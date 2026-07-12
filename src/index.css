@@ -1,0 +1,112 @@
+/* Theme + utilities only — Tailwind's Preflight reset is intentionally
+   skipped. Preflight rewrites bare-tag defaults (h1-h6 font-size/weight,
+   strong/b weight, placeholder color, border defaults, etc.) in ways that
+   aren't guaranteed to match this project's original look, so instead a
+   hand-authored @layer base below reproduces the project's original global
+   reset exactly. */
+/* Explicitly declare cascade layer order up front. CSS layer priority is set
+   by the order layers are first declared, not by source position of their
+   content — without this, the @layer base block further down (which is
+   declared after the utilities import) would win over utility classes like
+   bg-green-primary on equal-specificity selectors (e.g. <button>), silently
+   breaking every button's background color. */
+@layer theme, base, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* Design tokens — every value here is copied 1:1 from the project's
+   original hand-written CSS variables, so all existing colors/radii/shadow
+   stay pixel-identical while becoming real Tailwind utilities
+   (bg-green-primary, text-ink-muted, rounded-lg, shadow-card, etc). */
+@theme {
+  --color-green-deep: #0f4d29;
+  --color-green-mid: #1f6638;
+  --color-green-primary: #1aa64d;
+  --color-green-active-bg: #e5f5eb;
+  --color-green-active-text: #127338;
+  --color-green-soft: #99d9a8;
+  --color-green-feat: #d9edde;
+  --color-ink: #000000;
+  --color-ink-muted: #6b736e;
+  --color-ink-faint: #949994;
+  --color-border: #e5e8e5;
+  --color-bg-page: #f5f7f5;
+  --color-bg-white: #ffffff;
+  --color-danger: #db2626;
+  --color-danger-soft: #fdecec;
+  --color-warn: #d9730d;
+  --color-warn-soft: #fff2d6;
+  --color-info: #2b6cb0;
+  --color-info-soft: #e8f1fb;
+  --color-success-soft: #e5f5eb;
+  --color-green-soft-bg: #F9FAF9;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 1px 2px rgba(26, 28, 26, 0.04);
+}
+
+:root {
+  --font: 'DM Sans', system-ui, sans-serif;
+  --sidebar-w: 260px;
+  --topbar-h: 64px;
+}
+
+/* Global tag-level resets only — everything component-specific now lives as
+   Tailwind utility classNames directly on the JSX elements. */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    font-family: var(--font);
+    color: var(--color-ink);
+    background: var(--color-bg-page);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+  }
+
+  img {
+    max-width: 100%;
+    display: block;
+  }
+
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+}
