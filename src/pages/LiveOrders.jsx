@@ -114,10 +114,11 @@ export default function LiveOrders() {
       />
 
       <RejectOrderModal
-        open={Boolean(rejectOrder)}
+        open={Boolean(rejectOrder?.order)}
         onClose={() => setRejectOrder(null)}
         order={rejectOrder?.order}
         tab={tab}
+        intent={rejectOrder?.intent}
       />
     </div>
   )

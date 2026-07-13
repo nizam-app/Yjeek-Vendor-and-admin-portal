@@ -25,6 +25,11 @@ function stopCardAction(e) {
   e.stopPropagation()
 }
 
+function triggerReject(e, onReject, order, mode, intent = 'reject') {
+  stopCardAction(e)
+  onReject?.({ order, mode, intent })
+}
+
 export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject }) {
   if (order.status === 'rejected') {
     return (
@@ -115,10 +120,7 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
           <button
             type="button"
             className={btnDangerOutline}
-            onClick={(e) => {
-              stopCardAction(e)
-              onReject?.({ order, mode })
-            }}
+            onClick={(e) => triggerReject(e, onReject, order, mode)}
           >
             Reject
           </button>
@@ -149,7 +151,7 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
             {order.handoverLabel || 'Handover'}
           </button>
           {order.noShow ? (
-            <button type="button" className={btnDangerOutlineFull} onClick={stopCardAction}>
+            <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>
               No Show
             </button>
           ) : null}
@@ -231,10 +233,7 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
               <button
                 type="button"
                 className={btnDangerOutline}
-                onClick={(e) => {
-                  stopCardAction(e)
-                  onReject?.({ order, mode })
-                }}
+                onClick={(e) => triggerReject(e, onReject, order, mode)}
               >
                 Reject
               </button>
@@ -257,7 +256,7 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
             <button type="button" className={btnGhostAction} onClick={stopCardAction}>
               Awaiting arrival
             </button>
-            <button type="button" className={btnDangerOutlineFull} onClick={stopCardAction}>
+            <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>
               No show
             </button>
           </>
@@ -276,7 +275,7 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
             Verify &amp; complete
           </button>
           {order.noShow ? (
-            <button type="button" className={btnDangerOutlineFull} onClick={stopCardAction}>
+            <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>
               No show
             </button>
           ) : null}

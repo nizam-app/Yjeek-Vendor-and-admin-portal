@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import LiveOrders from './pages/LiveOrders'
 import LiveOrderColumn from './pages/LiveOrderColumn'
 import Scheduled from './pages/Scheduled'
+import ScheduledOrderColumn from './pages/ScheduledOrderColumn'
 import Services from './pages/Services'
 import OrdersHistory from './pages/OrdersHistory'
 import Catalog from './pages/Catalog'
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/live-orders" element={<LiveOrders />} />
             <Route path="/live-orders/:key" element={<LiveOrderColumn />} />
             <Route path="/scheduled" element={<Scheduled />} />
+            <Route path="/scheduled/:key" element={<ScheduledOrderColumn />} />
             <Route path="/services" element={<Services />} />
             <Route path="/orders-history" element={<OrdersHistory />} />
             <Route path="/catalog" element={<Catalog />} />

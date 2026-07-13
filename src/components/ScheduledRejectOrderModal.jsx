@@ -1,35 +1,18 @@
 import { useEffect, useState } from 'react'
 import warningIcon from '../assets/warning-icon.png'
 
-const deliveryRejectReasons = [
-  'Item(s) out of stock',
-  'Kitchen too busy right now',
-  'Closing soon',
-  'Cannot fulfil on time',
-  'Price / menu error',
+const scheduledRejectReasons = [
+  'Item(s) out of stock for that day',
+  'Closed at the scheduled time',
+  'Kitchen capacity full for that window',
+  'Cannot fulfil at the scheduled time',
+  'Branch unavailable that day',
   'Other (please specify)',
 ]
 
-const dineInRejectReasons = [
-  'Fully booked — no tables',
-  'Kitchen too busy right now',
-  'Closing soon',
-  'Cannot accommodate party size',
-  'Closed for the day',
-  'Other (please specify)',
-]
-
-function buildDineInSubtitle(order) {
-  const guest = order.guest || 'Guest'
-  const guests = order.guests ? `${order.guests} guests` : 'guests'
-  const when = order.when || 'Today'
-  return `${guest} · ${guests} · ${when}. Tell us why you're rejecting this reservation. The guest is notified and refunded if prepaid.`
-}
-
-export default function RejectOrderModal({ open, onClose, order, tab = 'delivery', intent = 'reject' }) {
+export default function ScheduledRejectOrderModal({ open, onClose, order }) {
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
-  const isDineIn = tab === 'dinein'
 
   useEffect(() => {
     if (!open) return
@@ -53,53 +36,32 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
 
   if (!open || !order) return null
 
-  const isNoShow = intent === 'no-show'
-  const rejectReasons = isDineIn ? dineInRejectReasons : deliveryRejectReasons
-  const title = isNoShow
-    ? isDineIn
-      ? `No-show dine-in ${order.id}`
-      : `No-show order ${order.id}`
-    : isDineIn
-      ? `Reject dine-in ${order.id}`
-      : `Reject order ${order.id}`
-  const subtitle = isNoShow
-    ? isDineIn
-      ? buildDineInSubtitle(order).replace('rejecting this reservation', 'marking this as a no-show')
-      : "Tell us why the customer didn't collect this order. The customer is notified and refunded if prepaid."
-    : isDineIn
-      ? buildDineInSubtitle(order)
-      : "Tell us why you're rejecting this order. The customer is refunded automatically for card/wallet payments."
-  const warning = isNoShow
-    ? 'Frequent no-shows affect your acceptance rate and dispatch priority.'
-    : isDineIn
-      ? 'The guest is notified and refunded if prepaid. Frequent rejections affect your ranking.'
-      : 'Frequent rejections lower your acceptance rate and dispatch priority.'
-  const confirmLabel = isNoShow ? 'Confirm no-show' : 'Confirm rejection'
-
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-[rgba(0,0,0,0.25)]" aria-label="Close reject order modal" onClick={onClose} />
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-6" role="dialog" aria-modal="true">
+      <button type="button" className="absolute inset-0 bg-[rgba(0,0,0,0.25)]" aria-label="Close reject scheduled order modal" onClick={onClose} />
       <div className="relative w-[460px] max-w-full bg-white rounded-[16px] shadow-[0px_12px_40px_rgba(0,0,0,0.25)] overflow-hidden">
         <div className="flex flex-col px-[26px] py-[24px] gap-4">
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-[18px] font-bold leading-[22px] text-[#1A1A1A]">{title}</h2>
-            <p className="text-[13px] font-normal leading-[18px] text-[#69706E]">{subtitle}</p>
+            <h2 className="text-[18px] font-bold leading-[22px] text-[#1A1A1A]">Reject scheduled order {order.id}</h2>
+            <p className="text-[13px] font-normal leading-[18px] text-[#69706E]">
+              Tell us why you can&apos;t fulfil this scheduled order. The customer is notified and refunded if prepaid.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <p className="text-[13px] font-bold leading-[16px] text-[#1A1A1A]">Reason (required)</p>
             <div className="flex flex-col rounded-[10px] border border-[#DBE0DB] overflow-hidden px-[16px]">
-              {rejectReasons.map((item, idx) => (
+              {scheduledRejectReasons.map((item, idx) => (
                 <label
                   key={item}
                   className={`flex items-center justify-between gap-3 py-3 cursor-pointer ${
-                    idx < rejectReasons.length - 1 ? 'border-b border-[#DBE0DB]' : ''
+                    idx < scheduledRejectReasons.length - 1 ? 'border-b border-[#DBE0DB]' : ''
                   }`}
                 >
                   <span className="text-[13px] font-medium leading-[16px] text-[#1A1A1A]">{item}</span>
                   <input
                     type="radio"
-                    name="reject-reason"
+                    name="scheduled-reject-reason"
                     value={item}
                     checked={reason === item}
                     onChange={() => setReason(item)}
@@ -119,7 +81,9 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
 
           <div className="flex items-center gap-2 rounded-[10px] bg-warn-soft px-4 py-3">
             <img src={warningIcon} alt="" className="w-[18px] h-[18px] object-contain shrink-0" aria-hidden="true" />
-            <p className="text-[12.5px] font-medium leading-[18px] text-[#8a5a12]">{warning}</p>
+            <p className="text-[12.5px] font-medium leading-[18px] text-[#8a5a12]">
+              Rejecting an accepted scheduled order close to its window may carry a penalty.
+            </p>
           </div>
 
           <div className="flex gap-3 w-full">
@@ -136,7 +100,7 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
               disabled={!reason}
               onClick={onClose}
             >
-              {confirmLabel}
+              Confirm rejection
             </button>
           </div>
         </div>
