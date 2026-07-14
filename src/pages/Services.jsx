@@ -1,8 +1,12 @@
 import { useState } from 'react'
+import { LayoutGrid } from 'lucide-react'
 import { serviceBookings } from '../data/mockData'
 import { CalendarDateIcon } from '../components/CalendarDateIcon'
+import ServicesCalendarView from '../components/ServicesCalendarView'
+import ServicesCalendarDayView from '../components/ServicesCalendarDayView'
 import ServiceBookingModal from '../components/ServiceBookingModal'
 import ServiceRejectBookingModal from '../components/ServiceRejectBookingModal'
+import ServiceAcceptBookingModal from '../components/ServiceAcceptBookingModal'
 
 const columnMeta = {
   new: { title: 'New', items: serviceBookings.new },
@@ -19,7 +23,7 @@ function stopCardAction(event) {
   event.stopPropagation()
 }
 
-function BookingCard({ order, columnKey, onSelect, onReject }) {
+function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
   if (order.noShow) {
     return (
       <div
@@ -84,7 +88,14 @@ function BookingCard({ order, columnKey, onSelect, onReject }) {
 
       {order.actions && order.actions.length === 2 ? (
         <div className="flex w-full gap-2">
-          <button type="button" className="flex-1 rounded-[8px] bg-green-primary px-3 py-2 text-xs font-semibold text-white" onClick={stopCardAction}>
+          <button
+            type="button"
+            className="flex-1 rounded-[8px] bg-green-primary px-3 py-2 text-xs font-semibold text-white"
+            onClick={(event) => {
+              stopCardAction(event)
+              onAccept?.({ order, columnKey })
+            }}
+          >
             {order.actions[0]}
           </button>
           <button
@@ -110,27 +121,87 @@ function BookingCard({ order, columnKey, onSelect, onReject }) {
 }
 
 export default function Services() {
+  const [view, setView] = useState('board')
+  const [calendarDay, setCalendarDay] = useState(null)
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [rejectBooking, setRejectBooking] = useState(null)
+  const [acceptedBooking, setAcceptedBooking] = useState(null)
+
+  function mapCalendarBookingToOrder(booking) {
+    const columnKey =
+      booking.status === 'In progress' ? 'inProgress' : 'upcoming'
+
+    return {
+      order: {
+        id: '#YJK-…48',
+        when: booking.time,
+        customer: booking.customer,
+        customerPhone: '+973 3xxx xxxx',
+        service: booking.service,
+        category: 'Salon & Beauty',
+        bookingType: 'Salon & Beauty · booking',
+        venueType: 'At venue',
+        duration: '45 mins',
+        durationLabel: 'Duration: 45 mins',
+        staff: booking.staff,
+        price: 'BHD 15.000',
+        servicesList: [{ qty: 1, name: booking.service }],
+      },
+      columnKey,
+    }
+  }
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
-      <h1 className="mb-4 text-[26px] font-bold text-ink">Services bookings</h1>
+      {view === 'board' ? <h1 className="mb-4 text-[26px] font-bold text-ink">Services bookings</h1> : null}
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          className="inline-flex items-center gap-[6px] rounded-[18px] border-[1.2px] border-[#e0e5e0] bg-white py-2 px-[14px] text-[13px] font-semibold text-ink"
-        >
-          <CalendarDateIcon />
-          Calendar view
-        </button>
-        <input
-          className="h-10 min-w-[220px] rounded-[8px] border border-border bg-white px-[14px] text-xs"
-          placeholder="Search by order #…"
+      {view === 'board' ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            className="inline-flex items-center gap-[6px] rounded-[18px] border-[1.2px] border-[#e0e5e0] bg-white py-2 px-[14px] text-[13px] font-semibold text-ink"
+            onClick={() => {
+              setCalendarDay(null)
+              setView('calendar')
+            }}
+          >
+            <CalendarDateIcon />
+            Calendar view
+          </button>
+          <input
+            className="h-10 min-w-[220px] rounded-[8px] border border-border bg-white px-[14px] text-xs"
+            placeholder="Search by order #…"
+          />
+        </div>
+      ) : null}
+
+      {view === 'calendar' && calendarDay ? (
+        <ServicesCalendarDayView
+          year={calendarDay.year}
+          month={calendarDay.month}
+          day={calendarDay.day}
+          onBack={() => setCalendarDay(null)}
+          onSelect={({ booking }) => setSelectedBooking(mapCalendarBookingToOrder(booking))}
         />
-      </div>
+      ) : null}
 
+      {view === 'calendar' && !calendarDay ? (
+        <ServicesCalendarView
+          leftAction={(
+            <button
+              type="button"
+              className="inline-flex items-center gap-[6px] rounded-[18px] border-[1.2px] border-[#e0e5e0] bg-white py-2 px-[14px] text-[13px] font-semibold text-ink"
+              onClick={() => setView('board')}
+            >
+              <LayoutGrid size={16} />
+              Board view
+            </button>
+          )}
+          onDaySelect={setCalendarDay}
+        />
+      ) : null}
+
+      {view === 'board' ? (
       <div className="grid grid-cols-3 gap-[14px] max-[1200px]:grid-cols-1">
         {Object.entries(columnMeta).map(([key, meta]) => (
           <div key={key} className="flex min-h-[520px] flex-col gap-2.5 rounded-lg bg-[#eef2ee] px-3 py-[14px]">
@@ -152,6 +223,7 @@ export default function Services() {
                   order={order}
                   columnKey={key}
                   onSelect={setSelectedBooking}
+                  onAccept={({ order: acceptTarget }) => setAcceptedBooking(acceptTarget)}
                   onReject={({ order: rejectTarget }) => setRejectBooking(rejectTarget)}
                 />
               ))
@@ -159,6 +231,7 @@ export default function Services() {
           </div>
         ))}
       </div>
+      ) : null}
 
       <ServiceBookingModal
         open={Boolean(selectedBooking?.order)}
@@ -171,6 +244,12 @@ export default function Services() {
         open={Boolean(rejectBooking)}
         onClose={() => setRejectBooking(null)}
         order={rejectBooking}
+      />
+
+      <ServiceAcceptBookingModal
+        open={Boolean(acceptedBooking)}
+        onClose={() => setAcceptedBooking(null)}
+        order={acceptedBooking}
       />
     </div>
   )

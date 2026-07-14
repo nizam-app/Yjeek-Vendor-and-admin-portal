@@ -21,7 +21,7 @@ export function StatusPill({ status }) {
     .replace(/\s+/g, '-')
   return (
     <span
-      className={`inline-flex items-center py-[4px] px-3 rounded-full text-[10px] font-semibold border leading-normal ${
+      className={`inline-flex items-center py-[4px] px-3 rounded-full text-[10px] font-bold  leading-normal ${
         pillTones[key] || 'border-transparent'
       }`}
     >

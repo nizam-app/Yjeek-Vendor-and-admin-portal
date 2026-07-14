@@ -9,7 +9,9 @@ import Scheduled from './pages/Scheduled'
 import ScheduledOrderColumn from './pages/ScheduledOrderColumn'
 import Services from './pages/Services'
 import OrdersHistory from './pages/OrdersHistory'
+import OrderHistoryDetail from './pages/OrderHistoryDetail'
 import Catalog from './pages/Catalog'
+import FoodCatalog from './pages/FoodCatalog'
 import Branches from './pages/Branches'
 import Staff from './pages/Staff'
 import Promotions from './pages/Promotions'
@@ -37,7 +39,9 @@ export default function App() {
             <Route path="/scheduled/:key" element={<ScheduledOrderColumn />} />
             <Route path="/services" element={<Services />} />
             <Route path="/orders-history" element={<OrdersHistory />} />
+            <Route path="/orders-history/:orderId" element={<OrderHistoryDetail />} />
             <Route path="/catalog" element={<Catalog />} />
+            <Route path="/catalog/food" element={<FoodCatalog />} />
             <Route path="/branches" element={<Branches />} />
             <Route path="/staff" element={<Staff />} />
             <Route path="/promotions" element={<Promotions />} />
