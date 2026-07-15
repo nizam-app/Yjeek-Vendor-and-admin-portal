@@ -8,9 +8,12 @@ const pillTones = {
   delivered: 'bg-green-active-bg text-green-active-text border-green-active-text',
   active: 'bg-green-active-bg text-green-active-text border-green-active-text',
   open: 'bg-green-active-bg text-green-active-text border-green-active-text',
+  scheduled: 'bg-warn-soft text-warn border-warn',
+  paused: 'bg-[#F2F4F2] text-[#6B736E] border-[#949994]',
+  ended: 'bg-[#F2F4F2] text-[#949994] border-[#C7CFC7]',
   cancelled: 'bg-danger-soft text-danger border-danger',
   rejected: 'bg-danger-soft text-danger border-danger',
-  inactive: 'bg-[#f2f2f2] text-ink-muted border-border',
+  inactive: 'bg-[#F2F4F2] text-[#1A1A1A] border-[#1A1A1A]',
   closed: 'bg-[#f2f2f2] text-ink-muted border-border',
   busy: 'bg-warn-soft text-warn border-warn',
 }
@@ -21,7 +24,7 @@ export function StatusPill({ status }) {
     .replace(/\s+/g, '-')
   return (
     <span
-      className={`inline-flex items-center py-[4px] px-3 rounded-full text-[10px] font-bold  leading-normal ${
+      className={`inline-flex items-center rounded-full  px-3 py-[4px] text-[10px] leading-normal font-bold ${
         pillTones[key] || 'border-transparent'
       }`}
     >

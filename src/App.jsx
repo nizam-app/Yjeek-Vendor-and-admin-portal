@@ -13,8 +13,12 @@ import OrderHistoryDetail from './pages/OrderHistoryDetail'
 import Catalog from './pages/Catalog'
 import FoodCatalog from './pages/FoodCatalog'
 import Branches from './pages/Branches'
+import EditBranch from './pages/EditBranch'
+import BranchMenu from './pages/BranchMenu'
 import Staff from './pages/Staff'
 import Promotions from './pages/Promotions'
+import ConfigurePromotion from './pages/ConfigurePromotion'
+import PromotionDetail from './pages/PromotionDetail'
 import Notifications from './pages/Notifications'
 import Account from './pages/Account'
 
@@ -42,8 +46,12 @@ export default function App() {
             <Route path="/orders-history/:orderId" element={<OrderHistoryDetail />} />
             <Route path="/catalog" element={<Catalog />} />
             <Route path="/catalog/food" element={<FoodCatalog />} />
+            <Route path="/branches/:branchId/edit" element={<EditBranch />} />
+            <Route path="/branches/:branchId/menu" element={<BranchMenu />} />
             <Route path="/branches" element={<Branches />} />
             <Route path="/staff" element={<Staff />} />
+            <Route path="/promotions/new" element={<ConfigurePromotion />} />
+            <Route path="/promotions/:promoId" element={<PromotionDetail />} />
             <Route path="/promotions" element={<Promotions />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/account" element={<Account />} />

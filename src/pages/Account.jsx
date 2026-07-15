@@ -1,73 +1,85 @@
-import { PageHeader } from '../components/ui'
-import { vendor } from '../data/mockData'
-import { useAuth } from '../context/AuthContext'
+const labelClass =
+  'mb-1.5 block text-[11px] font-bold tracking-[0.04em] text-[#69706E] uppercase'
+const fieldClass =
+  'box-border flex h-[42px] w-full items-center rounded-[10px] border border-[#E0E6E0] bg-white px-3.5 text-[13px] font-semibold text-[#1A1A1A]'
+const cardClass = 'rounded-[14px] border border-[#E0E6E0] bg-white p-5 shadow-card'
+
+function Field({ label, value, width = 'w-[280px]' }) {
+  return (
+    <div className={`max-w-full ${width}`}>
+      <label className={labelClass}>{label}</label>
+      <div className={fieldClass}>{value}</div>
+    </div>
+  )
+}
 
 export default function Account() {
-  const { user } = useAuth()
-
-  const labelClass = 'block text-[11px] font-bold tracking-[0.04em] text-ink-muted mb-[6px]'
-  const inputClass =
-    'w-full h-11 border border-border rounded-md px-[14px] text-[13px] bg-white min-w-[220px] focus:outline-2 focus:outline-solid focus:outline-[rgba(26,166,77,0.25)] focus:border-green-primary'
-
   return (
-    <div className="pt-[26px] px-[28px] pb-10">
-      <PageHeader title="Account" subtitle="Vendor profile & security settings" />
+    <div className="px-[28px] pt-[26px] pb-10">
+      <h1 className="mb-5 text-[26px] font-bold tracking-[-0.02em] text-ink">Account</h1>
 
-      <div className="grid grid-cols-2 gap-4 max-[1200px]:grid-cols-1">
-        <div className="bg-white border border-border rounded-lg shadow-card overflow-hidden py-[18px] px-5">
-          <div className="text-[15px] font-bold mb-[14px] flex items-center justify-between">Profile</div>
-          <div className="grid gap-[14px]">
-            <div className="mb-[18px]">
-              <label className={labelClass}>STORE NAME</label>
-              <input className={inputClass} defaultValue={vendor.name} />
-            </div>
-            <div className="mb-[18px]">
-              <label className={labelClass}>ADMIN NAME</label>
-              <input className={inputClass} defaultValue={vendor.adminName} />
-            </div>
-            <div className="mb-[18px]">
-              <label className={labelClass}>EMAIL</label>
-              <input className={inputClass} defaultValue={user?.email || vendor.email} />
-            </div>
-            <div className="mb-[18px]">
-              <label className={labelClass}>ROLE</label>
-              <input className={inputClass} defaultValue={vendor.adminRole} readOnly />
-            </div>
-            <button
-              type="button"
-              className="bg-green-primary text-white rounded-md py-[10px] px-4 text-sm font-semibold hover:brightness-[0.96]"
-              style={{ width: 'fit-content' }}
-            >
-              Save changes
-            </button>
+      {/* Profile */}
+      <section className={`${cardClass} mb-4`}>
+        <h2 className="mb-4 text-[15px] font-bold text-ink">Profile</h2>
+
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-full bg-[#E5F5EB] text-[16px] font-bold text-[#127036]">
+            GK
           </div>
+          <div className="min-w-0">
+            <p className="text-[15px] font-bold text-ink">Green Kitchen Admin</p>
+            <p className="text-[12.5px] text-ink-muted">vendor_admin</p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-[34px] shrink-0 items-center rounded-full  border border-[#E0E5E0] bg-white px-3.5 text-[12.5px] font-semibold text-[#127036] hover:bg-[#f3faf5]"
+          >
+            Change photo
+          </button>
         </div>
 
-        <div className="bg-white border border-border rounded-lg shadow-card overflow-hidden py-[18px] px-5">
-          <div className="text-[15px] font-bold mb-[14px] flex items-center justify-between">Security</div>
-          <div className="grid gap-[14px]">
-            <div className="mb-[18px]">
-              <label className={labelClass}>CURRENT PASSWORD</label>
-              <input className={inputClass} type="password" placeholder="••••••••••" />
-            </div>
-            <div className="mb-[18px]">
-              <label className={labelClass}>NEW PASSWORD</label>
-              <input className={inputClass} type="password" placeholder="••••••••••" />
-            </div>
-            <div className="mb-[18px]">
-              <label className={labelClass}>CONFIRM PASSWORD</label>
-              <input className={inputClass} type="password" placeholder="••••••••••" />
-            </div>
-            <button
-              type="button"
-              className="border border-border rounded-md py-2 px-[14px] text-[13px] font-medium bg-white text-ink hover:bg-[#f7f9f7]"
-              style={{ width: 'fit-content' }}
-            >
-              Update password
-            </button>
-          </div>
+        <div className="mb-3.5 flex flex-wrap gap-4">
+          <Field label="Full name" value="Asmaa Ilsaey" />
+          <Field label="Display name" value="Green Kitchen" />
         </div>
-      </div>
+        <div className="flex flex-wrap gap-4">
+          <Field label="Email" value="asmaailsaey@gmail.com" width="w-[320px]" />
+          <Field label="Phone" value="+973 3886 6620" />
+        </div>
+      </section>
+
+      {/* Business details */}
+      <section className={`${cardClass} mb-4`}>
+        <h2 className="mb-4 text-[15px] font-bold text-ink">Business details</h2>
+
+        <div className="mb-3.5">
+          <Field label="Legal name" value="Green Kitchen W.L.L" width="w-[320px]" />
+        </div>
+        <div className="mb-3.5 flex flex-wrap gap-4">
+          <Field label="CR number" value="110111-3" width="w-[220px]" />
+          <Field label="VAT number" value="220011223300" width="w-[260px]" />
+        </div>
+        <Field
+          label="Business address"
+          value="Building 2732, Road 3649, Block 436, Al Seef, Bahrain"
+          width="w-[560px]"
+        />
+      </section>
+
+      {/* Payout & bank */}
+      <section className={cardClass}>
+        <h2 className="mb-3 text-[15px] font-bold text-ink">Payout &amp; bank</h2>
+
+        <span className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#E5F5EB] px-2.5 py-[4px] text-[11px] font-bold text-[#127036]">
+          <span className="size-1.5 rounded-full bg-[#2E9E4D]" aria-hidden />
+          Verified
+        </span>
+
+        <div className="mb-3.5">
+          <Field label="Bank name" value="National Bank of Bahrain" width="w-[320px]" />
+        </div>
+        <Field label="IBAN" value="BH•• •••• •••• •••• 4417" width="w-[320px]" />
+      </section>
     </div>
   )
 }

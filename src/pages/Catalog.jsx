@@ -31,13 +31,12 @@ export default function Catalog() {
               key={type.id}
               type="button"
               onClick={() => handleSelect(type)}
-              className={`flex h-[118px] w-full items-center gap-3.5 rounded-[16px] px-5 text-left transition-colors ${
+              className={`relative flex h-[118px] w-full items-start gap-3.5 rounded-[16px] px-5 pt-5 text-left transition-colors ${
                 selected
                   ? 'border-[1.5px] border-[#1AA64D] bg-[#E8F5EC]'
                   : 'border border-[#E5E8E5] bg-white hover:border-[#D0D5D0]'
               }`}
             >
-              {/* Icon tile: white when selected, soft gray when not */}
               <span
                 className={`flex size-11 shrink-0 items-center justify-center rounded-[10px] ${
                   selected ? 'bg-white' : 'bg-[#F0F2F0]'
@@ -46,10 +45,8 @@ export default function Catalog() {
                 <CatalogStoreIcon id={type.id} />
               </span>
 
-              <span className="min-w-0 flex-1">
-                {/* Title always black / bold */}
+              <span className="min-w-0 flex-1 pt-0.5">
                 <span className="block text-[16px] font-bold leading-[1.2] text-[#1A1A1A]">{type.title}</span>
-                {/* Description: green when selected, gray when not (see Figma arrows) */}
                 <span
                   className={`mt-1 block text-[13px] font-normal leading-[1.35] ${
                     selected ? 'text-[#1AA64D]' : 'text-[#8A938C]'
@@ -60,7 +57,7 @@ export default function Catalog() {
               </span>
 
               {selected ? (
-                <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-[#1AA64D]">
+                <span className="absolute top-4 right-4 inline-flex size-6 items-center justify-center rounded-full bg-[#1AA64D]">
                   <Check size={14} strokeWidth={3} className="text-white" />
                 </span>
               ) : null}
