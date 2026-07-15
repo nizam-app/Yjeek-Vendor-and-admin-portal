@@ -30,10 +30,21 @@ function triggerReject(e, onReject, order, mode, intent = 'reject') {
   onReject?.({ order, mode, intent })
 }
 
+function openDetailsOnClick(mode) {
+  return mode === 'new'
+}
+
 export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject }) {
+  const canOpenDetails = openDetailsOnClick(mode)
+
   if (order.status === 'rejected') {
     return (
-      <div className={`${cardClass(dense)} cursor-pointer`} onClick={() => onSelect?.({ order, mode })} role="button" tabIndex={0}>
+      <div
+        className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
+        onClick={canOpenDetails ? () => onSelect?.({ order, mode }) : undefined}
+        role={canOpenDetails ? 'button' : undefined}
+        tabIndex={canOpenDetails ? 0 : undefined}
+      >
         <span className="inline-flex w-fit items-center text-[10px] font-bold py-[2px] px-[7px] rounded-[6px] bg-[#fce8e8] text-[#c91a24]">
           ✕ REJECTED
         </span>
@@ -50,7 +61,12 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
 
   if (order.status === 'no-show-cancelled') {
     return (
-      <div className={`${cardClass(dense)} cursor-pointer`} onClick={() => onSelect?.({ order, mode })} role="button" tabIndex={0}>
+      <div
+        className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
+        onClick={canOpenDetails ? () => onSelect?.({ order, mode }) : undefined}
+        role={canOpenDetails ? 'button' : undefined}
+        tabIndex={canOpenDetails ? 0 : undefined}
+      >
         {order.when ? <p className="text-right text-[11px] font-medium text-ink-muted">{order.when}</p> : null}
         <p className="text-[14px] font-bold text-ink">{order.id}</p>
         <span className="inline-flex w-full items-center text-[11px] font-bold py-[3px] px-[9px] rounded-[8px] bg-[#fce8e8] text-[#c91a24]">
@@ -63,16 +79,20 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
 
   return (
     <div
-      className={`${cardClass(dense)} cursor-pointer`}
-      onClick={() => onSelect?.({ order, mode })}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onSelect?.({ order, mode })
-        }
-      }}
-      role="button"
-      tabIndex={0}
+      className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
+      onClick={canOpenDetails ? () => onSelect?.({ order, mode }) : undefined}
+      onKeyDown={
+        canOpenDetails
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect?.({ order, mode })
+              }
+            }
+          : undefined
+      }
+      role={canOpenDetails ? 'button' : undefined}
+      tabIndex={canOpenDetails ? 0 : undefined}
     >
       {order.type && order.type !== 'Delivery' ? (
         <span className="inline-flex w-fit bg-[#dceeff] text-[#2978db] text-[10px] font-bold uppercase py-[2px] px-[7px] rounded-[6px]">
@@ -177,21 +197,26 @@ function DineInTag({ tag }) {
 }
 
 export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject }) {
+  const canOpenDetails = openDetailsOnClick(mode)
   const separateRows = mode === 'ready' || (mode === 'confirmed' && order.arrived === false)
   const showTogether = !separateRows && order.when && order.tag
 
   return (
     <div
-      className={`${cardClass(dense)} cursor-pointer`}
-      onClick={() => onSelect?.({ order, mode })}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onSelect?.({ order, mode })
-        }
-      }}
-      role="button"
-      tabIndex={0}
+      className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
+      onClick={canOpenDetails ? () => onSelect?.({ order, mode }) : undefined}
+      onKeyDown={
+        canOpenDetails
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect?.({ order, mode })
+              }
+            }
+          : undefined
+      }
+      role={canOpenDetails ? 'button' : undefined}
+      tabIndex={canOpenDetails ? 0 : undefined}
     >
       <p className="text-[12px] font-bold text-ink">{order.id}</p>
       <p className="text-[13px] font-semibold text-ink">
