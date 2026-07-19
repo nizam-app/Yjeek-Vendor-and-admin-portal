@@ -8,12 +8,12 @@ const windowTones = {
   gray: 'bg-[#ededed] text-ink-muted',
 }
 
-const btnBase = 'w-full text-center rounded-[8px] py-2 text-[13px] font-semibold'
+const btnBase = 'w-full text-center rounded-[8px] py-2 text-[13px] font-medium'
 const btnPrimaryFull = `bg-green-primary text-white ${btnBase} hover:brightness-[0.96]`
-const btnPrimaryAction = 'flex-1 text-center bg-green-primary text-white rounded-[8px] px-3 py-[10px] text-[13px] font-semibold hover:brightness-[0.96]'
-const btnDangerOutline = 'flex-1 text-center border border-[#e8b4b8] text-danger bg-white rounded-[8px] px-3 py-[10px] text-[13px] font-semibold'
-const btnPrimaryActionCompact = 'flex-1 text-center bg-green-primary text-white rounded-[8px] px-3 py-2 text-xs font-semibold hover:brightness-[0.96]'
-const btnDangerOutlineCompact = 'flex-1 text-center border border-border text-danger bg-white rounded-[8px] px-3 py-2 text-xs font-semibold'
+const btnPrimaryAction = 'flex-1 text-center bg-green-primary text-white rounded-[8px] px-3 py-[10px] text-[13px] font-medium hover:brightness-[0.96]'
+const btnDangerOutline = 'flex-1 text-center border border-[#e8b4b8] text-danger bg-white rounded-[8px] px-3 py-[10px] text-[13px] font-medium'
+const btnPrimaryActionCompact = 'flex-1 text-center bg-green-primary text-white rounded-[8px] px-3 py-2 text-xs font-medium hover:brightness-[0.96]'
+const btnDangerOutlineCompact = 'flex-1 text-center border border-border text-danger bg-white rounded-[8px] px-3 py-2 text-xs font-medium'
 
 export const columnMeta = {
   new: {
@@ -84,8 +84,8 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
           tabIndex={0}
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[15px] font-bold text-ink">{order.id}</p>
-            <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[10.5px] font-semibold shrink-0 ${windowTones[order.windowTone]}`}>
+            <p className="text-[16px] font-bold text-ink">{order.id}</p>
+            <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium shrink-0 ${windowTones[order.windowTone]}`}>
               {order.window}
             </span>
           </div>
@@ -100,13 +100,13 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
 
           {order.sla ? (
             <p className="flex items-center justify-between text-warn pt-0.5">
-              <span className="text-[11.5px] font-medium">Accept within (SLA 5 min)</span>
+              <span className="text-[11px] font-medium">Accept within (SLA 5 min)</span>
               <strong className="text-[13px] font-bold">{order.sla}</strong>
             </p>
           ) : null}
           {order.note ? (
             <p className="flex items-center justify-between text-warn pt-0.5">
-              <span className="text-[11.5px] font-medium">{order.note}</span>
+              <span className="text-[11px] font-medium">{order.note}</span>
               <strong className="text-[13px] font-bold">{order.noteValue}</strong>
             </p>
           ) : null}
@@ -167,7 +167,7 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
         tabIndex={0}
       >
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[10.5px] font-semibold ${windowTones[order.windowTone]}`}>
+          <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium ${windowTones[order.windowTone]}`}>
             {order.window}
           </span>
           <span className="flex-1 text-right text-[11px] font-medium text-ink-muted">{order.when}</span>

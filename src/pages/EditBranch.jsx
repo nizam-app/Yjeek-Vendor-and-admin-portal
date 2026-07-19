@@ -6,9 +6,9 @@ import editIcon from '../assets/icon-edit.png'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-const labelClass = 'mb-1.5 block text-[10.5px] font-bold uppercase leading-[13px] text-[#69706E]'
+const labelClass = 'mb-1.5 block text-[13px] font-medium uppercase leading-[13px] text-[#69706E]'
 const inputClass =
-  'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-semibold text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-medium text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 
 function defaultHours() {
   return {
@@ -75,7 +75,7 @@ function Toggle({ checked, onChange, label }) {
 function ShiftPill({ from, to }) {
   return (
     <div className="box-border inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-lg border-[1.1px] border-[#E0E6E0] bg-white px-2.5 py-[5px]">
-    <span className="text-[12.5px] leading-[15px] font-semibold text-[#6B756E]">🕒</span>
+    <span className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]">🕒</span>
       <span className="whitespace-nowrap text-[12.5px] leading-[15px] font-medium text-[#1A1A1A]">
         {from} – {to}
       </span>
@@ -108,7 +108,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         {isOpen ? (
           <div className="relative shrink-0">
             <select
-              className="box-border h-[25px] appearance-none rounded-sm border border-[#E0E6E0] bg-[#E3F2EB] py-[5px] pr-6 pl-2.5 text-[12.5px] leading-[15px] font-semibold text-[#127036] outline-none"
+              className="box-border h-[25px] appearance-none rounded-sm border border-[#E0E6E0] bg-[#E3F2EB] py-[5px] pr-6 pl-2.5 text-[12.5px] leading-[15px] font-medium text-[#127036] outline-none"
               value={isSplit ? 'split' : 'single'}
               onChange={(e) => onModeChange?.(e.target.value)}
               aria-label={`${day} shift type`}
@@ -123,7 +123,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         ) : null}
 
         <span
-          className={`shrink-0 text-[12.5px] leading-[15px] font-semibold ${
+          className={`shrink-0 text-[12.5px] leading-[15px] font-medium ${
             isOpen ? 'text-[#2E9E4D]' : 'text-[#949C94]'
           }`}
         >
@@ -161,7 +161,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
           <button
             type="button"
             onClick={onToggle}
-            className="text-[12.5px] leading-[15px] font-semibold text-[#2E9E4D] hover:underline"
+            className="text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
           >
             + Set opening hours
           </button>
@@ -169,14 +169,14 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
           <>
             <button
               type="button"
-              className="inline-flex items-center gap-1 text-[12.5px] leading-[15px] font-semibold text-[#2E9E4D] hover:underline"
+              className="inline-flex items-center gap-1 text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
             >
             ✎ Edit break
             </button>
             <button
               type="button"
               onClick={onRemoveBreak}
-              className="text-[12.5px] leading-[15px] font-semibold text-[#C91A24] hover:underline"
+              className="text-[12.5px] leading-[15px] font-medium text-[#C91A24] hover:underline"
             >
               × Remove break
             </button>
@@ -185,7 +185,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
           <button
             type="button"
             onClick={onAddBreak}
-            className="text-[12.5px] leading-[15px] font-semibold text-[#2E9E4D] hover:underline"
+            className="text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
           >
             + Add break (make split shift)
           </button>
@@ -211,7 +211,7 @@ export default function EditBranch() {
       <div className="px-[28px] pt-[26px] pb-10">
         <Link
           to="/branches"
-          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Branches
         </Link>
@@ -312,19 +312,19 @@ export default function EditBranch() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
           to="/branches"
-          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Branches
         </Link>
 
-        <h1 className="min-w-0 flex-1 text-[22px] font-bold tracking-[-0.02em] text-ink sm:text-[24px]">
+        <h1 className="min-w-0 flex-1 text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
           Edit branch · {branch.name}
         </h1>
 
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-4 text-[13px] font-semibold text-white hover:brightness-[0.96]"
+          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-4 text-[13px] font-medium text-white hover:brightness-[0.96]"
         >
           Save changes
         </button>
@@ -334,7 +334,7 @@ export default function EditBranch() {
       <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
         {/* Branch details */}
         <section className="rounded-[14px] border border-border bg-white p-5">
-          <h2 className="mb-4 text-[15px] font-bold text-ink">Branch details</h2>
+          <h2 className="mb-4 text-[16px] font-bold text-ink">Branch details</h2>
 
           <div className="flex flex-col gap-3.5">
             <div>
@@ -397,7 +397,7 @@ export default function EditBranch() {
         {/* Right stack */}
         <div className="flex flex-col gap-3">
           <section className="rounded-[14px] border border-border bg-white  px-5 py-4.5">
-            <h2 className="mb-3 text-[15px] font-bold text-ink">Delivery coverage</h2>
+            <h2 className="mb-3 text-[16px] font-bold text-ink">Delivery coverage</h2>
             <div className="flex items-center justify-between gap-3">
               <span className="text-[13px] text-ink-muted">Radius</span>
               <span className="text-[13px] font-bold text-ink">{form.radiusKm || '0'} km</span>
@@ -407,7 +407,7 @@ export default function EditBranch() {
           <section className="rounded-[14px] border border-border bg-white px-5 py-4.5">
             <div className="flex items-end justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="mb-1 text-[15px] font-bold text-ink">Branch menu</h2>
+                <h2 className="mb-1 text-[16px] font-bold text-ink">Branch menu</h2>
                 <p className="text-[12.5px] leading-relaxed text-ink-muted">
                   Tap to customize items &amp; prices for this branch
                 </p>
@@ -417,7 +417,7 @@ export default function EditBranch() {
                 onClick={() =>
                   navigate(`/branches/${encodeURIComponent(branch.id || branchId)}/menu`)
                 }
-                className="shrink-0 text-[13px] font-semibold text-[#127036] hover:underline"
+                className="shrink-0 text-[13px] font-medium text-[#127036] hover:underline"
               >
                 Manage ›
               </button>
@@ -434,7 +434,7 @@ export default function EditBranch() {
               </div>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:brightness-[0.96]"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-medium text-white hover:brightness-[0.96]"
               >
                 🗑
                 Delete
@@ -446,12 +446,12 @@ export default function EditBranch() {
 
       {/* Working hours */}
       <section className="rounded-[14px] border border-border bg-white p-5">
-        <h2 className="mb-2 text-[15px] font-bold text-ink">Working hours</h2>
+        <h2 className="mb-2 text-[16px] font-bold text-ink">Working hours</h2>
 
         <button
           type="button"
           onClick={copyMondayToAll}
-          className="mb-4 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#127036] hover:underline"
+          className="mb-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-[#127036] hover:underline"
         >
           <Copy size={13} strokeWidth={2.2} />
           Copy Monday&apos;s hours to all days

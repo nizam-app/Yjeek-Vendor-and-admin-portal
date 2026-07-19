@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 /* Theme + utilities only — Tailwind's Preflight reset is intentionally
    skipped. Preflight rewrites bare-tag defaults (h1-h6 font-size/weight,
    strong/b weight, placeholder color, border defaults, etc.) in ways that
@@ -52,7 +54,7 @@
 }
 
 :root {
-  --font: 'DM Sans', system-ui, sans-serif;
+  --font: 'Inter', system-ui, sans-serif;
   --sidebar-w: 260px;
   --topbar-h: 64px;
 }

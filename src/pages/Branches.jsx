@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { branches as seed } from '../data/mockData'
 import branchIcon from '../assets/icon-stadium.png'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 const statusPillTones = {
   Open: 'bg-green-active-bg border-green-active-text text-green-active-text',
@@ -11,11 +12,19 @@ const statusPillTones = {
 }
 
 const kvLabel = 'text-[10px] font-bold text-ink-faint uppercase'
-const kvValue = 'text-[13px] font-semibold text-ink'
+const kvValue = 'text-[13px] font-medium text-ink'
 
 export default function Branches() {
   const navigate = useNavigate()
-  const [branches, setBranches] = useState(seed)
+  const [branches, setBranches] = useState([])
+  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getBranches(), [])
+
+  useEffect(() => {
+    if (data) setBranches(data)
+  }, [data])
+
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading branches…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load branches. <button onClick={refetch} className="underline">Try again</button></div>
 
   function setStatus(name, status) {
     setBranches((prev) => prev.map((b) => (b.name === name ? { ...b, status } : b)))
@@ -29,7 +38,7 @@ export default function Branches() {
   return (
     <div className="px-[28px] pt-[26px] pb-10">
       <div className="mb-[18px]">
-        <h1 className="text-[26px] font-bold text-ink">Branches</h1>
+        <h1 className="text-[20px] font-bold text-ink">Branches</h1>
         <p className="text-[13px] text-ink-muted">{branches.length} branches</p>
       </div>
 
@@ -49,12 +58,12 @@ export default function Branches() {
                     <img src={branchIcon} alt="" className="size-full object-contain" />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-[15px] font-bold text-ink">{branch.name}</p>
+                    <p className="truncate text-[16px] font-bold text-ink">{branch.name}</p>
                     <p className="truncate text-[11px] text-ink-muted">{branch.address}</p>
                   </div>
                 </div>
                 <span
-                  className={`inline-flex shrink-0 items-center rounded-full border px-[10px] py-[3px] text-[10px] font-semibold whitespace-nowrap ${statusPillTones[branch.status]}`}
+                  className={`inline-flex shrink-0 items-center rounded-full border px-[10px] py-[3px] text-[10px] font-medium whitespace-nowrap ${statusPillTones[branch.status]}`}
                 >
                   {branch.status}
                 </span>
@@ -70,7 +79,7 @@ export default function Branches() {
                     <button
                       key={s}
                       type="button"
-                      className={`rounded-[8px] border px-3 py-[6px] text-[11px] font-semibold ${
+                      className={`rounded-[8px] border px-3 py-[6px] text-[11px] font-medium ${
                         branch.status === s
                           ? 'border-[#1aa64d] bg-green-active-bg text-green-active-text'
                           : 'border-border bg-white text-ink-muted'
@@ -111,7 +120,7 @@ export default function Branches() {
               <button
                 type="button"
                 onClick={() => openEdit(branch)}
-                className="inline-flex h-[31px] w-full items-center justify-center gap-1.5 rounded-[8px] border border-border bg-white px-3 text-[12px] font-semibold text-ink hover:bg-[#f7f9f7]"
+                className="inline-flex h-[31px] w-full items-center justify-center gap-1.5 rounded-[8px] border border-border bg-white px-3 text-[12px] font-medium text-ink hover:bg-[#f7f9f7]"
               >
                 ✎ Edit
               </button>

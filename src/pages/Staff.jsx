@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
 import { PageHeader, StatusPill } from '../components/ui'
-import { staff } from '../data/mockData'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 export default function Staff() {
   const [query, setQuery] = useState('')
-  const filtered = staff.filter((s) =>
+  const { data: staff, error, isLoading, refetch } = useApiResource(() => vendorService.getStaff(), [])
+  const filtered = (staff || []).filter((s) =>
     [s.name, s.email, s.phone, s.branch].join(' ').toLowerCase().includes(query.toLowerCase()),
   )
 
   const thClass =
     'px-5 py-3.5 text-left text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase'
   const tdClass = 'px-5 py-[15px] text-[13px] text-ink'
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading staff…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load staff. <button onClick={refetch} className="underline">Try again</button></div>
 
   return (
     <div className="px-[28px] pt-[26px] pb-10">

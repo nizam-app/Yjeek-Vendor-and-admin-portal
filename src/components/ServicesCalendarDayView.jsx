@@ -40,13 +40,13 @@ export default function ServicesCalendarDayView({ year, month, day, onBack, onSe
       <div className="mb-5 flex flex-wrap items-center gap-4">
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded-[18px] border border-[#e0e5e0] bg-white py-1.5 pl-2.5 pr-3.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="inline-flex items-center gap-1 rounded-[18px] border border-[#e0e5e0] bg-white py-1.5 pl-2.5 pr-3.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
           onClick={onBack}
         >
           <ChevronLeft size={14} strokeWidth={2.2} />
           Calendar
         </button>
-        <h1 className="text-[26px] font-bold tracking-[-0.02em] text-ink">
+        <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink">
           {formatDayTitle(year, month, day, bookings.length)}
         </h1>
       </div>
@@ -60,7 +60,7 @@ export default function ServicesCalendarDayView({ year, month, day, onBack, onSe
         />
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white px-[14px] py-[10px] text-[13px] font-semibold text-ink"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white px-[14px] py-[10px] text-[13px] font-medium text-ink"
         >
           Sort: Window
           <ChevronDown size={14} strokeWidth={2.2} className="text-ink-muted" />
@@ -85,7 +85,7 @@ export default function ServicesCalendarDayView({ year, month, day, onBack, onSe
                 </span>
                 <span className="mt-1 block text-[12px] leading-none text-ink-muted">with {booking.staff}</span>
               </span>
-              <span className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[11px] font-semibold ${statusTone}`}>
+              <span className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[11px] font-medium ${statusTone}`}>
                 {booking.status}
               </span>
             </button>

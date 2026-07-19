@@ -7,6 +7,8 @@ import OrderDetailModal from '../components/OrderDetailModal'
 import AcceptOrderModal from '../components/AcceptOrderModal'
 import HandoverChampModal from '../components/HandoverChampModal'
 import RejectOrderModal from '../components/RejectOrderModal'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 export default function LiveOrders() {
   const [searchParams] = useSearchParams()
@@ -16,9 +18,12 @@ export default function LiveOrders() {
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const isDineIn = tab === 'dinein'
+  const { data: orders, error, isLoading, refetch } = useApiResource(() => vendorService.getLiveOrders(), [])
 
-  const columns = getColumns(tab)
+  const columns = getColumns(tab, orders)
   const totalActive = columns.reduce((sum, col) => sum + col.items.length, 0)
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load live orders. <button onClick={refetch} className="underline">Try again</button></div>
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
@@ -31,7 +36,7 @@ export default function LiveOrders() {
         <div className="inline-flex bg-[#eef1ee] rounded-[9px] p-[4px]">
           <button
             type="button"
-            className={`py-2 px-4 rounded-[7px] text-[13px] font-semibold ${
+            className={`py-2 px-4 rounded-[7px] text-[13px] font-medium ${
               !isDineIn ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
             }`}
             onClick={() => setTab('delivery')}
@@ -40,7 +45,7 @@ export default function LiveOrders() {
           </button>
           <button
             type="button"
-            className={`py-2 px-4 rounded-[10px] text-[13px] font-semibold ${
+            className={`py-2 px-4 rounded-[10px] text-[13px] font-medium ${
               isDineIn ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
             }`}
             onClick={() => setTab('dinein')}
@@ -55,7 +60,7 @@ export default function LiveOrders() {
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <button type="button" className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-semibold">
+        <button type="button" className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium">
           ↻ Refresh
         </button>
       </div>

@@ -36,10 +36,10 @@ export default function Sidebar() {
     <aside className="w-[var(--sidebar-w)] shrink-0 bg-bg-white border-r border-border flex flex-col py-[18px] px-[14px] sticky top-0 h-screen overflow-y-auto max-[900px]:hidden">
       <div className="flex items-center justify-between px-1 pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-[34px] h-[17px] rounded-[17px] bg-green-primary text-white grid place-items-center font-bold text-sm">Y</div>
+          <div className="w-[34px] h-[17px] rounded-[17px] bg-green-primary text-white grid place-items-center text-[18px] font-bold">Y</div>
           <div>
             <strong className="block text-base leading-[1.2]">Yjeek</strong>
-            <span className="block text-[10px] font-bold tracking-[0.04em] text-green-primary">VENDOR</span>
+            <span className="block text-[9px] font-bold tracking-[0.04em] text-green-primary">VENDOR</span>
           </div>
         </div>
         <ChevronLeft size={16} color="#949994" />
@@ -52,8 +52,8 @@ export default function Sidebar() {
             to={to}
             end={to === '/branches' || to === '/catalog' || to === '/dashboard'}
             className={({ isActive }) =>
-              `flex items-center gap-3 py-[11px] px-3 rounded-md text-sm font-medium transition-colors duration-150 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:shrink-0 ${
-                isActive ? 'bg-green-active-bg text-green-active-text font-semibold' : 'text-ink-muted hover:bg-[#f3f6f3] hover:text-ink'
+              `flex items-center gap-3 py-[11px] px-3 rounded-md text-[13px] font-medium transition-colors duration-150 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:shrink-0 ${
+                isActive ? 'bg-green-active-bg text-green-active-text font-medium' : 'text-ink-muted hover:bg-[#f3f6f3] hover:text-ink'
               }`
             }
           >
@@ -62,7 +62,7 @@ export default function Sidebar() {
           </NavLink>
         ))}
         <div className="flex-1 min-h-6" />
-        <button type="button" className="flex items-center gap-3 py-[11px] px-3 rounded-md text-danger text-sm font-medium w-full text-left hover:bg-danger-soft" onClick={logout}>
+        <button type="button" className="flex items-center gap-3 py-[11px] px-3 rounded-md text-danger text-[13px] font-medium w-full text-left hover:bg-danger-soft" onClick={logout}>
           <LogOut size={20} strokeWidth={1.8} />
           Sign out
         </button>

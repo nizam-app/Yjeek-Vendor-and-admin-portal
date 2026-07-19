@@ -6,6 +6,8 @@ import OrderDetailModal from '../components/OrderDetailModal'
 import AcceptOrderModal from '../components/AcceptOrderModal'
 import HandoverChampModal from '../components/HandoverChampModal'
 import RejectOrderModal from '../components/RejectOrderModal'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 export default function LiveOrderColumn() {
   const { key } = useParams()
@@ -17,8 +19,9 @@ export default function LiveOrderColumn() {
   const [rejectOrder, setRejectOrder] = useState(null)
   const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
+  const { data: orders, error, isLoading, refetch } = useApiResource(() => vendorService.getLiveOrders(), [])
 
-  const column = getColumns(tab).find((col) => col.key === key)
+  const column = getColumns(tab, orders).find((col) => col.key === key)
   const items = column
     ? column.items.filter((order) =>
         [order.id, order.customer, order.items, order.guest]
@@ -29,11 +32,14 @@ export default function LiveOrderColumn() {
       )
     : []
 
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading orders…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load orders. <button onClick={refetch} className="underline">Try again</button></div>
+
   return (
     <div className="pt-[26px] px-[28px] pb-10">
       <Link
         to={`/live-orders?tab=${tab}`}
-        className="inline-flex items-center gap-[6px] text-green-primary text-[13px] font-semibold mb-[14px] hover:underline"
+        className="inline-flex items-center gap-[6px] text-green-primary text-[13px] font-medium mb-[14px] hover:underline"
       >
         <ArrowLeft size={14} strokeWidth={2.2} />
         Back to live orders
@@ -41,7 +47,7 @@ export default function LiveOrderColumn() {
 
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em] flex items-center gap-2.5">
+          <h1 className="text-[20px] font-bold tracking-[-0.02em] flex items-center gap-2.5">
             {column ? column.title : 'Not found'}
             <span className="bg-green-active-bg text-green-active-text text-[13px] font-bold rounded-full py-[2px] px-[10px]">
               {items.length}

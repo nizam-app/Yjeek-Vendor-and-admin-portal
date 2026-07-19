@@ -1,4 +1,5 @@
-import { notifications } from '../data/mockData'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 const sections = [
   { key: 'today', label: 'TODAY' },
@@ -6,10 +7,14 @@ const sections = [
 ]
 
 export default function Notifications() {
+  const { data: notifications, error, isLoading, refetch } = useApiResource(() => vendorService.getNotifications(), [])
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading notifications…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load notifications. <button onClick={refetch} className="underline">Try again</button></div>
+
   return (
     <div className="px-[28px] pt-[26px] pb-10">
       <div className="mb-5">
-        <h1 className="text-[26px] font-bold tracking-[-0.02em] text-ink">Notifications</h1>
+        <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink">Notifications</h1>
         <p className="mt-1 text-[13px] text-ink-muted">New-order pings and critical SLA alerts</p>
       </div>
 

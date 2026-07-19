@@ -2,8 +2,8 @@ import { useEffect } from 'react'
 import { Check, X } from 'lucide-react'
 import motoBike from '../assets/moto_bike.png'
 
-const fieldLabel = 'text-[10px] font-bold text-[#949C94] uppercase tracking-[0.04em]'
-const fieldValue = 'text-[13px] font-semibold text-[#1A1A1A]'
+const fieldLabel = 'text-[13px] font-medium text-[#949C94] uppercase tracking-[0.04em]'
+const fieldValue = 'text-[13px] font-medium text-[#1A1A1A]'
 
 const windowTones = {
   blue: 'bg-[#E5F0FF] text-[#2978DB]',
@@ -93,13 +93,13 @@ function buildScheduledDetails(order, columnKey) {
   }
 }
 
-const itemsLabel = 'text-[11px] font-semibold leading-[13px] tracking-[0.03em] text-[#8C948C] uppercase'
+const itemsLabel = 'text-[11px] font-medium leading-[13px] tracking-[0.03em] text-[#8C948C] uppercase'
 
 function ItemRow({ qty, name }) {
   return (
     <div className="box-border flex w-full items-center rounded-full bg-[#F5F7F5] px-[12px] py-[9px]">
       <p className="m-0 w-full text-[13px] leading-[16px] text-[#1A1A1A]">
-        <span className="font-semibold">{qty}×</span>
+        <span className="font-medium">{qty}×</span>
         <span className="font-normal"> {name}</span>
       </p>
     </div>
@@ -117,7 +117,7 @@ function StatusBanner({ banner }) {
       {banner.icon === 'champ' ? (
         <img src={motoBike} alt="" className="w-[22px] h-[22px] object-contain shrink-0" aria-hidden="true" />
       ) : null}
-      <p className="text-[13px] font-semibold leading-[1.45]">{banner.message}</p>
+      <p className="text-[13px] font-medium leading-[1.45]">{banner.message}</p>
     </div>
   )
 }
@@ -151,9 +151,9 @@ export default function ScheduledOrderModal({ open, onClose, order, columnKey = 
         >
           {isNew ? (
             <>
-              <h2 className="text-[19px] font-bold text-[#1A1A1A] leading-tight min-w-0">{details.title}</h2>
+              <h2 className="text-[20px] font-bold text-[#1A1A1A] leading-tight min-w-0">{details.title}</h2>
               <div className="flex items-center gap-2 shrink-0">
-                <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[10.5px] font-semibold ${details.windowTone}`}>
+                <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[11px] font-medium ${details.windowTone}`}>
                   {details.windowLabel}
                 </span>
                 <button
@@ -171,11 +171,11 @@ export default function ScheduledOrderModal({ open, onClose, order, columnKey = 
               <h2 className="text-[18px] font-bold text-[#1A1A1A] leading-tight min-w-0">{details.title}</h2>
               <div className="flex items-center gap-2 shrink-0">
                 {config.showStatusBadge ? (
-                  <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[10.5px] font-bold ${config.statusTone}`}>
+                  <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[11px] font-bold ${config.statusTone}`}>
                     {config.statusLabel}
                   </span>
                 ) : null}
-                <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[10.5px] font-semibold ${details.windowTone}`}>
+                <span className={`inline-flex items-center rounded-full py-[4px] px-[10px] text-[11px] font-medium ${details.windowTone}`}>
                   {details.windowLabel}
                 </span>
                 <button

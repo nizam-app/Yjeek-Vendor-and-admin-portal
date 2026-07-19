@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import VendorLayout from './layout/VendorLayout'
+import AdminLayout from './layout/AdminLayout'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import LiveOrders from './pages/LiveOrders'
@@ -21,11 +22,22 @@ import ConfigurePromotion from './pages/ConfigurePromotion'
 import PromotionDetail from './pages/PromotionDetail'
 import Notifications from './pages/Notifications'
 import Account from './pages/Account'
+import { AdminDashboard, AdminManagement, AdminOperations } from './pages/admin/AdminPages'
+import AdminTwoFactor from './pages/admin/AdminTwoFactor'
 
-function ProtectedRoute() {
+function RequireRole({ role }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  if (user.role !== role) {
+    return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
+  }
   return <Outlet />
+}
+
+function RoleHome() {
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
 }
 
 export default function App() {
@@ -33,9 +45,11 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
-        <Route element={<ProtectedRoute />}>
+        <Route path="/admin/verify" element={<AdminTwoFactor />} />
+        <Route path="/" element={<RoleHome />} />
+
+        <Route element={<RequireRole role="vendor" />}>
           <Route element={<VendorLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/live-orders" element={<LiveOrders />} />
             <Route path="/live-orders/:key" element={<LiveOrderColumn />} />
@@ -57,7 +71,30 @@ export default function App() {
             <Route path="/account" element={<Account />} />
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+
+        <Route element={<RequireRole role="admin" />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="live-orders" element={<AdminOperations mode="live orders" />} />
+            <Route path="scheduled" element={<AdminOperations mode="scheduled" />} />
+            <Route path="pickup" element={<AdminOperations mode="pickup" />} />
+            <Route path="dine-in" element={<AdminOperations mode="dine-in" />} />
+            <Route path="services" element={<AdminOperations mode="services" />} />
+            <Route path="vendors" element={<AdminManagement type="vendors" />} />
+            <Route path="stores" element={<AdminManagement type="stores" />} />
+            <Route path="fleet" element={<AdminManagement type="fleet" />} />
+            <Route path="customers" element={<AdminManagement type="customers" />} />
+            <Route path="marketing" element={<AdminManagement type="marketing" />} />
+            <Route path="sla-models" element={<AdminManagement type="sla-models" />} />
+            <Route path="ui-editor" element={<AdminManagement type="ui-editor" />} />
+            <Route path="users" element={<AdminManagement type="users" />} />
+            <Route path="reports" element={<AdminManagement type="reports" />} />
+            <Route path="settings" element={<AdminManagement type="settings" />} />
+          </Route>
+        </Route>
+
+        <Route path="*" element={<RoleHome />} />
       </Routes>
     </AuthProvider>
   )

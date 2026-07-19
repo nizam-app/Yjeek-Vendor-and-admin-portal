@@ -68,7 +68,7 @@ export default function ServicesCalendarView({
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>{leftAction}</div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[15px] font-bold text-ink">{monthLabel}</span>
+          <span className="text-[16px] font-bold text-ink">{monthLabel}</span>
           <button
             type="button"
             className="inline-flex h-7 w-7 items-center justify-center rounded-[6px] border border-[#d9ded9] bg-white text-ink-muted hover:bg-[#f5f7f5]"
@@ -90,7 +90,7 @@ export default function ServicesCalendarView({
 
       <div className="mb-2 grid grid-cols-7 gap-2">
         {WEEKDAYS.map((label) => (
-          <div key={label} className="px-1 text-center text-[12px] font-semibold text-[#8a938c]">
+          <div key={label} className="px-1 text-center text-[12px] font-medium text-[#8a938c]">
             {label}
           </div>
         ))}
@@ -127,9 +127,9 @@ export default function ServicesCalendarView({
                 }
               }}
             >
-              <span className="text-[13px] font-semibold leading-none text-ink">{cell.day}</span>
+              <span className="text-[13px] font-medium leading-none text-ink">{cell.day}</span>
               {hasBookings ? (
-                <span className="mt-2 inline-flex rounded-full bg-[#2e9e4d] px-2.5 py-[3px] text-[11px] font-semibold leading-none text-white">
+                <span className="mt-2 inline-flex rounded-full bg-[#2e9e4d] px-2.5 py-[3px] text-[11px] font-medium leading-none text-white">
                   {bookingLabel(cell.bookingCount)}
                 </span>
               ) : null}

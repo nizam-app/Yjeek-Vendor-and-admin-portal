@@ -15,7 +15,7 @@ function DashDivider() {
   )
 }
 
-function MetaRow({ label, value, labelClass = 'text-[12.5px] font-medium text-[#69706E]', valueClass = 'text-[12.5px] font-semibold text-[#1A1A1A]' }) {
+function MetaRow({ label, value, labelClass = 'text-[12.5px] font-medium text-[#69706E]', valueClass = 'text-[12.5px] font-medium text-[#1A1A1A]' }) {
   return (
     <div className="flex w-full min-h-[15px] items-center gap-2">
       <span className={`shrink-0 leading-[15px] ${labelClass}`}>{label}</span>
@@ -51,12 +51,12 @@ export default function OrderHistoryReceiptModal({ open, onClose, order }) {
       <div className="relative h-[457px] w-[440px] max-w-full overflow-hidden rounded-[16px] bg-white shadow-[0px_12px_40px_rgba(0,0,0,0.25)]">
         <div className="flex h-full flex-col gap-3 px-6 pt-6 pb-[22px]">
           <div className="flex flex-col items-start gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-[20px] bg-[#E3F2EB] px-3 py-[5px] text-[11.5px] font-bold leading-[14px] text-[#127036]">
+            <span className="inline-flex items-center gap-1.5 rounded-[20px] bg-[#E3F2EB] px-3 py-[5px] text-[11px] font-bold leading-[14px] text-[#127036]">
               <Check size={12} strokeWidth={3} />
               PAID
             </span>
             <h2 className="text-[16px] font-bold leading-[19px] text-[#1A1A1A]">{order.branch}</h2>
-            <p className="text-[11.5px] font-normal leading-[14px] text-[#949C94]">
+            <p className="text-[11px] font-normal leading-[14px] text-[#949C94]">
               Order {order.id} · {order.when}
             </p>
           </div>
@@ -70,7 +70,7 @@ export default function OrderHistoryReceiptModal({ open, onClose, order }) {
                   {item.qty}× {item.name}
                 </span>
                 <span className="min-w-2 flex-1" />
-                <span className="shrink-0 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]">{formatPrice(item.price)}</span>
+                <span className="shrink-0 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]">{formatPrice(item.price)}</span>
               </div>
             ))}
           </div>

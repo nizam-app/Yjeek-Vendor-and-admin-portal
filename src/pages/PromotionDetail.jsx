@@ -11,10 +11,11 @@ import {
   YAxis,
 } from 'recharts'
 import { StatusPill } from '../components/ui'
-import { promotions } from '../data/mockData'
 import editIcon from '../assets/icon-edit.png'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
-function findPromo(promoId) {
+function findPromo(promotions, promoId) {
   if (!promoId) return null
   const decoded = decodeURIComponent(promoId)
   return promotions.find((p) => p.id === decoded) || promotions.find((p) => p.title === decoded)
@@ -27,7 +28,7 @@ function ChartTooltip({ active, payload }) {
 
   return (
     <div className="rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-2 shadow-[0_8px_20px_rgba(26,28,26,0.12)]">
-      <p className="text-[11px] font-semibold tracking-[0.02em] text-ink-muted uppercase">
+      <p className="text-[11px] font-medium tracking-[0.02em] text-ink-muted uppercase">
         {point.label}
       </p>
       <p className="mt-1 text-[13px] font-bold text-ink">
@@ -57,13 +58,13 @@ function RedemptionChart({ values }) {
             dataKey="day"
             tickLine={false}
             axisLine={false}
-            tick={{ fill: '#949994', fontSize: 11, fontWeight: 600 }}
+            tick={{ fill: '#949994', fontSize: 11, fontWeight: 500 }}
             dy={6}
           />
           <YAxis
             tickLine={false}
             axisLine={false}
-            tick={{ fill: '#949994', fontSize: 11, fontWeight: 600 }}
+            tick={{ fill: '#949994', fontSize: 11, fontWeight: 500 }}
             allowDecimals={false}
             width={36}
           />
@@ -88,14 +89,18 @@ function RedemptionChart({ values }) {
 export default function PromotionDetail() {
   const { promoId } = useParams()
   const navigate = useNavigate()
-  const promo = useMemo(() => findPromo(promoId), [promoId])
+  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getPromotions(), [])
+  const promo = useMemo(() => findPromo(data?.promotions || [], promoId), [data, promoId])
+
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading promotion…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load promotion. <button onClick={refetch} className="underline">Try again</button></div>
 
   if (!promo) {
     return (
       <div className="px-[28px] pt-[26px] pb-10">
         <Link
           to="/promotions"
-          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Promotions
         </Link>
@@ -117,14 +122,14 @@ export default function PromotionDetail() {
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:gap-3">
           <Link
             to="/promotions"
-            className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+            className="mt-1 inline-flex shrink-0 items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
           >
             ‹ Promotions
           </Link>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[22px] font-bold tracking-[-0.02em] text-ink sm:text-[26px]">
+              <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
                 {promo.title}
               </h1>
               <StatusPill status={promo.status} />
@@ -138,7 +143,7 @@ export default function PromotionDetail() {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-semibold text-[#127036] hover:bg-[#f3faf5]"
+            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#127036] hover:bg-[#f3faf5]"
           >
             <Pause size={14} strokeWidth={2.4} fill="currentColor" className="shrink-0" />
             Pause
@@ -146,7 +151,7 @@ export default function PromotionDetail() {
           <button
             type="button"
             onClick={() => navigate('/promotions/new')}
-            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-semibold text-[#127036] hover:bg-[#f3faf5]"
+            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#127036] hover:bg-[#f3faf5]"
           >
             <img src={editIcon} alt="" className="size-3.5 shrink-0 object-contain" />
             Edit
@@ -171,7 +176,7 @@ export default function PromotionDetail() {
             <p className="text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase">
               {kpi.label}
             </p>
-            <p className="mt-2 text-[22px] leading-none font-bold text-ink sm:text-[24px]">
+            <p className="mt-2 text-[20px] leading-none font-bold text-ink sm:text-[20px]">
               {kpi.value}
             </p>
             <p className={`mt-2 text-[12px] font-medium ${noteTone[kpi.tone] || noteTone.muted}`}>
@@ -184,7 +189,7 @@ export default function PromotionDetail() {
       {/* Chart + Settings */}
       <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.65fr_1fr]">
         <section className="rounded-[14px] border border-[#E0E6E0] bg-white p-4 sm:p-5">
-          <h2 className="mb-4 text-[15px] font-bold text-ink">Redemptions — last 14 days</h2>
+          <h2 className="mb-4 text-[16px] font-bold text-ink">Redemptions — last 14 days</h2>
           <RedemptionChart values={promo.chart || Array(14).fill(0)} />
           <p className="mt-4 text-[12.5px] text-ink-muted">
             Peak on day {promo.chartPeakDay || 1} — {promo.chartPeakValue || 0} redemptions. Total
@@ -193,7 +198,7 @@ export default function PromotionDetail() {
         </section>
 
         <section className="rounded-[14px] border border-[#E0E6E0] bg-white p-4 sm:p-5">
-          <h2 className="mb-3 text-[15px] font-bold text-ink">Settings</h2>
+          <h2 className="mb-3 text-[16px] font-bold text-ink">Settings</h2>
           <div className="divide-y divide-[#EEF1EE]">
             {(promo.settings || []).map((row) => (
               <div
@@ -201,7 +206,7 @@ export default function PromotionDetail() {
                 className="flex items-center justify-between gap-3 py-[11px] first:pt-0 last:pb-0"
               >
                 <span className=" flex-1 shrink-0 text-[12.5px] text-ink-muted">{row.label}</span>
-                <span className=" flex-1 text-left text-[12.5px] font-semibold text-ink">{row.value}</span>
+                <span className=" flex-1 text-left text-[12.5px] font-medium text-ink">{row.value}</span>
               </div>
             ))}
           </div>
@@ -211,7 +216,7 @@ export default function PromotionDetail() {
       {/* Recent redemptions */}
       <section className="overflow-hidden rounded-[14px] border border-[#E0E6E0] bg-white">
         <div className="border-b border-[#EEF1EE] px-4 py-4 sm:px-5">
-          <h2 className="text-[15px] font-bold text-ink">Recent redemptions</h2>
+          <h2 className="text-[16px] font-bold text-ink">Recent redemptions</h2>
         </div>
 
         {(promo.recent || []).length === 0 ? (
@@ -237,7 +242,7 @@ export default function PromotionDetail() {
                     <td className="px-5 py-[14px] text-[13px] font-bold text-ink">{row.order}</td>
                     <td className="px-5 py-[14px] text-[13px] text-ink">{row.customer}</td>
                     <td className="px-5 py-[14px] text-[13px] text-ink">{row.discount}</td>
-                    <td className="px-5 py-[14px] text-[13px] font-semibold text-ink">{row.total}</td>
+                    <td className="px-5 py-[14px] text-[13px] font-medium text-ink">{row.total}</td>
                     <td className="px-5 py-[14px] text-[13px] text-ink-muted">{row.when}</td>
                   </tr>
                 ))}

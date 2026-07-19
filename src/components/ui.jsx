@@ -38,7 +38,7 @@ export function PageHeader({ title, subtitle, actions }) {
   return (
     <div className="flex items-start justify-between gap-4 mb-5">
       <div>
-        <h1 className="text-[26px] font-bold tracking-[-0.02em] flex items-center gap-2.5">{title}</h1>
+        <h1 className="text-[20px] font-bold tracking-[-0.02em] flex items-center gap-2.5">{title}</h1>
         {subtitle ? <p className="mt-1 text-ink-muted text-[13px]">{subtitle}</p> : null}
       </div>
       {actions ? <div>{actions}</div> : null}

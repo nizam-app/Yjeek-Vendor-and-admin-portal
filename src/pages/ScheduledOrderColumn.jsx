@@ -30,7 +30,7 @@ export default function ScheduledOrderColumn() {
     <div className="pt-[26px] px-[28px] pb-10">
       <Link
         to="/scheduled"
-        className="inline-flex items-center gap-[6px] text-green-primary text-[13px] font-semibold mb-[14px] hover:underline"
+        className="inline-flex items-center gap-[6px] text-green-primary text-[13px] font-medium mb-[14px] hover:underline"
       >
         <ArrowLeft size={14} strokeWidth={2.2} />
         Back to scheduled orders
@@ -38,7 +38,7 @@ export default function ScheduledOrderColumn() {
 
       <div className="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em] flex items-center gap-2.5">
+          <h1 className="text-[20px] font-bold tracking-[-0.02em] flex items-center gap-2.5">
             {column ? column.title : 'Not found'}
             <span className="bg-[#eef1ee] text-ink-muted text-[13px] font-bold rounded-full py-[2px] px-[10px]">
               {items.length}
@@ -58,7 +58,7 @@ export default function ScheduledOrderColumn() {
         />
         <button
           type="button"
-          className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white font-semibold text-ink shrink-0"
+          className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white font-medium text-ink shrink-0"
         >
           Sort: Window
         </button>

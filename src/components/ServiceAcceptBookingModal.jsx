@@ -8,7 +8,7 @@ function DashDivider() {
   )
 }
 
-function MetaRow({ label, value, valueClass = 'text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]' }) {
+function MetaRow({ label, value, valueClass = 'text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]' }) {
   return (
     <div className="flex w-full min-h-[15px] items-center gap-2">
       <span className="shrink-0 text-[12.5px] font-medium leading-[15px] text-[#69706E]">{label}</span>
@@ -22,9 +22,9 @@ function ServiceRow({ name, qty, price }) {
   return (
     <div className="flex w-full min-h-[15px] items-center gap-2">
       <span className="shrink-0 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]">{name}</span>
-      <span className="shrink-0 text-[11.5px] font-semibold leading-[14px] text-[#69706E]">×{qty}</span>
+      <span className="shrink-0 text-[11px] font-medium leading-[14px] text-[#69706E]">×{qty}</span>
       <span className="min-w-2 flex-1" />
-      <span className="shrink-0 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]">{price}</span>
+      <span className="shrink-0 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]">{price}</span>
     </div>
   )
 }
@@ -91,7 +91,7 @@ export default function ServiceAcceptBookingModal({ open, onClose, order }) {
       <div className="relative h-[558px] w-[430px] max-w-full overflow-hidden rounded-[16px] bg-white shadow-[0px_12px_40px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col items-start gap-3 px-6 pb-[22px] pt-6">
           <div className="flex w-full flex-col items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-[20px] bg-[#E3F2EB] px-3 py-[5px] text-[11.5px] font-bold leading-[14px] text-[#127036]">
+            <span className="inline-flex items-center gap-1.5 rounded-[20px] bg-[#E3F2EB] px-3 py-[5px] text-[11px] font-bold leading-[14px] text-[#127036]">
               ✓ {receipt.badge}
             </span>
             <h2 className="w-full text-center text-[16px] font-bold leading-[19px] text-[#1A1A1A]">{receipt.branchName}</h2>
@@ -110,9 +110,9 @@ export default function ServiceAcceptBookingModal({ open, onClose, order }) {
 
           <div className="flex w-full flex-col gap-2">
             <div className="flex w-full min-h-[13px] items-start gap-2">
-              <span className="text-[10.5px] font-bold uppercase leading-[13px] text-[#949C94]">Service</span>
+              <span className="text-[11px] font-bold uppercase leading-[13px] text-[#949C94]">Service</span>
               <span className="min-w-2 flex-1" />
-              <span className="text-[10.5px] font-bold uppercase leading-[13px] text-[#949C94]">Price</span>
+              <span className="text-[11px] font-bold uppercase leading-[13px] text-[#949C94]">Price</span>
             </div>
             {receipt.items.map((item, index) => (
               <ServiceRow key={`${item.name}-${index}`} name={item.name} qty={item.qty} price={item.price} />
@@ -138,7 +138,7 @@ export default function ServiceAcceptBookingModal({ open, onClose, order }) {
           <div className="flex h-12 w-full gap-3">
             <button
               type="button"
-              className="h-12 flex-1 rounded-[12px] border-[1.2px] border-[#DBE0DB] bg-white text-[14px] font-semibold leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
+              className="h-12 flex-1 rounded-[12px] border-[1.2px] border-[#DBE0DB] bg-white text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
               onClick={onClose}
             >
               Cancel

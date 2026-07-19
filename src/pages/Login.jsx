@@ -1,30 +1,32 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { demoAccounts, useAuth } from '../context/AuthContext'
 import { loginFeatures } from '../data/mockData'
 
 export default function Login() {
   const { user, login } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('admin@greenkitchen.bh')
+  const [email, setEmail] = useState(demoAccounts.vendor.email)
   const [password, setPassword] = useState('password123')
   const [error, setError] = useState('')
 
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user) return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
 
   function handleSubmit(e) {
     e.preventDefault()
-    if (!email.trim() || !password.trim()) {
-      setError('Incorrect email or password. Please recheck and try again.')
-      return
-    }
-    if (password.length < 4) {
+    const nextUser = login(email, password)
+    if (!nextUser) {
       setError('Incorrect email or password. Please recheck and try again.')
       return
     }
     setError('')
-    login(email.trim())
-    navigate('/dashboard')
+    navigate(nextUser.requiresTwoFactor ? '/admin/verify' : '/dashboard')
+  }
+
+  function useDemo(account) {
+    setEmail(account.email)
+    setPassword(account.password)
+    setError('')
   }
 
   const fieldInputClass = `w-full h-11 border rounded-md px-[14px] text-[13px] focus:outline-2 focus:outline-solid ${
@@ -45,17 +47,17 @@ export default function Login() {
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
           </div>
-          <div className="text-[11px] font-bold text-green-soft tracking-[0.06em] mt-1">VENDOR PORTAL</div>
+          <div className="text-[11px] font-bold text-green-soft tracking-[0.06em] mt-1">VENDOR &amp; ADMIN PORTAL</div>
         </div>
-        <h1 className="text-[26px] font-bold leading-[1.25] max-w-[426px]">
+        <h1 className="text-[20px] font-bold leading-[1.25] max-w-[426px]">
           Run your Store, your branches,
           <br />
           and your finances — in one place.
         </h1>
         <div className="flex flex-col gap-[14px]">
           {loginFeatures.map((f) => (
-            <div key={f.text} className="flex items-center gap-3 text-sm font-medium text-green-feat">
-              <div className="w-[34px] h-[34px] rounded-[9px] bg-green-mid grid place-items-center text-[15px]">{f.icon}</div>
+            <div key={f.text} className="flex items-center gap-3 text-[14px] font-normal text-green-feat">
+              <div className="w-[34px] h-[34px] rounded-[9px] bg-green-mid grid place-items-center text-[14px]">{f.icon}</div>
               <span>{f.text}</span>
             </div>
           ))}
@@ -66,8 +68,8 @@ export default function Login() {
         <form className="w-full max-w-[420px]" onSubmit={handleSubmit}>
           <div className="flex justify-between items-start mb-[18px]">
             <div>
-              <h2 className="text-2xl font-bold">Welcome back</h2>
-              <p className="mt-[2px] text-[13px] text-ink-muted">Sign in to your vendor dashboard</p>
+              <h2 className="text-xl font-bold">Welcome back</h2>
+              <p className="mt-[2px] text-[14px] font-normal text-ink-muted">Sign in to your Yjeek workspace</p>
             </div>
             <button
               type="button"
@@ -84,8 +86,27 @@ export default function Login() {
             </div>
           ) : null}
 
+          <div className="grid grid-cols-2 gap-2 mb-[18px]">
+            <button
+              type="button"
+              onClick={() => useDemo(demoAccounts.vendor)}
+              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg"
+            >
+              <span className="block text-[11px] font-medium text-green-active-text">VENDOR DEMO</span>
+              <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.vendor.email}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => useDemo(demoAccounts.admin)}
+              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg"
+            >
+              <span className="block text-[11px] font-medium text-green-active-text">ADMIN DEMO</span>
+              <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.admin.email}</span>
+            </button>
+          </div>
+
           <div className="mb-[18px]">
-            <label htmlFor="email" className="block text-[11px] font-bold tracking-[0.04em] text-ink-muted mb-[6px]">
+            <label htmlFor="email" className="block text-[13px] font-medium tracking-[0.04em] text-ink-muted mb-[6px]">
               EMAIL
             </label>
             <input
@@ -102,7 +123,7 @@ export default function Login() {
           </div>
 
           <div className="mb-[18px]">
-            <label htmlFor="password" className="block text-[11px] font-bold tracking-[0.04em] text-ink-muted mb-[6px]">
+            <label htmlFor="password" className="block text-[13px] font-medium tracking-[0.04em] text-ink-muted mb-[6px]">
               PASSWORD
             </label>
             <input
@@ -118,7 +139,7 @@ export default function Login() {
             />
           </div>
 
-          <button type="submit" className="w-full h-6 rounded-full bg-green-primary text-white text-[15px] font-semibold">
+          <button type="submit" className="w-full h-11 rounded-md bg-green-primary text-white text-[13px] font-medium hover:bg-green-active-text">
             Sign in
           </button>
         </form>

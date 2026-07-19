@@ -2,11 +2,16 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { CatalogStoreIcon } from '../components/CatalogStoreIcons'
-import { catalogStoreTypes } from '../data/mockData'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 export default function Catalog() {
   const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState('all')
+  const { data: catalogStoreTypes, error, isLoading, refetch } = useApiResource(() => vendorService.getCatalogStoreTypes(), [])
+
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading catalog…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load catalog. <button onClick={refetch} className="underline">Try again</button></div>
 
   function handleSelect(type) {
     setSelectedId(type.id)
@@ -17,7 +22,7 @@ export default function Catalog() {
 
   return (
     <div className="px-[28px] pt-[26px] pb-10">
-      <h1 className="mb-2 text-[28px] font-bold tracking-[-0.02em] text-ink">Set up your catalog</h1>
+      <h1 className="mb-2 text-[20px] font-bold tracking-[-0.02em] text-ink">Set up your catalog</h1>
       <p className="mb-7 max-w-[560px] text-[14px] leading-[1.55] text-ink-muted">
         Pick your store type and we’ll tailor the product fields. One catalog system — works for any category, and you
         can mix or change anytime.

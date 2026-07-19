@@ -32,7 +32,7 @@ export default function Scheduled() {
             <div className="flex items-center justify-between mb-3 font-bold text-sm">
               <span>{col.title}</span>
               <div className="flex items-center gap-2">
-                <span className="bg-white rounded-full py-[2px] px-[7px] text-[11px] font-semibold text-ink-muted">
+                <span className="bg-white rounded-full py-[2px] px-[7px] text-[11px] font-medium text-ink-muted">
                   {col.items.length}
                 </span>
                 <Link

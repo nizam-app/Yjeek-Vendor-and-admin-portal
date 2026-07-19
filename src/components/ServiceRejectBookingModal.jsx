@@ -89,7 +89,7 @@ export default function ServiceRejectBookingModal({ open, onClose, order }) {
           <div className="flex w-full gap-3">
             <button
               type="button"
-              className="h-12 flex-1 rounded-full border-[1.2px] border-[#DBE0DB] bg-white text-[14px] font-semibold leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
+              className="h-12 flex-1 rounded-full border-[1.2px] border-[#DBE0DB] bg-white text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
               onClick={onClose}
             >
               Cancel

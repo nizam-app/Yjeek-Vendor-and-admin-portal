@@ -8,7 +8,7 @@ function DashDivider() {
   )
 }
 
-function MetaRow({ label, value, valueClass = 'text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]' }) {
+function MetaRow({ label, value, valueClass = 'text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]' }) {
   return (
     <div className="flex items-center gap-2 w-full min-h-[15px]">
       <span className="text-[12.5px] font-medium leading-[15px] text-[#69706E] shrink-0">{label}</span>
@@ -22,9 +22,9 @@ function ItemRow({ name, qty, price }) {
   return (
     <div className="flex items-center gap-2 w-full min-h-[15px]">
       <span className="text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] shrink-0">{name}</span>
-      <span className="text-[11.5px] font-semibold leading-[14px] text-[#69706E] shrink-0">×{qty}</span>
+      <span className="text-[11px] font-medium leading-[14px] text-[#69706E] shrink-0">×{qty}</span>
       <span className="flex-1 min-w-2" />
-      <span className="text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A] shrink-0">{price}</span>
+      <span className="text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] shrink-0">{price}</span>
     </div>
   )
 }
@@ -92,7 +92,7 @@ export default function ScheduledReceiptModal({ open, onClose, order }) {
       <div className="relative w-[430px] h-[558px] max-w-full bg-white rounded-[16px] shadow-[0px_12px_40px_rgba(0,0,0,0.25)] overflow-hidden">
         <div className="flex flex-col items-start px-6 pt-6 pb-[22px] gap-3">
           <div className="flex flex-col items-center gap-2 w-full">
-            <span className="inline-flex items-center gap-1.5 py-[5px] px-3 bg-[#E3F2EB] rounded-[20px] text-[11.5px] font-bold leading-[14px] text-[#127036]">
+            <span className="inline-flex items-center gap-1.5 py-[5px] px-3 bg-[#E3F2EB] rounded-[20px] text-[11px] font-bold leading-[14px] text-[#127036]">
               ✓ {receipt.badge}
             </span>
             <h2 className="w-full text-[16px] font-bold leading-[19px] text-center text-[#1A1A1A]">{receipt.branchName}</h2>
@@ -111,9 +111,9 @@ export default function ScheduledReceiptModal({ open, onClose, order }) {
 
           <div className="flex flex-col gap-2 w-full">
             <div className="flex items-start gap-2 w-full min-h-[13px]">
-              <span className="text-[10.5px] font-bold leading-[13px] text-[#949C94] uppercase">Item</span>
+              <span className="text-[11px] font-bold leading-[13px] text-[#949C94] uppercase">Item</span>
               <span className="flex-1 min-w-2" />
-              <span className="text-[10.5px] font-bold leading-[13px] text-[#949C94] uppercase">Price</span>
+              <span className="text-[11px] font-bold leading-[13px] text-[#949C94] uppercase">Price</span>
             </div>
             {receipt.items.map((item, idx) => (
               <ItemRow key={`${item.name}-${idx}`} name={item.name} qty={item.qty} price={item.price} />
@@ -139,7 +139,7 @@ export default function ScheduledReceiptModal({ open, onClose, order }) {
           <div className="flex gap-3 w-full h-12">
             <button
               type="button"
-              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-[12px] text-[14px] font-semibold leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
+              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-[12px] text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
               onClick={onClose}
             >
               Cancel

@@ -35,7 +35,7 @@ function VisibilityToggle({ visible, onChange, label }) {
   return (
     <div className="flex shrink-0 items-center gap-2">
       <span
-        className={`text-[12.5px] font-semibold ${
+        className={`text-[12.5px] font-medium ${
           visible ? 'text-[#2E9E4D]' : 'text-[#949C94]'
         }`}
       >
@@ -50,7 +50,7 @@ function AvailabilityToggle({ available, onChange, label }) {
   return (
     <div className="flex shrink-0 items-center gap-2">
       <span
-        className={`text-[12.5px] font-semibold ${
+        className={`text-[12.5px] font-medium ${
           available ? 'text-[#2E9E4D]' : 'text-[#949C94]'
         }`}
       >
@@ -63,7 +63,7 @@ function AvailabilityToggle({ available, onChange, label }) {
 
 function PricePill({ price }) {
   return (
-    <span className="inline-flex h-[28px] shrink-0 items-center rounded-[8px] border border-[#E0E6E0] bg-white px-2.5 text-[12.5px] font-semibold text-[#1A1A1A]">
+    <span className="inline-flex h-[28px] shrink-0 items-center rounded-[8px] border border-[#E0E6E0] bg-white px-2.5 text-[12.5px] font-medium text-[#1A1A1A]">
       {price}
     </span>
   )
@@ -82,7 +82,7 @@ function MenuItemRow({ item, onToggle }) {
       >
         <span className="text-[14px] leading-[17px] text-[#949C94]">🍽️</span>
       </span>
-      <p className="min-w-0 flex-1 text-[13.5px] font-semibold text-[#1A1A1A]">{item.name}</p>
+      <p className="min-w-0 flex-1 text-[13px] font-medium text-[#1A1A1A]">{item.name}</p>
       <PricePill price={item.price} />
       <AvailabilityToggle
         available={item.available}
@@ -188,7 +188,7 @@ export default function BranchMenu() {
       <div className="px-[28px] pt-[26px] pb-10">
         <Link
           to="/branches"
-          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="mb-4 inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Branches
         </Link>
@@ -246,19 +246,19 @@ export default function BranchMenu() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
           to={editPath}
-          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Edit branch
         </Link>
 
-        <h1 className="min-w-0 flex-1 text-[22px] font-bold tracking-[-0.02em] text-ink sm:text-[24px]">
+        <h1 className="min-w-0 flex-1 text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
           Branch menu · {branch.name}
         </h1>
 
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-6 text-[13px] font-semibold text-white hover:brightness-[0.96]"
+          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-6 text-[13px] font-medium text-white hover:brightness-[0.96]"
         >
           Save
         </button>
@@ -273,7 +273,7 @@ export default function BranchMenu() {
           aria-hidden
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-[14.5px] font-bold text-ink">
+          <h2 className="text-[14px] font-bold text-ink">
             Organize categories (Category › Subcategory › Type)
           </h2>
           <p className="text-[12.5px] leading-relaxed text-ink-muted">
@@ -282,7 +282,7 @@ export default function BranchMenu() {
         </div>
         <button
           type="button"
-          className="shrink-0 text-[13px] font-semibold text-[#127036] hover:underline"
+          className="shrink-0 text-[13px] font-medium text-[#127036] hover:underline"
         >
           Open ›
         </button>
@@ -318,7 +318,7 @@ function FlatSection({ section, onToggleVisible, onToggleItem }) {
   return (
     <section className="rounded-[14px] border border-border bg-white pb-1">
       <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-        <h2 className="text-[15px] font-bold text-ink">{section.name}</h2>
+        <h2 className="text-[16px] font-bold text-ink">{section.name}</h2>
         <VisibilityToggle
           visible={section.visible}
           onChange={onToggleVisible}
@@ -336,7 +336,7 @@ function FlatSection({ section, onToggleVisible, onToggleItem }) {
 
 function NestArrow() {
   return (
-    <span className="text-[12.5px] leading-[15px] font-semibold text-[#949C94]">▾</span>
+    <span className="text-[12.5px] leading-[15px] font-medium text-[#949C94]">▾</span>
   )
 }
 
@@ -360,7 +360,7 @@ function NestedSection({ section, onToggleVisible, onToggleNode }) {
             className="h-[18px] w-auto shrink-0 object-contain"
             aria-hidden
           />
-          <h2 className="text-[15px] font-bold text-ink">{section.name}</h2>
+          <h2 className="text-[16px] font-bold text-ink">{section.name}</h2>
         </div>
         <VisibilityToggle
           visible={section.visible}
@@ -376,7 +376,7 @@ function NestedSection({ section, onToggleVisible, onToggleNode }) {
             <div className="mb-1 flex items-center justify-between gap-3 px-3 py-2">
               <div className="flex min-w-0 items-center gap-1.5 pl-1">
                 <NestArrow />
-                <p className="text-[13.5px] font-bold text-[#1A1A1A]">{sub.name}</p>
+                <p className="text-[13px] font-bold text-[#1A1A1A]">{sub.name}</p>
               </div>
               <VisibilityToggle
                 visible={sub.visible}
@@ -393,7 +393,7 @@ function NestedSection({ section, onToggleVisible, onToggleNode }) {
                     <div className="flex min-w-0 items-center gap-1.5">
                       <NestArrow />
                       <p
-                        className={`text-[13px] font-semibold ${
+                        className={`text-[13px] font-medium ${
                           type.visible ? 'text-[#127036]' : 'text-[#949C94]'
                         }`}
                       >
@@ -416,7 +416,7 @@ function NestedSection({ section, onToggleVisible, onToggleNode }) {
                         }`}
                       >
                         <NestDot />
-                        <p className="min-w-0 flex-1 text-[13px] font-semibold text-[#1A1A1A]">
+                        <p className="min-w-0 flex-1 text-[13px] font-medium text-[#1A1A1A]">
                           {item.name}
                         </p>
                         <PricePill price={item.price} />

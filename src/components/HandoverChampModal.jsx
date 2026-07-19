@@ -56,7 +56,7 @@ export default function HandoverChampModal({ open, onClose, order }) {
 
           <div className="flex items-center gap-2.5 rounded-[10px] bg-[#E8F1FB] px-4 py-3 mx-[24px]">
             <img src={motoBike} alt="" className="w-6 h-6 object-contain shrink-0" aria-hidden="true" />
-            <p className="text-[13px] font-semibold leading-[16px] text-[#2B6CB0]">
+            <p className="text-[13px] font-medium leading-[16px] text-[#2B6CB0]">
               Champ arriving — {champName}
             </p>
           </div>

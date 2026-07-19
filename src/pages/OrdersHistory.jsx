@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { StatusPill } from '../components/ui'
 import OrderHistoryReceiptModal from '../components/OrderHistoryReceiptModal'
-import { orderHistory } from '../data/mockData'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 const TYPE_OPTIONS = ['All types', 'Delivery', 'Pickup', 'Dine-in', 'Services']
 
-const fieldLabelClass = 'text-[10px] font-bold text-ink-muted tracking-[0.02em] uppercase'
+const fieldLabelClass = 'text-[13px] font-medium text-ink-muted tracking-[0.02em] uppercase'
 const selectClass =
   'h-10 border border-border rounded-[8px] px-3 flex items-center justify-between gap-2 text-xs text-ink-faint bg-white whitespace-nowrap'
 
@@ -23,6 +24,7 @@ export default function OrdersHistory() {
   const [receiptOrder, setReceiptOrder] = useState(null)
   const typeRef = useRef(null)
   const menuRef = useRef(null)
+  const { data: orderHistory, error, isLoading, refetch } = useApiResource(() => vendorService.getOrderHistory(), [])
 
   useEffect(() => {
     if (!typeOpen && !menuOrderId) return undefined
@@ -40,7 +42,7 @@ export default function OrdersHistory() {
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [typeOpen, menuOrderId])
 
-  const filtered = orderHistory.filter((o) => {
+  const filtered = (orderHistory || []).filter((o) => {
     const matchesQuery =
       o.id.toLowerCase().includes(query.toLowerCase()) ||
       o.branch.toLowerCase().includes(query.toLowerCase()) ||
@@ -50,11 +52,14 @@ export default function OrdersHistory() {
     return matchesQuery && matchesType
   })
 
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading order history…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load order history. <button onClick={refetch} className="underline">Try again</button></div>
+
   return (
     <div className="pt-[26px] px-[28px] pb-10">
       <div className="flex items-start justify-between mb-[22px]">
-        <h1 className="text-[26px] font-bold text-ink">Orders</h1>
-        <button type="button" className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-semibold bg-white">
+        <h1 className="text-[20px] font-bold text-ink">Orders</h1>
+        <button type="button" className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-medium bg-white">
           ↻ Refresh
         </button>
       </div>
@@ -104,7 +109,7 @@ export default function OrdersHistory() {
                     aria-selected={selected}
                     className={`flex w-full items-center justify-between px-3 py-[11px] text-left text-[13px] ${
                       idx > 0 ? 'border-t border-border' : ''
-                    } ${selected ? 'font-semibold text-green-light-text' : 'font-medium text-ink hover:bg-[#f7f9f7]'}`}
+                    } ${selected ? 'font-medium text-green-light-text' : 'font-medium text-ink hover:bg-[#f7f9f7]'}`}
                     onClick={() => {
                       setTypeFilter(option)
                       setTypeOpen(false)
@@ -157,7 +162,7 @@ export default function OrdersHistory() {
                 const menuOpen = menuOrderId === order.id
                 return (
                   <tr key={order.id} className={`${idx % 2 === 1 ? 'bg-[#fbfcfb]' : ''} border-t border-border`}>
-                    <td className="py-[15px] px-5 text-[12px] font-semibold text-green-light-text">{order.id}</td>
+                    <td className="py-[15px] px-5 text-[12px] font-medium text-green-light-text">{order.id}</td>
                     <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.type}</td>
                     <td className="py-[15px] px-5">
                       <StatusPill status={order.status} />

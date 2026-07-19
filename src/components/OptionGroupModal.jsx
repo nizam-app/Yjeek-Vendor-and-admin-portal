@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import productDrink from '../assets/product-drink.png'
 import productSalad from '../assets/product-salad.png'
 
-const labelClass = 'text-[10.5px] font-bold leading-[13px] text-[#69706E]'
+const labelClass = 'text-[13px] font-medium leading-[13px] text-[#69706E]'
 const inputBox =
-  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 
 const DRINK_CHOICES = [
   { name: 'Pepsi', price: '+0.000', image: productDrink, isDefault: true },
@@ -190,7 +190,7 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
             <div className="flex w-full flex-col gap-1.5">
               <label className={labelClass}>GROUP NAME</label>
               <input
-                className="box-border flex h-[42px] w-[108px] items-center rounded-sm border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                className="box-border flex h-[42px] w-[108px] items-center rounded-sm border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
                 value={form.title}
                 onChange={(e) => updateField('title', e.target.value)}
                 placeholder="Choose a drink"
@@ -205,7 +205,7 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
                   <button
                     type="button"
                     onClick={() => setSelection('single')}
-                    className={`px-3.5 text-[12px] font-semibold transition ${
+                    className={`px-3.5 text-[12px] font-medium transition ${
                       form.selection === 'single'
                         ? 'bg-[#1A1A1A] text-white'
                         : 'bg-transparent text-[#69706E] hover:text-[#1A1A1A]'
@@ -216,7 +216,7 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
                   <button
                     type="button"
                     onClick={() => setSelection('multiple')}
-                    className={`px-3.5 text-[12px] font-semibold transition ${
+                    className={`px-3.5 text-[12px] font-medium transition ${
                       form.selection === 'multiple'
                         ? 'bg-[#1A1A1A] text-white'
                         : 'bg-transparent text-[#69706E] hover:text-[#1A1A1A]'
@@ -254,7 +254,7 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
               <button
                 type="button"
                 onClick={addChoice}
-                className="text-[12px] font-semibold leading-[14px] text-[#127036] hover:underline"
+                className="text-[12px] font-medium leading-[14px] text-[#127036] hover:underline"
               >
                 + Add choice
               </button>
@@ -284,18 +284,18 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
 
                   {/* Name — bordered white box (indicated) */}
                   <input
-                    className="box-border h-9 min-w-0 flex-1 rounded-[8px] border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-semibold leading-[15px] text-[#1A1A1A] outline-none placeholder:text-[#9EA69E] focus:border-[#1AA34D]"
+                    className="box-border h-9 min-w-0 flex-1 rounded-[8px] border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-medium leading-[15px] text-[#1A1A1A] outline-none placeholder:text-[#9EA69E] focus:border-[#1AA34D]"
                     placeholder="Choice name"
                     value={choice.name}
                     onChange={(e) => updateChoice(idx, 'name', e.target.value)}
                   />
 
                   <div className="flex w-[90px] shrink-0 flex-col items-start gap-0.5">
-                    <span className="text-[8.5px] font-bold leading-[10px] text-[#949C94]">
+                    <span className="text-[9px] font-bold leading-[10px] text-[#949C94]">
                       PRICE +/−
                     </span>
                     <input
-                      className="box-border flex h-[30px] w-full items-center rounded-[8px] border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                      className="box-border flex h-[30px] w-full items-center rounded-[8px] border border-[#D6DBD6] bg-white px-2.5 text-[12px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
                       value={choice.price}
                       onChange={(e) => updateChoice(idx, 'price', e.target.value)}
                     />
@@ -303,14 +303,14 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
 
                   {/* Default / Set default pills (indicated) */}
                   {choice.isDefault ? (
-                    <span className="inline-block h-[21px] shrink-0 items-center rounded-[20px] bg-[#E3F2EB] px-2.5 py-1 text-[10.5px] font-semibold leading-[13px] text-[#127036]">
+                    <span className="inline-block h-[21px] shrink-0 items-center rounded-[20px] bg-[#E3F2EB] px-2.5 py-1 text-[11px] font-medium leading-[13px] text-[#127036]">
                       Default
                     </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setDefaultChoice(idx)}
-                      className="inline-flex h-[21px]  shrink-0 items-center justify-center rounded-[20px] bg-[#EBEDEB] px-2.5 py-1 text-[10.5px] font-semibold leading-[13px] text-[#949C94] hover:bg-[#E3E5E3]"
+                      className="inline-flex h-[21px]  shrink-0 items-center justify-center rounded-[20px] bg-[#EBEDEB] px-2.5 py-1 text-[11px] font-medium leading-[13px] text-[#949C94] hover:bg-[#E3E5E3]"
                     >
                       Set default
                     </button>
@@ -337,13 +337,13 @@ export default function OptionGroupModal({ open, group, onClose, onSave }) {
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-4 text-[13px] font-semibold text-[#1A1A1A]"
+              className="inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#1A1A1A]"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="inline-flex h-[38px] min-w-[110px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-4 text-[13px] font-semibold text-white hover:brightness-[0.96]"
+              className="inline-flex h-[38px] min-w-[110px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-4 text-[13px] font-medium text-white hover:brightness-[0.96]"
             >
               Save group
             </button>

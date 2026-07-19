@@ -90,18 +90,18 @@ function buildForm(product) {
   }
 }
 
-const labelClass = 'text-[10.5px] font-bold leading-[13px] text-[#69706E]'
+const labelClass = 'text-[13px] font-medium leading-[13px] text-[#69706E]'
 const inputBox =
-  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 const selectBox =
-  'box-border flex h-[42px] w-full appearance-none items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border flex h-[42px] w-full appearance-none items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 
 function Chip({ selected, children, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`box-border inline-flex h-[29px] items-center gap-1 rounded-[18px] px-[13px] py-[7px] text-[12px] font-semibold leading-[15px] ${
+      className={`box-border inline-flex h-[29px] items-center gap-1 rounded-[18px] px-[13px] py-[7px] text-[12px] font-medium leading-[15px] ${
         selected
           ? 'border border-[#1AA34D] bg-[#E3F2EB] text-[#127036]'
           : 'border border-[#D6DBD6] bg-white text-[#1A1A1A]'
@@ -268,7 +268,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
       <div className="flex w-[860px] max-w-[calc(100vw-24px)] flex-col items-start rounded-[16px] bg-white shadow-[0_20px_60px_rgba(26,28,26,0.22)]">
         {/* Header */}
         <div className="flex h-[57px] w-full shrink-0 flex-row items-center border-b border-[#E3E8E3] px-5 py-[18px] pl-[22px] pr-5">
-          <h2 id="product-modal-title" className="min-w-0 flex-1 text-[17px] font-bold leading-[21px] text-[#1A1A1A]">
+          <h2 id="product-modal-title" className="min-w-0 flex-1 text-[16px] font-bold leading-[21px] text-[#1A1A1A]">
             {isAdd ? 'Add product' : 'Edit product'}
           </h2>
           <button
@@ -291,12 +291,12 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
                 {productImage ? (
                   <img src={productImage} alt="" className="size-11 object-contain" />
                 ) : (
-                  <span className="text-[30px] leading-9" aria-hidden="true">
+                  <span className="text-[20px] leading-9" aria-hidden="true">
                     {form.icon || '🍔'}
                   </span>
                 )}
                 <span className="inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 py-1">
-                  <span className="text-[10.5px] font-semibold leading-[13px] text-[#127036]">Main</span>
+                  <span className="text-[11px] font-medium leading-[13px] text-[#127036]">Main</span>
                 </span>
               </div>
               {[0, 1, 2].map((slot) => (
@@ -382,7 +382,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
               <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                 <label className={labelClass}>DESCRIPTION (EN)</label>
                 <textarea
-                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
                   value={form.descriptionEn}
                   onChange={(e) => updateField('descriptionEn', e.target.value)}
                 />
@@ -390,7 +390,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
               <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                 <label className={labelClass}>DESCRIPTION (AR)</label>
                 <textarea
-                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-right text-[12.5px] font-semibold leading-[23px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-right text-[12.5px] font-medium leading-[23px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
                   dir="rtl"
                   value={form.descriptionAr}
                   onChange={(e) => updateField('descriptionAr', e.target.value)}
@@ -444,7 +444,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
               <button
                 type="button"
                 onClick={openAddOptionGroup}
-                className="text-[11.5px] font-semibold leading-[14px] text-[#127036] hover:underline"
+                className="text-[11px] font-medium leading-[14px] text-[#127036] hover:underline"
               >
                 + Add option group
               </button>
@@ -462,12 +462,12 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
                     className="flex w-full flex-col items-start gap-1 rounded-[10px] bg-[#F2F7F2] px-3 py-[11px] text-left transition hover:bg-[#E8F2E8]"
                   >
                     <div className="flex w-full flex-row items-center gap-2">
-                      <span className="text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]">
+                      <span className="text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]">
                         {group.title}
                       </span>
                       <span className="min-h-1.5 min-w-0 flex-1" />
                       <span
-                        className={`inline-flex h-[21px] items-center rounded-[20px] px-2.5 py-1 text-[10.5px] font-semibold leading-[13px] ${
+                        className={`inline-flex h-[21px] items-center rounded-[20px] px-2.5 py-1 text-[11px] font-medium leading-[13px] ${
                           required ? 'bg-[#E6F0FF] text-[#2978DB]' : 'bg-[#EBEDEB] text-[#69706E]'
                         }`}
                       >
@@ -490,7 +490,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
               <button
                 type="button"
                 onClick={addAddOn}
-                className="text-[11.5px] font-semibold leading-[14px] text-[#127036] hover:underline"
+                className="text-[11px] font-medium leading-[14px] text-[#127036] hover:underline"
               >
                 + Add add-on
               </button>
@@ -512,7 +512,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
                       className={`min-w-0 flex-1 border-none bg-transparent outline-none ${
                         empty
                           ? 'text-[13px] font-normal leading-[16px] text-[#9EA69E]'
-                          : 'text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]'
+                          : 'text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]'
                       }`}
                       placeholder="Add-on name"
                       value={addon.name}
@@ -522,7 +522,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
                       className={`w-[58px] shrink-0 border-none bg-transparent text-right outline-none ${
                         empty
                           ? 'text-[13px] font-normal leading-[16px] text-[#9EA69E]'
-                          : 'text-[12.5px] font-semibold leading-[15px] text-[#127036]'
+                          : 'text-[12.5px] font-medium leading-[15px] text-[#127036]'
                       }`}
                       value={addon.price}
                       onChange={(e) => updateAddOn(idx, 'price', e.target.value)}
@@ -544,7 +544,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
             <p className="text-[12.5px] font-bold leading-[15px] text-[#1A1A1A]">Availability</p>
             <div className="-mt-1 flex h-[30px] w-full flex-row items-center gap-2.5">
               <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-                <span className="text-[12.5px] font-semibold leading-[15px] text-[#1A1A1A]">Active</span>
+                <span className="text-[12.5px] font-medium leading-[15px] text-[#1A1A1A]">Active</span>
                 <span className="text-[11px] font-normal leading-[13px] text-[#949C94]">
                   Visible to customers
                 </span>
@@ -571,13 +571,13 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
             <button
               type="button"
               onClick={onClose}
-              className="box-border inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-[18px] py-[11px] text-[13px] font-semibold leading-4 text-[#1A1A1A]"
+              className="box-border inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-[18px] py-[11px] text-[13px] font-medium leading-4 text-[#1A1A1A]"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="inline-flex h-[38px] min-w-[120px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-[18px] py-[11px] text-[13px] font-semibold leading-4 text-white hover:brightness-[0.96]"
+              className="inline-flex h-[38px] min-w-[120px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-[18px] py-[11px] text-[13px] font-medium leading-4 text-white hover:brightness-[0.96]"
             >
               Save product
             </button>

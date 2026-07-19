@@ -1,7 +1,6 @@
-import { liveOrders, dineInOrders } from '../data/mockData'
 import { StatusPill } from './ui'
 
-const btnBase = 'rounded-[8px] px-3 py-2 text-xs font-semibold'
+const btnBase = 'rounded-[8px] px-3 py-2 text-xs font-medium'
 const btnPrimaryAction = `flex-1 text-center bg-green-primary text-white ${btnBase} hover:brightness-[0.96]`
 const btnGhostAction = `w-full text-center border border-border bg-white text-ink ${btnBase}`
 const btnDangerOutline = `flex-1 text-center border border-border text-danger bg-white ${btnBase}`
@@ -72,7 +71,7 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
         <span className="inline-flex w-full items-center text-[11px] font-bold py-[3px] px-[9px] rounded-[8px] bg-[#fce8e8] text-[#c91a24]">
           ✕ No-show · cancelled
         </span>
-        {order.note ? <p className="text-[11.5px] text-ink-muted">{order.note}</p> : null}
+        {order.note ? <p className="text-[11px] text-ink-muted">{order.note}</p> : null}
       </div>
     )
   }
@@ -109,12 +108,12 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
       {order.sla ? <SlaRow label="Accept within (SLA 60s)" value={order.sla} /> : null}
 
       {order.readyLabel ? (
-        <span className="inline-flex w-fit items-center text-[10px] font-semibold py-[3px] px-[9px] rounded-full bg-green-active-bg text-green-active-text  border-green-active-text">
+        <span className="inline-flex w-fit items-center text-[10px] font-medium py-[3px] px-[9px] rounded-full bg-green-active-bg text-green-active-text  border-green-active-text">
           {order.readyLabel}
         </span>
       ) : null}
       {order.prepDelay ? (
-        <div className="bg-warn-soft text-warn text-[10px] font-semibold py-[5px] px-[8px] rounded-[7px]">
+        <div className="bg-warn-soft text-warn text-[10px] font-medium py-[5px] px-[8px] rounded-[7px]">
           ⚠ Prep delay — SLA risk
         </div>
       ) : null}
@@ -187,7 +186,7 @@ function DineInTag({ tag }) {
   const icon = isUrgent ? '🔥' : '🕒'
   return (
     <span
-      className={`inline-flex w-fit items-center text-[10px] font-semibold py-[3px] px-[9px] rounded-full border ${
+      className={`inline-flex w-fit items-center text-[10px] font-medium py-[3px] px-[9px] rounded-full border ${
         isUrgent ? 'bg-warn-soft text-warn border-warn' : 'bg-[#f2f2f2] text-ink-muted border-ink-muted'
       }`}
     >
@@ -219,7 +218,7 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
       tabIndex={canOpenDetails ? 0 : undefined}
     >
       <p className="text-[12px] font-bold text-ink">{order.id}</p>
-      <p className="text-[13px] font-semibold text-ink">
+      <p className="text-[13px] font-medium text-ink">
         {order.guest} · {order.guests} guests
       </p>
 
@@ -325,9 +324,9 @@ const columnMeta = {
   },
 }
 
-export function getColumns(tab) {
+export function getColumns(tab, orders) {
   const isDineIn = tab === 'dinein'
-  const source = isDineIn ? dineInOrders : liveOrders
+  const source = isDineIn ? orders?.dineIn : orders?.delivery
   const meta = columnMeta[isDineIn ? 'dinein' : 'delivery']
   const keys = isDineIn ? ['new', 'confirmed', 'preparing', 'ready'] : ['new', 'accepted', 'preparing', 'ready']
 
@@ -335,6 +334,6 @@ export function getColumns(tab) {
     key,
     title: meta[key].title,
     subtitle: meta[key].subtitle,
-    items: source[key] || [],
+    items: source?.[key] || [],
   }))
 }

@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { LayoutGrid, List, Search } from 'lucide-react'
-import { catalogItems } from '../data/mockData'
 import { getProductImage } from '../data/productImages'
 import EditProductModal from '../components/EditProductModal'
+import { useApiResource } from '../hooks/useApiResource'
+import { vendorService } from '../services/vendorService'
 
 const headerCellClass =
-  'flex items-center text-[10.5px] font-bold uppercase tracking-[0.04em] text-ink-faint'
+  'flex items-center text-[11px] font-bold uppercase tracking-[0.04em] text-ink-faint'
 
 /** Shared column widths so header + rows stay aligned */
 const col = {
@@ -18,10 +19,15 @@ const col = {
 export default function FoodCatalog() {
   const [view, setView] = useState('list')
   const [query, setQuery] = useState('')
-  const [items, setItems] = useState(catalogItems)
+  const [items, setItems] = useState([])
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [modalMode, setModalMode] = useState('edit')
   const [modalOpen, setModalOpen] = useState(false)
+  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getCatalogItems(), [])
+
+  useEffect(() => {
+    if (data) setItems(data)
+  }, [data])
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -37,6 +43,9 @@ export default function FoodCatalog() {
         .includes(normalizedQuery),
     )
   }, [items, query])
+
+  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading products…</div>
+  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load products. <button onClick={refetch} className="underline">Try again</button></div>
 
   const handleOpenAddModal = () => {
     setModalMode('add')
@@ -78,7 +87,7 @@ export default function FoodCatalog() {
         {/* Page header */}
         <div className="mb-4 flex items-center gap-3.5">
           <div className="flex-1">
-            <h1 className="text-[26px] font-bold text-ink">
+            <h1 className="text-[20px] font-bold text-ink">
               Food catalog
             </h1>
 
@@ -91,7 +100,7 @@ export default function FoodCatalog() {
           <button
             type="button"
             onClick={handleOpenAddModal}
-            className="rounded-[9px] bg-green-primary px-4 py-[10px] text-[13px] font-semibold text-white transition hover:brightness-[0.96]"
+            className="rounded-[9px] bg-green-primary px-4 py-[10px] text-[13px] font-medium text-white transition hover:brightness-[0.96]"
           >
             + Add product
           </button>
@@ -99,7 +108,7 @@ export default function FoodCatalog() {
 
         {/* Filters and view buttons */}
         <div className="mb-4 flex flex-wrap items-center gap-2.5">
-          <span className="whitespace-nowrap rounded-[9px] bg-green-active-bg px-3 py-[9px] text-[12.5px] font-semibold text-green-active-text">
+          <span className="whitespace-nowrap rounded-[9px] bg-green-active-bg px-3 py-[9px] text-[12.5px] font-medium text-green-active-text">
             Store type: Food &amp; drink
           </span>
 
@@ -122,7 +131,7 @@ export default function FoodCatalog() {
             type="button"
             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[9px] border border-border bg-white px-3 py-[9px] text-[12.5px]"
           >
-            <span className="font-semibold text-ink">
+            <span className="font-medium text-ink">
               Category
             </span>
 
@@ -136,7 +145,7 @@ export default function FoodCatalog() {
               type="button"
               className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[9px] border border-border bg-white px-3 py-[9px] text-[12.5px]"
             >
-              <span className="font-semibold text-ink">
+              <span className="font-medium text-ink">
                 Type
               </span>
 
@@ -149,7 +158,7 @@ export default function FoodCatalog() {
           <div className="flex overflow-hidden rounded-[9px] border border-border">
             <button
               type="button"
-              className={`inline-flex items-center gap-1.5 px-3 py-[9px] text-xs font-semibold transition ${
+              className={`inline-flex items-center gap-1.5 px-3 py-[9px] text-xs font-medium transition ${
                 view === 'list'
                   ? 'bg-ink text-white'
                   : 'bg-white text-ink-muted hover:bg-[#f7faf7]'
@@ -162,7 +171,7 @@ export default function FoodCatalog() {
 
             <button
               type="button"
-              className={`inline-flex items-center gap-1.5 border-l border-border px-3 py-[9px] text-xs font-semibold transition ${
+              className={`inline-flex items-center gap-1.5 border-l border-border px-3 py-[9px] text-xs font-medium transition ${
                 view === 'grid'
                   ? 'bg-ink text-white'
                   : 'bg-white text-ink-muted hover:bg-[#f7faf7]'
@@ -207,10 +216,10 @@ export default function FoodCatalog() {
                       </div>
 
                       <div className="min-w-0">
-                        <p className="truncate text-[13.5px] leading-[18px] font-semibold text-ink">
+                        <p className="truncate text-[13px] leading-[18px] font-medium text-ink">
                           {item.name}
                         </p>
-                        <p className="truncate text-[11.5px] leading-[15px] text-ink-faint">
+                        <p className="truncate text-[11px] leading-[15px] text-ink-faint">
                           {item.category}
                         </p>
                       </div>
@@ -230,7 +239,7 @@ export default function FoodCatalog() {
 
                     <div className={col.status}>
                       <span
-                        className={`inline-flex h-[24px] items-center gap-1.5 rounded-full px-[9px] text-[10.5px] font-semibold ${
+                        className={`inline-flex h-[24px] items-center gap-1.5 rounded-full px-[9px] text-[11px] font-medium ${
                           item.status === 'Active'
                             ? 'bg-green-active-bg text-green-active-text'
                             : 'bg-[#f2f2f2] text-ink-muted'
@@ -252,7 +261,7 @@ export default function FoodCatalog() {
                     >
                       <button
                         type="button"
-                        className="text-[12.5px] leading-[16px] font-semibold text-green-active-text hover:underline"
+                        className="text-[12.5px] leading-[16px] font-medium text-green-active-text hover:underline"
                         onClick={() => handleOpenEditModal(item)}
                       >
                         Edit
@@ -289,13 +298,13 @@ export default function FoodCatalog() {
                     }}
                   >
                     <span
-                      className={`absolute top-3 left-3 inline-flex items-center gap-1 text-[11px] font-semibold ${
+                      className={`absolute top-3 left-3 inline-flex items-center gap-1 text-[11px] font-medium ${
                         item.status === 'Active'
                           ? 'text-green-active-text'
                           : 'text-ink-muted'
                       }`}
                     >
-                      <span className="text-[8px] leading-none">●</span>
+                      <span className="text-[9px] leading-none">●</span>
                       {item.status}
                     </span>
 
@@ -330,7 +339,7 @@ export default function FoodCatalog() {
                       </span>
 
                       <span
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${
                           item.badgeTone === 'options'
                             ? 'bg-[#ebf2ff] text-[#2978db]'
                             : 'bg-[#f2f2f2] text-ink-muted'

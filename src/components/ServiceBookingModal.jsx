@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
-const fieldLabel = 'text-[10px] font-bold text-[#949C94] uppercase tracking-[0.04em]'
-const fieldValue = 'text-[13px] font-semibold text-[#1A1A1A]'
+const fieldLabel = 'text-[13px] font-medium text-[#949C94] uppercase tracking-[0.04em]'
+const fieldValue = 'text-[13px] font-medium text-[#1A1A1A]'
 
 const columnModalConfig = {
   new: {
@@ -90,7 +90,7 @@ export default function ServiceBookingModal({ open, onClose, order, columnKey })
         <div className="flex items-center justify-between gap-4 border-b border-[#E0E5E0] px-8 py-5">
           <h2 className="min-w-0 text-[18px] font-bold leading-tight text-[#1A1A1A]">{details.title}</h2>
           <div className="flex shrink-0 items-center gap-2">
-            <span className={`inline-flex items-center rounded-full px-[10px] py-[4px] text-[10.5px] font-bold ${details.status.tone}`}>
+            <span className={`inline-flex items-center rounded-full px-[10px] py-[4px] text-[11px] font-bold ${details.status.tone}`}>
               {details.status.label}
             </span>
             <button

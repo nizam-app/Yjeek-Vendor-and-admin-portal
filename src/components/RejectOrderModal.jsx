@@ -125,7 +125,7 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
           <div className="flex gap-3 w-full">
             <button
               type="button"
-              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-full text-[14px] font-semibold leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
+              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-full text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
               onClick={onClose}
             >
               Cancel

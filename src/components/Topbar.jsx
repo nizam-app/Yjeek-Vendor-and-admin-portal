@@ -38,8 +38,8 @@ export default function Topbar() {
       <div className="flex items-center gap-[14px]">
         <div className="flex items-center gap-2">
           <div
-            className="grid place-items-center text-black font-bold"
-            style={{ width: 28, height: 28, fontSize: 13, borderRadius: 8 }}
+            className="grid place-items-center text-[18px] font-bold text-black"
+            style={{ width: 28, height: 28, borderRadius: 8 }}
           >
             {vendor.name.charAt(0)}
           </div>
@@ -109,7 +109,7 @@ export default function Topbar() {
         <div className="flex items-center gap-2">
           <div className="w-[34px] h-[17px] rounded-[17px] bg-green-primary text-white grid place-items-center font-bold text-sm">G</div>
           <div>
-            <strong className="block text-[13px] leading-[1.2] max-[900px]:hidden">{vendor.adminName}</strong>
+            <strong className="block text-[12px] leading-[1.2] max-[900px]:hidden">{vendor.adminName}</strong>
             <span className="block text-xs text-ink-muted max-[900px]:hidden">{vendor.adminRole}</span>
           </div>
         </div>

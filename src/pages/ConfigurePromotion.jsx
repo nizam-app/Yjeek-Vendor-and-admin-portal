@@ -7,9 +7,9 @@ const APPLY_OPTIONS = ['All menu', 'Selected categories', 'Selected items']
 const BRANCH_OPTIONS = ['All branches', 'Selected branches']
 const REWARD_OPTIONS = ['Free', '50% off', '% off']
 
-const labelClass = 'mb-1.5 block text-[10.5px] font-bold uppercase tracking-[0.04em] text-[#69706E]'
+const labelClass = 'mb-1.5 block text-[13px] font-medium uppercase tracking-[0.04em] text-[#69706E]'
 const inputClass =
-  'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-semibold text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-medium text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 const cardClass = 'rounded-[14px] border border-[#E0E6E0] bg-white p-5'
 
 const DEFAULT_NAMES = {
@@ -45,7 +45,7 @@ function PromoTypeTabs({ options, value, onChange }) {
             key={option}
             type="button"
             onClick={() => onChange(option)}
-            className={`min-w-0 flex-1 rounded-[8px] px-3 py-[11px] text-[13px] font-semibold whitespace-nowrap transition-colors ${
+            className={`min-w-0 flex-1 rounded-[8px] px-3 py-[11px] text-[13px] font-medium whitespace-nowrap transition-colors ${
               selected
                 ? 'bg-white text-[#127036] shadow-[0_1px_3px_rgba(26,28,26,0.1)]'
                 : 'text-[#6B736E] hover:text-ink'
@@ -74,7 +74,7 @@ function ScopeTabs({ options, value, onChange, className = '' }) {
             className={`rounded-[8px] px-3.5 py-2 text-[12.5px] whitespace-nowrap transition-colors ${
               selected
                 ? 'bg-white font-bold text-[#1A1A1A] shadow-card'
-                : 'font-semibold text-[#6B736E] hover:text-ink'
+                : 'font-medium text-[#6B736E] hover:text-ink'
             }`}
           >
             {option}
@@ -87,7 +87,7 @@ function ScopeTabs({ options, value, onChange, className = '' }) {
 
 function TagChip({ label, onRemove }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-active-text bg-green-active-bg py-[5px] pr-2 pl-3 text-[12px] font-semibold text-green-active-text">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-green-active-text bg-green-active-bg py-[5px] pr-2 pl-3 text-[12px] font-medium text-green-active-text">
       {label}
       <button
         type="button"
@@ -106,7 +106,7 @@ function AddChipButton({ onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center rounded-full border border-[#1AA34D] bg-white px-3 py-[5px] text-[12px] font-semibold text-[#127036] hover:bg-[#f3faf5]"
+      className="inline-flex items-center rounded-full border border-[#1AA34D] bg-white px-3 py-[5px] text-[12px] font-medium text-[#127036] hover:bg-[#f3faf5]"
     >
       + Add
     </button>
@@ -117,7 +117,7 @@ function ToggleRow({ title, hint, checked, onChange, label }) {
   return (
     <div className="flex flex-wrap items-center  gap-3">
       <div className="min-w-0">
-        <p className="text-[13.5px] font-semibold text-ink">{title}</p>
+        <p className="text-[13px] font-medium text-ink">{title}</p>
         {hint ? <p className="mt-0.5 text-[12.5px] text-ink-muted">{hint}</p> : null}
       </div>
       <Toggle checked={checked} onChange={onChange} label={label} />
@@ -185,11 +185,11 @@ export default function ConfigurePromotion() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
           to="/promotions"
-          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-semibold text-ink-muted hover:bg-[#fafbfa]"
+          className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
           ‹ Promotions
         </Link>
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-ink sm:text-[24px]">
+        <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
           Configure promotion
         </h1>
       </div>
@@ -220,7 +220,7 @@ export default function ConfigurePromotion() {
           </p>
         </div>
         <div className="flex items-center gap-2.5">
-          <span className="text-[12.5px] font-semibold text-ink-muted">Pause</span>
+          <span className="text-[12.5px] font-medium text-ink-muted">Pause</span>
           <Toggle checked={active} onChange={() => setActive((v) => !v)} label="Promotion active" />
         </div>
       </section>
@@ -229,7 +229,7 @@ export default function ConfigurePromotion() {
       {isDeal ? (
         <>
           <section className={`${cardClass} mb-4`}>
-            <h2 className="mb-4 text-[15px] font-bold text-ink">Basics</h2>
+            <h2 className="mb-4 text-[16px] font-bold text-ink">Basics</h2>
 
             <div className="mb-3.5 grid grid-cols-1 gap-3.5 lg:grid-cols-[1fr_140px_120px]">
               <div>
@@ -256,7 +256,7 @@ export default function ConfigurePromotion() {
                       key={u}
                       type="button"
                       onClick={() => setUnit(u)}
-                      className={`h-full flex-1 rounded-[7px] text-[12.5px] font-semibold ${
+                      className={`h-full flex-1 rounded-[7px] text-[12.5px] font-medium ${
                         unit === u ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
                       }`}
                     >
@@ -296,7 +296,7 @@ export default function ConfigurePromotion() {
           </section>
 
           <section className={`${cardClass} mb-4`}>
-            <h2 className="mb-3 text-[15px] font-bold text-ink">Applies to</h2>
+            <h2 className="mb-3 text-[16px] font-bold text-ink">Applies to</h2>
             <ScopeTabs options={APPLY_OPTIONS} value={appliesTo} onChange={setAppliesTo} />
             <p className="mt-3 mb-3.5 text-[12.5px] text-ink-muted">
               {appliesTo === 'All menu'
@@ -326,7 +326,7 @@ export default function ConfigurePromotion() {
       {/* Free delivery */}
       {isFreeDelivery ? (
         <section className={`${cardClass} mb-4`}>
-          <h2 className="mb-4 text-[15px] font-bold text-ink">Basics</h2>
+          <h2 className="mb-4 text-[16px] font-bold text-ink">Basics</h2>
 
           <div className="mb-4">
             <label className={labelClass}>Promotion name</label>
@@ -369,7 +369,7 @@ export default function ConfigurePromotion() {
       {/* Buy X Get Y */}
       {isBogo ? (
         <section className={`${cardClass} mb-4`}>
-          <h2 className="mb-4 text-[15px] font-bold text-ink">Buy X Get Y</h2>
+          <h2 className="mb-4 text-[16px] font-bold text-ink">Buy X Get Y</h2>
 
           <div className="mb-3.5">
             <label className={labelClass}>Promotion name</label>
@@ -405,7 +405,7 @@ export default function ConfigurePromotion() {
                     key={r}
                     type="button"
                     onClick={() => setReward(r)}
-                    className={`h-full flex-1 rounded-[7px] px-4 text-[12.5px] font-semibold whitespace-nowrap ${
+                    className={`h-full flex-1 rounded-[7px] px-4 text-[12.5px] font-medium whitespace-nowrap ${
                       reward === r ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
                     }`}
                   >
@@ -417,7 +417,7 @@ export default function ConfigurePromotion() {
           </div>
 
           <div className="mb-4">
-            <p className="text-[13.5px] font-semibold text-ink-muted">Buy (X) — qualifying items</p>
+            <p className="text-[13px] font-medium text-ink-muted">Buy (X) — qualifying items</p>
             <p className="mt-0.5 mb-2.5 text-[12.5px] text-ink-muted">
               Items the customer must purchase to unlock the reward
             </p>
@@ -438,7 +438,7 @@ export default function ConfigurePromotion() {
           </div>
 
           <div className="mb-4">
-            <p className="text-[13.5px] font-semibold text-ink-muted">Get (Y) — reward items</p>
+            <p className="text-[13px] font-medium text-ink-muted">Get (Y) — reward items</p>
             <p className="mt-0.5 mb-2.5 text-[12.5px] text-ink-muted">
               Items the customer receives as the reward
             </p>
@@ -480,7 +480,7 @@ export default function ConfigurePromotion() {
 
       {/* Schedule */}
       <section className={`${cardClass} mb-4`}>
-        <h2 className="mb-4 text-[15px] font-bold text-ink">Schedule</h2>
+        <h2 className="mb-4 text-[16px] font-bold text-ink">Schedule</h2>
         <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Start date</label>
@@ -513,7 +513,7 @@ export default function ConfigurePromotion() {
 
       {/* Branches & limits — shared */}
       <section className={`${cardClass} mb-4`}>
-        <h2 className="mb-3 text-[15px] font-bold text-ink">Branches &amp; limits</h2>
+        <h2 className="mb-3 text-[16px] font-bold text-ink">Branches &amp; limits</h2>
         <ScopeTabs
           options={BRANCH_OPTIONS}
           value={branchScope}
@@ -543,14 +543,14 @@ export default function ConfigurePromotion() {
       <div className="flex items-center justify-between gap-3 py-3">
         <Link
           to="/promotions"
-          className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#E0E6E0] bg-white px-4 text-[13px] font-semibold text-ink hover:bg-[#f7f9f7]"
+          className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#E0E6E0] bg-white px-4 text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
         >
           ‹ Back
         </Link>
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-8 text-[13px] font-semibold text-white hover:brightness-[0.96]"
+          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-8 text-[13px] font-medium text-white hover:brightness-[0.96]"
         >
           Save
         </button>

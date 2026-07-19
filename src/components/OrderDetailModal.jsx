@@ -29,8 +29,8 @@ const modeStatus = {
   confirmed: 'CONFIRMED',
 }
 
-const fieldLabel = 'text-[10px] font-bold text-ink-muted uppercase tracking-[0.04em]'
-const fieldValue = 'text-[13px] font-semibold text-ink'
+const fieldLabel = 'text-[13px] font-medium text-ink-muted uppercase tracking-[0.04em]'
+const fieldValue = 'text-[13px] font-medium text-ink'
 
 function StatusBadge({ status, variant = 'header' }) {
   const key = String(status || '').toUpperCase()
@@ -96,7 +96,7 @@ function DineInPrepTag({ tag }) {
   const isUrgent = tag === 'Prepare now'
   return (
     <span
-      className={`inline-flex w-fit items-center text-[10px] font-semibold py-[3px] px-[9px] rounded-full border ${
+      className={`inline-flex w-fit items-center text-[10px] font-medium py-[3px] px-[9px] rounded-full border ${
         isUrgent ? 'bg-warn-soft text-warn border-warn' : 'bg-[#f2f2f2] text-ink-muted border-ink-muted'
       }`}
     >
@@ -249,7 +249,7 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
                       <span className="text-ink font-medium min-w-0 truncate">
                         <span className="text-green-primary font-bold">{item.qty}×</span> {item.name}
                       </span>
-                      <span className="text-ink font-semibold whitespace-nowrap">{item.price}</span>
+                      <span className="text-ink font-medium whitespace-nowrap">{item.price}</span>
                     </div>
                   ) : (
                     <div
@@ -259,7 +259,7 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
                       <span className="text-ink font-medium min-w-0 truncate">
                         <span className="text-green-active-text font-bold">{item.qty}×</span> {item.name}
                       </span>
-                      <span className="text-ink font-semibold whitespace-nowrap">{item.price}</span>
+                      <span className="text-ink font-medium whitespace-nowrap">{item.price}</span>
                     </div>
                   ),
                 )}
@@ -285,7 +285,7 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
                 Ask the guest to show this at the counter on arrival, then complete.
               </p>
             </div>
-            <p className="text-[22px] font-bold leading-none text-[#127338] shrink-0">{order.id}</p>
+            <p className="text-[20px] font-bold leading-none text-[#127338] shrink-0">{order.id}</p>
           </div>
         ) : null}
 
@@ -303,7 +303,7 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
         {details.slaLabel && details.slaValue ? (
           <div className="border-t border-border px-6 py-4">
             <p className="text-[12px] font-medium text-warn">{details.slaLabel}</p>
-            <p className="text-[28px] font-bold leading-none text-warn mt-1">{details.slaValue}</p>
+            <p className="text-[20px] font-bold leading-none text-warn mt-1">{details.slaValue}</p>
           </div>
         ) : null}
       </div>
