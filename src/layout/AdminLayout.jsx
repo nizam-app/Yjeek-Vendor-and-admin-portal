@@ -16,6 +16,7 @@ import {
   Store,
   Users,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -45,9 +46,9 @@ const pageTitles = {
   '/admin/dashboard': 'Live Dashboard',
   '/admin/live-orders': 'Live Orders',
   '/admin/scheduled': 'Scheduled Orders',
-  '/admin/pickup': 'Pickup Orders',
-  '/admin/dine-in': 'Dine-in Orders',
-  '/admin/services': 'Service Bookings',
+  '/admin/pickup': 'Live Dashboard',
+  '/admin/dine-in': 'Live Dashboard',
+  '/admin/services': 'Live Dashboard',
   '/admin/vendors': 'Vendor Management',
   '/admin/stores': 'Store Management',
   '/admin/fleet': 'Fleet Management',
@@ -64,7 +65,13 @@ function AdminSidebar() {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const dashboardActive = dashboardChildren.some(([, to]) => pathname === to)
+  const dashboardActive = dashboardChildren.some(([, to]) => pathname === to || pathname.startsWith(`${to}/`))
+  const [dashboardOpen, setDashboardOpen] = useState(dashboardActive)
+
+  useEffect(() => {
+    if (dashboardActive) setDashboardOpen(true)
+    else setDashboardOpen(false)
+  }, [dashboardActive])
 
   function signOut() {
     logout()
@@ -82,41 +89,53 @@ function AdminSidebar() {
       </div>
 
       <nav className="flex-1 overflow-y-auto pb-2">
-        <NavLink
-          to="/admin/dashboard"
-          className={`flex h-[36px] items-center gap-2.5 rounded-[9px] border px-2.5 text-[13px] font-medium transition ${
+        <button
+          type="button"
+          onClick={() => setDashboardOpen((open) => !open)}
+          className={`flex h-[36px] w-full items-center gap-2.5 rounded-[9px] border px-2.5 text-[13px] font-medium transition ${
             dashboardActive
               ? 'border-[#168b4a] bg-[#173a2c] text-[#f3faf5]'
               : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
           }`}
         >
           <Activity size={15} strokeWidth={1.8} />
-          <span className="min-w-0 flex-1">Live Dashboard</span>
-          <ChevronDown size={12} strokeWidth={1.8} />
-        </NavLink>
-        <div className="mb-0.5">
-          {dashboardChildren.map(([label, to]) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex h-[27px] items-center gap-2 rounded-md px-[34px] text-[12.5px] font-medium transition ${
-                  isActive ? 'bg-[#28473a] font-medium text-white' : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
-                }`
-              }
-            >
-              <span className="h-[3px] w-[3px] rounded-full bg-current" />
-              {label}
-            </NavLink>
-          ))}
-        </div>
+          <span className="min-w-0 flex-1 text-left">Live Dashboard</span>
+          <ChevronDown
+            size={12}
+            strokeWidth={1.8}
+            className={`shrink-0 transition-transform ${dashboardOpen ? 'rotate-0' : '-rotate-90'}`}
+          />
+        </button>
+        {dashboardOpen ? (
+          <div className="mb-0.5">
+            {dashboardChildren.map(([label, to]) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to !== '/admin/scheduled'}
+                className={({ isActive }) =>
+                  `flex h-[27px] items-center gap-2 rounded-md px-[34px] text-[12.5px] font-medium transition ${
+                    isActive || (to === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
+                      ? 'bg-[#28473a] font-medium text-white'
+                      : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
+                  }`
+                }
+              >
+                <span className="h-[3px] w-[3px] rounded-full bg-current" />
+                {label}
+              </NavLink>
+            ))}
+          </div>
+        ) : null}
         {navItems.map(([label, to, Icon]) => (
           <NavLink
             key={to}
             to={to}
             className={({ isActive }) =>
-              `flex h-[38px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition ${
-                isActive ? 'bg-[#28473a] font-medium text-white' : 'text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
+              `flex h-[38px] items-center gap-2.5 rounded-[9px] border px-2.5 text-[13px] font-medium transition ${
+                isActive
+                  ? 'border-[#168b4a] bg-[#173a2c] font-medium text-[#f3faf5]'
+                  : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
               }`
             }
           >
@@ -145,7 +164,10 @@ function AdminSidebar() {
 
 function AdminTopbar() {
   const { pathname } = useLocation()
-  const title = pageTitles[pathname] || 'Admin Console'
+  const title = pageTitles[pathname]
+    || (pathname.startsWith('/admin/scheduled/assign') ? 'Scheduled Orders · Assign champ' : null)
+    || (pathname.startsWith('/admin/scheduled/') ? 'Scheduled Orders' : null)
+    || 'Admin Console'
 
   return (
     <header className="fixed left-[250px] right-0 top-0 z-20 flex h-[44px] items-center justify-between border-b border-[#e7ebe8] bg-white px-4 max-[900px]:left-0">
@@ -159,7 +181,8 @@ function AdminTopbar() {
           Bahrain · All regions
           <ChevronDown size={10} />
         </button>
-        <label className="flex h-[27px] w-[158px] items-center gap-2 rounded-md bg-[#f6f7f6] px-2.5 max-[700px]:hidden">
+        <label className="flex h-[27px] w-[220px] items-center gap-2 rounded-md bg-[#f6f7f6] px-2.5 max-[700px]:hidden">
+          <Search size={13} className="text-[#89938c]" />
           <input className="min-w-0 flex-1 border-0 bg-transparent text-[12px] outline-none" placeholder="Search orders, vendors, champs…" />
         </label>
         <button className="relative grid h-7 w-7 place-items-center rounded-md hover:bg-[#f3f6f4]">

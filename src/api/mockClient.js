@@ -3,12 +3,18 @@ import {
   adminLiveOrdersMock,
   adminManagementMock,
   adminOperationsMock,
+  adminPickupMock,
+  adminDineInMock,
+  adminServicesMock,
 } from '../mocks/admin.mock'
 import * as vendorMock from '../data/mockData'
 
 const mockRoutes = {
   'GET /admin/dashboard': () => adminDashboardMock,
   'GET /admin/live-orders': () => adminLiveOrdersMock,
+  'GET /admin/pickup': () => adminPickupMock,
+  'GET /admin/dine-in': () => adminDineInMock,
+  'GET /admin/services': () => adminServicesMock,
   'GET /admin/operations': () => adminOperationsMock,
   'GET /admin/management': ({ params }) => adminManagementMock[params?.type] || adminManagementMock.vendors,
   'GET /vendor/dashboard': () => ({
@@ -41,6 +47,17 @@ const mockRoutes = {
 
 const clone = (value) => structuredClone(value)
 
+function createRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID()
+    } catch {
+      // HTTP over LAN IP is not a secure context in some browsers
+    }
+  }
+  return `req-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+}
+
 export const mockClient = {
   async request({ method = 'GET', url, params, body }) {
     const route = mockRoutes[`${method.toUpperCase()} ${url}`]
@@ -52,7 +69,7 @@ export const mockClient = {
     return Promise.resolve({
       data: clone(data),
       meta: {
-        requestId: crypto.randomUUID(),
+        requestId: createRequestId(),
         timestamp: new Date().toISOString(),
       },
     })

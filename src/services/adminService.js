@@ -7,6 +7,15 @@ export const adminService = {
   getLiveOrders(options) {
     return apiClient.get('/admin/live-orders', options)
   },
+  getPickup(options) {
+    return apiClient.get('/admin/pickup', options)
+  },
+  getDineIn(options) {
+    return apiClient.get('/admin/dine-in', options)
+  },
+  getServices(options) {
+    return apiClient.get('/admin/services', options)
+  },
   getOperations(mode, options = {}) {
     return apiClient.get('/admin/operations', { ...options, params: { ...options.params, mode } })
   },

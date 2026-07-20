@@ -23,6 +23,8 @@ import PromotionDetail from './pages/PromotionDetail'
 import Notifications from './pages/Notifications'
 import Account from './pages/Account'
 import { AdminDashboard, AdminManagement, AdminOperations } from './pages/admin/AdminPages'
+import { AdminScheduledColumn } from './pages/admin/AdminScheduledColumn'
+import { AdminAssignChamp } from './pages/admin/AdminAssignChamp'
 import AdminTwoFactor from './pages/admin/AdminTwoFactor'
 
 function RequireRole({ role }) {
@@ -78,6 +80,8 @@ export default function App() {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="live-orders" element={<AdminOperations mode="live orders" />} />
             <Route path="scheduled" element={<AdminOperations mode="scheduled" />} />
+            <Route path="scheduled/assign/:orderId" element={<AdminAssignChamp />} />
+            <Route path="scheduled/:columnKey" element={<AdminScheduledColumn />} />
             <Route path="pickup" element={<AdminOperations mode="pickup" />} />
             <Route path="dine-in" element={<AdminOperations mode="dine-in" />} />
             <Route path="services" element={<AdminOperations mode="services" />} />

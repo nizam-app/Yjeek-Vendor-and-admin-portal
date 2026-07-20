@@ -106,6 +106,132 @@ export const adminLiveOrdersMock = {
   chats: adminChatsMock,
 }
 
+const adminIncidentBoardShared = {
+  refreshIntervalSeconds: 3,
+  filters: ['All orders', 'All chats', 'Chat · Champ', 'Chat · Customer'],
+}
+
+export const adminPickupMock = {
+  ...adminIncidentBoardShared,
+  activeCount: 26,
+  activeLabel: 'active pickups',
+  columns: [
+    {
+      id: 'incident',
+      title: 'Incident',
+      count: 34,
+      tone: 'red',
+      orders: [
+        { id: 'YJK…2YKZ9VF', vendor: 'Green Kitchen', timeLeft: '41m', detail: 'Ready · Ahmed K.', hasIncident: true },
+        { id: 'YJK…7VZSSWC5', vendor: 'Lulu Express', timeLeft: '38m', detail: 'Ready · Sara M.', hasIncident: true },
+        { id: 'YJK…0YBIGQHT', vendor: 'Sharaf DG', timeLeft: '12m', detail: 'Preparing · Omar F.', hasIncident: true },
+        { id: 'YJK…KXEQWHMP', vendor: 'VEERA', timeLeft: '9m', detail: 'Ready · Unassigned', hasIncident: true },
+        { id: 'YJK…9QTBM', vendor: 'Marine & Co.', timeLeft: '22m', detail: 'Preparing · Mariam', hasIncident: true },
+        { id: 'YJK…4PLX82', vendor: 'Burger Lab', timeLeft: '17m', detail: 'Ready · Unassigned', hasIncident: true },
+      ],
+    },
+    {
+      id: 'on-track',
+      title: 'On Track',
+      count: 0,
+      tone: 'green',
+      orders: [],
+    },
+  ],
+  incidents: [
+    { id: 'pickup-food', priority: 'P1', title: 'Food poisoning report', detail: '#YJK-…2YK · resolved', tone: 'red' },
+    { id: 'pickup-bag', priority: 'P2', title: 'Damaged bag', detail: '#YJK-…7VZ · resolved', tone: 'yellow' },
+    { id: 'pickup-ghost', priority: 'P3', title: 'Vendor ghost', detail: '#YJK-…0YB · resolved', tone: 'blue' },
+    { id: 'pickup-spill', priority: 'P2', title: 'Spilled order', detail: '#YJK-…KXE · resolved', tone: 'yellow' },
+    { id: 'pickup-extras', priority: 'P4', title: 'Missing extras', detail: '#YJK-…QF2 · resolved', tone: 'gray' },
+    { id: 'pickup-fraud', priority: 'P1', title: 'Fraud flag', detail: '#YJK-…11C · resolved', tone: 'red' },
+  ],
+  chats: adminChatsMock,
+}
+
+export const adminDineInMock = {
+  ...adminIncidentBoardShared,
+  activeCount: 18,
+  activeLabel: 'active dine-in',
+  columns: [
+    {
+      id: 'incident',
+      title: 'Incident',
+      count: 12,
+      tone: 'red',
+      orders: [
+        { id: 'YJK…DIN8A2K', vendor: 'Cafe Lilou', timeLeft: '28m', detail: 'Seated · Table 4', hasIncident: true },
+        { id: 'YJK…DIN3F9P', vendor: 'Bait Al Lulu', timeLeft: '19m', detail: 'Waiting · Table 12', hasIncident: true },
+        { id: 'YJK…DIN7M1Q', vendor: 'Villa Mamas', timeLeft: '14m', detail: 'Order delayed · Unassigned', hasIncident: true },
+        { id: 'YJK…DIN2R5T', vendor: 'Ishtiraq', timeLeft: '7m', detail: 'No-show risk · Host desk', hasIncident: true },
+      ],
+    },
+    {
+      id: 'on-track',
+      title: 'On Track',
+      count: 6,
+      tone: 'green',
+      orders: [
+        { id: 'YJK…DIN9K4W', vendor: 'The Grove', timeLeft: '35m', detail: 'Seated · Table 2', hasIncident: false },
+        { id: 'YJK…DIN6H8C', vendor: 'Fusions', timeLeft: '42m', detail: 'Preparing · Table 8', hasIncident: false },
+      ],
+    },
+  ],
+  incidents: [
+    { id: 'dine-noshow', priority: 'P1', title: 'Table no-show', detail: '#YJK-…DIN · resolved', tone: 'red' },
+    { id: 'dine-allergy', priority: 'P1', title: 'Allergy alert', detail: '#YJK-…DIN · open', tone: 'red' },
+    { id: 'dine-wait', priority: 'P2', title: 'Long wait complaint', detail: '#YJK-…DIN · resolved', tone: 'yellow' },
+    { id: 'dine-table', priority: 'P3', title: 'Wrong table seated', detail: '#YJK-…DIN · resolved', tone: 'blue' },
+    { id: 'dine-bill', priority: 'P4', title: 'Bill dispute', detail: '#YJK-…DIN · resolved', tone: 'gray' },
+  ],
+  chats: [
+    { id: 'chat-dine-1', initials: 'NK', name: 'Noura K.', role: 'Customer', message: 'Our table is still empty', unreadCount: 2 },
+    { id: 'chat-dine-2', initials: 'HF', name: 'Hassan F.', role: 'Champ', message: 'Guest arrived at host desk', unreadCount: 0 },
+    { id: 'chat-dine-3', initials: 'RM', name: 'Rania M.', role: 'Customer', message: 'Can we move to outdoor?', unreadCount: 1 },
+  ],
+}
+
+export const adminServicesMock = {
+  ...adminIncidentBoardShared,
+  activeCount: 9,
+  activeLabel: 'active services',
+  columns: [
+    {
+      id: 'incident',
+      title: 'Incident',
+      count: 5,
+      tone: 'red',
+      orders: [
+        { id: 'YJK…SVC1A9D', vendor: 'Home Cleaning Pro', timeLeft: '55m', detail: 'En route · Late', hasIncident: true },
+        { id: 'YJK…SVC4B2E', vendor: 'AC Fix Bahrain', timeLeft: '33m', detail: 'Parts missing · Unassigned', hasIncident: true },
+        { id: 'YJK…SVC8C7F', vendor: 'Sparkle Laundry', timeLeft: '21m', detail: 'Pickup missed · Ali R.', hasIncident: true },
+      ],
+    },
+    {
+      id: 'on-track',
+      title: 'On Track',
+      count: 4,
+      tone: 'green',
+      orders: [
+        { id: 'YJK…SVC2D5G', vendor: 'Pet Care Plus', timeLeft: '48m', detail: 'In progress · Sara N.', hasIncident: false },
+        { id: 'YJK…SVC6E3H', vendor: 'Move & Pack', timeLeft: '1h 10m', detail: 'Confirmed · Khalid A.', hasIncident: false },
+      ],
+    },
+  ],
+  incidents: [
+    { id: 'svc-late', priority: 'P1', title: 'Provider running late', detail: '#YJK-…SVC · open', tone: 'red' },
+    { id: 'svc-parts', priority: 'P2', title: 'Missing spare parts', detail: '#YJK-…SVC · open', tone: 'yellow' },
+    { id: 'svc-cancel', priority: 'P2', title: 'Last-minute cancel', detail: '#YJK-…SVC · resolved', tone: 'yellow' },
+    { id: 'svc-access', priority: 'P3', title: 'Building access issue', detail: '#YJK-…SVC · resolved', tone: 'blue' },
+    { id: 'svc-payment', priority: 'P4', title: 'Payment mismatch', detail: '#YJK-…SVC · resolved', tone: 'gray' },
+  ],
+  chats: [
+    { id: 'chat-svc-1', initials: 'AR', name: 'Ali R.', role: 'Champ', message: 'Traffic near Seef, 10 min late', unreadCount: 1 },
+    { id: 'chat-svc-2', initials: 'SN', name: 'Sara N.', role: 'Champ', message: 'Service started on site', unreadCount: 0 },
+    { id: 'chat-svc-3', initials: 'JM', name: 'Jassim M.', role: 'Customer', message: 'Please confirm arrival time', unreadCount: 3 },
+  ],
+}
+
 export const adminOperationsMock = {
   columns: [
     { key: 'new', title: 'New', tone: '#20b665' },
@@ -118,14 +244,17 @@ export const adminOperationsMock = {
     { id: '#YJK-…63', tags: ['Normal', 'Same Day'], payment: 'Accepted · Awaiting payment', route: 'Lulu Express → Manama', timer: '⌛ 4 min to Pay', column: 'new' },
     { id: '#YJK-…64', tags: ['Normal', 'Next Day'], payment: 'Awaiting vendor', route: 'VEERA → Juffair', timer: '⌛ 4 min to accept', column: 'new' },
     { id: '#YJK-…64', tags: ['★ Special', 'Economy'], payment: 'Time expired · vendor didn’t accept', route: 'VEERA → Juffair', action: 'Order Auto Cancelled', actionTone: 'redSoft', column: 'new' },
-    { id: '#YJK-…62', tags: ['★ Special', 'Standard'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: 'Remind champ', timer: '⌛ 47 min to confirm', column: 'response' },
-    { id: '#YJK-…63', tags: ['Normal', 'Same Day'], payment: 'Declined', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', column: 'response' },
-    { id: '#YJK-…57', tags: ['★ Special', 'Next Day'], payment: 'Time expired · champ didn’t accept', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', column: 'response' },
-    { id: '#YJK-…50', tags: ['Normal', 'Economy'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: 'Remind champ', timer: '⌛ 12 min to confirm', column: 'confirmation' },
-    { id: '#YJK-…57', tags: ['Normal', 'Standard'], payment: 'Declined', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', column: 'confirmation' },
-    { id: '#YJK-…57', tags: ['★ Special', 'Same Day'], payment: 'Time expired · champ didn’t accept', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', column: 'confirmation' },
-    { id: '#YJK-…50', tags: ['Normal', 'Next Day'], payment: 'Preparing', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: '◷ Opens in 2h 10m', actionTone: 'blue', note: 'Tracking in 10m · auto-moves to before window', column: 'confirmed' },
-    { id: '#YJK-…55', tags: ['Normal', 'Economy'], payment: 'Ready for pickup', route: 'Lulu Express → Seef', slot: '30 Jun · 6–8 PM', champ: 'Yusuf R.', action: '◷ Opens in 4h 50m', actionTone: 'blue', note: 'Tracking in 3h 50m · auto-moves to before window', footer: 'Force pickup now', column: 'confirmed' },
+    { id: '#YJK-…50', tags: ['★ Special', 'Standard'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: 'Remind champ', prep: '~20 min', column: 'response' },
+    { id: '#YJK-…57', tags: ['Normal', 'Same Day'], payment: 'Declined', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', prep: '~20 min', column: 'response' },
+    { id: '#YJK-…57', tags: ['★ Special', 'Next Day'], payment: 'Time expired · champ didn’t accept', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', prep: '~20 min', column: 'response' },
+    { id: '#YJK-…50', tags: ['Normal', 'Economy'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: 'Remind champ', prep: '~20 min', column: 'response' },
+    { id: '#YJK-…50', tags: ['★ Special', 'Economy'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', timer: '⌛ 12 min to confirm', prep: '~20 min', column: 'confirmation' },
+    { id: '#YJK-…57', tags: ['Normal', 'Standard'], payment: 'Declined', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', prep: '~20 min', column: 'confirmation' },
+    { id: '#YJK-…57', tags: ['★ Special', 'Same Day'], payment: 'Time expired · champ didn’t accept', route: 'Sharaf DG → Adliya', slot: '01 Jul · 1–3 PM', champ: 'Omar F.', action: 'Reassign champ', actionTone: 'red', prep: '~20 min', column: 'confirmation' },
+    { id: '#YJK-…50', tags: ['Normal', 'Next Day'], payment: 'Awaiting', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', timer: '⌛ 12 min to confirm', prep: '~20 min', column: 'confirmation' },
+    { id: '#YJK-…50', tags: ['★ Special', 'Next Day'], payment: 'Preparing', route: 'VEERA → Juffair', slot: '30 Jun · 1–3 PM', champ: 'Ahmed K.', action: '◷ Opens in 2h 10m', actionTone: 'blue', note: 'Tracking in 10m · auto-moves to before window', prep: '~20 min', column: 'confirmed' },
+    { id: '#YJK-…55', tags: ['Normal', 'Economy'], payment: 'Ready for pickup', route: 'Lulu Express → Seef', slot: '30 Jun · 6–8 PM', champ: 'Yusuf R.', action: '◷ Opens in 4h 50m', actionTone: 'blue', note: 'Tracking in 3h 50m · auto-moves to before window', footer: 'Force pickup now', prep: '~20 min', column: 'confirmed' },
+    { id: '#YJK-…61', tags: ['Normal', 'Standard'], payment: 'Preparing', route: 'Burger Lab → Manama', slot: '30 Jun · 3–5 PM', champ: 'Sara N.', action: '◷ Opens in 1h 20m', actionTone: 'blue', prep: '~25 min', column: 'confirmed' },
   ],
   incidents: [
     { priority: 'P1', name: 'Champ no-show', detail: '#YJK-…57 · 01–PM window', status: 'Open', time: '5m ago' },
@@ -138,14 +267,25 @@ export const adminOperationsMock = {
 
 export const adminManagementMock = {
   vendors: {
-    title: 'Vendors', subtitle: 'Onboard, review and manage every partner on Yjeek', action: 'Add vendor',
-    stats: [{ label: 'Total vendors', value: '248' }, { label: 'Active', value: '184' }, { label: 'Under review', value: '16' }, { label: 'Paused', value: '12' }],
-    columns: ['Vendor', 'Category', 'Stores', 'GMV this month', 'Commission', 'Status'],
+    title: 'Vendor Management',
+    action: 'Add vendor',
+    stats: [
+      { label: 'Total vendors', value: '48', tone: 'ink' },
+      { label: 'Active', value: '39', tone: 'green' },
+      { label: 'Pending approval', value: '6', tone: 'orange' },
+      { label: 'Suspended', value: '3', tone: 'red' },
+    ],
+    tabs: ['All', 'Active', 'Pending', 'Suspended'],
+    columns: ['Vendor', 'Vendor ID', 'Category', 'Orders', 'Branches', 'Users', 'Rating', 'Status'],
     rows: [
-      ['The Green Kitchen', 'Healthy food', '4', 'BHD 12,840', '18%', 'Active'],
-      ['Burger Lab', 'Burgers', '7', 'BHD 21,405', '20%', 'Active'],
-      ['Casa Mexicana', 'Mexican', '2', 'BHD 8,920', '18%', 'Under review'],
-      ['Healthy Bowl', 'Healthy food', '3', 'BHD 9,140', '16%', 'Paused'],
+      { name: 'Green Kitchen', id: 'VND-1024', category: 'Hot food', orders: '1,240', branches: '3', users: '12', rating: '4.7', status: 'Active' },
+      { name: 'Lulu Express', id: 'VND-1088', category: 'Grocery', orders: '3,802', branches: '8', users: '41', rating: '4.5', status: 'Active' },
+      { name: 'Sharaf DG', id: 'VND-1102', category: 'Electronics', orders: '980', branches: '2', users: '18', rating: '4.3', status: 'Draft' },
+      { name: 'VEERA', id: 'VND-1145', category: 'Fashion', orders: '640', branches: '1', users: '7', rating: '4.1', status: 'Active' },
+      { name: 'Bloom & Co.', id: 'VND-1151', category: 'Flowers', orders: '318', branches: '2', users: '6', rating: '4.6', status: 'Active' },
+      { name: 'Marine & Co.', id: 'VND-1160', category: 'Seafood', orders: '420', branches: '2', users: '9', rating: '4.6', status: 'Suspended' },
+      { name: 'Burger Lab', id: 'VND-1182', category: 'Fast food', orders: '2,110', branches: '5', users: '22', rating: '4.4', status: 'Active' },
+      { name: 'Healthy Bowl', id: 'VND-1199', category: 'Healthy food', orders: '710', branches: '3', users: '11', rating: '4.8', status: 'Pending' },
     ],
   },
   stores: {
