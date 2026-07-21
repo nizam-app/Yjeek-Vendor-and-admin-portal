@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
+  Copy,
   Download,
   Eye,
   Filter,
@@ -26,11 +27,11 @@ import {
   Users,
   WalletCards,
   Zap,
-  Copy,
 } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
 import { useApiResource } from '../../hooks/useApiResource'
 import { adminService } from '../../services/adminService'
+import AdminAddVendorPage from './AdminAddVendorPage'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -1705,6 +1706,7 @@ export function AdminManagement({ type }) {
 function AdminVendorsPage() {
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
+  const [addingVendor, setAddingVendor] = useState(false)
   const { data, error, isLoading, refetch } = useApiResource(() => adminService.getManagement('vendors'), [])
 
   const rows = useMemo(() => {
@@ -1718,6 +1720,7 @@ function AdminVendorsPage() {
   }, [data, tab, query])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  if (addingVendor) return <AdminAddVendorPage onBack={() => setAddingVendor(false)} />
 
   const statTone = {
     ink: 'text-[#17231c]',
@@ -1739,7 +1742,8 @@ function AdminVendorsPage() {
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{data.title}</h2>
         <button
           type="button"
-          className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#1aa054] px-3.5 text-[12px] font-medium text-white hover:bg-[#158a47]"
+          onClick={() => setAddingVendor(true)}
+          className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
         >
           <Plus size={14} strokeWidth={2.2} /> {data.action}
         </button>
@@ -1749,26 +1753,26 @@ function AdminVendorsPage() {
         {data.stats.map(({ label, value, tone }) => (
           <div
             key={label}
-            className="rounded-[10px] border border-[#e8ebe9] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.04)]"
+            className="rounded-xl border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
           >
-            <p className="text-[10px] font-medium uppercase tracking-[0.04em] text-[#8a948e]">{label}</p>
-            <p className={cn('mt-2 text-[24px] font-bold leading-none', statTone[tone] || statTone.ink)}>{value}</p>
+            <p className="text-[12px] text-[#7c8780]">{label}</p>
+            <p className={cn('mt-1.5 text-[26px] font-bold leading-none', statTone[tone] || statTone.ink)}>{value}</p>
           </div>
         ))}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
           {data.tabs.map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => setTab(item)}
               className={cn(
-                'h-[30px] rounded-full px-3.5 text-[12px] font-medium',
+                'h-[28px] rounded-[8px] px-3.5 text-[12px]',
                 tab === item
-                  ? 'bg-[#e9ecea] text-[#17231c]'
-                  : 'text-[#657169] hover:bg-[#f0f2f0]',
+                  ? 'bg-white font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
+                  : 'font-medium text-[#69756d] hover:text-[#455249]',
               )}
             >
               {item}
@@ -1778,11 +1782,11 @@ function AdminVendorsPage() {
         <span className="flex-1" />
         <button
           type="button"
-          className="inline-flex h-[32px] items-center gap-1 rounded-[8px] border border-[#dfe4e0] bg-white px-3 text-[12px] font-medium text-[#455249]"
+          className="inline-flex h-[32px] items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3.5 text-[12px] font-bold text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
         >
-          All categories <ChevronDown size={13} />
+          All categories <ChevronDown size={13} className="text-[#69756d]" />
         </button>
-        <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-[8px] border border-[#dfe4e0] bg-white px-2.5 max-[700px]:w-full">
+        <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
           <Search size={14} className="text-[#9aa49d]" />
           <input
             value={query}
@@ -1793,11 +1797,11 @@ function AdminVendorsPage() {
         </label>
       </div>
 
-      <section className="overflow-hidden rounded-[10px] border border-[#e8ebe9] bg-white shadow-[0_1px_2px_rgba(20,40,28,.04)]">
+      <section className="overflow-hidden rounded-xl border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-[#edf0ee] bg-[#f7f8f7]">
+              <tr className="border-b border-[#edf0ee]">
                 {data.columns.map((column) => (
                   <th
                     key={column}
@@ -1811,7 +1815,7 @@ function AdminVendorsPage() {
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-b border-[#f0f2f0] last:border-0 hover:bg-[#fafbfa]">
+                <tr key={row.id} className="border-b border-[#f0f2f0] last:border-0 even:bg-[#fafbfa] hover:bg-[#f6f8f6]">
                   <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-bold text-[#17231c]">{row.name}</td>
                   <td className="whitespace-nowrap px-4 py-3.5">
                     <span className="inline-flex items-center gap-1.5 text-[12px] text-[#59655e]">
