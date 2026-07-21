@@ -366,3 +366,355 @@ export const adminManagementMock = {
     ],
   },
 }
+
+function vendorInitials(name) {
+  return String(name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'V'
+}
+
+const GREEN_KITCHEN_BRANCHES = [
+  {
+    id: 'b1',
+    name: 'Manama — Al Seef',
+    block: 'Block 436',
+    area: 'Manama',
+    radius: '5 km',
+    eta: '35 min',
+    minOrder: 'BHD 3.000',
+    hours: '08:00–23:00',
+    status: 'Open',
+  },
+  {
+    id: 'b2',
+    name: 'Juffair — Road 2401',
+    block: 'Block 240',
+    area: 'Manama',
+    radius: '4 km',
+    eta: '30 min',
+    minOrder: 'BHD 2.500',
+    hours: '08:00–23:00',
+    status: 'Open',
+  },
+  {
+    id: 'b3',
+    name: 'Riffa — East',
+    block: 'Block 911',
+    area: 'Riffa',
+    radius: '6 km',
+    eta: '40 min',
+    minOrder: 'BHD 3.500',
+    hours: '08:00–23:00',
+    status: 'Force-closed',
+  },
+  {
+    id: 'b4',
+    name: 'Muharraq — Souq',
+    block: 'Block 203',
+    area: 'Muharraq',
+    radius: '5 km',
+    eta: '35 min',
+    minOrder: 'BHD 3.000',
+    hours: 'Closed today',
+    status: 'Closed',
+  },
+  {
+    id: 'b5',
+    name: 'Saar — Mall area',
+    block: 'Block 525',
+    area: 'Saar',
+    radius: '5 km',
+    eta: '30 min',
+    minOrder: 'BHD 3.000',
+    hours: '08:00–23:00',
+    status: 'Open',
+  },
+]
+
+function buildVendorBranches(vendorName, branchCount) {
+  if (branchCount <= GREEN_KITCHEN_BRANCHES.length) {
+    return GREEN_KITCHEN_BRANCHES.slice(0, branchCount)
+  }
+
+  return [
+    ...GREEN_KITCHEN_BRANCHES,
+    ...Array.from({ length: branchCount - GREEN_KITCHEN_BRANCHES.length }, (_, index) => ({
+      id: `b-extra-${index + 1}`,
+      name: `${vendorName} — Branch ${GREEN_KITCHEN_BRANCHES.length + index + 1}`,
+      block: `Block ${100 + index}`,
+      area: 'Manama',
+      radius: '5 km',
+      eta: '35 min',
+      minOrder: 'BHD 3.000',
+      hours: '08:00–23:00',
+      status: 'Open',
+    })),
+  ]
+}
+
+const GREEN_KITCHEN_USERS = [
+  {
+    id: 'u1',
+    name: 'Asmaa Ilsaey',
+    email: 'owner@greenkitchen.bh',
+    role: 'Vendor admin',
+    branch: 'All branches',
+    lastActive: '2 min ago',
+    status: 'Active',
+  },
+  {
+    id: 'u2',
+    name: 'Sara Ali',
+    email: 'sara@greenkitchen.bh',
+    role: 'Branch manager',
+    branch: 'Manama — Al Seef',
+    lastActive: '1 h ago',
+    status: 'Active',
+  },
+  {
+    id: 'u3',
+    name: 'Yousif Hasan',
+    email: 'yousif@greenkitchen.bh',
+    role: 'Operation staff',
+    branch: 'Manama — Al Seef',
+    lastActive: 'Today',
+    status: 'Active',
+  },
+  {
+    id: 'u4',
+    name: 'Noora Faisal',
+    email: 'noora@greenkitchen.bh',
+    role: 'Branch manager',
+    branch: 'Riffa — East',
+    lastActive: 'Today',
+    status: 'Active',
+  },
+  {
+    id: 'u5',
+    name: 'Omar Khalid',
+    email: 'omar@greenkitchen.bh',
+    role: 'Operation staff',
+    branch: 'Juffair — Road 2401',
+    lastActive: '3 d ago',
+    status: 'Active',
+  },
+  {
+    id: 'u6',
+    name: 'Laila Ahmed',
+    email: 'laila@greenkitchen.bh',
+    role: 'Operation staff',
+    branch: 'Saar — Mall area',
+    lastActive: '3 d ago',
+    status: 'Active',
+  },
+  {
+    id: 'u7',
+    name: 'Fatima Hassan',
+    email: 'fatima@greenkitchen.bh',
+    role: 'Branch manager',
+    branch: 'Muharraq — Souq',
+    lastActive: '1 d ago',
+    status: 'Active',
+  },
+  {
+    id: 'u8',
+    name: 'Hassan Mahmood',
+    email: 'hassan@greenkitchen.bh',
+    role: 'Operation staff',
+    branch: 'Riffa — East',
+    lastActive: '—',
+    status: 'Active',
+  },
+]
+
+function buildVendorUsers(userCount) {
+  if (userCount <= GREEN_KITCHEN_USERS.length) {
+    return GREEN_KITCHEN_USERS.slice(0, userCount)
+  }
+
+  return [
+    ...GREEN_KITCHEN_USERS,
+    ...Array.from({ length: userCount - GREEN_KITCHEN_USERS.length }, (_, index) => ({
+      id: `u-extra-${index + 1}`,
+      name: `Staff member ${GREEN_KITCHEN_USERS.length + index + 1}`,
+      email: `staff${GREEN_KITCHEN_USERS.length + index + 1}@greenkitchen.bh`,
+      role: 'Operation staff',
+      branch: 'All branches',
+      lastActive: '—',
+      status: 'Active',
+    })),
+  ]
+}
+
+const DELIVERY_ZONE_DEFAULTS = {
+  radiusKm: '5',
+  etaMin: '35',
+  minOrder: '2.000',
+  deliveryContribution: '0.300',
+  freeDeliveryOver: '8.000',
+  freeDeliveryEnabled: true,
+  maxDistanceKm: '8',
+  extraContributionPerKm: '0.100',
+  maxContribution: '0.800',
+}
+
+const DELIVERY_BRANCH_OVERRIDES = [
+  { id: 'dz1', name: 'Manama — Al Seef', radius: '5 km', eta: '35 min', minOrder: 'BHD 3.000', deliveryFee: 'BHD 0.800' },
+  { id: 'dz2', name: 'Riffa — Bu Kuwarah', radius: '6 km', eta: '40 min', minOrder: 'BHD 3.000', deliveryFee: 'BHD 1.000' },
+  { id: 'dz3', name: 'Muharraq — Busaiteen', radius: '5 km', eta: '35 min', minOrder: 'BHD 2.500', deliveryFee: 'BHD 0.800' },
+  { id: 'dz4', name: 'Hidd — Industrial', radius: '4 km', eta: '30 min', minOrder: 'BHD 4.000', deliveryFee: 'BHD 1.200' },
+  { id: 'dz5', name: 'Isa Town — Central', radius: '5 km', eta: '35 min', minOrder: 'BHD 3.000', deliveryFee: 'BHD 0.800' },
+]
+
+function buildVendorDeliveryZones(branches) {
+  const overrides = DELIVERY_BRANCH_OVERRIDES.slice(0, branches.length)
+
+  if (branches.length > DELIVERY_BRANCH_OVERRIDES.length) {
+    overrides.push(
+      ...branches.slice(DELIVERY_BRANCH_OVERRIDES.length).map((branch) => ({
+        id: branch.id,
+        name: branch.name,
+        radius: `${DELIVERY_ZONE_DEFAULTS.radiusKm} km`,
+        eta: `${DELIVERY_ZONE_DEFAULTS.etaMin} min`,
+        minOrder: `BHD ${DELIVERY_ZONE_DEFAULTS.minOrder}`,
+        deliveryFee: `BHD ${DELIVERY_ZONE_DEFAULTS.deliveryContribution}`,
+      })),
+    )
+  }
+
+  return {
+    defaults: { ...DELIVERY_ZONE_DEFAULTS },
+    overrides,
+  }
+}
+
+function buildVendorPromotions() {
+  return [
+    {
+      id: 'p1',
+      name: 'Ramadan 20% Off',
+      type: '% off',
+      scope: 'All branches',
+      period: '1–30 Ramadan',
+      used: 420,
+      status: 'Active',
+      detailType: 'Percentage off (20%)',
+      discountCap: 'BHD 3.000',
+      minOrder: 'BHD 5.000',
+      detailScope: 'All branches · entire menu',
+      detailPeriod: '22–30 Mar 2026',
+      eligibility: 'Everyone · code RAMADAN20',
+      usedLabel: '420 of 1000',
+    },
+    {
+      id: 'p2',
+      name: 'Free Delivery Weekend',
+      type: 'Free delivery',
+      scope: 'All branches',
+      period: 'Fri–Sat',
+      used: 310,
+      status: 'Active',
+      detailType: 'Free delivery',
+      discountCap: '—',
+      minOrder: 'BHD 5.000',
+      detailScope: 'All branches',
+      detailPeriod: 'Fri–Sat',
+      eligibility: 'Everyone',
+      usedLabel: '310 of 2000',
+    },
+    {
+      id: 'p3',
+      name: 'Buy 1 Get 1 Burger',
+      type: 'BOGO',
+      scope: 'Manama, Riffa',
+      period: 'Starts 1 Jul',
+      used: 0,
+      status: 'Scheduled',
+      detailType: 'Buy X Get Y',
+      discountCap: '—',
+      minOrder: '—',
+      detailScope: 'Manama, Riffa · selected items',
+      detailPeriod: 'Starts 1 Jul 2026',
+      eligibility: 'Everyone',
+      usedLabel: '0 of 1000',
+    },
+    {
+      id: 'p4',
+      name: 'First Order Free Delivery',
+      type: 'Free delivery',
+      scope: 'All branches',
+      period: 'Ongoing',
+      used: 240,
+      status: 'Active',
+      detailType: 'Free delivery',
+      discountCap: '—',
+      minOrder: 'BHD 3.000',
+      detailScope: 'All branches',
+      detailPeriod: 'Ongoing',
+      eligibility: 'New customers',
+      usedLabel: '240 of 5000',
+    },
+    {
+      id: 'p5',
+      name: 'Pizza Combo Deal',
+      type: 'Item deal',
+      scope: 'Manama — Al Seef',
+      period: '1–10 Apr',
+      used: 502,
+      status: 'Ended',
+      detailType: 'Item / category deal',
+      discountCap: 'BHD 2.000',
+      minOrder: 'BHD 4.000',
+      detailScope: 'Manama — Al Seef · selected items',
+      detailPeriod: '1–10 Apr 2026',
+      eligibility: 'Everyone',
+      usedLabel: '502 of 800',
+    },
+  ]
+}
+
+/** Build per-vendor detail payload from the vendors list row (demo). */
+export function buildAdminVendorDetail(vendorId) {
+  const row = adminManagementMock.vendors.rows.find((item) => item.id === vendorId)
+    || adminManagementMock.vendors.rows[0]
+  const isDemoKitchen = row.id === 'VND-1024'
+  const branchCount = isDemoKitchen ? 5 : (Number(String(row.branches).replace(/,/g, '')) || 1)
+  const userCount = isDemoKitchen ? 8 : (Number(String(row.users).replace(/,/g, '')) || 1)
+  const isActive = row.status === 'Active'
+  const branches = buildVendorBranches(row.name, branchCount)
+  const users = buildVendorUsers(userCount)
+  const deliveryZones = buildVendorDeliveryZones(branches)
+  const promotions = buildVendorPromotions()
+
+  return {
+    id: row.id,
+    name: row.name,
+    initials: vendorInitials(row.name),
+    status: row.status,
+    storeType: 'Food & Beverage',
+    category: row.category,
+    rating: row.rating,
+    branchesLabel: `${branchCount} branches`,
+    legalName: `${row.name} W.L.L`,
+    delivery: 'Radius 5 km · ETA 35 min · min BHD 3.000',
+    storeOnline: isActive,
+    storeOnlineHint: isActive ? 'Visible & accepting orders' : 'Hidden from customers',
+    dispatchMode: 'Auto-dispatch',
+    metrics: [
+      { label: 'Orders (30d)', value: isDemoKitchen ? '1,284' : row.orders },
+      { label: 'GMV (30d)', value: 'BHD 8,940' },
+      { label: 'Avg rating', value: row.rating, star: true, tone: 'green' },
+      { label: 'Active branches', value: `${branchCount} / ${branchCount}`, tone: 'green' },
+      { label: 'Open issues', value: isActive ? '2' : '0', tone: isActive ? 'orange' : 'ink' },
+    ],
+    tabs: ['Overview', 'Branches', 'Users & staff', 'Delivery zones', 'Promotions', 'Commission & fees', 'SLA'],
+    branches,
+    users,
+    deliveryZones,
+    promotions,
+  }
+}
+

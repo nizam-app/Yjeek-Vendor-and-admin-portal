@@ -22,4 +22,7 @@ export const adminService = {
   getManagement(type, options = {}) {
     return apiClient.get('/admin/management', { ...options, params: { ...options.params, type } })
   },
+  getVendorDetail(vendorId, options = {}) {
+    return apiClient.get('/admin/vendors/detail', { ...options, params: { ...options.params, id: vendorId } })
+  },
 }

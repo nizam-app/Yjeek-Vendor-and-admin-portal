@@ -6,6 +6,7 @@ import {
   adminPickupMock,
   adminDineInMock,
   adminServicesMock,
+  buildAdminVendorDetail,
 } from '../mocks/admin.mock'
 import * as vendorMock from '../data/mockData'
 
@@ -17,6 +18,7 @@ const mockRoutes = {
   'GET /admin/services': () => adminServicesMock,
   'GET /admin/operations': () => adminOperationsMock,
   'GET /admin/management': ({ params }) => adminManagementMock[params?.type] || adminManagementMock.vendors,
+  'GET /admin/vendors/detail': ({ params }) => buildAdminVendorDetail(params?.id),
   'GET /vendor/dashboard': () => ({
     kpis: vendorMock.kpis,
     revenueDays: vendorMock.revenueDays,

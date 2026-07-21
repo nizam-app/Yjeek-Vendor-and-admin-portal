@@ -50,6 +50,7 @@ const pageTitles = {
   '/admin/dine-in': 'Live Dashboard',
   '/admin/services': 'Live Dashboard',
   '/admin/vendors': 'Vendor Management',
+  '/admin/vendors/new': 'Vendor Management',
   '/admin/stores': 'Store Management',
   '/admin/fleet': 'Fleet Management',
   '/admin/customers': 'Customer Management',
@@ -167,6 +168,7 @@ function AdminTopbar() {
   const title = pageTitles[pathname]
     || (pathname.startsWith('/admin/scheduled/assign') ? 'Scheduled Orders · Assign champ' : null)
     || (pathname.startsWith('/admin/scheduled/') ? 'Scheduled Orders' : null)
+    || (pathname.startsWith('/admin/vendors/') ? 'Vendor Management' : null)
     || 'Admin Console'
 
   return (
@@ -196,10 +198,10 @@ function AdminTopbar() {
 
 export default function AdminLayout() {
   return (
-    <div className="admin-shell min-h-full bg-[#f5f7f5] text-[#17231c]">
+    <div className="admin-shell h-full overflow-hidden bg-[#f5f7f5] text-[#17231c]">
       <AdminSidebar />
       <AdminTopbar />
-      <main className="min-h-screen pl-[250px] pt-[44px] max-[900px]:pl-0">
+      <main className="h-full overflow-y-auto overflow-x-hidden pl-[250px] pt-[44px] max-[900px]:pl-0 [-webkit-overflow-scrolling:touch]">
         <Outlet />
       </main>
     </div>
