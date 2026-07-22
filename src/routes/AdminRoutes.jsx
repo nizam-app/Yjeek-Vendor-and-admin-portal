@@ -14,8 +14,17 @@ import AdminAddVendorUser from '../pages/admin/vendors/AdminAddVendorUser'
 import AdminVendorsPage from '../pages/admin/management/AdminVendorsPage'
 import AdminVendorDetailPage from '../pages/admin/management/AdminVendorDetailPage'
 import AdminStoresPage from '../pages/admin/management/AdminStoresPage'
+import AdminCreateStoreTypePage from '../pages/admin/management/AdminCreateStoreTypePage'
 import AdminFleetPage from '../pages/admin/management/AdminFleetPage'
+import AdminChampDetailPage from '../pages/admin/management/AdminChampDetailPage'
+import AdminAddChampPage from '../pages/admin/management/AdminAddChampPage'
+import AdminNotifyChampsPage from '../pages/admin/management/AdminNotifyChampsPage'
+import AdminFleetSuppliersPage from '../pages/admin/management/AdminFleetSuppliersPage'
+import AdminAddSupplierPage from '../pages/admin/management/AdminAddSupplierPage'
+import AdminSupplierDetailPage from '../pages/admin/management/AdminSupplierDetailPage'
 import AdminCustomersPage from '../pages/admin/management/AdminCustomersPage'
+import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDetailPage'
+import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
 import AdminSlaModelsPage from '../pages/admin/management/AdminSlaModelsPage'
 import AdminUsersPage from '../pages/admin/management/AdminUsersPage'
@@ -44,8 +53,18 @@ export const adminRoutes = (
     <Route path="vendors/:vendorId/users/:userId" element={<AdminAddVendorUser />} />
     <Route path="vendors/:vendorId" element={<AdminVendorDetailPage />} />
     <Route path="vendors" element={<AdminVendorsPage />} />
+    <Route path="stores/new" element={<AdminCreateStoreTypePage />} />
+    <Route path="stores/:storeTypeId" element={<AdminCreateStoreTypePage />} />
     <Route path="stores" element={<AdminStoresPage />} />
+    <Route path="fleet/new" element={<AdminAddChampPage />} />
+    <Route path="fleet/notify" element={<AdminNotifyChampsPage />} />
+    <Route path="fleet/suppliers/new" element={<AdminAddSupplierPage />} />
+    <Route path="fleet/suppliers/:supplierId" element={<AdminSupplierDetailPage />} />
+    <Route path="fleet/suppliers" element={<AdminFleetSuppliersPage />} />
+    <Route path="fleet/:champId" element={<AdminChampDetailPage />} />
     <Route path="fleet" element={<AdminFleetPage />} />
+    <Route path="customers/new" element={<AdminCreateSegmentPage />} />
+    <Route path="customers/:customerId" element={<AdminCustomerDetailPage />} />
     <Route path="customers" element={<AdminCustomersPage />} />
     <Route path="marketing" element={<AdminMarketingPage />} />
     <Route path="sla-models" element={<AdminSlaModelsPage />} />

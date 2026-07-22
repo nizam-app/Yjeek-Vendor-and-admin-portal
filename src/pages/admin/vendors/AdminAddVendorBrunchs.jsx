@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, Copy, Map, MapPin, Pause, Pencil, Trash2 } from 'lucide-react'
-import AdminForceCloseModal from './AdminForceCloseModal'
+import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 

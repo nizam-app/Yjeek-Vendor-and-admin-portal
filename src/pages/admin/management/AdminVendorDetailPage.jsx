@@ -8,6 +8,8 @@ import { AdminVendorBranches } from '../../../components/admin/management/AdminV
 import { AdminVendorDeliveryZones } from '../../../components/admin/management/AdminVendorDeliveryZones'
 import { AdminVendorUsers } from '../../../components/admin/management/AdminVendorUsers'
 import { AdminVendorPromotions } from '../../../components/admin/management/AdminVendorPromotions'
+import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
+import { AdminVendorSla } from '../../../components/admin/management/AdminVendorSla'
 import { cn } from '../../../components/admin/cn'
 
 export default function AdminVendorDetailPage() {
@@ -57,6 +59,16 @@ export default function AdminVendorDetailPage() {
 
         <button
           type="button"
+          onClick={() =>
+            navigate('/admin/vendors/new', {
+              state: {
+                mode: 'edit',
+                vendorId,
+                storeName: data.name,
+                step: 1,
+              },
+            })
+          }
           className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#127338] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
         >
           <Pencil size={14} strokeWidth={2} />
@@ -253,6 +265,10 @@ export default function AdminVendorDetailPage() {
         <AdminVendorDeliveryZones deliveryZones={data.deliveryZones} />
       ) : tab === 'Promotions' ? (
         <AdminVendorPromotions promotions={data.promotions} />
+      ) : tab === 'Commission & fees' ? (
+        <AdminVendorCommission commission={data.commission} />
+      ) : tab === 'SLA' ? (
+        <AdminVendorSla sla={data.sla} />
       ) : (
         <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[15px] font-bold text-[#17231c]">{tab}</p>

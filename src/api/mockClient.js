@@ -7,6 +7,8 @@ import {
   adminDineInMock,
   adminServicesMock,
   buildAdminVendorDetail,
+  buildAdminCustomerDetail,
+  buildAdminChampDetail,
 } from '../mocks/admin.mock'
 import * as vendorMock from '../data/mockData'
 
@@ -19,6 +21,8 @@ const mockRoutes = {
   'GET /admin/operations': () => adminOperationsMock,
   'GET /admin/management': ({ params }) => adminManagementMock[params?.type] || adminManagementMock.vendors,
   'GET /admin/vendors/detail': ({ params }) => buildAdminVendorDetail(params?.id),
+  'GET /admin/customers/detail': ({ params }) => buildAdminCustomerDetail(params?.id),
+  'GET /admin/champs/detail': ({ params }) => buildAdminChampDetail(params?.id),
   'GET /vendor/dashboard': () => ({
     kpis: vendorMock.kpis,
     revenueDays: vendorMock.revenueDays,
@@ -81,6 +85,9 @@ export const mockClient = {
   },
   post(url, body, options = {}) {
     return this.request({ method: 'POST', url, body, ...options })
+  },
+  put(url, body, options = {}) {
+    return this.request({ method: 'PUT', url, body, ...options })
   },
   patch(url, body, options = {}) {
     return this.request({ method: 'PATCH', url, body, ...options })

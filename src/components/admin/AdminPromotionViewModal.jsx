@@ -1,4 +1,4 @@
-import { Badge } from '../../../components/admin/Badge'
+import { Badge } from './Badge'
 
 const detailRows = (promo) => [
   ['Type', promo.detailType || promo.type],

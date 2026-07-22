@@ -11,6 +11,7 @@ import {
 import houseIcon from '../../../assets/icon-house.png'
 import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
+import { AdminVendorSlaConfigs, SERVICE_MODE_OPTIONS } from '../../../components/admin/AdminVendorSlaConfigs'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -116,7 +117,15 @@ function VendorCard({ title, subtitle, children, className = '' }) {
 export default function AdminAddVendorPage({ onBack }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const handleBack = onBack || (() => navigate('/admin/vendors'))
+  const isEdit = location.state?.mode === 'edit'
+  const editVendorId = location.state?.vendorId
+  const handleBack = onBack || (() => {
+    if (isEdit && editVendorId) {
+      navigate(`/admin/vendors/${encodeURIComponent(editVendorId)}`)
+      return
+    }
+    navigate('/admin/vendors')
+  })
   const [step, setStep] = useState(location.state?.step ?? 1)
   const [form, setForm] = useState({
     storeName: 'Green Kitchen',
@@ -213,7 +222,7 @@ export default function AdminAddVendorPage({ onBack }) {
         </button>
         <div className="min-w-0 flex-1">
           <h2 className="text-[18px] font-bold tracking-[-0.02em] text-[#17231c]">
-            Add vendor · {current.short}
+            {isEdit ? 'Edit vendor' : 'Add vendor'} · {current.short}
           </h2>
           <p className="mt-0.5 text-[12px] text-[#7c8780]">{current.subtitle}</p>
         </div>
@@ -533,44 +542,48 @@ export default function AdminAddVendorPage({ onBack }) {
         ) : null}
 
         {step === 5 ? (
-          <VendorCard title="Service modes & SLA">
-            <div className="flex flex-wrap gap-2.5">
-              {[
-                'Hot food · on demand',
-                'Dine-in',
-                'Pickup',
-                'Scheduled delivery',
-                'Services',
-              ].map((mode) => {
-                const selected = serviceModes.includes(mode)
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => toggleServiceMode(mode)}
-                    className={cn(
-                      'inline-flex h-[36px] items-center gap-2 rounded-full border bg-white px-3.5 text-[13px] font-medium transition',
-                      selected
-                        ? 'border-[#1aa054] text-[#147940]'
-                        : 'border-[#e1e5e2] text-[#455249] hover:border-[#c9d0cb]',
-                    )}
-                  >
-                    <span
+          <>
+            <VendorCard title="Service modes & SLA">
+              <div className="flex flex-wrap gap-2.5">
+                {SERVICE_MODE_OPTIONS.map((mode) => {
+                  const selected = serviceModes.includes(mode)
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => toggleServiceMode(mode)}
                       className={cn(
-                        'grid h-[16px] w-[16px] place-items-center rounded-full border',
+                        'inline-flex h-[36px] items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium transition',
                         selected
-                          ? 'border-[#1aa054] bg-[#1aa054] text-white'
-                          : 'border-[#c9d0cb] bg-white',
+                          ? 'border-[#1aa054] bg-[#e8f7ed] text-[#147940]'
+                          : 'border-[#e1e5e2] bg-white text-[#455249] hover:border-[#c9d0cb]',
                       )}
                     >
-                      {selected ? <Check size={10} strokeWidth={3} /> : null}
-                    </span>
-                    {mode}
-                  </button>
-                )
-              })}
-            </div>
-          </VendorCard>
+                      <span
+                        className={cn(
+                          'grid h-[16px] w-[16px] place-items-center rounded-full border',
+                          selected
+                            ? 'border-[#1aa054] bg-[#1aa054] text-white'
+                            : 'border-[#c9d0cb] bg-white',
+                        )}
+                      >
+                        {selected ? <Check size={10} strokeWidth={3} /> : null}
+                      </span>
+                      {mode}
+                    </button>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                className="mt-3 text-[12.5px] font-medium text-[#1aa054] hover:underline border border-[#DBDEDB] rounded-full px-3 py-2"
+              >
+                ↗ Open default Vendor SLA.
+              </button>
+            </VendorCard>
+
+            <AdminVendorSlaConfigs selectedModes={serviceModes} />
+          </>
         ) : null}
 
         {step === 6 ? (

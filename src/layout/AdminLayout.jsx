@@ -52,7 +52,12 @@ const pageTitles = {
   '/admin/vendors': 'Vendor Management',
   '/admin/vendors/new': 'Vendor Management',
   '/admin/stores': 'Store Management',
-  '/admin/fleet': 'Fleet Management',
+  '/admin/stores/new': 'Store Management',
+  '/admin/fleet': 'Fleet Management · Champs',
+  '/admin/fleet/new': 'Fleet Management · Champs',
+  '/admin/fleet/notify': 'Fleet Management · Champs',
+  '/admin/fleet/suppliers': 'Fleet Management · Suppliers',
+  '/admin/fleet/suppliers/new': 'Fleet Management · Suppliers',
   '/admin/customers': 'Customer Management',
   '/admin/marketing': 'Marketing',
   '/admin/sla-models': 'SLA Models',
@@ -168,7 +173,11 @@ function AdminTopbar() {
   const title = pageTitles[pathname]
     || (pathname.startsWith('/admin/scheduled/assign') ? 'Scheduled Orders · Assign champ' : null)
     || (pathname.startsWith('/admin/scheduled/') ? 'Scheduled Orders' : null)
+    || (pathname.startsWith('/admin/stores/') ? 'Store Management' : null)
     || (pathname.startsWith('/admin/vendors/') ? 'Vendor Management' : null)
+    || (pathname.startsWith('/admin/fleet/suppliers') ? 'Fleet Management · Suppliers' : null)
+    || (pathname.startsWith('/admin/fleet/') ? 'Fleet Management · Champs' : null)
+    || (pathname.startsWith('/admin/customers/') ? 'Customer Management' : null)
     || 'Admin Console'
 
   return (

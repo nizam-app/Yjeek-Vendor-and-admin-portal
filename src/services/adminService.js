@@ -25,4 +25,10 @@ export const adminService = {
   getVendorDetail(vendorId, options = {}) {
     return apiClient.get('/admin/vendors/detail', { ...options, params: { ...options.params, id: vendorId } })
   },
+  getCustomerDetail(customerId, options = {}) {
+    return apiClient.get('/admin/customers/detail', { ...options, params: { ...options.params, id: customerId } })
+  },
+  getChampDetail(champId, options = {}) {
+    return apiClient.get('/admin/champs/detail', { ...options, params: { ...options.params, id: champId } })
+  },
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Eye, MoreVertical, Pencil, Plus } from 'lucide-react'
 import { Badge } from '../Badge'
+import AdminPromotionEditModal from '../AdminPromotionEditModal'
 
 const statusTone = (status) => {
   if (status === 'Active') return 'green'
@@ -93,10 +94,19 @@ export function AdminVendorPromotions({
   onNewPromotion,
   onViewPromotion,
   onEditPromotion,
+  onSavePromotion,
 }) {
   const [menuId, setMenuId] = useState(null)
   const [viewPromo, setViewPromo] = useState(null)
+  const [editPromo, setEditPromo] = useState(null)
   const menuRef = useRef(null)
+
+  const openEditPromotion = (promo) => {
+    setViewPromo(null)
+    setMenuId(null)
+    setEditPromo(promo)
+    onEditPromotion?.(promo)
+  }
 
   useEffect(() => {
     if (!menuId) return undefined
@@ -215,10 +225,7 @@ export function AdminVendorPromotions({
                               type="button"
                               role="menuitem"
                               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
-                              onClick={() => {
-                                setMenuId(null)
-                                onEditPromotion?.(promo)
-                              }}
+                              onClick={() => openEditPromotion(promo)}
                             >
                               <Pencil size={14} strokeWidth={2} className="text-[#127338]" />
                               Edit
@@ -238,7 +245,17 @@ export function AdminVendorPromotions({
       <PromotionViewModal
         promo={viewPromo}
         onClose={() => setViewPromo(null)}
-        onEdit={onEditPromotion}
+        onEdit={openEditPromotion}
+      />
+
+      <AdminPromotionEditModal
+        open={Boolean(editPromo)}
+        promotion={editPromo}
+        onClose={() => setEditPromo(null)}
+        onSave={(updated) => {
+          onSavePromotion?.(updated)
+          setEditPromo(null)
+        }}
       />
     </>
   )

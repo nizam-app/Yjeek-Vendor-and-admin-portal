@@ -28,5 +28,5 @@ export const catalogStoreIconSrc = {
 
 export function CatalogStoreIcon({ id, className = 'size-[22px]' }) {
   const src = catalogStoreIconSrc[id] || catalogStoreIconSrc.all
-  return <img src={src} alt="" className={`object-contain ${className}`} width={22} height={22} />
+  return <img src={src} alt="" className={`object-contain ${className}`} />
 }
