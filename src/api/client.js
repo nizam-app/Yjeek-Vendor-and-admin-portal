@@ -148,7 +148,9 @@ async function httpRequest({
         requestId: response.headers.get('x-request-id') || response.headers.get('request-id'),
       })
 
-      if (response.status === 401) {
+      // Public endpoints (e.g. login with skipAuth) must not clear sessions or
+      // trigger unauthorized redirects — that would loop users back to /login.
+      if (response.status === 401 && !skipAuth) {
         handleUnauthorized(scope)
       }
 

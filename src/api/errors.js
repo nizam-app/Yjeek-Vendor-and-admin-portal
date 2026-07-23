@@ -101,12 +101,19 @@ export class ApiError extends Error {
 
 /**
  * Best-effort extraction of field-level validation errors from unknown payloads.
- * Does not assume a single backend shape.
+ * Supports confirmed Vendor shape: `{ error: { details: { email: ["..."] } } }`.
  */
 export function extractFieldErrors(payload) {
   if (!payload || typeof payload !== 'object') return null
 
-  const candidates = [payload.errors, payload.fieldErrors, payload.validationErrors, payload.data?.errors]
+  const candidates = [
+    payload.errors,
+    payload.fieldErrors,
+    payload.validationErrors,
+    payload.data?.errors,
+    payload.error?.details,
+    payload.details,
+  ]
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
     return candidate
@@ -115,10 +122,46 @@ export function extractFieldErrors(payload) {
   return null
 }
 
+/**
+ * Prefer email / password field messages, then any first field message.
+ * @param {Record<string, string[]|string>|null|undefined} fieldErrors
+ * @param {string[]} [preferredFields]
+ */
+export function getFirstFieldErrorMessage(fieldErrors, preferredFields = ['email', 'password']) {
+  if (!fieldErrors || typeof fieldErrors !== 'object') return null
+
+  const readMessage = (value) => {
+    if (Array.isArray(value)) {
+      const first = value.find((item) => typeof item === 'string' && item.trim())
+      return first || null
+    }
+    if (typeof value === 'string' && value.trim()) return value
+    return null
+  }
+
+  for (const field of preferredFields) {
+    const message = readMessage(fieldErrors[field])
+    if (message) return message
+  }
+
+  for (const value of Object.values(fieldErrors)) {
+    const message = readMessage(value)
+    if (message) return message
+  }
+
+  return null
+}
+
 export function createApiErrorFromResponse({ status, payload, requestId = null, fallbackMessage }) {
   const type = typeFromStatus(status)
+  const nestedError =
+    payload?.error && typeof payload.error === 'object' && !Array.isArray(payload.error)
+      ? payload.error
+      : null
+
   const message =
     (typeof payload?.message === 'string' && payload.message) ||
+    (typeof nestedError?.message === 'string' && nestedError.message) ||
     (typeof payload?.error === 'string' && payload.error) ||
     (typeof payload?.detail === 'string' && payload.detail) ||
     fallbackMessage ||
@@ -128,7 +171,7 @@ export function createApiErrorFromResponse({ status, payload, requestId = null, 
     type,
     status,
     message,
-    details: payload?.details ?? payload?.data ?? null,
+    details: nestedError?.details ?? payload?.details ?? payload?.data ?? null,
     fieldErrors: extractFieldErrors(payload),
     requestId: requestId || payload?.requestId || payload?.meta?.requestId || null,
     raw: payload,

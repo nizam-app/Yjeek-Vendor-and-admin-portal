@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import { PageHeader } from '../../components/ui'
@@ -7,8 +7,12 @@ import OrderDetailModal from '../../components/OrderDetailModal'
 import AcceptOrderModal from '../../components/AcceptOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useApiMutation } from '../../hooks/useApiMutation'
+import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
+import { moveAcceptedOrderOnLiveBoard } from '../../mappers/vendor/mapVendorLiveOrders'
+import { orderService } from '../../services/vendor/orderService'
+
+const AUTO_REFRESH_MS = 8000
 
 export default function LiveOrders() {
   const [searchParams] = useSearchParams()
@@ -17,19 +21,83 @@ export default function LiveOrders() {
   const [acceptedOrder, setAcceptedOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [acceptingId, setAcceptingId] = useState(null)
+  const [acceptError, setAcceptError] = useState(null)
   const isDineIn = tab === 'dinein'
-  const { data: orders, error, isLoading, refetch } = useApiResource(() => vendorService.getLiveOrders(), [])
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+  const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
 
-  const columns = getColumns(tab, orders)
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      refetch()
+    }, AUTO_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [refetch])
+
+  const handleAccept = useCallback(
+    async ({ order, mode }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setAcceptError(new Error('Order id is missing.'))
+        return
+      }
+
+      setAcceptError(null)
+      setAcceptingId(String(orderId))
+      try {
+        const result = await acceptOrder(orderId)
+        const mapped = result?.data || order
+        setAcceptedOrder({ order: mapped, mode })
+        setData((current) =>
+          moveAcceptedOrderOnLiveBoard(current, {
+            board: tab,
+            previousOrder: order,
+            acceptedOrder: mapped,
+          }),
+        )
+        refetch()
+      } catch (err) {
+        setAcceptError(err)
+      } finally {
+        setAcceptingId(null)
+      }
+    },
+    [acceptOrder, refetch, setData, tab],
+  )
+
+  const columns = getColumns(tab, orders).map((col) => ({
+    ...col,
+    items: col.items.filter((order) => {
+      if (!searchQuery.trim()) return true
+      const haystack = [order.id, order.customer, order.items, order.guest]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(searchQuery.trim().toLowerCase())
+    }),
+  }))
   const totalActive = columns.reduce((sum, col) => sum + col.items.length, 0)
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load live orders. <button onClick={refetch} className="underline">Try again</button></div>
+
+  if (isLoading && !orders) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
+  }
+  if (error && !orders) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load live orders.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
       <PageHeader
         title={isDineIn ? 'Dine-in queue' : 'Live orders'}
-        subtitle={`${totalActive} active · auto-refresh 8s`}
+        subtitle={`${totalActive} active · auto-refresh ${AUTO_REFRESH_MS / 1000}s`}
       />
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
@@ -56,13 +124,32 @@ export default function LiveOrders() {
         <input
           className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white min-w-[220px]"
           placeholder="Search by order #…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <button type="button" className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium">
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7]"
+        >
           ↻ Refresh
         </button>
+        {error ? (
+          <p className="text-[12px] text-danger">
+            Refresh failed.{' '}
+            <button type="button" onClick={refetch} className="underline">
+              Retry
+            </button>
+          </p>
+        ) : null}
+        {acceptError ? (
+          <p className="text-[12px] text-danger">
+            {acceptError.message || 'Failed to accept order.'}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-4 gap-[14px] max-[1200px]:grid-cols-2">
@@ -71,7 +158,9 @@ export default function LiveOrders() {
             <div className="flex items-center justify-between mb-3 font-bold text-sm">
               <span>{col.title}</span>
               <div className="flex items-center gap-2">
-                <span className="bg-white rounded-full py-[2px] px-2 text-xs text-ink-muted">{col.items.length}</span>
+                <span className="bg-white rounded-full py-[2px] px-2 text-xs text-ink-muted">
+                  {col.items.length}
+                </span>
                 <Link
                   to={`/live-orders/${col.key}?tab=${tab}`}
                   className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-[6px] text-ink-muted bg-white hover:text-green-primary hover:bg-green-active-bg"
@@ -87,9 +176,26 @@ export default function LiveOrders() {
             ) : (
               col.items.map((order) =>
                 isDineIn ? (
-                  <DineInCard key={order.id} order={order} mode={col.key} onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onReject={setRejectOrder} />
+                  <DineInCard
+                    key={order.backendId || order.id}
+                    order={order}
+                    mode={col.key}
+                    onSelect={setSelectedOrder}
+                    onAccept={handleAccept}
+                    onReject={setRejectOrder}
+                    accepting={acceptingId === String(order.backendId || order.id)}
+                  />
                 ) : (
-                  <OrderCard key={order.id} order={order} mode={col.key} onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onHandoverChamp={setHandoverOrder} onReject={setRejectOrder} />
+                  <OrderCard
+                    key={order.backendId || order.id}
+                    order={order}
+                    mode={col.key}
+                    onSelect={setSelectedOrder}
+                    onAccept={handleAccept}
+                    onHandoverChamp={setHandoverOrder}
+                    onReject={setRejectOrder}
+                    accepting={acceptingId === String(order.backendId || order.id)}
+                  />
                 ),
               )
             )}

@@ -2,28 +2,43 @@ import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { demoAccounts, useAuth } from '../context/AuthContext'
 import { loginFeatures } from '../data/mockData'
+import { authService } from '../services/vendor/authService'
 
 export default function Login() {
-  const { user, login } = useAuth()
+  const { user, login, isAuthInitializing } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState(demoAccounts.vendor.email)
   const [password, setPassword] = useState('password123')
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  if (isAuthInitializing) return null
 
   if (user) return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
-    const nextUser = login(email, password)
-    if (!nextUser) {
-      setError('Incorrect email or password. Please recheck and try again.')
-      return
-    }
+    if (isLoading) return
+
+    setIsLoading(true)
     setError('')
-    navigate(nextUser.requiresTwoFactor ? '/admin/verify' : '/dashboard')
+
+    try {
+      const nextUser = await login(email, password)
+      if (!nextUser) {
+        setError('Incorrect email or password. Please recheck and try again.')
+        return
+      }
+      navigate(nextUser.requiresTwoFactor ? '/admin/verify' : '/dashboard')
+    } catch (err) {
+      setError(authService.getLoginErrorMessage(err))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   function useDemo(account) {
+    if (isLoading) return
     setEmail(account.email)
     setPassword(account.password)
     setError('')
@@ -90,7 +105,8 @@ export default function Login() {
             <button
               type="button"
               onClick={() => useDemo(demoAccounts.vendor)}
-              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg"
+              disabled={isLoading}
+              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg disabled:opacity-60 disabled:pointer-events-none"
             >
               <span className="block text-[11px] font-medium text-green-active-text">VENDOR DEMO</span>
               <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.vendor.email}</span>
@@ -98,7 +114,8 @@ export default function Login() {
             <button
               type="button"
               onClick={() => useDemo(demoAccounts.admin)}
-              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg"
+              disabled={isLoading}
+              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg disabled:opacity-60 disabled:pointer-events-none"
             >
               <span className="block text-[11px] font-medium text-green-active-text">ADMIN DEMO</span>
               <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.admin.email}</span>
@@ -119,6 +136,7 @@ export default function Login() {
                 setError('')
               }}
               autoComplete="username"
+              disabled={isLoading}
             />
           </div>
 
@@ -136,10 +154,15 @@ export default function Login() {
                 setError('')
               }}
               autoComplete="current-password"
+              disabled={isLoading}
             />
           </div>
 
-          <button type="submit" className="w-full h-11 rounded-md bg-green-primary text-white text-[13px] font-medium hover:bg-green-active-text">
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full h-11 rounded-md bg-green-primary text-white text-[13px] font-medium hover:bg-green-active-text disabled:opacity-60 disabled:pointer-events-none"
+          >
             Sign in
           </button>
         </form>

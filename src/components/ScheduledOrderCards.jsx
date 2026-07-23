@@ -1,5 +1,4 @@
 import { Clock } from 'lucide-react'
-import { scheduledOrders } from '../data/mockData'
 
 const windowTones = {
   blue: 'bg-[#e5f0ff] text-[#2978db]',
@@ -47,6 +46,8 @@ function getItemsSummary(order) {
     const count = order.itemsList.reduce((sum, item) => sum + (item.qty || 1), 0)
     return `${count} items`
   }
+  if (order.itemCount != null) return `${order.itemCount} items`
+  if (order.itemsPreview) return order.itemsPreview
 
   const match = order.customer?.match(/(\d+ items)/)
   return match ? match[1] : order.customer
@@ -85,7 +86,7 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-[16px] font-bold text-ink">{order.id}</p>
-            <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium shrink-0 ${windowTones[order.windowTone]}`}>
+            <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium shrink-0 ${windowTones[order.windowTone] || windowTones.gray}`}>
               {order.window}
             </span>
           </div>
@@ -112,7 +113,7 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
           ) : null}
         </div>
 
-        {isNew && order.sla ? (
+        {isNew ? (
           <div className="flex gap-2.5">
             <button
               type="button"
@@ -167,7 +168,7 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
         tabIndex={0}
       >
         <div className="flex items-center gap-1.5">
-          <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium ${windowTones[order.windowTone]}`}>
+          <span className={`inline-flex items-center rounded-full py-[3px] px-[9px] text-[11px] font-medium ${windowTones[order.windowTone] || windowTones.gray}`}>
             {order.window}
           </span>
           <span className="flex-1 text-right text-[11px] font-medium text-ink-muted">{order.when}</span>
@@ -190,7 +191,7 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
         ) : null}
       </div>
 
-      {isNew && order.sla ? (
+      {isNew ? (
         <div className="flex gap-2">
           <button
             type="button"
@@ -230,12 +231,16 @@ export function ScheduleCard({ order, columnKey, dense, onSelect, onAction, onRe
   )
 }
 
-export function getScheduledColumns() {
+/**
+ * @param {{ columns?: Record<string, unknown[]> }|null|undefined} [board]
+ */
+export function getScheduledColumns(board) {
+  const source = board?.columns || {}
   return Object.entries(columnMeta).map(([key, meta]) => ({
     key,
     title: meta.title,
     subtitle: meta.subtitle,
     buttonLabel: meta.buttonLabel,
-    items: scheduledOrders[key] || [],
+    items: Array.isArray(source[key]) ? source[key] : [],
   }))
 }

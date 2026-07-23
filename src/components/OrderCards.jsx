@@ -33,7 +33,8 @@ function openDetailsOnClick(mode) {
   return mode === 'new'
 }
 
-export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject }) {
+export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject, accepting }) {
+  const isAccepting = Boolean(accepting)
   const canOpenDetails = openDetailsOnClick(mode)
 
   if (order.status === 'rejected') {
@@ -129,16 +130,18 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
           <button
             type="button"
             className={btnPrimaryAction}
+            disabled={isAccepting}
             onClick={(e) => {
               stopCardAction(e)
               onAccept?.({ order, mode })
             }}
           >
-            Accept
+            {isAccepting ? 'Accepting…' : 'Accept'}
           </button>
           <button
             type="button"
             className={btnDangerOutline}
+            disabled={isAccepting}
             onClick={(e) => triggerReject(e, onReject, order, mode)}
           >
             Reject
@@ -195,7 +198,8 @@ function DineInTag({ tag }) {
   )
 }
 
-export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject }) {
+export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject, accepting }) {
+  const isAccepting = Boolean(accepting)
   const canOpenDetails = openDetailsOnClick(mode)
   const separateRows = mode === 'ready' || (mode === 'confirmed' && order.arrived === false)
   const showTogether = !separateRows && order.when && order.tag
@@ -219,7 +223,8 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
     >
       <p className="text-[12px] font-bold text-ink">{order.id}</p>
       <p className="text-[13px] font-medium text-ink">
-        {order.guest} · {order.guests} guests
+        {order.guest}
+        {order.guests != null && order.guests !== '' ? ` · ${order.guests} guests` : ''}
       </p>
 
       {showTogether ? (
@@ -247,16 +252,18 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
               <button
                 type="button"
                 className={btnPrimaryAction}
+                disabled={isAccepting}
                 onClick={(e) => {
                   stopCardAction(e)
                   onAccept?.({ order, mode })
                 }}
               >
-                Accept
+                {isAccepting ? 'Accepting…' : 'Accept'}
               </button>
               <button
                 type="button"
                 className={btnDangerOutline}
+                disabled={isAccepting}
                 onClick={(e) => triggerReject(e, onReject, order, mode)}
               >
                 Reject

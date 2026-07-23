@@ -11,7 +11,16 @@ export const productService = {
   getServiceBookings(options = {}) {
     return apiClient.get(endpoints.vendor.services.bookings, { ...options, scope: 'vendor' })
   },
+  /** @deprecated Prefer orderService.getServiceCalendar */
   getServiceCalendar(options = {}) {
-    return apiClient.get(endpoints.vendor.services.calendar, { ...options, scope: 'vendor' })
+    const { branchId, month, params, ...requestOptions } = options
+    const query = { ...(params || {}) }
+    if (month) query.month = String(month)
+    if (branchId) query.branchId = String(branchId)
+    return apiClient.get(endpoints.vendor.orders.servicesCalendar, {
+      ...requestOptions,
+      params: query,
+      scope: 'vendor',
+    })
   },
 }

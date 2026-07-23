@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { OrderCard, DineInCard, getColumns } from '../../components/OrderCards'
@@ -6,8 +6,10 @@ import OrderDetailModal from '../../components/OrderDetailModal'
 import AcceptOrderModal from '../../components/AcceptOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useApiMutation } from '../../hooks/useApiMutation'
+import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
+import { moveAcceptedOrderOnLiveBoard } from '../../mappers/vendor/mapVendorLiveOrders'
+import { orderService } from '../../services/vendor/orderService'
 
 export default function LiveOrderColumn() {
   const { key } = useParams()
@@ -17,9 +19,43 @@ export default function LiveOrderColumn() {
   const [acceptedOrder, setAcceptedOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
+  const [acceptingId, setAcceptingId] = useState(null)
+  const [acceptError, setAcceptError] = useState(null)
   const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
-  const { data: orders, error, isLoading, refetch } = useApiResource(() => vendorService.getLiveOrders(), [])
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+  const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+
+  const handleAccept = useCallback(
+    async ({ order, mode }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setAcceptError(new Error('Order id is missing.'))
+        return
+      }
+
+      setAcceptError(null)
+      setAcceptingId(String(orderId))
+      try {
+        const result = await acceptOrder(orderId)
+        const mapped = result?.data || order
+        setAcceptedOrder({ order: mapped, mode })
+        setData((current) =>
+          moveAcceptedOrderOnLiveBoard(current, {
+            board: tab,
+            previousOrder: order,
+            acceptedOrder: mapped,
+          }),
+        )
+        refetch()
+      } catch (err) {
+        setAcceptError(err)
+      } finally {
+        setAcceptingId(null)
+      }
+    },
+    [acceptOrder, refetch, setData, tab],
+  )
 
   const column = getColumns(tab, orders).find((col) => col.key === key)
   const items = column
@@ -33,7 +69,15 @@ export default function LiveOrderColumn() {
     : []
 
   if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading orders…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load orders. <button onClick={refetch} className="underline">Try again</button></div>
+  if (error)
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load orders.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
@@ -67,15 +111,40 @@ export default function LiveOrderColumn() {
         />
       </div>
 
+      {acceptError ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {acceptError.message || 'Failed to accept order.'}
+        </p>
+      ) : null}
+
       {items.length === 0 ? (
         <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[14px]">
           {items.map((order) =>
             isDineIn ? (
-              <DineInCard key={order.id} order={order} mode={key} dense onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onReject={setRejectOrder} />
+              <DineInCard
+                key={order.backendId || order.id}
+                order={order}
+                mode={key}
+                dense
+                onSelect={setSelectedOrder}
+                onAccept={handleAccept}
+                onReject={setRejectOrder}
+                accepting={acceptingId === String(order.backendId || order.id)}
+              />
             ) : (
-              <OrderCard key={order.id} order={order} mode={key} dense onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onHandoverChamp={setHandoverOrder} onReject={setRejectOrder} />
+              <OrderCard
+                key={order.backendId || order.id}
+                order={order}
+                mode={key}
+                dense
+                onSelect={setSelectedOrder}
+                onAccept={handleAccept}
+                onHandoverChamp={setHandoverOrder}
+                onReject={setRejectOrder}
+                accepting={acceptingId === String(order.backendId || order.id)}
+              />
             ),
           )}
         </div>
