@@ -35,6 +35,9 @@ export const endpoints = {
      */
     /** Confirmed: GET /vendor-panel/dashboard?branchId= */
     dashboard: '/vendor-panel/dashboard',
+    /** Confirmed: GET /vendor-panel/account */
+    account: '/vendor-panel/account',
+    /** @deprecated Prefer endpoints.vendor.account */
     profile: '/vendor/profile',
     orders: {
       /** Confirmed: GET /vendor-panel/orders/live?tab=delivery_pickup|dine_in&branchId= */
@@ -61,17 +64,53 @@ export const endpoints = {
       calendar: '/vendor-panel/orders/services/calendar',
     },
     catalog: {
-      storeTypes: '/catalog/store-types',
-      items: '/catalog/items',
+      /** Confirmed: GET /vendor-panel/catalog/products */
+      products: '/vendor-panel/catalog/products',
+      /** Confirmed: GET /vendor-panel/catalog/products/:productId */
+      product: (productId) =>
+        `/vendor-panel/catalog/products/${encodeURIComponent(String(productId || '').trim())}`,
+      /** Confirmed: POST /vendor-panel/catalog/products */
+      // create uses same path via apiClient.post(endpoints.vendor.catalog.products)
+      /** Confirmed: GET /vendor-panel/catalog/categories */
+      categories: '/vendor-panel/catalog/categories',
+      /** Confirmed: GET /vendor-panel/catalog/store-types */
+      storeTypes: '/vendor-panel/catalog/store-types',
+      /** @deprecated Prefer endpoints.vendor.catalog.products */
+      items: '/vendor-panel/catalog/products',
     },
     branches: '/vendor-panel/branches',
     /** Confirmed: PATCH /vendor-panel/branches/close-all */
     branchesCloseAll: '/vendor-panel/branches/close-all',
     /** Confirmed: PATCH /vendor-panel/branches/open-all */
     branchesOpenAll: '/vendor-panel/branches/open-all',
-    staff: '/staff',
-    promotions: '/promotions',
-    notifications: '/notifications',
+    /** Confirmed: GET /vendor-panel/staff */
+    staff: '/vendor-panel/staff',
+    promotions: {
+      /** Confirmed: GET /vendor-panel/promotions */
+      list: '/vendor-panel/promotions',
+      /** Confirmed: GET /vendor-panel/promotions/summary */
+      summary: '/vendor-panel/promotions/summary',
+      /** Confirmed: GET /vendor-panel/promotions/:promotionId */
+      detail: (promotionId) =>
+        `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}`,
+      /** Confirmed: GET /vendor-panel/promotions/:promotionId/analytics */
+      analytics: (promotionId) =>
+        `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}/analytics`,
+      /** Confirmed: PATCH /vendor-panel/promotions/:promotionId/pause */
+      pause: (promotionId) =>
+        `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}/pause`,
+    },
+    notifications: {
+      /** Confirmed: GET /vendor-panel/notifications */
+      list: '/vendor-panel/notifications',
+      /** Confirmed: GET /vendor-panel/notifications/unread-count */
+      unreadCount: '/vendor-panel/notifications/unread-count',
+      /** Confirmed: PATCH /vendor-panel/notifications/:notificationId/read */
+      markRead: (notificationId) =>
+        `/vendor-panel/notifications/${encodeURIComponent(String(notificationId || '').trim())}/read`,
+      /** Confirmed: PATCH /vendor-panel/notifications/read-all */
+      markAllRead: '/vendor-panel/notifications/read-all',
+    },
     content: {
       login: '/content/login',
     },

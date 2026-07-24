@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { GripVertical } from 'lucide-react'
 import { getProductImage } from '../data/productImages'
 import OptionGroupModal from './OptionGroupModal'
@@ -114,14 +114,18 @@ function Chip({ selected, children, onClick }) {
 }
 
 function FieldSelect({ label, value, onChange, options, className = '' }) {
+  const normalized = options.map((option) =>
+    typeof option === 'string' ? { value: option, label: option } : option,
+  )
+
   return (
     <div className={`flex min-w-0 flex-col items-start gap-1.5 ${className}`}>
       <label className={labelClass}>{label}</label>
       <div className="relative w-full">
         <select className={`${selectBox} pr-8`} value={value} onChange={onChange}>
-          {options.map((option) => (
-            <option key={option} value={option}>
-              {option}
+          {normalized.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -137,17 +141,64 @@ function FieldSelect({ label, value, onChange, options, className = '' }) {
  * Add / Edit product modal (Figma 860px)
  * mode: 'add' | 'edit'
  */
-export default function EditProductModal({ open, product, mode = 'edit', onClose, onSave }) {
+export default function EditProductModal({
+  open,
+  product,
+  mode = 'edit',
+  onClose,
+  onSave,
+  categories = [],
+  isSaving = false,
+  isLoadingDetail = false,
+  saveError = '',
+}) {
   const [form, setForm] = useState(null)
   const [optionModal, setOptionModal] = useState({ open: false, index: null, group: null })
   const isAdd = mode === 'add'
   const source = isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT
 
+  const categoryOptions = useMemo(() => {
+    if (Array.isArray(categories) && categories.length > 0) {
+      return [
+        { value: '', label: 'Select category' },
+        ...categories.map((category) => ({
+          value: category.id,
+          label:
+            category.depth > 0
+              ? `${'— '.repeat(category.depth)}${category.name}`
+              : category.name,
+        })),
+      ]
+    }
+    return [
+      { value: '', label: 'Select category' },
+      ...['Main course', 'Drinks', 'Desserts', 'Sides', 'Pizza', 'Salads'].map((name) => ({
+        value: name,
+        label: name,
+      })),
+    ]
+  }, [categories])
+
   useEffect(() => {
     if (!open) return
-    setForm(buildForm(isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT))
+    const base = buildForm(isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT)
+    const matchedCategory =
+      categories.find((category) => category.id === product?.catalogCategoryId) ||
+      categories.find(
+        (category) =>
+          category.name === (product?.catalogCategoryName || product?.categoryValue || base.categoryValue),
+      ) ||
+      categories.find((category) => category.name === 'Main course') ||
+      categories[0] ||
+      null
+
+    setForm({
+      ...base,
+      catalogCategoryId: matchedCategory?.id || product?.catalogCategoryId || '',
+      categoryValue: matchedCategory?.name || base.categoryValue,
+    })
     setOptionModal({ open: false, index: null, group: null })
-  }, [open, product, mode, isAdd])
+  }, [open, product, mode, isAdd, categories])
 
   useEffect(() => {
     if (!open) return undefined
@@ -163,7 +214,19 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
     }
   }, [open, onClose, optionModal.open])
 
-  if (!open || !form) return null
+  if (!open) return null
+
+  if (isLoadingDetail && !form) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(0,0,0,0.28)]">
+        <div className="rounded-[12px] bg-white px-6 py-4 text-[13px] text-ink-muted shadow-lg">
+          Loading product…
+        </div>
+      </div>
+    )
+  }
+
+  if (!form) return null
 
   const productImage = !isAdd && product?.id ? getProductImage(product) : null
 
@@ -218,23 +281,32 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
     closeOptionModal()
   }
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
+    if (isSaving) return
+
     const priceValue = form.priceValue.trim() || '0.000'
     const name = form.name.trim() || 'Untitled product'
     const filledAddOns = form.addOns.filter((item) => item.name.trim())
     const hasOptions = Boolean(form.optionGroups?.length || filledAddOns.length)
+    const selectedCategory =
+      categories.find((category) => category.id === form.catalogCategoryId) ||
+      categories.find((category) => category.name === form.categoryValue) ||
+      null
+    const categoryName = selectedCategory?.name || form.categoryValue || 'Main course'
 
-    onSave({
+    await onSave?.({
       ...SAMPLE_PRODUCT,
       ...source,
-      id: isAdd ? `product-${Date.now()}` : source.id,
+      id: isAdd ? null : source.id,
       name,
       nameAr: form.nameAr,
       priceValue,
       price: `${priceValue} BHD${hasOptions ? ' +' : ''}`,
-      category: `Food · ${form.categoryValue === 'Main course' ? 'Mains' : form.categoryValue}`,
-      categoryValue: form.categoryValue,
+      category: `Food · ${categoryName === 'Main course' ? 'Mains' : categoryName}`,
+      categoryValue: categoryName,
+      catalogCategoryId: form.catalogCategoryId || selectedCategory?.id || null,
+      catalogCategoryName: categoryName,
       subcategory: form.subcategory,
       subSubcategory: form.subSubcategory,
       prepTime: form.prepTime,
@@ -252,6 +324,7 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
       badgeTone: hasOptions ? 'options' : 'simple',
       icon: form.icon || '🍔',
       stock: source.stock || 'Made to order',
+      stockType: 'MADE_TO_ORDER',
     })
   }
 
@@ -281,7 +354,12 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex w-full flex-col">
+        <form onSubmit={handleSubmit} className="relative flex w-full flex-col">
+          {isLoadingDetail ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-b-[16px] bg-white/70 text-[13px] text-ink-muted">
+              Loading product details…
+            </div>
+          ) : null}
           <div className="flex w-full flex-col items-start gap-4 px-[22px] pt-[18px] pb-[22px]">
             {/* Images */}
             <p className="text-[12.5px] font-bold leading-[15px] text-[#1A1A1A]">Images</p>
@@ -346,9 +424,17 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
               <FieldSelect
                 className="w-[148px] shrink-0"
                 label="CATEGORY"
-                value={form.categoryValue}
-                onChange={(e) => updateField('categoryValue', e.target.value)}
-                options={['Main course', 'Drinks', 'Desserts', 'Sides', 'Pizza', 'Salads']}
+                value={form.catalogCategoryId || form.categoryValue}
+                onChange={(e) => {
+                  const nextValue = e.target.value
+                  const selected = categories.find((category) => category.id === nextValue)
+                  setForm((current) => ({
+                    ...current,
+                    catalogCategoryId: nextValue,
+                    categoryValue: selected?.name || nextValue,
+                  }))
+                }}
+                options={categoryOptions}
               />
 
               <FieldSelect
@@ -565,21 +651,27 @@ export default function EditProductModal({ open, product, mode = 'edit', onClose
 
           <div className="h-px w-full bg-[#E3E8E3]" />
 
+          {saveError ? (
+            <div className="w-full px-[22px] pt-3 text-[12.5px] text-danger">{saveError}</div>
+          ) : null}
+
           {/* Footer */}
           <div className="flex h-[68px] w-full flex-row items-center gap-[10px] px-[22px] pt-3.5 pb-4">
             <span className="min-h-1.5 min-w-0 flex-1" />
             <button
               type="button"
               onClick={onClose}
-              className="box-border inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-[18px] py-[11px] text-[13px] font-medium leading-4 text-[#1A1A1A]"
+              disabled={isSaving || isLoadingDetail}
+              className="box-border inline-flex h-[38px] min-w-[80px] items-center justify-center rounded-[10px] border border-[#D6DBD6] bg-white px-[18px] py-[11px] text-[13px] font-medium leading-4 text-[#1A1A1A] disabled:opacity-60"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="inline-flex h-[38px] min-w-[120px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-[18px] py-[11px] text-[13px] font-medium leading-4 text-white hover:brightness-[0.96]"
+              disabled={isSaving || isLoadingDetail}
+              className="inline-flex h-[38px] min-w-[120px] items-center justify-center rounded-[10px] bg-[#1AA34D] px-[18px] py-[11px] text-[13px] font-medium leading-4 text-white hover:brightness-[0.96] disabled:opacity-60"
             >
-              Save product
+              {isSaving ? 'Saving…' : 'Save product'}
             </button>
           </div>
         </form>

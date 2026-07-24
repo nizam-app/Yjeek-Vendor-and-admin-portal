@@ -40,3 +40,27 @@ export {
   mapVendorOrderHistoryResponse,
 } from './mapVendorOrderHistory'
 export { mapVendorOrderReceiptResponse } from './mapVendorOrderReceipt'
+export {
+  mapVendorNotification,
+  mapVendorNotificationsResponse,
+  mapVendorUnreadCountResponse,
+} from './mapVendorNotifications'
+export { formatMaskedIban, mapVendorAccountResponse } from './mapVendorAccount'
+export {
+  flattenVendorCatalogCategories,
+  mapVendorCatalogCategoriesResponse,
+  mapVendorCatalogCategory,
+  mapVendorCatalogProduct,
+  mapVendorCatalogProductsResponse,
+  mapVendorCatalogStoreTypesResponse,
+  buildVendorCreateProductBody,
+} from './mapVendorCatalog'
+export { mapVendorStaffMember, mapVendorStaffResponse } from './mapVendorStaff'
+export {
+  mapVendorPromotion,
+  mapVendorPromotionAnalyticsResponse,
+  mapVendorPromotionDetailResponse,
+  mapVendorPromotionsResponse,
+  mapVendorPromotionsSummaryResponse,
+  PROMOTION_FILTERS,
+} from './mapVendorPromotions'

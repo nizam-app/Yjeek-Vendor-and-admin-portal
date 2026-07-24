@@ -15,5 +15,6 @@ export const productImages = {
 
 export function getProductImage(product) {
   if (!product) return productBurger
+  if (product.imageUrl) return product.imageUrl
   return productImages[product.id] || productBurger
 }

@@ -62,7 +62,7 @@ export default function Sidebar() {
           <NavLink
             key={to}
             to={to}
-            end={to === '/branches' || to === '/catalog' || to === '/dashboard'}
+            end={to === '/branches' || to === '/dashboard'}
             className={({ isActive }) =>
               `flex items-center gap-3 py-[11px] px-3 rounded-md text-[13px] font-medium transition-colors duration-150 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:shrink-0 ${
                 isActive ? 'bg-green-active-bg text-green-active-text font-medium' : 'text-ink-muted hover:bg-[#f3f6f3] hover:text-ink'

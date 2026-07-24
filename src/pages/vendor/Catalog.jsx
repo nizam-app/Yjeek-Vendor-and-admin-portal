@@ -2,20 +2,41 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { CatalogStoreIcon } from '../../components/CatalogStoreIcons'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useVendorCatalogStoreTypes } from '../../hooks/vendor/useVendorCatalog'
 
+function isFoodStoreType(type) {
+  const slug = String(type?.slug || type?.iconKey || '').toLowerCase()
+  return slug === 'food' || slug === 'food_drink' || slug === 'food-drink' || /food/i.test(type?.title || '')
+}
+
+/**
+ * Store-type picker ("Set up your catalog").
+ * Data: GET /vendor-panel/catalog/store-types
+ * Selecting Food opens the products catalog.
+ */
 export default function Catalog() {
   const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState('all')
-  const { data: catalogStoreTypes, error, isLoading, refetch } = useApiResource(() => vendorService.getCatalogStoreTypes(), [])
+  const { data: catalogStoreTypes, error, isLoading, refetch } = useVendorCatalogStoreTypes()
+  const types = Array.isArray(catalogStoreTypes) ? catalogStoreTypes : []
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading catalog…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load catalog. <button onClick={refetch} className="underline">Try again</button></div>
+  if (isLoading && types.length === 0) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading catalog…</div>
+  }
+  if (error && types.length === 0) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load catalog.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   function handleSelect(type) {
     setSelectedId(type.id)
-    if (type.id === 'food') {
+    if (isFoodStoreType(type)) {
       navigate('/catalog/food')
     }
   }
@@ -29,8 +50,8 @@ export default function Catalog() {
       </p>
 
       <div className="grid max-w-[744px] grid-cols-1 gap-[14px] sm:grid-cols-2">
-        {catalogStoreTypes.map((type) => {
-          const selected = selectedId === type.id
+        {types.map((type) => {
+          const selected = selectedId === type.id || selectedId === type.slug || selectedId === type.iconKey
           return (
             <button
               key={type.id}
@@ -47,7 +68,11 @@ export default function Catalog() {
                   selected ? 'bg-white' : 'bg-[#F0F2F0]'
                 }`}
               >
-                <CatalogStoreIcon id={type.id} />
+                <CatalogStoreIcon
+                  id={type.iconKey || type.slug || type.id}
+                  emoji={type.iconEmoji}
+                  iconUrl={type.iconUrl}
+                />
               </span>
 
               <span className="min-w-0 flex-1 pt-0.5">

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Bell, Power } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { ApiError, getFirstFieldErrorMessage } from '../api/errors'
 import { useAuth } from '../context/AuthContext'
 import { useApiMutation } from '../hooks/useApiMutation'
 import { useVendorBranches } from '../hooks/vendor/useVendorBranches'
+import { useVendorUnreadNotificationCount } from '../hooks/vendor/useVendorNotifications'
 import {
   branchService,
   notifyVendorBranchesUpdated,
@@ -37,6 +39,8 @@ function getActionErrorMessage(error) {
 export default function Topbar() {
   const { user } = useAuth()
   const { data, isLoading, refetch } = useVendorBranches()
+  const { data: unreadData } = useVendorUnreadNotificationCount()
+  const unreadCount = Number(unreadData?.count) || 0
   const [open, setOpen] = useState(false)
   const [branches, setBranches] = useState([])
   const [actionError, setActionError] = useState('')
@@ -231,13 +235,18 @@ export default function Topbar() {
         <button type="button" className="border border-border rounded-sm py-[7px] px-3 text-xs font-medium bg-white inline-flex items-center gap-1">
           EN ▾
         </button>
-        <button
-          type="button"
-          className="rounded-sm p-[6px] text-xs font-medium bg-white inline-flex items-center gap-1 text-ink-muted"
-          aria-label="Notifications"
+        <Link
+          to="/notifications"
+          className="relative rounded-sm p-[6px] text-xs font-medium bg-white inline-flex items-center gap-1 text-ink-muted hover:bg-[#f7f9f7]"
+          aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         >
           <Bell size={18} />
-        </button>
+          {unreadCount > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] place-items-center rounded-full bg-[#3B82F6] px-1 text-[10px] font-bold leading-[16px] text-white">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          ) : null}
+        </Link>
         <div className="flex items-center gap-2">
           <div className="w-[34px] h-[17px] rounded-[17px] bg-green-primary text-white grid place-items-center font-bold text-sm">
             {adminName.charAt(0).toUpperCase()}

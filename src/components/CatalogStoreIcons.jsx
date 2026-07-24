@@ -14,11 +14,14 @@ import iconJewelry from '../assets/catalog-jewelry.png'
 export const catalogStoreIconSrc = {
   all: iconAll,
   food: iconFood,
+  food_drink: iconFood,
+  'food-drink': iconFood,
   groceries: iconGroceries,
   pharmacy: iconPharmacy,
   cosmetics: iconCosmetics,
   vape: iconVape,
   'dine-in': iconDineIn,
+  dine_in: iconDineIn,
   pickup: iconPickup,
   gifts: iconGifts,
   fashion: iconFashion,
@@ -26,7 +29,33 @@ export const catalogStoreIconSrc = {
   jewelry: iconJewelry,
 }
 
-export function CatalogStoreIcon({ id, className = 'size-[22px]' }) {
-  const src = catalogStoreIconSrc[id] || catalogStoreIconSrc.all
-  return <img src={src} alt="" className={`object-contain ${className}`} />
+function normalizeIconKey(id) {
+  return String(id || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+}
+
+export function CatalogStoreIcon({ id, emoji, iconUrl, className = 'size-[22px]' }) {
+  if (iconUrl) {
+    return <img src={iconUrl} alt="" className={`object-contain ${className}`} />
+  }
+
+  const key = normalizeIconKey(id)
+  const underscored = key.replace(/-/g, '_')
+  const src = catalogStoreIconSrc[key] || catalogStoreIconSrc[underscored]
+
+  if (src) {
+    return <img src={src} alt="" className={`object-contain ${className}`} />
+  }
+
+  if (emoji) {
+    return (
+      <span className={`grid place-items-center text-[20px] leading-none ${className}`} aria-hidden>
+        {emoji}
+      </span>
+    )
+  }
+
+  return <img src={catalogStoreIconSrc.all} alt="" className={`object-contain ${className}`} />
 }

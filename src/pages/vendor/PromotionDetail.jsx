@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { MoreHorizontal, Pause } from 'lucide-react'
+import { MoreHorizontal, Pause, Play } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -12,14 +12,8 @@ import {
 } from 'recharts'
 import { StatusPill } from '../../components/ui'
 import editIcon from '../../assets/icon-edit.png'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
-
-function findPromo(promotions, promoId) {
-  if (!promoId) return null
-  const decoded = decodeURIComponent(promoId)
-  return promotions.find((p) => p.id === decoded) || promotions.find((p) => p.title === decoded)
-}
+import { useVendorPromotionDetail } from '../../hooks/vendor/useVendorPromotionDetail'
+import { promotionService } from '../../services/vendor/promotionService'
 
 function ChartTooltip({ active, payload }) {
   if (!active || !payload?.length) return null
@@ -27,7 +21,7 @@ function ChartTooltip({ active, payload }) {
   if (!point) return null
 
   return (
-    <div className="rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-2 shadow-[0_8px_20px_rgba(26,28,26,0.12)]">
+    <div className="rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-2 shadow-[0_12px_28px_rgba(26,28,26,0.12)]">
       <p className="text-[11px] font-medium tracking-[0.02em] text-ink-muted uppercase">
         {point.label}
       </p>
@@ -89,13 +83,33 @@ function RedemptionChart({ values }) {
 export default function PromotionDetail() {
   const { promoId } = useParams()
   const navigate = useNavigate()
-  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getPromotions(), [])
-  const promo = useMemo(() => findPromo(data?.promotions || [], promoId), [data, promoId])
+  const { data: promo, error, isLoading, refetch } = useVendorPromotionDetail(promoId)
+  const [localPromo, setLocalPromo] = useState(null)
+  const [pausing, setPausing] = useState(false)
+  const [pauseError, setPauseError] = useState(null)
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading promotion…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load promotion. <button onClick={refetch} className="underline">Try again</button></div>
+  useEffect(() => {
+    setLocalPromo(null)
+    setPauseError(null)
+  }, [promoId])
 
-  if (!promo) {
+  const view = localPromo || promo
+
+  if (isLoading && !view) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading promotion…</div>
+  }
+  if (error && !view) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load promotion.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
+
+  if (!view) {
     return (
       <div className="px-[28px] pt-[26px] pb-10">
         <Link
@@ -115,10 +129,60 @@ export default function PromotionDetail() {
     blue: 'text-[#3B82C4]',
   }
 
+  const chartValues = view.chart || Array(14).fill(0)
+  const chartTotal = view.chartTotal ?? view.used ?? 0
+  const hasKpis = Array.isArray(view.kpis) && view.kpis.length > 0
+
+  async function handlePauseToggle() {
+    if (!view?.id || pausing) return
+    const nextPaused = !view.isPaused
+    setPausing(true)
+    setPauseError(null)
+    try {
+      const result = await promotionService.pausePromotion(view.id, nextPaused)
+      if (result?.data) {
+        setLocalPromo({
+          ...view,
+          ...result.data,
+          isPaused: result.data.isPaused ?? nextPaused,
+          status: result.data.status || (nextPaused ? 'Paused' : 'Active'),
+          settings: result.data.settings?.length ? result.data.settings : view.settings,
+          kpis: result.data.kpis || view.kpis,
+          chart: result.data.chart || view.chart,
+          recent: result.data.recent?.length ? result.data.recent : view.recent,
+        })
+      } else {
+        await refetch()
+        setLocalPromo(null)
+      }
+    } catch (err) {
+      const fieldMessage =
+        err?.fieldErrors &&
+        typeof err.fieldErrors === 'object' &&
+        Object.values(err.fieldErrors)
+          .flatMap((v) => (Array.isArray(v) ? v : [v]))
+          .find((m) => typeof m === 'string' && m.trim())
+      const detailMessage =
+        typeof err?.details === 'string'
+          ? err.details
+          : typeof err?.details?.message === 'string'
+            ? err.details.message
+            : null
+      setPauseError(
+        fieldMessage ||
+          detailMessage ||
+          err?.message ||
+          (nextPaused ? 'Unable to pause promotion.' : 'Unable to resume promotion.'),
+      )
+    } finally {
+      setPausing(false)
+    }
+  }
+
   return (
     <div className="px-[20px] pt-[18px] pb-10 sm:px-[28px]">
       {/* Header */}
-      <div className="mb-5 flex  gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-5 flex gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5 sm:gap-3">
           <Link
             to="/promotions"
@@ -130,12 +194,12 @@ export default function PromotionDetail() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
-                {promo.title}
+                {view.title}
               </h1>
-              <StatusPill status={promo.status} />
+              <StatusPill status={view.status} />
             </div>
             <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-muted sm:text-[13px]">
-              {promo.detailMeta || promo.subtitle}
+              {view.detailMeta || view.subtitle}
             </p>
           </div>
         </div>
@@ -143,10 +207,16 @@ export default function PromotionDetail() {
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#127036] hover:bg-[#f3faf5]"
+            disabled={pausing}
+            onClick={handlePauseToggle}
+            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#127036] hover:bg-[#f3faf5] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <Pause size={14} strokeWidth={2.4} fill="currentColor" className="shrink-0" />
-            Pause
+            {view.isPaused ? (
+              <Play size={14} strokeWidth={2.4} fill="currentColor" className="shrink-0" />
+            ) : (
+              <Pause size={14} strokeWidth={2.4} fill="currentColor" className="shrink-0" />
+            )}
+            {pausing ? (view.isPaused ? 'Resuming…' : 'Pausing…') : view.isPaused ? 'Resume' : 'Pause'}
           </button>
           <button
             type="button"
@@ -166,47 +236,54 @@ export default function PromotionDetail() {
         </div>
       </div>
 
+      {pauseError ? (
+        <p className="mb-3 text-[12.5px] text-danger">{pauseError}</p>
+      ) : null}
+
       {/* KPI cards */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {(promo.kpis || []).map((kpi) => (
-          <div
-            key={kpi.label}
-            className="rounded-[14px] border border-[#E0E6E0] bg-white px-[16px] py-[14px]"
-          >
-            <p className="text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase">
-              {kpi.label}
-            </p>
-            <p className="mt-2 text-[20px] leading-none font-bold text-ink sm:text-[20px]">
-              {kpi.value}
-            </p>
-            <p className={`mt-2 text-[12px] font-medium ${noteTone[kpi.tone] || noteTone.muted}`}>
-              {kpi.note}
-            </p>
-          </div>
-        ))}
-      </div>
+      {hasKpis ? (
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {view.kpis.map((kpi) => (
+            <div
+              key={kpi.label}
+              className="rounded-[14px] border border-[#E0E6E0] bg-white px-[16px] py-[14px]"
+            >
+              <p className="text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase">
+                {kpi.label}
+              </p>
+              <p className="mt-2 text-[20px] leading-none font-bold text-ink sm:text-[20px]">
+                {kpi.value}
+              </p>
+              <p className={`mt-2 text-[12px] font-medium ${noteTone[kpi.tone] || noteTone.muted}`}>
+                {kpi.note}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Chart + Settings */}
       <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1.65fr_1fr]">
         <section className="rounded-[14px] border border-[#E0E6E0] bg-white p-4 sm:p-5">
           <h2 className="mb-4 text-[16px] font-bold text-ink">Redemptions — last 14 days</h2>
-          <RedemptionChart values={promo.chart || Array(14).fill(0)} />
+          <RedemptionChart values={chartValues} />
           <p className="mt-4 text-[12.5px] text-ink-muted">
-            Peak on day {promo.chartPeakDay || 1} — {promo.chartPeakValue || 0} redemptions. Total
-            this period: {promo.chartTotal ?? promo.used}.
+            {view.chart
+              ? `Peak on day ${view.chartPeakDay || 1} — ${view.chartPeakValue || 0} redemptions. Total this period: ${chartTotal}.`
+              : `Total uses: ${view.used ?? 0}. Daily chart data is not available yet.`}
           </p>
         </section>
 
         <section className="rounded-[14px] border border-[#E0E6E0] bg-white p-4 sm:p-5">
           <h2 className="mb-3 text-[16px] font-bold text-ink">Settings</h2>
           <div className="divide-y divide-[#EEF1EE]">
-            {(promo.settings || []).map((row) => (
+            {(view.settings || []).map((row) => (
               <div
                 key={row.label}
                 className="flex items-center justify-between gap-3 py-[11px] first:pt-0 last:pb-0"
               >
-                <span className=" flex-1 shrink-0 text-[12.5px] text-ink-muted">{row.label}</span>
-                <span className=" flex-1 text-left text-[12.5px] font-medium text-ink">{row.value}</span>
+                <span className="flex-1 shrink-0 text-[12.5px] text-ink-muted">{row.label}</span>
+                <span className="flex-1 text-left text-[12.5px] font-medium text-ink">{row.value}</span>
               </div>
             ))}
           </div>
@@ -219,7 +296,7 @@ export default function PromotionDetail() {
           <h2 className="text-[16px] font-bold text-ink">Recent redemptions</h2>
         </div>
 
-        {(promo.recent || []).length === 0 ? (
+        {(view.recent || []).length === 0 ? (
           <p className="px-5 py-8 text-[13px] text-ink-muted">No redemptions yet.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -237,7 +314,7 @@ export default function PromotionDetail() {
                 </tr>
               </thead>
               <tbody>
-                {promo.recent.map((row) => (
+                {view.recent.map((row) => (
                   <tr key={row.order} className="border-t border-[#EEF1EE]">
                     <td className="px-5 py-[14px] text-[13px] font-bold text-ink">{row.order}</td>
                     <td className="px-5 py-[14px] text-[13px] text-ink">{row.customer}</td>
