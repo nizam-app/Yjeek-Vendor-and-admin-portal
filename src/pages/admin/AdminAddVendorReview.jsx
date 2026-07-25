@@ -35,6 +35,7 @@ export default function AdminAddVendorReview({
               className="flex items-start justify-between gap-4 border-b border-[#eef1ef] py-3 last:border-0"
             >
               <span className="shrink-0 text-[13px] text-[#7c8780] flex-1">{label}</span>
+              <span className="shrink-0 text-black text-[#7c8780] flex-3">{value}</span>
             </div>
           ))}
         </div>

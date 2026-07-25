@@ -93,7 +93,7 @@ export default function AdminVendorsPage() {
         >
           All categories <ChevronDown size={13} className="text-[#69756d]" />
         </button>
-        <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
+        <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
           <Search size={14} className="text-[#9aa49d]" />
           <input
             value={query}
@@ -157,7 +157,7 @@ export default function AdminVendorsPage() {
                   <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.branches}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.users}</td>
                   <td className="whitespace-nowrap px-4 py-3.5 text-[12px] font-medium text-[#17231c]">★ {row.rating}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5">
+                  <td className="whitespace-nowrap px-4 py-3.5 ">
                     <Badge tone={vendorStatusTone(row.status)}>{row.status}</Badge>
                   </td>
                   <td className="px-2">

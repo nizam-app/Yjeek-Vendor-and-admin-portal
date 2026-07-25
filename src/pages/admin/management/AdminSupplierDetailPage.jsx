@@ -1,7 +1,8 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import { Calendar, Car, ChevronLeft, Star } from 'lucide-react'
+import { Calendar, ChevronLeft, Star } from 'lucide-react'
 import editIcon from '../../../assets/icon-edit.png'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
@@ -157,7 +158,7 @@ function VehicleLabel({ type }) {
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Car size={13} strokeWidth={1.8} className="text-[#59655e]" />
+      <img src={carIcon} alt="" className="h-3.5 w-3.5 object-contain" />
       Car
     </span>
   )

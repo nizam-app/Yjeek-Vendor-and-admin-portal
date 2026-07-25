@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Car, ChevronDown, MoreVertical, Plus, Search, Star } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminService } from '../../../services/adminService'
@@ -35,7 +36,7 @@ function VehicleIcon({ type }) {
   if (type === 'Bike') {
     return <img src={motoBikeIcon} alt="" className="h-4 w-4 object-contain" />
   }
-  return <Car size={14} className="text-[#59655e]" strokeWidth={1.8} />
+  return <Car fill='#C91A24' className='h-4 w-4'></Car>
 }
 
 export default function AdminFleetPage() {

@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Car, ChevronLeft, Mail, Star } from 'lucide-react'
+import { ChevronLeft, Mail, Star } from 'lucide-react'
 import editIcon from '../../../assets/icon-edit.png'
 import banIcon from '../../../assets/⛔.png'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
@@ -32,7 +33,7 @@ function VehicleLabel({ type }) {
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <Car size={13} strokeWidth={1.8} />
+      <img src={carIcon} alt="" className="h-3.5 w-3.5 object-contain" />
       Car
     </span>
   )

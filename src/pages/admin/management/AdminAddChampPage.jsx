@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Car, ChevronDown, ChevronLeft } from 'lucide-react'
+import { ChevronDown, ChevronLeft } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import uploadIcon from '../../../assets/⬆.png'
 import imageUploadIcon from '../../../assets/🖼.png'
 import { cn } from '../../../components/admin/cn'
@@ -256,7 +257,7 @@ export default function AdminAddChampPage() {
           <div className="inline-flex items-center gap-2 rounded-[12px] bg-[#f3f5f3] p-1.5 w-[554px]">
             {[
               { id: 'Bike', icon: <img src={motoBikeIcon} alt="" className="h-4 w-4 object-contain" /> },
-              { id: 'Car', icon: <Car size={15} strokeWidth={1.8}  className=' fill-[#ff0000]'/> },
+              { id: 'Car', icon: <img src={carIcon} alt="" className="h-4 w-4 object-contain" /> },
             ].map(({ id, icon }) => (
               <button
                 key={id}

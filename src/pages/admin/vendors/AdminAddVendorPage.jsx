@@ -210,7 +210,7 @@ export default function AdminAddVendorPage({ onBack }) {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-44px)] flex-col px-5 pb-5 pt-4 max-[700px]:px-3">
+    <div className="flex min-h-[calc(100vh-44px)] flex-col px-5 pb-5 pt-4 max-[700px]:px-3 ">
       <div className="mb-4 flex flex-wrap items-start gap-3">
         <button
           type="button"
@@ -233,15 +233,15 @@ export default function AdminAddVendorPage({ onBack }) {
           const active = step === item.id
           const done = item.id < step
           return (
-            <div key={item.id} className="flex items-center">
+            <div key={item.id} className="flex items-center ">
               <button
                 type="button"
                 onClick={() => setStep(item.id)}
                 className={cn(
                   'inline-flex h-[34px] items-center gap-2 rounded-full px-2.5 pr-3.5 text-[12px] font-medium whitespace-nowrap transition',
-                  active && 'border border-[#1aa054] bg-[#e8f7ed] text-[#147940]',
+                  active && 'border border-2 border-[#1aa054] bg-[#e8f7ed] text-[#147940]',
                   done && !active && 'border border-[#1aa054] bg-[#1aa054] text-white',
-                  !active && !done && 'border border-transparent bg-[#eef0ee] text-[#7c8780] hover:bg-[#e6e9e6]',
+                  !active && !done && 'border border-[#E3E5E3] bg-white text-[#7c8780] hover:bg-[#e6e9e6]',
                 )}
               >
                 <span
@@ -249,7 +249,7 @@ export default function AdminAddVendorPage({ onBack }) {
                     'grid h-[22px] w-[22px] place-items-center rounded-full text-[11px] font-bold',
                     active && 'bg-[#1aa054] text-white',
                     done && !active && 'bg-white text-[#1aa054]',
-                    !active && !done && 'bg-white text-[#8a948e]',
+                    !active && !done && 'bg-[#E3E5E3] text-[#8a948e]',
                   )}
                 >
                   {done && !active ? <Check size={12} strokeWidth={3} /> : item.id}
@@ -264,7 +264,7 @@ export default function AdminAddVendorPage({ onBack }) {
         })}
       </div>
 
-      <div className="flex-1 space-y-3">
+      <div className="space-y-3">
         {step === 1 ? (
           <VendorCard title="Store profile">
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
@@ -306,7 +306,7 @@ export default function AdminAddVendorPage({ onBack }) {
               {branches.map((branch) => (
                 <div
                   key={branch.id}
-                  className="flex items-center gap-3 rounded-[12px] border border-[#e8ebe9] bg-[#fafbfa] px-3.5 py-3"
+                  className="flex items-center gap-3 rounded-[12px] border border-[#e8ebe9] bg-white px-3.5 py-3"
                 >
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#e7f5eb] p-1.5">
                     <img src={houseIcon} alt="" className="h-full w-full object-contain" />
@@ -322,9 +322,9 @@ export default function AdminAddVendorPage({ onBack }) {
                         state: { branch, storeName: form.storeName },
                       })
                     }
-                    className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#1aa054] hover:underline"
+                    className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#127338] hover:underline"
                   >
-                    <img src={editIcon} alt="" className="h-3.5 w-3.5 object-contain" />
+                    
                     Edit ›
                   </button>
                 </div>
@@ -332,7 +332,7 @@ export default function AdminAddVendorPage({ onBack }) {
               <button
                 type="button"
                 onClick={addBranch}
-                className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-sm border border-[#1aa054] bg-white text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
+                className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-sm border border border-[#1aa054] bg-white text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
               >
                 <Plus size={15} strokeWidth={2.2} /> Add branch 
               </button>
@@ -402,7 +402,7 @@ export default function AdminAddVendorPage({ onBack }) {
               <button
                 type="button"
                 onClick={addUser}
-                className="mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-sm border border-[#1aa054] bg-white text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
+                className="mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-sm border border-2 border-[#1aa054] bg-white text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
               >
                 <Plus size={15} strokeWidth={2.2} /> Add user
               </button>
@@ -576,6 +576,7 @@ export default function AdminAddVendorPage({ onBack }) {
               </div>
               <button
                 type="button"
+                onClick={() => navigate('/admin/sla-models')}
                 className="mt-3 text-[12.5px] font-medium text-[#1aa054] hover:underline border border-[#DBDEDB] rounded-full px-3 py-2"
               >
                 ↗ Open default Vendor SLA.
@@ -596,7 +597,7 @@ export default function AdminAddVendorPage({ onBack }) {
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap justify-end gap-2">
+      <div className="mt-12 flex flex-wrap justify-end gap-2">
         <button
           type="button"
           className="inline-flex h-[36px] items-center rounded-full border border-[#d7e8dc] bg-white px-4 text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"

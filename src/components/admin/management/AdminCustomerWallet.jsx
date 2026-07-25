@@ -78,21 +78,55 @@ export function AdminCustomerWallet({ wallet }) {
       </section>
 
       <section className="rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:p-4">
-        <div className="mb-4 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
-          <div className="rounded-[12px] bg-[#e8f7ed] px-4 py-3">
-            <p className="text-[12px] text-[#1aa054] font-semibold">Cashback balance</p>
-            <p className="mt-1 text-[26px] font-bold leading-none tracking-[-0.02em] text-[#1aa054]">
-              {wallet.cashbackBalance}
-            </p>
-          </div>
+        <div className="mb-4 grid grid-cols-4 items-stretch gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
           {[
-            ['Earned (lifetime)', wallet.earnedLifetime],
-            ['Pending', wallet.pending],
-            ['Withdrawn', wallet.withdrawn],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-[12px] bg-[#f6f8f6] px-4 py-3">
-              <p className="text-[12px] text-[#7c8780]">{label}</p>
-              <p className="mt-1 text-[20px] font-bold leading-none tracking-[-0.02em] text-[#17231c]">{value}</p>
+            {
+              label: 'Cashback balance',
+              value: wallet.cashbackBalance,
+              box: 'bg-[#e8f7ed]',
+              labelClass: 'text-[#1aa054]',
+              valueClass: 'text-[#1aa054]',
+            },
+            {
+              label: 'Earned (lifetime)',
+              value: wallet.earnedLifetime,
+              box: 'bg-[#f6f8f6]',
+              labelClass: 'text-[#7c8780]',
+              valueClass: 'text-[#17231c]',
+            },
+            {
+              label: 'Pending',
+              value: wallet.pending,
+              box: 'bg-[#f6f8f6]',
+              labelClass: 'text-[#7c8780]',
+              valueClass: 'text-[#17231c]',
+            },
+            {
+              label: 'Withdrawn',
+              value: wallet.withdrawn,
+              box: 'bg-[#f6f8f6]',
+              labelClass: 'text-[#7c8780]',
+              valueClass: 'text-[#17231c]',
+            },
+          ].map(({ label, value, box, labelClass, valueClass }) => (
+            <div
+              key={label}
+              className={cn(
+                'box-border flex h-[68px] min-h-[68px] max-h-[68px] w-full min-w-0 flex-col justify-center overflow-hidden rounded-[12px] px-4',
+                box,
+              )}
+            >
+              <p className={cn('truncate text-[12px] font-normal leading-[12px]', labelClass)}>
+                {label}
+              </p>
+              <p
+                className={cn(
+                  'mt-2 truncate text-[20px] font-bold leading-[20px] tracking-[-0.02em]',
+                  valueClass,
+                )}
+              >
+                {value}
+              </p>
             </div>
           ))}
         </div>

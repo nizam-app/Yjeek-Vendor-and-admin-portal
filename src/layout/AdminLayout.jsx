@@ -59,10 +59,21 @@ const pageTitles = {
   '/admin/fleet/suppliers': 'Fleet Management · Suppliers',
   '/admin/fleet/suppliers/new': 'Fleet Management · Suppliers',
   '/admin/customers': 'Customer Management',
-  '/admin/marketing': 'Marketing',
-  '/admin/sla-models': 'SLA Models',
+  '/admin/marketing': 'Marketing · Notifications',
+  '/admin/marketing/notifications/customers': 'Customer Management',
+  '/admin/marketing/notifications/vendors': 'Vendor Management',
+  '/admin/marketing/promo-codes': 'Marketing · Promo codes',
+  '/admin/marketing/promo-codes/new': 'Marketing · Create promo code',
+  '/admin/sla-models': 'SLA Models · Vendor SLA',
+  '/admin/sla-models/champ': 'SLA Models · Champ SLA',
+  '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
+
   '/admin/ui-editor': 'UI Editor',
-  '/admin/users': 'Users',
+  '/admin/users': 'Users & Roles · Users',
+  '/admin/users/new': 'Users & Roles · Create user',
+  '/admin/users/roles/new': 'Users & Roles · Create role',
+  '/admin/users/roles': 'Users & Roles · Roles',
+  '/admin/users/activity': 'Users & Roles · Activity log',
   '/admin/reports': 'Reports',
   '/admin/settings': 'Settings',
 }
@@ -104,7 +115,7 @@ function AdminSidebar() {
               : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
           }`}
         >
-          <Activity size={15} strokeWidth={1.8} />
+          <Activity size={15} strokeWidth={1.8} className={`${dashboardActive ? 'text-[#2EC75E]' : 'text-white'}`}/>
           <span className="min-w-0 flex-1 text-left">Live Dashboard</span>
           <ChevronDown
             size={12}
@@ -120,7 +131,7 @@ function AdminSidebar() {
                 to={to}
                 end={to !== '/admin/scheduled'}
                 className={({ isActive }) =>
-                  `flex h-[27px] items-center gap-2 rounded-md px-[34px] text-[12.5px] font-medium transition ${
+                  `flex h-[27px] mt-1 items-center gap-2 rounded-sm px-[34px] text-[12.5px] font-medium transition ${
                     isActive || (to === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
                       ? 'bg-[#28473a] font-medium text-white'
                       : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
@@ -145,8 +156,16 @@ function AdminSidebar() {
               }`
             }
           >
-            <Icon size={15} strokeWidth={1.8} />
-            {label}
+            {({ isActive }) => (
+              <>
+                <Icon
+                  size={15}
+                  strokeWidth={1.8}
+                  className={isActive ? 'text-[#2EC75E]' : undefined}
+                />
+                {label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -178,6 +197,14 @@ function AdminTopbar() {
     || (pathname.startsWith('/admin/fleet/suppliers') ? 'Fleet Management · Suppliers' : null)
     || (pathname.startsWith('/admin/fleet/') ? 'Fleet Management · Champs' : null)
     || (pathname.startsWith('/admin/customers/') ? 'Customer Management' : null)
+    || (pathname.startsWith('/admin/users/') ? 'Users & Roles · User' : null)
+    || (() => {
+      const match = pathname.match(/^\/admin\/marketing\/notifications\/([^/]+)$/)
+      if (!match) return null
+      const id = match[1]
+      if (id === 'customers' || id === 'vendors') return null
+      return id === 'ntf-7791' || id === 'ntf-7770' ? 'Customer Management' : 'Vendor Management'
+    })()
     || 'Admin Console'
 
   return (
