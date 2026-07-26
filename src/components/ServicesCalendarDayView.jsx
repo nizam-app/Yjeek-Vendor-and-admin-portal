@@ -83,7 +83,7 @@ export default function ServicesCalendarDayView({
           className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white px-[14px] py-[10px] text-[13px] font-medium text-ink"
         >
           Sort: Status
-          <ChevronDown size={14} strokeWidth={2.2} className="text-ink-muted" />
+          ▾
         </button>
       </div>
 

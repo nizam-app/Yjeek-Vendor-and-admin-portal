@@ -91,7 +91,7 @@ export default function AdminVendorsPage() {
           type="button"
           className="inline-flex h-[32px] items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3.5 text-[12px] font-bold text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
         >
-          All categories <ChevronDown size={13} className="text-[#69756d]" />
+          All categories ▾
         </button>
         <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
           <Search size={14} className="text-[#9aa49d]" />

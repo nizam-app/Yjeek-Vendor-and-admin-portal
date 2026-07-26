@@ -228,8 +228,8 @@ export function AdminScheduledColumn() {
             placeholder="Search orders, vendors, champs…"
           />
         </label>
-        <button type="button" className={FILTER_CLASS}>Sort: Window <ChevronDown size={12} /></button>
-        <button type="button" className={FILTER_CLASS}>Filter: All <ChevronDown size={12} /></button>
+        <button type="button" className={FILTER_CLASS}>Sort: Window ▾</button>
+        <button type="button" className={FILTER_CLASS}>Filter: All ▾</button>
         <button
           type="button"
           className={cn(
@@ -251,12 +251,12 @@ export function AdminScheduledColumn() {
         </label>
         {['Vendor · All', 'Zone · All', 'Type · All', 'Champ · All'].map((filter) => (
           <button key={filter} type="button" className={PILL_FILTER}>
-            {filter} <ChevronDown size={10} />
+            {filter}▾
           </button>
         ))}
         <span className="flex-1" />
         <button type="button" className={PILL_FILTER}>
-          Sort · Time left <ChevronDown size={10} />
+          Sort · Time left▾
         </button>
       </div>
 

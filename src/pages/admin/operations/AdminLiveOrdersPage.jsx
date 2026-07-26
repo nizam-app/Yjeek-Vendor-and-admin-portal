@@ -416,10 +416,10 @@ function AdminLiveOrdersFullView({ column, chats, onBack, onIncidentClick, onCon
           <Search size={12} className="text-[#7b867f]" />
           <input className="min-w-0 flex-1 border-0 bg-transparent text-[10px] outline-none" placeholder="Search order, vendor, champ, customer..." />
         </label>
-        {['Vendor · All⌄', 'Type · All⌄', 'Champ · All⌄'].map((filter) => (
+        {['Vendor  · All ▾', 'Type · All ▾', 'Champ · All ▾'].map((filter) => (
           <button key={filter} className="h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]">{filter}</button>
         ))}
-        <button className="ml-auto h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]">Sort · <b>Time left</b>⌄</button>
+        <button className="ml-auto h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]">Sort · <b>Time left</b>▾</button>
       </div>
 
       <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">

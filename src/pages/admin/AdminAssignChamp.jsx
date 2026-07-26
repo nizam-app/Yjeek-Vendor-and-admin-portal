@@ -236,7 +236,7 @@ function SelectField({ label, value, options, onChange }) {
             </option>
           ))}
         </select>
-        <ChevronDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8a948e]" />
+        ▾
       </span>
     </label>
   )
@@ -481,12 +481,12 @@ export function AdminAssignChamp() {
             </label>
             {['Governorate · All', 'City · All', 'Vehicle · All', 'Type · All', 'Tier · All', 'Allowed · All'].map((filter) => (
               <button key={filter} type="button" className={FILTER_PILL}>
-                {filter} <ChevronDown size={10} />
+                {filter}▾
               </button>
             ))}
             <span className="flex-1" />
             <button type="button" className={FILTER_PILL}>
-              Sort · Nearest <ChevronDown size={10} />
+              Sort · Nearest▾
             </button>
           </div>
         </div>

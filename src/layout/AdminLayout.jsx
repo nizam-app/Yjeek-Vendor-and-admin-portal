@@ -19,6 +19,7 @@ import {
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { cn } from '../components/admin/cn'
 
 const dashboardChildren = [
   ['Full Overview', '/admin/dashboard'],
@@ -74,8 +75,9 @@ const pageTitles = {
   '/admin/users/roles/new': 'Users & Roles · Create role',
   '/admin/users/roles': 'Users & Roles · Roles',
   '/admin/users/activity': 'Users & Roles · Activity log',
-  '/admin/reports': 'Reports',
-  '/admin/settings': 'Settings',
+  '/admin/reports': 'Reports · Orders',
+  '/admin/settings': 'Settings · General',
+  '/admin/account': 'Account',
 }
 
 function AdminSidebar() {
@@ -171,13 +173,22 @@ function AdminSidebar() {
       </nav>
 
       <div>
-        <div className="flex min-h-[36px] items-center gap-2 rounded-md bg-[#234438] px-2.5">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/account')}
+          className={cn(
+            'flex min-h-[36px] w-full items-center gap-2 rounded-md px-2.5 text-left transition',
+            pathname === '/admin/account' || pathname.startsWith('/admin/account/')
+              ? 'bg-[#2a5544]'
+              : 'bg-[#234438] hover:bg-[#2a5544]',
+          )}
+        >
           <div className="grid h-[18px] w-[25px] place-items-center rounded-full bg-[#36c66b] text-[9px] font-bold text-[#0e3423]">SA</div>
           <div className="min-w-0">
             <div className="text-[12px] text-white">{user?.name}</div>
             <div className="truncate text-[10px] font-normal text-[#9fb2a8]">{user?.email}</div>
           </div>
-        </div>
+        </button>
         <button onClick={signOut} className="flex h-[32px] w-full items-center gap-2 px-2.5 text-[13px] font-medium text-[#ef817c] hover:text-[#ffaba7]">
           <LogOut size={14} />
           Sign out
@@ -188,8 +199,19 @@ function AdminSidebar() {
 }
 
 function AdminTopbar() {
-  const { pathname } = useLocation()
-  const title = pageTitles[pathname]
+  const { pathname, search } = useLocation()
+  const settingsTab = new URLSearchParams(search).get('tab') || 'general'
+  const settingsTitles = {
+    general: 'Settings · General',
+    localization: 'Settings · Localization & regions',
+    notifications: 'Settings · Notifications',
+    security: 'Settings · Security',
+    integrations: 'Settings · Integrations',
+  }
+
+  const title =
+    (pathname === '/admin/settings' ? settingsTitles[settingsTab] || settingsTitles.general : null)
+    || pageTitles[pathname]
     || (pathname.startsWith('/admin/scheduled/assign') ? 'Scheduled Orders · Assign champ' : null)
     || (pathname.startsWith('/admin/scheduled/') ? 'Scheduled Orders' : null)
     || (pathname.startsWith('/admin/stores/') ? 'Store Management' : null)

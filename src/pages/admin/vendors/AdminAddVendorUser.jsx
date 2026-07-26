@@ -66,7 +66,7 @@ function SelectField({ value, onChange, options, label }) {
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
-        <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]" />
+        ▾
       </div>
     </Field>
   )

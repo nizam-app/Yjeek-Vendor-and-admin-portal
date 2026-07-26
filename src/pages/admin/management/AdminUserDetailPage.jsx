@@ -166,14 +166,14 @@ export default function AdminUserDetailPage() {
             onClick={() => navigate('/admin/users/new')}
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
-            <Pencil size={13.5} strokeWidth={2.2} className="text-[#1aa054]" />
+            ✎
             Edit
           </button>
           <button
             type="button"
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
-            <KeyRound size={13.5} strokeWidth={2.2} className="text-[#59655e]" />
+            
             Reset password
           </button>
           <button

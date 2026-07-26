@@ -107,8 +107,8 @@ export default function AdminDashboardPage() {
                   <article key={id} className="h-[74px] rounded-[8px] border border-[#e5e8e5] bg-white px-2.5 py-2 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
                     <div className="flex items-center justify-between">
                       <strong className="text-[11px] font-medium leading-3 tracking-[.02em]">{id}</strong>
-                      <span className={cn('flex items-center gap-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : 'text-[#b27b17]')}>
-                        <Clock3 size={12} strokeWidth={1.8} />
+                      <span className={cn('flex items-center gap-3 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : 'text-[#b27b17]')}>
+                      ⏱ 
                         {timeLeft}
                       </span>
                     </div>

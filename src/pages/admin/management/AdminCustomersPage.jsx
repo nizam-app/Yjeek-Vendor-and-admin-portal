@@ -102,7 +102,7 @@ export default function AdminCustomersPage() {
           type="button"
           className="inline-flex h-[32px] items-center gap-1 rounded-sm border w-24 border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
         >
-          All <ChevronDown size={13} className="text-[#69756d]" />
+          All ▾
         </button>
         </div>
         <div>
@@ -112,7 +112,7 @@ export default function AdminCustomersPage() {
           type="button"
           className="inline-flex h-[32px] items-center gap-1 rounded-sm border w-24 border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
         >
-          All <ChevronDown size={13} className="text-[#69756d]" />
+          All ▾
         </button>
         </div>
 

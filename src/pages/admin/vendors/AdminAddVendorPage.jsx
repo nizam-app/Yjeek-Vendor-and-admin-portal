@@ -81,7 +81,7 @@ function VendorSelect({ children, className = '', ...props }) {
       >
         {children}
       </select>
-      <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]" />
+      ▾
     </div>
   )
 }
@@ -576,7 +576,6 @@ export default function AdminAddVendorPage({ onBack }) {
               </div>
               <button
                 type="button"
-                onClick={() => navigate('/admin/sla-models')}
                 className="mt-3 text-[12.5px] font-medium text-[#1aa054] hover:underline border border-[#DBDEDB] rounded-full px-3 py-2"
               >
                 ↗ Open default Vendor SLA.

@@ -56,7 +56,7 @@ function AdminOperationsBoard({ mode }) {
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <OperationsViewTabs view={view} onViewChange={onViewChange} />
             <span className="flex-1" />
-            <Button>Zone: All <ChevronDown size={12} /></Button>
+            <Button>Zone: All ▾</Button>
             <Button primary><Zap size={12} /> Auto-assign</Button>
           </div>
           <div className="grid grid-cols-4 gap-3 overflow-x-auto max-[1100px]:grid-cols-2 max-[650px]:grid-cols-1">
@@ -227,7 +227,7 @@ function CalendarFilterDropdown({ title, items, selected, onToggle, open, onTogg
       >
         <span className={cn('font-medium', open || selectedCount > 0 ? 'text-[#2f8f55]' : 'text-[#6a746e]')}>{title}</span>
         <span className={cn('font-bold', open || selectedCount > 0 ? 'text-[#0f6b3a]' : 'text-[#17231c]')}>· {valueLabel}</span>
-        <ChevronDown size={11} className="opacity-70" />
+        ▾
       </button>
       {open ? (
         <div className="absolute left-0 top-[36px] z-30 w-[220px] overflow-hidden rounded-[12px] border border-[#e2e6e3] bg-white shadow-[0_12px_32px_rgba(20,40,28,.16)]">
@@ -379,7 +379,7 @@ function ScheduledCalendarDispatch({ view, onViewChange }) {
               <button key={filter} type="button" className="inline-flex h-[30px] items-center gap-1 rounded-full border border-[#d7ddd8] bg-white px-3 text-[11px] transition">
                 <span className="font-medium text-[#6a746e]">{filter}</span>
                 <span className="font-bold text-[#17231c]">· All</span>
-                <ChevronDown size={11} className="opacity-70" />
+                ▾
               </button>
             ))}
             <span className="flex-1" />
@@ -390,7 +390,7 @@ function ScheduledCalendarDispatch({ view, onViewChange }) {
           </div>
           <div className="mt-2.5">
             <button type="button" className="inline-flex h-[28px] items-center gap-1 rounded-full border border-[#d7ddd8] bg-white px-3 text-[11px] font-medium text-[#455249]">
-              Sort <ChevronDown size={11} className="opacity-70" />
+              Sort ▾
             </button>
           </div>
         </div>
@@ -452,7 +452,7 @@ function ScheduledDispatchBoard({ data, view, onViewChange }) {
         </div>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           {['Date: Today', 'Type: All', 'Stage: All', 'Zone: All'].map((filter) => (
-            <Button key={filter} className="h-[29px] px-2.5">{filter} <ChevronDown size={10} /></Button>
+            <Button key={filter} className="h-[29px] px-2.5">{filter}▾</Button>
           ))}
           <span className="flex-1" />
           <Button primary className="h-[31px] px-4"><Zap size={11} /> Auto-assign</Button>

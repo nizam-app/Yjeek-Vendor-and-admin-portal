@@ -71,7 +71,7 @@ export default function AdminVendorDetailPage() {
           }
           className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#127338] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
         >
-          <Pencil size={14} strokeWidth={2} />
+          ✎
           Edit
         </button>
       </div>

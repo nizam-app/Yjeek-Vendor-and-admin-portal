@@ -80,7 +80,7 @@ function PromotionViewModal({ promo, onClose, onEdit }) {
             }}
             className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
           >
-            <Pencil size={14} strokeWidth={2.2} className="text-white" />
+           ✎
             Edit
           </button>
         </div>
@@ -227,7 +227,7 @@ export function AdminVendorPromotions({
                               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
                               onClick={() => openEditPromotion(promo)}
                             >
-                              <Pencil size={14} strokeWidth={2} className="text-[#127338]" />
+                              ✎
                               Edit
                             </button>
                           </div>

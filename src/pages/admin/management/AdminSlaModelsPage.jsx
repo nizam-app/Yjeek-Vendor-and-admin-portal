@@ -4,6 +4,7 @@ import {
   AdminVendorSlaTemplate,
   VENDOR_SLA_SECTIONS,
   CHAMP_SLA_SECTIONS,
+  DISPATCHER_SLA_SECTIONS,
   buildSlaDefaults,
 } from '../../../components/admin/management/AdminVendorSlaTemplate'
 import { cn } from '../../../components/admin/cn'
@@ -31,7 +32,7 @@ const TAB_COPY = {
   },
   dispatcher: {
     title: 'Dispatcher SLA',
-    subtitle: 'Assignment and response targets for dispatchers.',
+    subtitle: 'Assignment and incident-handling thresholds.',
   },
 }
 
@@ -43,12 +44,15 @@ export default function AdminSlaModelsPage() {
 
   const vendorDefaults = useMemo(() => buildSlaDefaults(VENDOR_SLA_SECTIONS), [])
   const champDefaults = useMemo(() => buildSlaDefaults(CHAMP_SLA_SECTIONS), [])
+  const dispatcherDefaults = useMemo(() => buildSlaDefaults(DISPATCHER_SLA_SECTIONS), [])
   const [vendorValues, setVendorValues] = useState(vendorDefaults)
   const [champValues, setChampValues] = useState(champDefaults)
+  const [dispatcherValues, setDispatcherValues] = useState(dispatcherDefaults)
 
   function handleReset() {
     if (tab === 'vendor') setVendorValues(buildSlaDefaults(VENDOR_SLA_SECTIONS))
     if (tab === 'champ') setChampValues(buildSlaDefaults(CHAMP_SLA_SECTIONS))
+    if (tab === 'dispatcher') setDispatcherValues(buildSlaDefaults(DISPATCHER_SLA_SECTIONS))
   }
 
   return (
@@ -93,12 +97,11 @@ export default function AdminSlaModelsPage() {
       ) : null}
 
       {tab === 'dispatcher' ? (
-        <section className="rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-          <h3 className="text-[15px] font-bold text-[#17231c]">{copy.title}</h3>
-          <p className="mt-1.5 text-[12.5px] text-[#7c8780]">
-            Configuration for this SLA template will appear here.
-          </p>
-        </section>
+        <AdminVendorSlaTemplate
+          sections={DISPATCHER_SLA_SECTIONS}
+          values={dispatcherValues}
+          onChange={setDispatcherValues}
+        />
       ) : null}
 
       <div className="fixed bottom-0 left-[250px] right-0 z-20 border-t border-[#eceeec] bg-white/95 px-5 py-3 backdrop-blur max-[900px]:left-0">
@@ -108,7 +111,7 @@ export default function AdminSlaModelsPage() {
             onClick={handleReset}
             className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f8faf8]"
           >
-            {tab === 'champ' ? 'Reset' : 'Cancel'}
+            Reset
           </button>
           <button
             type="button"

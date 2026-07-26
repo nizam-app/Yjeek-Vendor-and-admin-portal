@@ -9,7 +9,7 @@ export function Toolbar({ placeholder = 'Search…', action = 'Export', onSearch
         <input onChange={(e) => onSearch?.(e.target.value)} className="min-w-0 flex-1 border-0 bg-transparent text-xs outline-none" placeholder={placeholder} />
       </label>
       <Button><Filter size={14} /> Filters</Button>
-      <Button><CalendarDays size={14} /> Today <ChevronDown size={12} /></Button>
+      <Button><CalendarDays size={14} /> Today ▾</Button>
       <Button><Download size={14} /> {action}</Button>
     </div>
   )

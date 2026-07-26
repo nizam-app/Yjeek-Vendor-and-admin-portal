@@ -46,7 +46,7 @@ export function AdminIncidentBoard({ fetchData }) {
               </span>
             </div>
             <div className="flex gap-2">
-              <Button className="h-[31px] px-3">All vendors <ChevronDown size={12} /></Button>
+              <Button className="h-[31px] px-3">All vendors ▾</Button>
               <Button className="h-[31px] px-4" onClick={refetch}><RefreshCw size={11} /> Refresh</Button>
             </div>
           </div>

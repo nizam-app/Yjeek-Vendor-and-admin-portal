@@ -38,11 +38,13 @@ import AdminUserDetailPage from '../pages/admin/management/AdminUserDetailPage'
 import AdminReportsPage from '../pages/admin/management/AdminReportsPage'
 import AdminUiEditorPage from '../pages/admin/ui-editor/AdminUiEditorPage'
 import AdminSettingsPage from '../pages/admin/settings/AdminSettingsPage'
+import AdminAccountPage from '../pages/admin/AdminAccountPage'
 
 /** Nested under RequireRole(admin). Relative children under /admin. */
 export const adminRoutes = (
   <Route path="/admin" element={<AdminLayout />}>
     <Route index element={<Navigate to="/admin/dashboard" replace />} />
+    <Route path="account" element={<AdminAccountPage />} />
     <Route path="dashboard" element={<AdminDashboardPage />} />
     <Route path="live-orders" element={<AdminLiveOrdersPage />} />
     <Route path="scheduled" element={<AdminScheduledOrdersPage />} />

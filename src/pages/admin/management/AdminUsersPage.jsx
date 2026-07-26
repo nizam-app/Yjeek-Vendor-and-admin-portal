@@ -73,7 +73,7 @@ function FilterSelect({ options, value, onChange, label }) {
 function DateFilter({ label, value, onChange }) {
   return (
     <label className="relative inline-flex h-[34px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white pl-3 pr-3 text-[12px] font-medium text-[#455249]">
-      <Calendar size={13} strokeWidth={2.2} className="text-[#7c8780]" aria-hidden />
+      📅
       <span className="whitespace-nowrap text-[#7c8780]">{label}</span>
       <span className="whitespace-nowrap">{value}</span>
       <input
