@@ -144,6 +144,35 @@ export const orderService = {
   },
 
   /**
+   * Execute an action advertised by GET /vendor-panel/orders/live.
+   * Only relative Vendor order POST/PATCH paths are accepted.
+   */
+  async performPrimaryAction(action, options = {}) {
+    const method = String(action?.method || '').trim().toUpperCase()
+    const path = String(action?.path || '').trim()
+
+    if (!['POST', 'PATCH'].includes(method)) {
+      throw new Error('Unsupported order action method.')
+    }
+    if (!/^\/vendor-panel\/orders\/[^/]+\/[^/?]+(?:\?.*)?$/.test(path)) {
+      throw new Error('Invalid order action path.')
+    }
+
+    const response = await apiClient.request({
+      ...options,
+      method,
+      url: path,
+      body: {},
+      scope: 'vendor',
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * GET /vendor-panel/orders/history?limit=
    */
   async getOrderHistory(options = {}) {

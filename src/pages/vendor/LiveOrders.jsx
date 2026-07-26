@@ -24,9 +24,14 @@ export default function LiveOrders() {
   const [searchQuery, setSearchQuery] = useState('')
   const [acceptingId, setAcceptingId] = useState(null)
   const [acceptError, setAcceptError] = useState(null)
+  const [actioningId, setActioningId] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const isDineIn = tab === 'dinein'
   const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+  const { mutate: performPrimaryAction } = useApiMutation((action) =>
+    orderService.performPrimaryAction(action),
+  )
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -66,6 +71,30 @@ export default function LiveOrders() {
     [acceptOrder, refetch, setData, tab],
   )
 
+  const handlePrimaryAction = useCallback(
+    async ({ order }) => {
+      const action = order?.primaryAction
+      const orderId = order?.backendId || order?.id
+      if (!action || !orderId) {
+        setActionError(new Error('This order action is not available.'))
+        return
+      }
+
+      setActionError(null)
+      setActioningId(String(orderId))
+      try {
+        await performPrimaryAction(action)
+        setHandoverOrder(null)
+        await refetch()
+      } catch (err) {
+        setActionError(err)
+      } finally {
+        setActioningId(null)
+      }
+    },
+    [performPrimaryAction, refetch],
+  )
+
   const columns = getColumns(tab, orders).map((col) => ({
     ...col,
     items: col.items.filter((order) => {
@@ -77,7 +106,11 @@ export default function LiveOrders() {
       return haystack.includes(searchQuery.trim().toLowerCase())
     }),
   }))
-  const totalActive = columns.reduce((sum, col) => sum + col.items.length, 0)
+  // Keep the server's count stable while the user filters cards locally.
+  const totalActive =
+    typeof orders?.activeCount === 'number'
+      ? orders.activeCount
+      : getColumns(tab, orders).reduce((sum, col) => sum + col.items.length, 0)
 
   if (isLoading && !orders) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
@@ -150,6 +183,11 @@ export default function LiveOrders() {
             {acceptError.message || 'Failed to accept order.'}
           </p>
         ) : null}
+        {actionError && !handoverOrder ? (
+          <p className="text-[12px] text-danger">
+            {actionError.message || 'Failed to update order.'}
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-4 gap-[14px] max-[1200px]:grid-cols-2">
@@ -192,9 +230,11 @@ export default function LiveOrders() {
                     mode={col.key}
                     onSelect={setSelectedOrder}
                     onAccept={handleAccept}
+                    onPrimaryAction={handlePrimaryAction}
                     onHandoverChamp={setHandoverOrder}
                     onReject={setRejectOrder}
                     accepting={acceptingId === String(order.backendId || order.id)}
+                    actioning={actioningId === String(order.backendId || order.id)}
                   />
                 ),
               )
@@ -220,8 +260,17 @@ export default function LiveOrders() {
 
       <HandoverChampModal
         open={Boolean(handoverOrder)}
-        onClose={() => setHandoverOrder(null)}
+        onClose={() => {
+          setHandoverOrder(null)
+          setActionError(null)
+        }}
+        onConfirm={() => handlePrimaryAction(handoverOrder)}
         order={handoverOrder?.order}
+        isSubmitting={
+          actioningId ===
+          String(handoverOrder?.order?.backendId || handoverOrder?.order?.id || '')
+        }
+        error={actionError}
       />
 
       <RejectOrderModal

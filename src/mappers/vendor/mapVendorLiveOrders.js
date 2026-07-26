@@ -38,6 +38,57 @@ function formatDineInWhen(iso) {
   return `${day} · ${time}`
 }
 
+function formatCountdown(deadline) {
+  if (!deadline) return null
+  const deadlineMs = new Date(deadline).getTime()
+  if (Number.isNaN(deadlineMs)) return null
+
+  const remainingSeconds = Math.max(0, Math.ceil((deadlineMs - Date.now()) / 1000))
+  const minutes = Math.floor(remainingSeconds / 60)
+  const seconds = remainingSeconds % 60
+  return remainingSeconds > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : 'Expired'
+}
+
+function formatElapsedSince(startedAt) {
+  if (!startedAt) return null
+  const startedMs = new Date(startedAt).getTime()
+  if (Number.isNaN(startedMs)) return null
+
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - startedMs) / 60000))
+  if (elapsedMinutes < 60) return `${elapsedMinutes} min`
+  const hours = Math.floor(elapsedMinutes / 60)
+  const minutes = elapsedMinutes % 60
+  return minutes ? `${hours}h ${minutes}m` : `${hours}h`
+}
+
+function normalizePrimaryAction(action) {
+  if (!action || typeof action !== 'object') return null
+  const key = String(action.key || '').trim()
+  const label = String(action.label || '').trim()
+  const method = String(action.method || '').trim().toUpperCase()
+  const path = String(action.path || '').trim()
+  if (!key || !label || !method || !path) return null
+  return { key, label, method, path }
+}
+
+function mapReadyLabel(order) {
+  const status = String(order?.status || '').trim().toUpperCase()
+  const driverName = order?.driver?.name
+
+  if (status === 'ON_THE_WAY') {
+    return driverName ? `On the way · ${driverName}` : 'On the way'
+  }
+  if (status === 'DRIVER_ASSIGNED') {
+    return driverName ? `Driver assigned · ${driverName}` : 'Driver assigned'
+  }
+  if (status === 'READY_FOR_PICKUP') {
+    return String(order?.orderType || '').toUpperCase() === 'PICKUP'
+      ? 'Ready · awaiting customer'
+      : 'Ready · awaiting champ'
+  }
+  return null
+}
+
 function mapOrderTypeBadge(orderType) {
   const raw = String(orderType || '').trim().toUpperCase()
   if (raw === 'PICKUP') return 'Pickup'
@@ -109,6 +160,8 @@ export function mapVendorLiveOrder(order) {
   const specialStatus = mapRejectedStatus(order.status)
   const typeBadge = mapOrderTypeBadge(order.orderType)
   const displayId = order.orderNumber ? String(order.orderNumber) : String(order.id || '')
+  const primaryAction = normalizePrimaryAction(order.primaryAction)
+  const prepTime = formatElapsedSince(order.prepStartedAt)
   const itemsList = Array.isArray(order.items)
     ? order.items.map((item) => ({
         name: item.name,
@@ -152,8 +205,37 @@ export function mapVendorLiveOrder(order) {
           .replace(/\b\w/g, (c) => c.toUpperCase())
       : undefined,
     deliveryAddress: order.deliveryAddress ?? null,
+    deliverySpeed: order.deliverySpeed ?? null,
+    estimatedReadyMin: order.estimatedReadyMin ?? null,
+    vendorAcceptDeadline: order.vendorAcceptDeadline ?? null,
+    paymentDeadline: order.paymentDeadline ?? null,
+    windowStartAt: order.windowStartAt ?? null,
+    windowEndAt: order.windowEndAt ?? null,
+    arriveByAt: order.arriveByAt ?? null,
+    scheduledAt: order.scheduledAt ?? null,
+    prepStartedAt: order.prepStartedAt ?? null,
+    readyAt: order.readyAt ?? null,
+    handedOverAt: order.handedOverAt ?? null,
     confirmedAt: order.confirmedAt ?? null,
     createdAt: order.createdAt ?? null,
+    driver: order.driver ?? null,
+    champName: order.driver?.name ?? null,
+    sla: formatCountdown(order.vendorAcceptDeadline) || undefined,
+    prepTime: prepTime || undefined,
+    prepDelay:
+      prepTime && order.estimatedReadyMin != null
+        ? (Date.now() - new Date(order.prepStartedAt).getTime()) / 60000 >
+          Number(order.estimatedReadyMin)
+        : false,
+    readyLabel: mapReadyLabel(order) || undefined,
+    primaryAction,
+    handoverType:
+      primaryAction?.key === 'HANDOVER_TO_CHAMP'
+        ? 'champ'
+        : primaryAction?.key === 'HANDOVER_TO_CUSTOMER'
+          ? 'customer'
+          : undefined,
+    handoverLabel: primaryAction?.label || undefined,
     type: typeBadge || undefined,
     status: specialStatus || undefined,
     reason: order.reason ?? order.rejectionReason ?? order.vendorRejectionReason ?? undefined,
@@ -284,6 +366,14 @@ export function mapVendorLiveOrdersResponse(data, { board = 'delivery' } = {}) {
     const columns = data.columns
     if (board === 'dinein') {
       return {
+        tab: data.tab ?? 'dine_in',
+        activeCount:
+          typeof data.activeCount === 'number'
+            ? data.activeCount
+            : Object.values(columns).reduce(
+                (count, list) => count + (Array.isArray(list) ? list.length : 0),
+                0,
+              ),
         delivery: { ...EMPTY_DELIVERY },
         dineIn: {
           new: mapDineInColumnOrders(columnList(columns, 'new')),
@@ -295,6 +385,14 @@ export function mapVendorLiveOrdersResponse(data, { board = 'delivery' } = {}) {
     }
 
     return {
+      tab: data.tab ?? 'delivery_pickup',
+      activeCount:
+        typeof data.activeCount === 'number'
+          ? data.activeCount
+          : Object.values(columns).reduce(
+              (count, list) => count + (Array.isArray(list) ? list.length : 0),
+              0,
+            ),
       delivery: {
         new: mapDeliveryColumnOrders(columnList(columns, 'new')),
         accepted: mapDeliveryColumnOrders(columnList(columns, 'accepted')),
@@ -307,6 +405,11 @@ export function mapVendorLiveOrdersResponse(data, { board = 'delivery' } = {}) {
 
   if (data && typeof data === 'object' && (data.delivery || data.dineIn)) {
     return {
+      tab: data.tab ?? null,
+      activeCount:
+        typeof data.activeCount === 'number'
+          ? data.activeCount
+          : null,
       delivery: {
         new: data.delivery?.new || [],
         accepted: data.delivery?.accepted || [],
@@ -326,6 +429,8 @@ export function mapVendorLiveOrdersResponse(data, { board = 'delivery' } = {}) {
 }
 
 export const emptyVendorLiveOrders = {
+  tab: null,
+  activeCount: 0,
   delivery: { ...EMPTY_DELIVERY },
   dineIn: { ...EMPTY_DINE_IN },
 }

@@ -55,7 +55,8 @@ export function mapVendorBranch(branch) {
   }
 
   const status = mapUiStatus(branch)
-  const radiusKm = branch.radiusKm
+  // Response uses radiusKm; PATCH request body uses deliveryRadiusKm
+  const radiusKm = branch.radiusKm ?? branch.deliveryRadiusKm
   const etaMin = branch.etaMin
 
   return {

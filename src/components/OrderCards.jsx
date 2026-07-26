@@ -33,8 +33,20 @@ function openDetailsOnClick(mode) {
   return mode === 'new'
 }
 
-export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject, accepting }) {
+export function OrderCard({
+  order,
+  mode,
+  dense,
+  onSelect,
+  onAccept,
+  onPrimaryAction,
+  onHandoverChamp,
+  onReject,
+  accepting,
+  actioning,
+}) {
   const isAccepting = Boolean(accepting)
+  const isActioning = Boolean(actioning)
   const canOpenDetails = openDetailsOnClick(mode)
 
   if (order.status === 'rejected') {
@@ -149,29 +161,50 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
         </div>
       ) : null}
       {mode === 'accepted' ? (
-        <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-          Start preparing
+        <button
+          type="button"
+          className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isActioning || !order.primaryAction}
+          onClick={(e) => {
+            stopCardAction(e)
+            if (order.primaryAction) onPrimaryAction?.({ order, mode })
+          }}
+        >
+          {isActioning ? 'Updating…' : order.primaryAction?.label || 'Start preparing'}
         </button>
       ) : null}
       {mode === 'preparing' ? (
-        <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-          Mark ready
+        <button
+          type="button"
+          className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isActioning || !order.primaryAction}
+          onClick={(e) => {
+            stopCardAction(e)
+            if (order.primaryAction) onPrimaryAction?.({ order, mode })
+          }}
+        >
+          {isActioning ? 'Updating…' : order.primaryAction?.label || 'Mark ready'}
         </button>
       ) : null}
       {mode === 'ready' ? (
         <>
-          <button
-            type="button"
-            className={btnPrimaryFull}
-            onClick={(e) => {
-              stopCardAction(e)
-              if (order.handoverType === 'champ' || order.handoverLabel === 'Handover to champ') {
-                onHandoverChamp?.({ order, mode })
-              }
-            }}
-          >
-            {order.handoverLabel || 'Handover'}
-          </button>
+          {order.primaryAction ? (
+            <button
+              type="button"
+              className={btnPrimaryFull}
+              disabled={isActioning}
+              onClick={(e) => {
+                stopCardAction(e)
+                if (order.primaryAction?.key === 'HANDOVER_TO_CHAMP') {
+                  onHandoverChamp?.({ order, mode })
+                } else {
+                  onPrimaryAction?.({ order, mode })
+                }
+              }}
+            >
+              {isActioning ? 'Updating…' : order.primaryAction.label}
+            </button>
+          ) : null}
           {order.noShow ? (
             <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>
               No Show

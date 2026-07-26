@@ -13,6 +13,49 @@ Confirmed from Postman / response samples. Real IDs, phones, and names are redac
 
 Columns: `new`, `accepted`, `preparing`, `ready`.
 
+### Confirmed response
+
+`data` contains:
+
+- `tab: "delivery_pickup"`
+- `columns.new`, `columns.accepted`, `columns.preparing`, `columns.ready`
+- `activeCount`
+
+Each order may contain:
+
+`id`, `orderNumber`, `orderType`, `fulfillmentType`, `deliverySpeed`, `status`,
+`paymentStatus`, `paymentMethod`, `branch`, `customer`, `itemCount`,
+`itemsPreview`, `subtotal`, `deliveryFee`, `serviceFee`, `vatAmount`,
+`totalAmount`, `kitchenNote`, `estimatedReadyMin`, `vendorAcceptDeadline`,
+`paymentDeadline`, `windowStartAt`, `windowEndAt`, `arriveByAt`, `scheduledAt`,
+`prepStartedAt`, `readyAt`, `handedOverAt`, `driver`, `createdAt`,
+`confirmedAt`, and `primaryAction`.
+
+`primaryAction`, when present:
+
+```json
+{
+  "key": "HANDOVER_TO_CUSTOMER",
+  "label": "Handover to customer",
+  "method": "POST",
+  "path": "/vendor-panel/orders/:orderId/complete"
+}
+```
+
+### Frontend mapping (delivery / pickup)
+
+| UI field | Source |
+| --- | --- |
+| Order number | `orderNumber` |
+| Pickup badge | `orderType === "PICKUP"` |
+| Items / total | `itemsPreview` / `totalAmount` |
+| Customer | `customer.name` |
+| Accept countdown | derived from `vendorAcceptDeadline` |
+| Preparation elapsed time | derived from `prepStartedAt` |
+| Ready status | `status`, `orderType`, and `driver.name` |
+| Action label | `primaryAction.label` |
+| Header active count | `activeCount` |
+
 ## Live board — Dine-in
 
 | Field | Value |
@@ -66,7 +109,11 @@ Success `200` returns the updated order (`status: "CONFIRMED"`, `items[]`, money
 
 ## Unconfirmed
 
-- Reject / Check-in / Start preparing / Mark ready / Handover / No-show POSTs
+- Reject / Check-in / No-show POSTs
+- Start-preparing / Mark-ready actions when `primaryAction` is `null`
+
+When `primaryAction` is present, the frontend executes its confirmed `method`
+and relative `path` after validating that it is a Vendor order POST/PATCH path.
 
 ## Modes
 

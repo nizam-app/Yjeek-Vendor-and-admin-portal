@@ -21,10 +21,15 @@ export default function LiveOrderColumn() {
   const [rejectOrder, setRejectOrder] = useState(null)
   const [acceptingId, setAcceptingId] = useState(null)
   const [acceptError, setAcceptError] = useState(null)
+  const [actioningId, setActioningId] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
   const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+  const { mutate: performPrimaryAction } = useApiMutation((action) =>
+    orderService.performPrimaryAction(action),
+  )
 
   const handleAccept = useCallback(
     async ({ order, mode }) => {
@@ -55,6 +60,30 @@ export default function LiveOrderColumn() {
       }
     },
     [acceptOrder, refetch, setData, tab],
+  )
+
+  const handlePrimaryAction = useCallback(
+    async ({ order }) => {
+      const action = order?.primaryAction
+      const orderId = order?.backendId || order?.id
+      if (!action || !orderId) {
+        setActionError(new Error('This order action is not available.'))
+        return
+      }
+
+      setActionError(null)
+      setActioningId(String(orderId))
+      try {
+        await performPrimaryAction(action)
+        setHandoverOrder(null)
+        await refetch()
+      } catch (err) {
+        setActionError(err)
+      } finally {
+        setActioningId(null)
+      }
+    },
+    [performPrimaryAction, refetch],
   )
 
   const column = getColumns(tab, orders).find((col) => col.key === key)
@@ -116,6 +145,11 @@ export default function LiveOrderColumn() {
           {acceptError.message || 'Failed to accept order.'}
         </p>
       ) : null}
+      {actionError && !handoverOrder ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {actionError.message || 'Failed to update order.'}
+        </p>
+      ) : null}
 
       {items.length === 0 ? (
         <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
@@ -141,9 +175,11 @@ export default function LiveOrderColumn() {
                 dense
                 onSelect={setSelectedOrder}
                 onAccept={handleAccept}
+                onPrimaryAction={handlePrimaryAction}
                 onHandoverChamp={setHandoverOrder}
                 onReject={setRejectOrder}
                 accepting={acceptingId === String(order.backendId || order.id)}
+                actioning={actioningId === String(order.backendId || order.id)}
               />
             ),
           )}
@@ -167,8 +203,17 @@ export default function LiveOrderColumn() {
 
       <HandoverChampModal
         open={Boolean(handoverOrder)}
-        onClose={() => setHandoverOrder(null)}
+        onClose={() => {
+          setHandoverOrder(null)
+          setActionError(null)
+        }}
+        onConfirm={() => handlePrimaryAction(handoverOrder)}
         order={handoverOrder?.order}
+        isSubmitting={
+          actioningId ===
+          String(handoverOrder?.order?.backendId || handoverOrder?.order?.id || '')
+        }
+        error={actionError}
       />
 
       <RejectOrderModal

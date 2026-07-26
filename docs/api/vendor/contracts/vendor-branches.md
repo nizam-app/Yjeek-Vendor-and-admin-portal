@@ -48,8 +48,9 @@ Confirmed from Postman screenshots. Real IDs, phones, and addresses are redacted
 | Method | `GET` |
 | Relative path | `/vendor-panel/branches/:branchId` |
 | Auth | Protected — Bearer via `apiClient` |
+| Registry | `endpoints.vendor.branch(branchId)` |
 
-Returns a single branch object in `data` (same fields as a list item).
+Returns a single branch object in `data` (same fields as a list item). May include `openingHours`.
 
 ## Update branch
 
@@ -58,21 +59,132 @@ Returns a single branch object in `data` (same fields as a list item).
 | Method | `PATCH` |
 | Relative path | `/vendor-panel/branches/:branchId` |
 | Auth | Protected — Bearer via `apiClient` |
+| Postman | `PATCH Update branch` |
 
 ### Confirmed request body
 
 ```json
 {
+  "name": "<string>",
+  "address": "<string>",
   "phone": "<string>",
-  "etaMin": 28
+  "deliveryRadiusKm": 5,
+  "etaMin": 12,
+  "minOrderAmount": 3,
+  "openingHours": {
+    "mon": { "open": "09:00", "lastOrder": "22:30", "close": "23:00" },
+    "tue": { "open": "09:00", "lastOrder": "21:30", "close": "22:00" },
+    "wed": { "open": "09:00", "lastOrder": "22:30", "close": "23:00" },
+    "thu": { "open": "09:00", "lastOrder": "22:30", "close": "23:00" },
+    "fri": "closed",
+    "sat": { "open": "10:00", "lastOrder": "23:30", "close": "00:00" },
+    "sun": { "open": "09:00", "lastOrder": "22:30", "close": "23:00" }
+  }
 }
 ```
 
-The edit form also saves `name`, `address`, `radiusKm`, and `minOrderAmount` (present on the branch model). `openingHours` stays local-only (null / format unconfirmed).
+Notes:
+
+- Request uses `deliveryRadiusKm`; success payload exposes `radiusKm`.
+- Closed days are the string `"closed"`.
+- API hours are single-shift only (`open` / `lastOrder` / `close`). UI split shifts are flattened to first-open → last-close when saving; `lastOrder` is derived as 30 minutes before `close`.
 
 ### Success (HTTP 200)
 
 Returns the updated branch object in `data`.
+
+## Delete branch
+
+| Field | Value |
+| --- | --- |
+| Method | `DELETE` |
+| Relative path | `/vendor-panel/branches/:branchId` |
+| Auth | Protected — Bearer via `apiClient` |
+| Postman | `DELETE Delete Branch` |
+| Registry | `endpoints.vendor.branch(branchId)` |
+
+## Get branch menu
+
+| Field | Value |
+| --- | --- |
+| Method | `GET` |
+| Relative path | `/vendor-panel/catalog/branches/:branchId/menu` |
+| Auth | Protected — Bearer via `apiClient` |
+| Postman | `GET Branch menu` |
+| Registry | `endpoints.vendor.catalog.branchMenu(branchId)` |
+
+### Success (HTTP 200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "menu": [
+      {
+        "id": "<categoryId>",
+        "name": "Main Course",
+        "type": "category",
+        "isVisible": true,
+        "children": [
+          {
+            "id": "<productId>",
+            "name": "Classic Burger",
+            "type": "product",
+            "isAvailable": true,
+            "product": {
+              "nameAr": "<string>",
+              "description": "<string>",
+              "price": 3.5
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Category nodes may nest further (subcategory / type). Product leaves use `type: "product"`.
+
+## Edit branch menu
+
+| Field | Value |
+| --- | --- |
+| Method | `PATCH` |
+| Relative path | `/vendor-panel/catalog/branches/:branchId/menu` |
+| Auth | Protected — Bearer via `apiClient` |
+| Postman | `PATCH Edit Branch menu` |
+
+### Confirmed request body
+
+```json
+{
+  "items": [
+    { "productId": "<id>", "isAvailable": true, "priceOverride": 3.2 },
+    { "productId": "<id>", "isAvailable": false }
+  ],
+  "categories": [
+    { "categoryId": "<id>", "isVisible": true }
+  ]
+}
+```
+
+`priceOverride` is optional per item. Confirmed item fields also include `isVisible`.
+`categories` sends `categoryId` + `isVisible` for real catalog category/subcategory nodes only.
+Synthetic buckets such as `Uncategorized` are never sent (they are not Category rows and cause `branch_category_visibility_category_id_fkey` failures).
+
+Product display mapping (GET response → UI):
+
+| UI | Source |
+| --- | --- |
+| Price | `product.effectivePrice` (fallback `product.price`) |
+| Available | `product.branchIsAvailable` |
+| Visible | `product.branchIsVisible` / node `isVisible` |
+| Locked toggle | `product.lockedByCategory` |
+
+### Success (HTTP 200)
+
+Same menu tree shape as Get branch menu.
 
 ## Set branch status
 
@@ -152,17 +264,19 @@ Same list shape as List branches — `data.count` + `data.branches[]`, with bran
 | `eta` | `` `${etaMin} min` `` |
 | `minOrder` | formatted `minOrderAmount` |
 | `status` | Suspended if `isSuspended`, else OPEN/BUSY/CLOSED → Open/Busy/Closed |
+| Working hours | `openingHours` ↔ EditBranch day cards |
+| Branch menu | `menu[]` tree → availability / visibility toggles |
 
 ## Unconfirmed
 
 - Create branch
-- Delete branch
-- `openingHours` structure
+- Exact `categories[]` field names beyond `categoryId` / `isVisible` (inferred from `items[].productId` pattern)
+- Split-shift persistence (API is single open/close only)
 
 ## Modes
 
 | Flag | Behavior |
 | --- | --- |
-| `VITE_VENDOR_USE_MOCK_API=true` | Mock branches + status + close-all + open-all |
-| `VITE_VENDOR_USE_MOCK_API=false` | Real list/get/update/set-status/close-all/open-all |
+| `VITE_VENDOR_USE_MOCK_API=true` | Mock branches + status + close-all + open-all + update hours + delete + branch menu |
+| `VITE_VENDOR_USE_MOCK_API=false` | Real list/get/update/delete/set-status/close-all/open-all/menu |
 | Admin | Untouched |

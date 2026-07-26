@@ -5,31 +5,16 @@ import { useApiMutation } from '../../hooks/useApiMutation'
 import { useVendorBranch } from '../../hooks/vendor/useVendorBranch'
 import { branchService } from '../../services/vendor/branchService'
 import { ApiError, getFirstFieldErrorMessage } from '../../api/errors'
-
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+import DeleteBranchModal from '../../components/DeleteBranchModal'
+import {
+  defaultUiOpeningHours,
+  mapApiOpeningHoursToUi,
+  UI_DAYS,
+} from '../../mappers/vendor/mapVendorOpeningHours'
 
 const labelClass = 'mb-1.5 block text-[13px] font-medium uppercase leading-[13px] text-[#69706E]'
 const inputClass =
   'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-medium text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
-
-function defaultHours() {
-  return {
-    Monday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Tuesday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Wednesday: {
-      open: true,
-      mode: 'split',
-      shifts: [
-        { from: '8:00 AM', to: '12:00 PM' },
-        { from: '4:00 PM', to: '10:00 PM' },
-      ],
-    },
-    Thursday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Friday: { open: false, mode: 'single', shifts: [] },
-    Saturday: { open: true, mode: 'single', shifts: [{ from: '10:00 AM', to: '12:00 AM' }] },
-    Sunday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-  }
-}
 
 function buildForm(branch) {
   const radiusFromLabel = String(branch.radius || '').replace(/[^\d.]/g, '')
@@ -47,8 +32,7 @@ function buildForm(branch) {
         branch.minOrderAmount ??
         (minFromLabel || '2.000'),
     ),
-    // openingHours format is unconfirmed (null in API samples) — keep local defaults
-    hours: defaultHours(),
+    hours: mapApiOpeningHoursToUi(branch.openingHours) || defaultUiOpeningHours(),
   }
 }
 
@@ -208,8 +192,13 @@ export default function EditBranch() {
   const { mutate: saveBranch, isLoading: isSaving } = useApiMutation((payload) =>
     branchService.updateBranch(decodedId, payload),
   )
+  const { mutate: removeBranch, isLoading: isDeleting } = useApiMutation(() =>
+    branchService.deleteBranch(decodedId),
+  )
   const [form, setForm] = useState(null)
   const [saveError, setSaveError] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     if (!branch) return
@@ -314,7 +303,7 @@ export default function EditBranch() {
     setForm((c) => {
       const monday = c.hours.Monday
       const hours = { ...c.hours }
-      DAYS.forEach((day) => {
+      UI_DAYS.forEach((day) => {
         hours[day] = {
           open: monday.open,
           mode: monday.mode,
@@ -326,20 +315,46 @@ export default function EditBranch() {
   }
 
   async function handleSave() {
-    if (isSaving) return
+    if (isSaving || isDeleting) return
     setSaveError('')
     try {
       await saveBranch({
         name: form.name,
         address: form.address,
         phone: form.phone,
-        radiusKm: form.radiusKm,
+        deliveryRadiusKm: form.radiusKm,
         etaMin: form.etaMin,
         minOrderValue: form.minOrderValue,
+        hours: form.hours,
       })
       navigate('/branches')
     } catch (err) {
       setSaveError(getSaveErrorMessage(err))
+    }
+  }
+
+  function openDeleteModal() {
+    if (isSaving || isDeleting) return
+    setDeleteError('')
+    setDeleteOpen(true)
+  }
+
+  function closeDeleteModal() {
+    if (isDeleting) return
+    setDeleteOpen(false)
+    setDeleteError('')
+  }
+
+  async function handleConfirmDelete() {
+    if (isSaving || isDeleting) return
+    setDeleteError('')
+    setSaveError('')
+    try {
+      await removeBranch()
+      setDeleteOpen(false)
+      navigate('/branches')
+    } catch (err) {
+      setDeleteError(getSaveErrorMessage(err) || 'Unable to delete branch. Please try again.')
     }
   }
 
@@ -360,7 +375,7 @@ export default function EditBranch() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || isDeleting}
           className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-4 text-[13px] font-medium text-white hover:brightness-[0.96] disabled:opacity-60 disabled:pointer-events-none"
         >
           {isSaving ? 'Saving…' : 'Save changes'}
@@ -385,7 +400,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.name}
                 onChange={(e) => updateField('name', e.target.value)}
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -395,7 +410,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.address}
                 onChange={(e) => updateField('address', e.target.value)}
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -405,7 +420,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.phone}
                 onChange={(e) => updateField('phone', e.target.value)}
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -416,7 +431,7 @@ export default function EditBranch() {
                   className={inputClass}
                   value={form.radiusKm}
                   onChange={(e) => updateField('radiusKm', e.target.value)}
-                  disabled={isSaving}
+                  disabled={isSaving || isDeleting}
                 />
               </div>
               <div>
@@ -425,7 +440,7 @@ export default function EditBranch() {
                   className={inputClass}
                   value={form.etaMin}
                   onChange={(e) => updateField('etaMin', e.target.value)}
-                  disabled={isSaving}
+                  disabled={isSaving || isDeleting}
                 />
               </div>
             </div>
@@ -436,7 +451,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.minOrderValue}
                 onChange={(e) => updateField('minOrderValue', e.target.value)}
-                disabled={isSaving}
+                disabled={isSaving || isDeleting}
               />
             </div>
           </div>
@@ -481,7 +496,9 @@ export default function EditBranch() {
               </div>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-medium text-white hover:brightness-[0.96]"
+                onClick={openDeleteModal}
+                disabled={isSaving || isDeleting}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-medium text-white hover:brightness-[0.96] disabled:opacity-60 disabled:pointer-events-none"
               >
                 🗑
                 Delete
@@ -533,6 +550,15 @@ export default function EditBranch() {
           </div>
         </div>
       </section>
+
+      <DeleteBranchModal
+        open={deleteOpen}
+        branchName={branch.name}
+        isDeleting={isDeleting}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

@@ -23,6 +23,74 @@ function findMockBranch(url) {
   )
 }
 
+function findMockBranchById(branchId) {
+  const id = decodeURIComponent(String(branchId || ''))
+  return (
+    vendorMock.branches.find((b) => b.id === id) ||
+    vendorMock.branches.find((b) => b.name === id) ||
+    null
+  )
+}
+
+/** In-memory branch menu (mutated by PATCH Edit Branch menu in mock mode). */
+let mockBranchMenuState = structuredClone(vendorMock.mockBranchMenu || [])
+
+function applyMockBranchMenuPatch(body = {}) {
+  const items = Array.isArray(body.items) ? body.items : []
+  const categories = Array.isArray(body.categories) ? body.categories : []
+  const itemMap = new Map(items.map((item) => [String(item.productId), item]))
+  const categoryMap = new Map(
+    categories.map((cat) => [String(cat.categoryId || cat.id), cat]),
+  )
+
+  function walk(nodes) {
+    return (nodes || []).map((node) => {
+      if (!node) return node
+      if (node.type === 'product' || node.product) {
+        const productId = String(node.productId || node.product?.id || node.id)
+        const patch = itemMap.get(productId)
+        if (!patch) return node
+        const nextProduct = { ...(node.product || {}) }
+        if (patch.isAvailable !== undefined) {
+          nextProduct.branchIsAvailable = patch.isAvailable
+          nextProduct.isAvailable = patch.isAvailable
+        }
+        if (patch.isVisible !== undefined) {
+          nextProduct.branchIsVisible = patch.isVisible
+        }
+        if (patch.priceOverride !== undefined) {
+          nextProduct.effectivePrice = patch.priceOverride
+          nextProduct.priceOverride = patch.priceOverride
+        }
+        return {
+          ...node,
+          isAvailable:
+            patch.isAvailable !== undefined ? patch.isAvailable : node.isAvailable,
+          isVisible: patch.isVisible !== undefined ? patch.isVisible : node.isVisible,
+          priceOverride:
+            patch.priceOverride !== undefined ? patch.priceOverride : node.priceOverride,
+          product: nextProduct,
+        }
+      }
+
+      const categoryId = String(node.id)
+      const catPatch = categoryMap.get(categoryId)
+      return {
+        ...node,
+        isVisible:
+          catPatch?.isVisible !== undefined ? catPatch.isVisible : node.isVisible,
+        children: walk(node.children),
+      }
+    })
+  }
+
+  mockBranchMenuState = walk(mockBranchMenuState)
+  return {
+    branch: { id: 'manama', name: 'Green Kitchen — Manama' },
+    menu: mockBranchMenuState,
+  }
+}
+
 function findMockPromotion(promotionId) {
   return (
     (vendorMock.promotions || []).find(
@@ -167,6 +235,11 @@ const mockRoutes = {
         preparing: vendorMock.liveOrders.preparing,
         ready: vendorMock.liveOrders.ready,
       },
+      activeCount:
+        vendorMock.liveOrders.new.length +
+        vendorMock.liveOrders.accepted.length +
+        vendorMock.liveOrders.preparing.length +
+        vendorMock.liveOrders.ready.length,
     }
   },
   'GET /orders/scheduled': () => vendorMock.scheduledOrders,
@@ -538,10 +611,31 @@ export const mockClient = {
     const key = `${method.toUpperCase()} ${url}`
     let route = mockRoutes[key]
 
-    // Dynamic branch detail / update / set-status for mock mode
+    // Dynamic branch detail / update / set-status / menu for mock mode
     if (!route && method.toUpperCase() === 'GET') {
+      const menuMatch = String(url).match(
+        /^\/vendor-panel\/catalog\/branches\/([^/?]+)\/menu$/,
+      )
+      if (menuMatch) {
+        const branch = findMockBranchById(menuMatch[1])
+        if (branch) {
+          route = () => ({
+            branch: { id: branch.id, name: branch.name },
+            menu: mockBranchMenuState,
+          })
+        }
+      }
+
       const branch = findMockBranch(url)
-      if (branch) route = () => branch
+      if (!route && branch) {
+        route = () => ({
+          ...branch,
+          openingHours: branch.openingHours || vendorMock.mockOpeningHours || null,
+          radiusKm: Number(branch.radiusKm) || branch.radiusKm,
+          etaMin: Number(branch.etaMin) || branch.etaMin,
+          minOrderAmount: Number(branch.minOrderValue ?? branch.minOrderAmount) || 0,
+        })
+      }
 
       // GET /vendor-panel/catalog/products/:productId
       if (!route) {
@@ -815,12 +909,17 @@ export const mockClient = {
         }
       }
 
+      const menuMatch = String(url).match(
+        /^\/vendor-panel\/catalog\/branches\/([^/?]+)\/menu$/,
+      )
+      if (!route && menuMatch && findMockBranchById(menuMatch[1])) {
+        route = ({ body: patchBody }) => applyMockBranchMenuPatch(patchBody)
+      }
+
       const statusMatch = String(url).match(/^\/vendor-panel\/branches\/([^/?]+)\/status$/)
       if (!route && statusMatch) {
         const branchId = decodeURIComponent(statusMatch[1])
-        const branch =
-          vendorMock.branches.find((b) => b.id === branchId) ||
-          vendorMock.branches.find((b) => b.name === branchId)
+        const branch = findMockBranchById(branchId)
         if (branch) {
           route = ({ body: patchBody }) => {
             const nextStatus = patchBody?.status || branch.status
@@ -834,10 +933,48 @@ export const mockClient = {
       } else if (!route) {
         const branch = findMockBranch(url)
         if (branch) {
-          route = ({ body: patchBody }) => ({
-            ...branch,
-            ...(patchBody && typeof patchBody === 'object' ? patchBody : {}),
-          })
+          route = ({ body: patchBody }) => {
+            const next = {
+              ...branch,
+              ...(patchBody && typeof patchBody === 'object' ? patchBody : {}),
+            }
+            // Postman sends deliveryRadiusKm; responses expose radiusKm
+            if (patchBody?.deliveryRadiusKm !== undefined) {
+              next.radiusKm = patchBody.deliveryRadiusKm
+              next.radius = `${patchBody.deliveryRadiusKm} km`
+              delete next.deliveryRadiusKm
+            }
+            if (patchBody?.minOrderAmount !== undefined) {
+              next.minOrderAmount = patchBody.minOrderAmount
+              next.minOrderValue = String(patchBody.minOrderAmount)
+              next.minOrder = `${Number(patchBody.minOrderAmount).toFixed(3)} BHD`
+            }
+            if (patchBody?.openingHours !== undefined) {
+              next.openingHours = patchBody.openingHours
+              branch.openingHours = patchBody.openingHours
+            }
+            Object.assign(branch, {
+              name: next.name ?? branch.name,
+              address: next.address ?? branch.address,
+              phone: next.phone ?? branch.phone,
+              radiusKm: next.radiusKm ?? branch.radiusKm,
+              etaMin: next.etaMin ?? branch.etaMin,
+              minOrderValue: next.minOrderValue ?? branch.minOrderValue,
+              openingHours: next.openingHours ?? branch.openingHours,
+            })
+            return next
+          }
+        }
+      }
+    }
+
+    if (!route && method.toUpperCase() === 'DELETE') {
+      const branch = findMockBranch(url)
+      if (branch) {
+        route = () => {
+          const index = vendorMock.branches.findIndex((b) => b.id === branch.id)
+          if (index >= 0) vendorMock.branches.splice(index, 1)
+          return { success: true, id: branch.id }
         }
       }
     }

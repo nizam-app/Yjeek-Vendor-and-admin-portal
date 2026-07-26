@@ -1,6 +1,11 @@
 import { apiClient } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
 import { mapVendorBranch, mapVendorBranchesResponse } from '../../mappers/vendor/mapVendorBranches'
+import {
+  buildBranchMenuUpdateBody,
+  mapVendorBranchMenuResponse,
+} from '../../mappers/vendor/mapVendorBranchMenu'
+import { mapUiHoursToApiOpeningHours } from '../../mappers/vendor/mapVendorOpeningHours'
 
 function toNumberOrNull(value) {
   if (value === '' || value === null || value === undefined) return null
@@ -24,7 +29,8 @@ export function notifyVendorBranchesUpdated() {
 
 /**
  * Vendor branches service.
- * Confirmed: list, get, update, set status, close-all, open-all.
+ * Confirmed: list, get, update (incl. openingHours), set status, close-all, open-all,
+ * delete, get/update branch menu.
  */
 export const branchService = {
   async getBranches(options = {}) {
@@ -43,8 +49,7 @@ export const branchService = {
    * GET /vendor-panel/branches/:branchId
    */
   async getBranch(branchId, options = {}) {
-    const id = encodeURIComponent(String(branchId || '').trim())
-    const response = await apiClient.get(`${endpoints.vendor.branches}/${id}`, {
+    const response = await apiClient.get(endpoints.vendor.branch(branchId), {
       ...options,
       scope: 'vendor',
     })
@@ -57,11 +62,10 @@ export const branchService = {
 
   /**
    * PATCH /vendor-panel/branches/:branchId
-   * Confirmed body fields include phone + etaMin.
-   * Also sends other form fields that exist on the branch model.
+   * Confirmed Postman body: name, address, phone, deliveryRadiusKm, etaMin,
+   * minOrderAmount, openingHours.
    */
   async updateBranch(branchId, payload = {}, options = {}) {
-    const id = encodeURIComponent(String(branchId || '').trim())
     const body = {
       phone: payload.phone,
       etaMin: toNumberOrNull(payload.etaMin),
@@ -69,20 +73,50 @@ export const branchService = {
 
     if (payload.name !== undefined) body.name = payload.name
     if (payload.address !== undefined) body.address = payload.address
-    if (payload.radiusKm !== undefined) body.radiusKm = toNumberOrNull(payload.radiusKm)
+
+    const radius =
+      payload.deliveryRadiusKm !== undefined ? payload.deliveryRadiusKm : payload.radiusKm
+    if (radius !== undefined) body.deliveryRadiusKm = toNumberOrNull(radius)
+
     if (payload.minOrderAmount !== undefined || payload.minOrderValue !== undefined) {
       body.minOrderAmount = toNumberOrNull(
         payload.minOrderAmount !== undefined ? payload.minOrderAmount : payload.minOrderValue,
       )
     }
 
-    const response = await apiClient.patch(`${endpoints.vendor.branches}/${id}`, body, {
+    if (payload.openingHours !== undefined) {
+      body.openingHours = payload.openingHours
+    } else if (payload.hours !== undefined) {
+      body.openingHours = mapUiHoursToApiOpeningHours(payload.hours)
+    }
+
+    const response = await apiClient.patch(endpoints.vendor.branch(branchId), body, {
       ...options,
       scope: 'vendor',
     })
 
+    notifyVendorBranchesUpdated()
+
     return {
       data: mapVendorBranch(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * DELETE /vendor-panel/branches/:branchId
+   * Confirmed from Postman "Delete Branch".
+   */
+  async deleteBranch(branchId, options = {}) {
+    const response = await apiClient.delete(endpoints.vendor.branch(branchId), {
+      ...options,
+      scope: 'vendor',
+    })
+
+    notifyVendorBranchesUpdated()
+
+    return {
+      data: response?.data ?? { success: true },
       meta: response?.meta ?? null,
     }
   },
@@ -107,6 +141,8 @@ export const branchService = {
       },
     )
 
+    notifyVendorBranchesUpdated()
+
     return {
       data: mapVendorBranch(response?.data),
       meta: response?.meta ?? null,
@@ -126,6 +162,8 @@ export const branchService = {
         scope: 'vendor',
       },
     )
+
+    notifyVendorBranchesUpdated()
 
     return {
       data: mapVendorBranchesResponse(response?.data),
@@ -147,8 +185,59 @@ export const branchService = {
       },
     )
 
+    notifyVendorBranchesUpdated()
+
     return {
       data: mapVendorBranchesResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * GET /vendor-panel/catalog/branches/:branchId/menu
+   * Confirmed from Postman "GET Branch menu".
+   */
+  async getBranchMenu(branchId, options = {}) {
+    const response = await apiClient.get(endpoints.vendor.catalog.branchMenu(branchId), {
+      ...options,
+      scope: 'vendor',
+    })
+
+    return {
+      data: mapVendorBranchMenuResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * PATCH /vendor-panel/catalog/branches/:branchId/menu
+   * Confirmed from Postman "PATCH Edit Branch menu".
+   * Accepts either a raw `{ items, categories }` payload or a mapped menu tree
+   * (auto-built via buildBranchMenuUpdateBody).
+   */
+  async updateBranchMenu(branchId, payload = {}, options = {}) {
+    const body = Array.isArray(payload)
+      ? buildBranchMenuUpdateBody(payload)
+      : Array.isArray(payload?.menu)
+        ? buildBranchMenuUpdateBody(payload.menu)
+        : payload?.items || payload?.categories
+          ? {
+              items: payload.items || [],
+              categories: payload.categories || [],
+            }
+          : buildBranchMenuUpdateBody(payload)
+
+    const response = await apiClient.patch(
+      endpoints.vendor.catalog.branchMenu(branchId),
+      body,
+      {
+        ...options,
+        scope: 'vendor',
+      },
+    )
+
+    return {
+      data: mapVendorBranchMenuResponse(response?.data),
       meta: response?.meta ?? null,
     }
   },

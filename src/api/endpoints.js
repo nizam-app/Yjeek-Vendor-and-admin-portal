@@ -75,6 +75,12 @@ export const endpoints = {
       categories: '/vendor-panel/catalog/categories',
       /** Confirmed: GET /vendor-panel/catalog/store-types */
       storeTypes: '/vendor-panel/catalog/store-types',
+      /**
+       * Confirmed: GET + PATCH /vendor-panel/catalog/branches/:branchId/menu
+       * Postman: "GET Branch menu" / "PATCH Edit Branch menu"
+       */
+      branchMenu: (branchId) =>
+        `/vendor-panel/catalog/branches/${encodeURIComponent(String(branchId || '').trim())}/menu`,
       /** @deprecated Prefer endpoints.vendor.catalog.products */
       items: '/vendor-panel/catalog/products',
     },
@@ -83,6 +89,9 @@ export const endpoints = {
     branchesCloseAll: '/vendor-panel/branches/close-all',
     /** Confirmed: PATCH /vendor-panel/branches/open-all */
     branchesOpenAll: '/vendor-panel/branches/open-all',
+    /** Confirmed: DELETE /vendor-panel/branches/:branchId (Postman "Delete Branch") */
+    branch: (branchId) =>
+      `/vendor-panel/branches/${encodeURIComponent(String(branchId || '').trim())}`,
     /** Confirmed: GET /vendor-panel/staff */
     staff: '/vendor-panel/staff',
     promotions: {
