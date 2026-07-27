@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { ArrowUpRight, ChevronDown, Clock3, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowUpRight, Clock3, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
+import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { ApiState } from '../ApiState'
 import { Button } from '../Button'
 import { cn } from '../cn'
@@ -25,12 +27,52 @@ function AdminIncidentCard({ order }) {
   )
 }
 
-export function AdminIncidentBoard({ fetchData }) {
+/**
+ * Shared Incident / On Track board used by Pickup, Dine-in, Services.
+ * Pass either `fetchData` or controlled `{ data, error, isLoading, onRetry }`.
+ */
+export function AdminIncidentBoard({ fetchData, data: controlledData, error: controlledError, isLoading: controlledLoading, onRetry }) {
   const [filter, setFilter] = useState('All orders')
   const [activeChat, setActiveChat] = useState(null)
-  const { data, error, isLoading, refetch } = useApiResource(fetchData, [])
+  const fetched = useApiResource(fetchData || (() => Promise.resolve({ data: null })), [Boolean(fetchData)])
+  const { data: incidentsData } = useAdminIncidents()
+  const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats()
+
+  const data = controlledData !== undefined ? controlledData : fetched.data
+  const error = controlledData !== undefined ? controlledError : fetched.error
+  const isLoading = controlledData !== undefined ? controlledLoading : fetched.isLoading
+  const refetch = onRetry || fetched.refetch
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+
+  const filters = Array.isArray(data.filters) ? data.filters : []
+  const feedIncidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+  const incidents = feedIncidents.length > 0
+    ? feedIncidents
+    : (Array.isArray(data.incidents) ? data.incidents : [])
+  const feedChats = Array.isArray(chatsData?.items) ? chatsData.items : []
+  const chats = feedChats.length > 0
+    ? feedChats
+    : (Array.isArray(data.chats) ? data.chats : [])
+  const chatsActive = feedChats.length > 0
+    ? (chatsData?.active ?? feedChats.length)
+    : chats.length
+  const columns = Array.isArray(data.columns) ? data.columns : []
+
+  function handleChatMarkedRead(conversationId) {
+    setChatsData((current) => {
+      if (!current?.items) return current
+      return {
+        ...current,
+        items: current.items.map((item) =>
+          item.conversationId === conversationId || item.id === conversationId
+            ? { ...item, unreadCount: 0 }
+            : item,
+        ),
+      }
+    })
+    refetchChats()
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
@@ -41,35 +83,43 @@ export function AdminIncidentBoard({ fetchData }) {
               <h2 className="text-[14px] font-bold text-[#17231c]">
                 {data.activeCount} {data.activeLabel}
               </h2>
-              <span className="rounded-full bg-[#e4f5e9] px-2.5 py-1 text-[10px] font-medium text-[#188248]">
-                ● auto-refresh {data.refreshIntervalSeconds}s
-              </span>
+              {data.refreshIntervalSeconds ? (
+                <span className="rounded-full bg-[#e4f5e9] px-2.5 py-1 text-[10px] font-medium text-[#188248]">
+                  ● auto-refresh {data.refreshIntervalSeconds}s
+                </span>
+              ) : null}
             </div>
             <div className="flex gap-2">
               <Button className="h-[31px] px-3">All vendors ▾</Button>
-              <Button className="h-[31px] px-4" onClick={refetch}><RefreshCw size={11} /> Refresh</Button>
+              <Button className="h-[31px] px-4" onClick={refetch} disabled={isLoading}>
+                <RefreshCw size={11} /> Refresh
+              </Button>
             </div>
           </div>
 
-          <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
-            <span>Filter:</span>
-            {data.filters.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={cn(
-                  'h-[26px] rounded-full border px-3 font-medium',
-                  filter === item ? 'border-[#15904a] bg-white text-[#14763f]' : 'border-[#d9dfdb] bg-white text-[#657068]',
-                )}
-              >
-                {item !== 'All orders' ? '💬 ' : ''}{item}
-              </button>
-            ))}
-          </div>
+          {filters.length > 0 ? (
+            <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
+              <span>Filter:</span>
+              {filters.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setFilter(item)}
+                  className={cn(
+                    'h-[26px] rounded-full border px-3 font-medium',
+                    filter === item ? 'border-[#15904a] bg-white text-[#14763f]' : 'border-[#d9dfdb] bg-white text-[#657068]',
+                  )}
+                >
+                  {item !== 'All orders' ? '💬 ' : ''}{item}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-3 mt-3" />
+          )}
 
           <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
-            {data.columns.map((column) => (
+            {columns.map((column) => (
               <section key={column.id} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
                 <div className="mb-2 flex h-[22px] items-center gap-2">
                   <span className={cn(
@@ -89,7 +139,11 @@ export function AdminIncidentBoard({ fetchData }) {
                   </button>
                 </div>
                 <div className="space-y-2.5">
-                  {column.orders.map((order) => (
+                  {(column.orders || []).length === 0 ? (
+                    <div className="rounded-[12px] border border-dashed border-[#dfe4e0] bg-white px-3 py-8 text-center text-[11px] text-[#78837c]">
+                      No orders
+                    </div>
+                  ) : (column.orders || []).map((order) => (
                     <AdminIncidentCard key={order.id} order={order} />
                   ))}
                 </div>
@@ -103,8 +157,10 @@ export function AdminIncidentBoard({ fetchData }) {
             <ShieldAlert size={14} className="text-[#d46763]" />
             <h3 className="text-[14px] font-bold text-[#17231c]">Incidents Log</h3>
           </div>
-          {data.incidents.map(({ id, priority, title, detail, tone }) => (
-            <div key={id} className="flex h-[59px] items-center border-b border-[#e2e6e3]">
+          {incidents.length === 0 ? (
+            <div className="py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
+          ) : incidents.map(({ id, priority, title, detail, tone }) => (
+            <div key={id || `${priority}-${title}`} className="flex h-[59px] items-center border-b border-[#e2e6e3]">
               <span className={cn(
                 'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[9px] font-medium',
                 tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
@@ -121,8 +177,15 @@ export function AdminIncidentBoard({ fetchData }) {
         </aside>
       </div>
 
-      <AdminOpenChats chats={data.chats} onChatClick={setActiveChat} />
-      {activeChat ? <AdminChatPanel key={activeChat.id} chat={activeChat} onClose={() => setActiveChat(null)} /> : null}
+      <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={setActiveChat} />
+      {activeChat ? (
+        <AdminChatPanel
+          key={activeChat.id}
+          chat={activeChat}
+          onClose={() => setActiveChat(null)}
+          onMarkedRead={handleChatMarkedRead}
+        />
+      ) : null}
     </div>
   )
 }

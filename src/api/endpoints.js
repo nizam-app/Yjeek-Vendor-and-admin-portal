@@ -127,14 +127,87 @@ export const endpoints = {
 
   admin: {
     /**
-     * Do not invent Admin API paths here.
-     * When Admin integration starts, register real relative paths only, e.g.:
-     *   dashboard: '/admin-panel/dashboard',
-     * then: apiClient.get(endpoints.admin.dashboard)
-     *
-     * Until then, Admin continues via src/services/adminService.js + mockClient
-     * (VITE_ADMIN_USE_MOCK_API=true).
+     * Register only Postman-confirmed Admin paths.
+     * Other Admin screens stay on adminService + mockClient until wired.
      */
+    auth: {
+      /** Confirmed: POST /admin/auth/login */
+      login: '/admin/auth/login',
+      /** Confirmed: GET /admin/auth/me */
+      me: '/admin/auth/me',
+      /** Confirmed: POST /admin/auth/logout */
+      logout: '/admin/auth/logout',
+      // Unconfirmed response samples — add only after screenshots:
+      // verify2fa: '/admin/auth/2fa/verify',
+    },
+    dashboard: {
+      /** Confirmed: GET /admin/dashboard/overview?region= */
+      overview: '/admin/dashboard/overview',
+      /** Confirmed: GET /admin/dashboard/map?layer=&region= */
+      map: '/admin/dashboard/map',
+      /** Confirmed: GET /admin/dashboard/orders?bucket=&sort=&limit= */
+      orders: '/admin/dashboard/orders',
+      boards: {
+        /** Confirmed: GET /admin/dashboard/boards/scheduled?sort=&limit= */
+        scheduled: '/admin/dashboard/boards/scheduled',
+        /** Confirmed: GET /admin/dashboard/boards/pickup?limit= */
+        pickup: '/admin/dashboard/boards/pickup',
+        /** Confirmed: GET /admin/dashboard/boards/dine_in?limit= */
+        dineIn: '/admin/dashboard/boards/dine_in',
+        /** Confirmed: GET /admin/dashboard/boards/services?limit= */
+        services: '/admin/dashboard/boards/services',
+      },
+      /** Confirmed: GET /admin/dashboard/incidents */
+      incidents: '/admin/dashboard/incidents',
+      /** Confirmed: GET /admin/dashboard/chats */
+      chats: '/admin/dashboard/chats',
+    },
+    orders: {
+      /**
+       * Confirmed: GET /admin/orders/:orderId
+       * @param {string} orderId
+       */
+      detail: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}`,
+      /** Confirmed: GET /admin/orders/action-options */
+      actionOptions: '/admin/orders/action-options',
+      /**
+       * Confirmed: GET /admin/orders/:orderId/nearby-champs
+       * @param {string} orderId
+       */
+      nearbyChamps: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/nearby-champs`,
+      /** Confirmed POST action paths */
+      redispatch: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/redispatch`,
+      refund: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/refund`,
+      reassignChamp: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/reassign-champ`,
+      flagVendor: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/flag-vendor`,
+      cancel: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/cancel`,
+      suspendChamp: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/suspend-champ`,
+    },
+    incidents: {
+      /**
+       * Confirmed: GET /admin/incidents?status=&priority=&limit=
+       */
+      list: '/admin/incidents',
+      /** Confirmed: POST /admin/incidents/:incidentId/resolve */
+      resolve: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/resolve`,
+    },
+    chats: {
+      /**
+       * Confirmed: GET /admin/chats/:conversationId
+       * @param {string} conversationId
+       */
+      conversation: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}`,
+      /**
+       * Confirmed: POST /admin/chats/:conversationId/read
+       * @param {string} conversationId
+       */
+      read: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/read`,
+      /**
+       * Confirmed: POST /admin/chats/:conversationId/messages
+       * @param {string} conversationId
+       */
+      messages: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/messages`,
+    },
   },
 }
 

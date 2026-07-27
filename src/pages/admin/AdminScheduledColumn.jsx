@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Bell, Check, ChevronDown, Search, Zap } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
-import { useApiResource } from '../../hooks/useApiResource'
-import { adminService } from '../../services/adminService'
+import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
+import { ApiState } from '../../components/admin/ApiState'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -165,7 +165,10 @@ function ColumnOrderCard({ order }) {
 export function AdminScheduledColumn() {
   const { columnKey } = useParams()
   const [query, setQuery] = useState('')
-  const { data, error, isLoading, refetch } = useApiResource(() => adminService.getOperations('scheduled'), [])
+  const { data, error, isLoading, refetch } = useAdminScheduledBoard({
+    sort: 'time_left',
+    limit: 50,
+  })
   const meta = columnMeta[columnKey]
 
   const orders = useMemo(() => {
@@ -178,12 +181,7 @@ export function AdminScheduledColumn() {
   }, [data, columnKey, query])
 
   if (!data) {
-    return (
-      <div className="p-7 text-[12px] text-[#78837c]">
-        {isLoading ? 'Loading…' : null}
-        {error ? <>Unable to load this page. <button type="button" onClick={refetch} className="underline">Try again</button></> : null}
-      </div>
-    )
+    return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
   }
 
   if (!meta) {

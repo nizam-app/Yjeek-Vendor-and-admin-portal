@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight, Check, ChevronDown, Clock3, Plus, Search, Zap } from 'lucide-react'
-import { useApiResource } from '../../../hooks/useApiResource'
-import { adminService } from '../../../services/adminService'
+import { apiConfig } from '../../../api/config'
+import { useAdminScheduledBoard } from '../../../hooks/admin/useAdminScheduledBoard'
+import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
+import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
 import { cn } from '../../../components/admin/cn'
@@ -10,6 +12,8 @@ import { ChatStrip } from '../../../components/admin/operations/ChatStrip'
 import { IncidentLog } from '../../../components/admin/operations/IncidentLog'
 import { OperationsViewTabs } from '../../../components/admin/operations/OperationsViewTabs'
 import { OrderCard } from '../../../components/admin/operations/OrderCard'
+
+const useAdminMocks = () => apiConfig.adminUseMockApi
 
 function AdminOperationsBoard({ mode }) {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,7 +38,18 @@ function AdminOperationsBoard({ mode }) {
     }
   }
 
-  const { data, error, isLoading, refetch } = useApiResource(() => adminService.getOperations(mode), [mode])
+  const { data, error, isLoading, refetch } = useAdminScheduledBoard({
+    sort: 'time_left',
+    limit: 50,
+  })
+  const { data: incidentsData } = useAdminIncidents()
+  const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+  const incidentCountLabel = String(
+    incidentsData?.summary?.totalOpen ?? incidentsData?.total ?? incidents.length,
+  )
+  const { data: chatsData } = useAdminChats()
+  const chats = Array.isArray(chatsData?.items) ? chatsData.items : []
+  const chatsActive = chatsData?.active ?? chats.length
   const title = mode === 'scheduled'
     ? (view === 'Board' ? 'Scheduled orders — dispatch' : view === 'Calendar' ? 'Scheduled Orders · Dispatching' : 'Scheduled orders — pipeline')
     : `${mode[0].toUpperCase()}${mode.slice(1).replace('-', ' ')} — live operations`
@@ -48,7 +63,7 @@ function AdminOperationsBoard({ mode }) {
         </div>
       )}
       {view === 'Board' && mode === 'scheduled' ? (
-        <ScheduledDispatchBoard data={data} view={view} onViewChange={onViewChange} />
+        <ScheduledDispatchBoard data={data} incidents={incidents} view={view} onViewChange={onViewChange} />
       ) : view === 'Calendar' && mode === 'scheduled' ? (
         <ScheduledCalendarDispatch view={view} onViewChange={onViewChange} />
       ) : (
@@ -89,10 +104,10 @@ function AdminOperationsBoard({ mode }) {
               )
             })}
           </div>
-          <IncidentLog incidents={data.incidents} />
+          <IncidentLog incidents={incidents} countLabel={incidentCountLabel} />
         </>
       )}
-      {view === 'Calendar' && mode === 'scheduled' ? null : <ChatStrip chats={data.chats} />}
+      {view === 'Calendar' && mode === 'scheduled' ? null : <ChatStrip chats={chats} activeCount={chatsActive} />}
     </div>
   )
 }
@@ -281,11 +296,13 @@ function CalendarFilterDropdown({ title, items, selected, onToggle, open, onTogg
 
 function ScheduledCalendarDispatch({ view, onViewChange }) {
   const navigate = useNavigate()
+  const showMockChrome = useAdminMocks()
+  const orders = showMockChrome ? calendarOrders : []
   const [openFilters, setOpenFilters] = useState(() => new Set())
   const [selected, setSelected] = useState({
-    Governorates: ['capital', 'muharraq'],
-    Cities: ['manama', 'muharraq-city', 'seef', 'arad'],
-    Blocks: ['b0322', 'b0214', 'b0428', 'b0911'],
+    Governorates: showMockChrome ? ['capital', 'muharraq'] : [],
+    Cities: showMockChrome ? ['manama', 'muharraq-city', 'seef', 'arad'] : [],
+    Blocks: showMockChrome ? ['b0322', 'b0214', 'b0428', 'b0911'] : [],
   })
 
   const toggleItem = (group, id) => {
@@ -406,7 +423,13 @@ function ScheduledCalendarDispatch({ view, onViewChange }) {
               </tr>
             </thead>
             <tbody>
-              {calendarOrders.map((order) => (
+              {orders.length === 0 ? (
+                <tr>
+                  <td colSpan={calendarDays.length + 1} className="px-4 py-10 text-center text-[12px] text-[#78837c]">
+                    No calendar orders
+                  </td>
+                </tr>
+              ) : orders.map((order) => (
                 <tr key={order.id} className="last:[&>td]:border-b-0">
                   <td className="border-b border-r border-[#e8ebe8] px-4 py-4 align-top">
                     <p className="text-[12px] font-bold leading-none text-[#17231c]">{order.id}</p>
@@ -443,7 +466,18 @@ const dispatchRows = [
   { id: '#YJK-…64', route: 'VEERA → Juffair', type: '★ Economy', prep: '~24 hrs', window: '01 Jul', champ: '—', stage: 'Auto-cancelled · expired', timer: '12m to confirm', tone: 'red' },
 ]
 
-function ScheduledDispatchBoard({ data, view, onViewChange }) {
+function ScheduledDispatchBoard({ data, incidents: feedIncidents = [], view, onViewChange }) {
+  const showMockChrome = useAdminMocks()
+  const rows = showMockChrome ? dispatchRows : []
+  const incidents = Array.isArray(feedIncidents) ? feedIncidents : []
+  const snapshotRows = showMockChrome
+    ? [['Scheduled today', '18'], ['Unassigned', '5'], ['Re-confirm pending', '2']]
+    : [['Scheduled today', '0'], ['Unassigned', '0'], ['Re-confirm pending', '0']]
+  const windowRows = showMockChrome
+    ? [['1–3 PM', '4 orders'], ['3–5 PM', '2 orders'], ['6–8 PM', '9 orders'], ['8–10 PM', '3 orders']]
+    : []
+  const champAvailable = showMockChrome ? '12' : '0'
+
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-3 max-[900px]:grid-cols-1">
       <div className="min-w-0">
@@ -472,7 +506,11 @@ function ScheduledDispatchBoard({ data, view, onViewChange }) {
                 </tr>
               </thead>
               <tbody>
-                {dispatchRows.map((order, index) => (
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-3 py-8 text-center text-[11px] text-[#78837c]">No scheduled board rows</td>
+                  </tr>
+                ) : rows.map((order, index) => (
                   <tr key={`${order.id}-${index}`} className="h-[54px] border-b border-[#edf0ee] last:border-0 hover:bg-[#fafcfa]">
                     <td className="whitespace-nowrap px-3 text-[10px] font-bold">{order.id}</td>
                     <td className="truncate px-3 text-[10px] font-semibold">{order.route}</td>
@@ -493,25 +531,24 @@ function ScheduledDispatchBoard({ data, view, onViewChange }) {
             </table>
           </div>
         </section>
-        <IncidentLog incidents={[
-          ...data.incidents.slice(0, 3),
-          { priority: 'P4', name: 'Address unclear', detail: '#YJK-…48 · clarified', status: 'Resolved', time: '2h' },
-        ]} countLabel="5 today" />
+        <IncidentLog incidents={incidents} countLabel={incidentCountLabel} />
       </div>
 
       <aside className="space-y-3">
         <DispatchSummary title="Ops snapshot · Today">
-          {[['Scheduled today', '18'], ['Unassigned', '5'], ['Re-confirm pending', '2']].map(([label, value]) => (
-            <SummaryRow key={label} label={label} value={value} alert={label === 'Unassigned'} warning={label === 'Re-confirm pending'} />
+          {snapshotRows.map(([label, value]) => (
+            <SummaryRow key={label} label={label} value={value} alert={label === 'Unassigned' && value !== '0'} warning={label === 'Re-confirm pending' && value !== '0'} />
           ))}
         </DispatchSummary>
         <DispatchSummary title="Windows today">
-          {[['1–3 PM', '4 orders'], ['3–5 PM', '2 orders'], ['6–8 PM', '9 orders'], ['8–10 PM', '3 orders']].map(([label, value]) => (
+          {windowRows.length === 0 ? (
+            <p className="text-[10px] text-[#78837c]">No window data</p>
+          ) : windowRows.map(([label, value]) => (
             <SummaryRow key={label} label={label} value={value} pill />
           ))}
         </DispatchSummary>
         <DispatchSummary title="Champ capacity">
-          <SummaryRow label="Available tonight" value="12" success />
+          <SummaryRow label="Available tonight" value={champAvailable} success={champAvailable !== '0'} />
           <Button primary className="mt-2 h-8 w-full rounded-[8px]"><Zap size={11} /> Auto-assign all</Button>
         </DispatchSummary>
       </aside>

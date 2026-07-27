@@ -1,0 +1,5374 @@
+{
+  "collectionName": "Yjeek Admin Panel",
+  "total": 279,
+  "moduleCount": 18,
+  "moduleCounts": {
+    "01. Auth": 10,
+    "02. Users & Roles": 20,
+    "03. Dashboard (poll live)": 12,
+    "04. Orders (detail + take action)": 15,
+    "05. Incidents & Chats": 12,
+    "06. Vendors": 31,
+    "07. Fleet": 26,
+    "08. Customers": 22,
+    "09. Segments": 8,
+    "10. Stores catalog": 9,
+    "11. Store types": 14,
+    "12. Marketing": 16,
+    "13. Settings": 13,
+    "14. SLA Models": 22,
+    "15. Dispatch Rules": 10,
+    "16. Reports": 12,
+    "17. UI Editor": 25,
+    "18. Search (global header)": 2
+  },
+  "variables": [
+    {
+      "key": "baseUrl",
+      "placeholder": "{{VITE_API_BASE_URL}}"
+    },
+    {
+      "key": "accessToken",
+      "placeholder": "{{accessToken}}"
+    },
+    {
+      "key": "tempToken",
+      "placeholder": "{{tempToken}}"
+    },
+    {
+      "key": "adminUserId",
+      "placeholder": "{{adminUserId}}"
+    },
+    {
+      "key": "adminInviteToken",
+      "placeholder": "{{adminInviteToken}}"
+    },
+    {
+      "key": "roleId",
+      "placeholder": "{{roleId}}"
+    },
+    {
+      "key": "vendorId",
+      "placeholder": "{{vendorId}}"
+    },
+    {
+      "key": "champId",
+      "placeholder": "{{champId}}"
+    },
+    {
+      "key": "customerId",
+      "placeholder": "{{customerId}}"
+    },
+    {
+      "key": "orderId",
+      "placeholder": "{{orderId}}"
+    },
+    {
+      "key": "branchId",
+      "placeholder": "{{branchId}}"
+    },
+    {
+      "key": "staffId",
+      "placeholder": "{{staffId}}"
+    },
+    {
+      "key": "productId",
+      "placeholder": "{{productId}}"
+    },
+    {
+      "key": "promotionId",
+      "placeholder": "{{promotionId}}"
+    },
+    {
+      "key": "bannerId",
+      "placeholder": "{{bannerId}}"
+    },
+    {
+      "key": "offerId",
+      "placeholder": "{{offerId}}"
+    },
+    {
+      "key": "promoCodeId",
+      "placeholder": "{{promoCodeId}}"
+    },
+    {
+      "key": "supplierId",
+      "placeholder": "{{supplierId}}"
+    },
+    {
+      "key": "segmentId",
+      "placeholder": "{{segmentId}}"
+    },
+    {
+      "key": "storeTypeId",
+      "placeholder": "{{storeTypeId}}"
+    },
+    {
+      "key": "slaModelId",
+      "placeholder": "{{slaModelId}}"
+    },
+    {
+      "key": "slaBreachId",
+      "placeholder": "{{slaBreachId}}"
+    },
+    {
+      "key": "dispatcherAdminId",
+      "placeholder": "{{dispatcherAdminId}}"
+    },
+    {
+      "key": "dispatcherRoleId",
+      "placeholder": "{{dispatcherRoleId}}"
+    },
+    {
+      "key": "dispatchRuleId",
+      "placeholder": "{{dispatchRuleId}}"
+    },
+    {
+      "key": "dispatchRuleVersion",
+      "placeholder": "{{dispatchRuleVersion}}"
+    },
+    {
+      "key": "acceptanceOrderId",
+      "placeholder": "{{acceptanceOrderId}}"
+    },
+    {
+      "key": "evaluationRunId",
+      "placeholder": "{{evaluationRunId}}"
+    },
+    {
+      "key": "reportFrom",
+      "placeholder": "{{reportFrom}}"
+    },
+    {
+      "key": "reportTo",
+      "placeholder": "{{reportTo}}"
+    },
+    {
+      "key": "categoryId",
+      "placeholder": "{{categoryId}}"
+    },
+    {
+      "key": "incidentId",
+      "placeholder": "{{incidentId}}"
+    },
+    {
+      "key": "conversationId",
+      "placeholder": "{{conversationId}}"
+    },
+    {
+      "key": "ticketId",
+      "placeholder": "{{ticketId}}"
+    },
+    {
+      "key": "withdrawalId",
+      "placeholder": "{{withdrawalId}}"
+    },
+    {
+      "key": "documentId",
+      "placeholder": "{{documentId}}"
+    },
+    {
+      "key": "menuCategoryId",
+      "placeholder": "{{menuCategoryId}}"
+    },
+    {
+      "key": "badgeId",
+      "placeholder": "{{badgeId}}"
+    },
+    {
+      "key": "notificationId",
+      "placeholder": "{{notificationId}}"
+    }
+  ],
+  "modules": {
+    "01. Auth": [
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Login",
+        "method": "POST",
+        "path": "/admin/auth/login",
+        "query": [],
+        "pathParams": [],
+        "auth": "Public (noauth)",
+        "body": {
+          "email": "{{email}}",
+          "password": "SuperAdmin@123"
+        },
+        "description": "Saves accessToken or tempToken when 2FA required.",
+        "saves": [
+          "accessToken",
+          "tempToken"
+        ]
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "2FA Verify",
+        "method": "POST",
+        "path": "/admin/auth/2fa/verify",
+        "query": [],
+        "pathParams": [],
+        "auth": "Public (noauth)",
+        "body": {
+          "tempToken": "{{tempToken}}",
+          "code": "000000",
+          "trustDevice": true
+        },
+        "description": "Replace code with TOTP (or backup code). trustDevice optional.",
+        "saves": [
+          "accessToken",
+          "tempToken"
+        ]
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Get me",
+        "method": "GET",
+        "path": "/admin/auth/me",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Update me (Account)",
+        "method": "PATCH",
+        "path": "/admin/auth/me",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "firstName": "Super",
+          "lastName": "Admin",
+          "jobTitle": "Platform Owner",
+          "phone": "{{phone}}"
+        },
+        "description": "Account screen — Edit profile",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Logout",
+        "method": "POST",
+        "path": "/admin/auth/logout",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Change required password",
+        "method": "POST",
+        "path": "/admin/auth/change-password",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "currentPassword": "TemporaryPass#123",
+          "newPassword": "PermanentPass#456"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "2FA Setup",
+        "method": "POST",
+        "path": "/admin/auth/2fa/setup",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "2FA Confirm",
+        "method": "POST",
+        "path": "/admin/auth/2fa/confirm",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "code": "000000"
+        },
+        "description": "Confirms setup; may return backup codes.",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "Regenerate backup codes",
+        "method": "POST",
+        "path": "/admin/auth/2fa/backup-codes",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "code": "000000"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "01. Auth",
+        "folder": "01. Auth",
+        "name": "2FA Disable",
+        "method": "POST",
+        "path": "/admin/auth/2fa/disable",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "code": "000000"
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "02. Users & Roles": [
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Users summary",
+        "method": "GET",
+        "path": "/admin/users/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Create-user meta",
+        "method": "GET",
+        "path": "/admin/users/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Roles + countries/zones + suggestedTemporaryPassword for wizard",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "List users",
+        "method": "GET",
+        "path": "/admin/users",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "adminUserId"
+        ]
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Get user detail",
+        "method": "GET",
+        "path": "/admin/users/{{adminUserId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Account + permissionsMatrix + recentActivity",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Create user (invite)",
+        "method": "POST",
+        "path": "/admin/users",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "fullName": "Khalid Omar",
+          "email": "{{email}}",
+          "username": "{{email}}",
+          "phone": "{{phone}}",
+          "countryCode": "+973",
+          "jobTitle": "Operations Manager",
+          "roleId": "{{roleId}}",
+          "scopeLevel": "COUNTRY",
+          "countries": [
+            "BH"
+          ],
+          "zones": [],
+          "permissionOverrides": {},
+          "sendInvite": true
+        },
+        "description": "temporaryPassword optional — server generates one and returns it",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Update user",
+        "method": "PATCH",
+        "path": "/admin/users/{{adminUserId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "jobTitle": "Operations Manager"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Reset password",
+        "method": "POST",
+        "path": "/admin/users/{{adminUserId}}/reset-password",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {},
+        "description": "Omit password to auto-generate; returned in data.temporaryPassword",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Resend invitation",
+        "method": "POST",
+        "path": "/admin/users/{{adminUserId}}/resend-invite",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Accept invitation (public)",
+        "method": "POST",
+        "path": "/admin/invitations/accept",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "token": "{{adminInviteToken}}",
+          "password": "PermanentPass#456"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Suspend user",
+        "method": "POST",
+        "path": "/admin/users/{{adminUserId}}/suspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Unsuspend user",
+        "method": "POST",
+        "path": "/admin/users/{{adminUserId}}/unsuspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Roles meta",
+        "method": "GET",
+        "path": "/admin/roles/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "List roles",
+        "method": "GET",
+        "path": "/admin/roles",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "roleId"
+        ]
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Get role",
+        "method": "GET",
+        "path": "/admin/roles/{{roleId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Create role",
+        "method": "POST",
+        "path": "/admin/roles",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Country Ops",
+          "description": "Live dashboard + vendors view",
+          "basedOnRoleId": "{{roleId}}",
+          "scopeLevel": "COUNTRY",
+          "permissions": {
+            "LIVE_DASHBOARD": [
+              "VIEW",
+              "EDIT"
+            ],
+            "VENDOR_MANAGEMENT": [
+              "VIEW"
+            ],
+            "REPORTS": [
+              "VIEW",
+              "EXPORT"
+            ]
+          }
+        },
+        "description": "",
+        "saves": [
+          "slaModelId"
+        ]
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Update role",
+        "method": "PATCH",
+        "path": "/admin/roles/{{roleId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "description": "Updated role description"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Delete role",
+        "method": "DELETE",
+        "path": "/admin/roles/{{roleId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Activity log",
+        "method": "GET",
+        "path": "/admin/activity",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "module",
+            "value": "Users & Roles",
+            "description": ""
+          },
+          {
+            "key": "actionType",
+            "value": "EDIT",
+            "description": ""
+          },
+          {
+            "key": "from",
+            "value": "2026-06-01",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30",
+            "description": ""
+          },
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Activity filters metadata",
+        "method": "GET",
+        "path": "/admin/activity/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "02. Users & Roles",
+        "folder": "02. Users & Roles",
+        "name": "Export activity CSV",
+        "method": "GET",
+        "path": "/admin/activity/export",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "03. Dashboard (poll live)": [
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Overview",
+        "method": "GET",
+        "path": "/admin/dashboard/overview",
+        "query": [
+          {
+            "key": "region",
+            "value": "BH",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Poll substitute for realtime — KPIs + funnel.",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Map — champs",
+        "method": "GET",
+        "path": "/admin/dashboard/map",
+        "query": [
+          {
+            "key": "layer",
+            "value": "champs",
+            "description": ""
+          },
+          {
+            "key": "region",
+            "value": "BH",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Map — orders",
+        "method": "GET",
+        "path": "/admin/dashboard/map",
+        "query": [
+          {
+            "key": "layer",
+            "value": "orders",
+            "description": ""
+          },
+          {
+            "key": "region",
+            "value": "BH",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Map — vendors",
+        "method": "GET",
+        "path": "/admin/dashboard/map",
+        "query": [
+          {
+            "key": "layer",
+            "value": "vendors",
+            "description": ""
+          },
+          {
+            "key": "region",
+            "value": "BH",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Live orders",
+        "method": "GET",
+        "path": "/admin/dashboard/orders",
+        "query": [
+          {
+            "key": "bucket",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "sort",
+            "value": "time_left",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "orderId"
+        ]
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Critical bucket",
+        "method": "GET",
+        "path": "/admin/dashboard/orders",
+        "query": [
+          {
+            "key": "bucket",
+            "value": "critical",
+            "description": ""
+          },
+          {
+            "key": "sort",
+            "value": "time_left",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Board — scheduled",
+        "method": "GET",
+        "path": "/admin/dashboard/boards/scheduled",
+        "query": [
+          {
+            "key": "sort",
+            "value": "time_left",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Board — pickup",
+        "method": "GET",
+        "path": "/admin/dashboard/boards/pickup",
+        "query": [
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Board — dine_in",
+        "method": "GET",
+        "path": "/admin/dashboard/boards/dine_in",
+        "query": [
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Board — services",
+        "method": "GET",
+        "path": "/admin/dashboard/boards/services",
+        "query": [
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Incidents feed",
+        "method": "GET",
+        "path": "/admin/dashboard/incidents",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "incidentId"
+        ]
+      },
+      {
+        "module": "03. Dashboard (poll live)",
+        "folder": "03. Dashboard (poll live)",
+        "name": "Open chats",
+        "method": "GET",
+        "path": "/admin/dashboard/chats",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "conversationId"
+        ]
+      }
+    ],
+    "04. Orders (detail + take action)": [
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Action options",
+        "method": "GET",
+        "path": "/admin/orders/action-options",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Get order",
+        "method": "GET",
+        "path": "/admin/orders/{{orderId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Includes dispatch.attempts, dispatch.latestEvaluations, and vendorAcceptance when present.",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Print order detail",
+        "method": "GET",
+        "path": "/admin/orders/{{orderId}}/print",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Nearby champs",
+        "method": "GET",
+        "path": "/admin/orders/{{orderId}}/nearby-champs",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "List dispatch attempts",
+        "method": "GET",
+        "path": "/admin/orders/{{orderId}}/dispatch-attempts",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Immutable offer attempts with scoreBreakdown for this order.",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "List dispatch evaluations",
+        "method": "GET",
+        "path": "/admin/orders/{{orderId}}/dispatch-evaluations",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Latest Gate 1–3 candidate evaluations. Leave evaluationRunId empty to use the newest run.",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Resolve vendor acceptance",
+        "method": "POST",
+        "path": "/admin/orders/{{acceptanceOrderId}}/vendor-acceptance/resolve",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "note": "Dispatcher contacted vendor for YJK-SCHED-001"
+        },
+        "description": "Marks VendorAcceptanceLog as DISPATCHER_RESOLVED. Uses acceptanceOrderId (pending accept when available).",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Mark vendor no-response",
+        "method": "POST",
+        "path": "/admin/orders/{{acceptanceOrderId}}/vendor-acceptance/no-response",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "note": "No vendor response for YJK-SCHED-001",
+          "cancelOrder": false
+        },
+        "description": "Records NO_RESPONSE. On-demand delivery is not auto-cancelled unless cancelOrder=true.",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Take action (generic)",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/actions",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "action": "FLAG_VENDOR",
+          "reason": "Late prep"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Redispatch",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/redispatch",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "scope": "FULL",
+          "itemIds": [],
+          "reason": "Missing item remake",
+          "notifyCustomer": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Refund",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/refund",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "type": "PARTIAL",
+          "amount": 1.5,
+          "destination": "WALLET",
+          "reason": "Missing item",
+          "idempotencyKey": "admin-refund-{{orderId}}-001"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Reassign champ",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/reassign-champ",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "driverId": "{{champId}}",
+          "reason": "Original champ delayed",
+          "notifyCustomer": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Flag vendor",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/flag-vendor",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "metric": "PREP_TIME",
+          "severity": "MAJOR",
+          "action": "LOG_FLAG",
+          "reason": "Chronic late prep",
+          "notifyVendor": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Cancel order",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/cancel",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "itemDisposition": "CHAMP_KEEPS",
+          "refund": "FULL",
+          "cause": "VENDOR",
+          "reason": "Vendor cannot fulfil"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "04. Orders (detail + take action)",
+        "folder": "04. Orders (detail + take action)",
+        "name": "Suspend champ (from order)",
+        "method": "POST",
+        "path": "/admin/orders/{{orderId}}/suspend-champ",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "type": "TEMPORARY",
+          "durationHours": 24,
+          "reason": "Customer complaint",
+          "driverId": "{{champId}}"
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "05. Incidents & Chats": [
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Incidents summary",
+        "method": "GET",
+        "path": "/admin/incidents/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "List incidents",
+        "method": "GET",
+        "path": "/admin/incidents",
+        "query": [
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "priority",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "incidentId"
+        ]
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Get incident detail",
+        "method": "GET",
+        "path": "/admin/incidents/{{incidentId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Order context + availableActions + canResolve",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Create incident",
+        "method": "POST",
+        "path": "/admin/incidents",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "orderId": "{{orderId}}",
+          "priority": "P2",
+          "type": "LATE_DELIVERY",
+          "title": "Late delivery",
+          "note": "Customer waiting > ETA",
+          "cause": "CHAMP"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Acknowledge incident (Dispatcher SLA)",
+        "method": "POST",
+        "path": "/admin/incidents/{{incidentId}}/acknowledge",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Resolve incident",
+        "method": "POST",
+        "path": "/admin/incidents/{{incidentId}}/resolve",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "outcome": "Resolved with refund"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Reopen incident",
+        "method": "POST",
+        "path": "/admin/incidents/{{incidentId}}/reopen",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Incident action",
+        "method": "POST",
+        "path": "/admin/incidents/{{incidentId}}/actions",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "action": "FLAG_VENDOR",
+          "reason": "Chronic late prep"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "List open chats",
+        "method": "GET",
+        "path": "/admin/chats",
+        "query": [
+          {
+            "key": "peer",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "unreadOnly",
+            "value": "false",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Dedicated inbox — also mirrored on GET /dashboard/chats",
+        "saves": [
+          "conversationId"
+        ]
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Get conversation",
+        "method": "GET",
+        "path": "/admin/chats/{{conversationId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Mark chat read",
+        "method": "POST",
+        "path": "/admin/chats/{{conversationId}}/read",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "05. Incidents & Chats",
+        "folder": "05. Incidents & Chats",
+        "name": "Send chat message",
+        "method": "POST",
+        "path": "/admin/chats/{{conversationId}}/messages",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "body": "Admin here — we are looking into your order."
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "06. Vendors": [
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "List vendors (KPIs + filters)",
+        "method": "GET",
+        "path": "/admin/vendors",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "category",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Vendor list screen. Returns kpis (totalVendors/active/pendingApproval/suspended). Filters: status=all|active|inactive|suspended|force_closed|draft|pending, category, storeTypeId, region.",
+        "saves": [
+          "vendorId"
+        ]
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Create vendor (Add vendor wizard)",
+        "method": "POST",
+        "path": "/admin/vendors",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Green Kitchen Express",
+          "legalName": "Green Kitchen Express W.L.L.",
+          "storeTypeId": "{{storeTypeId}}",
+          "categoryLabel": "Food & Beverage",
+          "description": "Fresh healthy meals",
+          "logoUrl": "https://cdn.yjeek.com/logos/gke.png",
+          "coverUrl": "https://cdn.yjeek.com/covers/gke.jpg",
+          "city": "Manama",
+          "area": "Seef",
+          "crNumber": "CR-123456-1",
+          "vatNumber": "{{phone}}",
+          "branches": [
+            {
+              "name": "Seef Main",
+              "address": "Road 2811, Seef District",
+              "area": "Seef",
+              "city": "Manama",
+              "phone": "+973 1770 0001",
+              "latitude": 26.2285,
+              "longitude": 50.535,
+              "deliveryRadiusKm": 6,
+              "minOrderAmount": 3,
+              "etaMin": 30,
+              "isPrimary": true
+            }
+          ],
+          "owner": {
+            "fullName": "Sara Owner",
+            "email": "{{email}}",
+            "phone": "{{phone}}",
+            "countryCode": "+973",
+            "password": "Owner@12345"
+          },
+          "additionalUsers": [
+            {
+              "displayName": "Branch Manager Bob",
+              "email": "{{email}}",
+              "phone": "{{phone}}",
+              "password": "Manager@123",
+              "role": "BRANCH_MANAGER",
+              "branchIndex": 0
+            }
+          ],
+          "commission": {
+            "model": "TIERED",
+            "commissionTiers": [
+              {
+                "fromAmount": 0,
+                "ratePct": 18
+              },
+              {
+                "fromAmount": 5000,
+                "ratePct": 15
+              },
+              {
+                "fromAmount": 15000,
+                "ratePct": 12
+              }
+            ],
+            "customFees": [
+              {
+                "name": "Marketing fee",
+                "amount": 0.1,
+                "type": "BHD"
+              }
+            ],
+            "platformServiceFee": 0.3,
+            "vatOnCommissionPct": 10
+          },
+          "sla": {
+            "slaModelId": "{{slaModelId}}",
+            "serviceModes": {
+              "hotFoodOnDemand": true,
+              "pickup": true,
+              "scheduledDelivery": true,
+              "dineIn": false,
+              "services": false
+            },
+            "config": {
+              "acceptanceCutoffMin": 2,
+              "prepTimeHotFoodMin": 18
+            }
+          },
+          "activate": false
+        },
+        "description": "Full Add-vendor wizard: store info, branches, owner + users, commission & fees, SLA. activate:false saves a DRAFT; activate:true goes live (requires owner + ≥1 branch).",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Get vendor",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update vendor (store info)",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "area": "Manama",
+          "logoUrl": "https://cdn.yjeek.com/logos/gk.png",
+          "coverUrl": "https://cdn.yjeek.com/covers/gk.jpg",
+          "cuisineTags": [
+            "healthy",
+            "salads"
+          ],
+          "storeTypeId": "{{storeTypeId}}"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Activate vendor (draft → live)",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/activate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "activate": true
+        },
+        "description": "Wizard Review step / draft list. Requires owner login + at least one branch.",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Patch controls",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/controls",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "isOnline": true,
+          "dispatchMode": "AUTO"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Force close",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/force-close",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "scope": "whole_store",
+          "reason": "Hygiene inspection",
+          "to": "2026-07-21T01:10:49.869Z"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Reopen",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/reopen",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "scope": "whole_store"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Suspend",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/suspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "reason": "Repeated SLA breaches"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Unsuspend",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/unsuspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "List branches",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/branches",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "branchId"
+        ]
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Create branch",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/branches",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Test Branch",
+          "area": "Seef",
+          "address": "Seef District",
+          "phone": "+973 1700 0099",
+          "latitude": 26.2285,
+          "longitude": 50.535
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update branch",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/branches/{{branchId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "etaMin": 35
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Delete branch",
+        "method": "DELETE",
+        "path": "/admin/vendors/{{vendorId}}/branches/{{branchId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "List staff (incl. owner)",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/staff",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "staffId"
+        ]
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Create staff",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/staff",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "displayName": "Branch Manager",
+          "email": "{{email}}",
+          "phone": "{{phone}}",
+          "countryCode": "+973",
+          "password": "StaffPass@123",
+          "role": "BRANCH_MANAGER",
+          "vendorLocationId": "{{branchId}}"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update staff",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/staff/{{staffId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "status": "ACTIVE"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Get delivery zones (map coverage)",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/delivery-zones",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update delivery zones",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/delivery-zones",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "deliveryRadiusKm": 5,
+          "minOrderAmount": 3,
+          "freeDeliveryOver": 8
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Apply zones to all branches",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/delivery-zones/apply-all",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Branch zone override",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/delivery-zones/branches/{{branchId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "deliveryFee": 0.8
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Get commission & fees",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/commission",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update commission (percent)",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/commission",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "model": "PERCENT_OF_ORDER",
+          "commissionRate": 15
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update commission (tiered + custom fees)",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/commission",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "model": "TIERED",
+          "commissionTiers": [
+            {
+              "fromAmount": 0,
+              "ratePct": 18
+            },
+            {
+              "fromAmount": 5000,
+              "ratePct": 15
+            }
+          ],
+          "customFees": [
+            {
+              "name": "Packaging fee",
+              "amount": 0.05,
+              "type": "BHD"
+            }
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "List promotions",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/promotions",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "promotionId"
+        ]
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Get promotion",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/promotions/{{promotionId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Create promotion",
+        "method": "POST",
+        "path": "/admin/vendors/{{vendorId}}/promotions",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Admin test promo",
+          "type": "PERCENT_OFF",
+          "discountValue": 10,
+          "scope": "all_branches",
+          "startsAt": "2026-07-20T21:10:49.871Z",
+          "endsAt": "2026-08-03T21:10:49.871Z"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update promotion",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/promotions/{{promotionId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Admin test promo updated"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Delete promotion",
+        "method": "DELETE",
+        "path": "/admin/vendors/{{vendorId}}/promotions/{{promotionId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Get SLA (rules + 30d compliance)",
+        "method": "GET",
+        "path": "/admin/vendors/{{vendorId}}/sla",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "06. Vendors",
+        "folder": "06. Vendors",
+        "name": "Update SLA (apply model / customize)",
+        "method": "PATCH",
+        "path": "/admin/vendors/{{vendorId}}/sla",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "slaModelId": "{{slaModelId}}",
+          "serviceModes": {
+            "hotFoodOnDemand": true,
+            "pickup": true
+          },
+          "config": {
+            "acceptanceCutoffMin": 2,
+            "prepTimeHotFoodMin": 18
+          }
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "07. Fleet": [
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champs list & onboarding",
+        "name": "Fleet KPI summary",
+        "method": "GET",
+        "path": "/admin/fleet/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champs list & onboarding",
+        "name": "List champs (tabs + filters)",
+        "method": "GET",
+        "path": "/admin/fleet/champs",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "statusTab",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "vehicle",
+            "value": "BIKE",
+            "description": ""
+          },
+          {
+            "key": "tier",
+            "value": "GOLD",
+            "description": ""
+          },
+          {
+            "key": "category",
+            "value": "Food",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "champId"
+        ]
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champs list & onboarding",
+        "name": "Create champ",
+        "method": "POST",
+        "path": "/admin/fleet/champs",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "firstName": "Ahmed",
+          "lastName": "Ali",
+          "phone": "{{phone}}",
+          "countryCode": "+973",
+          "email": "{{email}}",
+          "cprNumber": "{{phone}}",
+          "allowedCategories": [
+            "Food",
+            "Groceries"
+          ],
+          "dailyCashLimit": 50,
+          "tier": "BRONZE",
+          "city": "Manama",
+          "zone": "Adliya",
+          "vehicleType": "BIKE",
+          "vehicleMake": "Honda",
+          "vehicleModel": "PCX",
+          "vehicleYear": 2025,
+          "plateNumber": "MC-45821",
+          "supplierId": "{{supplierId}}"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Overview",
+        "method": "GET",
+        "path": "/admin/fleet/champs/{{champId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Edit champ",
+        "method": "PATCH",
+        "path": "/admin/fleet/champs/{{champId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "allowedCategories": [
+            "Food",
+            "Groceries",
+            "Flowers"
+          ],
+          "dailyCashLimit": 50,
+          "tier": "SILVER",
+          "zone": "Adliya",
+          "vehicleType": "BIKE",
+          "plateNumber": "MC-45821"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Set online",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/online",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "online": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Reconcile POD cash",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/reconcile-pod",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "note": "Banked COD / POD float cleared after shift"
+        },
+        "description": "Zeroes podCurrentCashBalance, codOutstanding, and wallet pendingCashCollected. Required before goOnline when cash is outstanding.",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Message champ",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/messages",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "title": "Shift update",
+          "body": "Please report to the Manama zone at 6 PM.",
+          "push": true,
+          "sms": false
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Suspend champ",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/suspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "reason": "Document expired",
+          "duration": "until_reviewed",
+          "note": "Insurance renewal required before reactivation.",
+          "notifyChamp": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Unsuspend champ",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/unsuspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ profile & controls",
+        "name": "Schedule termination",
+        "method": "POST",
+        "path": "/admin/fleet/champs/{{champId}}/terminate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "reason": "Contract ended",
+          "effectiveDate": "2026-08-01T00:00:00.000Z",
+          "note": "Final COD settlement required."
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ earnings, documents & SLA",
+        "name": "Earnings breakdown",
+        "method": "GET",
+        "path": "/admin/fleet/champs/{{champId}}/earnings",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01T00:00:00.000Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30T23:59:59.000Z",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "30",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ earnings, documents & SLA",
+        "name": "Documents",
+        "method": "GET",
+        "path": "/admin/fleet/champs/{{champId}}/documents",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "documentId"
+        ]
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ earnings, documents & SLA",
+        "name": "Approve document",
+        "method": "PATCH",
+        "path": "/admin/fleet/champs/{{champId}}/documents/{{documentId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "status": "APPROVED"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ earnings, documents & SLA",
+        "name": "Calculated SLA",
+        "method": "GET",
+        "path": "/admin/fleet/champs/{{champId}}/sla",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Champ earnings, documents & SLA",
+        "name": "Delivery jobs",
+        "method": "GET",
+        "path": "/admin/fleet/champs/{{champId}}/jobs",
+        "query": [
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "List suppliers",
+        "method": "GET",
+        "path": "/admin/fleet/suppliers",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "supplierId"
+        ]
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "Supplier detail & performance",
+        "method": "GET",
+        "path": "/admin/fleet/suppliers/{{supplierId}}",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01T00:00:00.000Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30T23:59:59.000Z",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "Create supplier",
+        "method": "POST",
+        "path": "/admin/fleet/suppliers",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "SpeedX Logistics",
+          "type": "THIRD_PARTY",
+          "contactPerson": "Ahmed Ali",
+          "phone": "+973 3300 1122",
+          "email": "{{email}}",
+          "city": "Manama",
+          "commissionPct": 12
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "Update supplier",
+        "method": "PATCH",
+        "path": "/admin/fleet/suppliers/{{supplierId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "contactPerson": "Ahmed Ali",
+          "commissionPct": 12
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "Deactivate supplier",
+        "method": "POST",
+        "path": "/admin/fleet/suppliers/{{supplierId}}/deactivate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Fleet partners & suppliers",
+        "name": "Activate supplier",
+        "method": "POST",
+        "path": "/admin/fleet/suppliers/{{supplierId}}/activate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Notify champs",
+        "name": "Estimate recipients",
+        "method": "POST",
+        "path": "/admin/fleet/notify/estimate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "audience": "online"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Notify champs",
+        "name": "Send notification now",
+        "method": "POST",
+        "path": "/admin/fleet/notify",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "audience": "online",
+          "type": "Incentive",
+          "title": "Peak hour bonus active!",
+          "body": "Go online now — earn BHD 0.500 extra per trip from 7–9 PM.",
+          "push": true,
+          "sms": false,
+          "schedule": "now"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Notify champs",
+        "name": "Schedule notification",
+        "method": "POST",
+        "path": "/admin/fleet/notify",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "audience": "by_zone",
+          "zone": "Hidd",
+          "type": "Policy",
+          "title": "New zone policy",
+          "body": "Review the updated Hidd pickup policy before your next shift.",
+          "push": true,
+          "sms": true,
+          "schedule": "later",
+          "scheduledAt": "2026-08-01T15:00:00.000Z"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "07. Fleet",
+        "folder": "07. Fleet / Notify champs",
+        "name": "Notification history",
+        "method": "GET",
+        "path": "/admin/fleet/notify/history",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "08. Customers": [
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Summary",
+        "method": "GET",
+        "path": "/admin/customers/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "List customers",
+        "method": "GET",
+        "path": "/admin/customers",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "statusTab",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "customerId"
+        ]
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Get customer",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Update customer",
+        "method": "PATCH",
+        "path": "/admin/customers/{{customerId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "language": "en",
+          "country": "BH"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Suspend",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/suspend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "reason": "Fraud review",
+          "duration": "until_reviewed",
+          "notifyCustomer": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Activate",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/activate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Reset password",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/reset-password",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Orders",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/orders",
+        "query": [
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Wallet ledgers",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/wallet",
+        "query": [
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Support tickets",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/support",
+        "query": [
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "ticketId"
+        ]
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Support ticket detail + thread",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/support/{{ticketId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Support ticket messages",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/support/{{ticketId}}/messages",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Reply to support ticket",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/support/{{ticketId}}/messages",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "body": "We verified the missing item and are reviewing the refund.",
+          "attachments": [
+            "https://cdn.yjeek.com/support/refund-confirmation.pdf"
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Create support ticket",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/support",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "subject": "Missing item",
+          "orderId": "{{orderId}}",
+          "remark": "Opened from admin"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Update support ticket",
+        "method": "PATCH",
+        "path": "/admin/customers/{{customerId}}/support/{{ticketId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "status": "RESOLVED",
+          "remark": "Refunded to wallet",
+          "resolutionType": "WALLET_REFUND",
+          "resolutionAmount": 1.5,
+          "resolutionNote": "Missing item refund approved by support."
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Verification",
+        "method": "GET",
+        "path": "/admin/customers/{{customerId}}/verification",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Approve verification",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/verification/approve",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "section": "all"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Reject verification",
+        "method": "POST",
+        "path": "/admin/customers/{{customerId}}/verification/reject",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "section": "id",
+          "reason": "Unreadable document"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "List withdrawals",
+        "method": "GET",
+        "path": "/admin/customers/withdrawals",
+        "query": [
+          {
+            "key": "status",
+            "value": "PENDING",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Approve withdrawal",
+        "method": "POST",
+        "path": "/admin/customers/withdrawals/{{withdrawalId}}/approve",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Reject withdrawal",
+        "method": "POST",
+        "path": "/admin/customers/withdrawals/{{withdrawalId}}/reject",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "reason": "IBAN does not match account name"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "08. Customers",
+        "folder": "08. Customers",
+        "name": "Complete withdrawal",
+        "method": "POST",
+        "path": "/admin/customers/withdrawals/{{withdrawalId}}/complete",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "bankReference": "FT{{phone}}"
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "09. Segments": [
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "List segments",
+        "method": "GET",
+        "path": "/admin/segments",
+        "query": [
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "segmentId"
+        ]
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Preview segment",
+        "method": "POST",
+        "path": "/admin/segments/preview",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "matchLogic": "ALL",
+          "rules": [
+            {
+              "field": "total_orders",
+              "operator": "gte",
+              "value": 3
+            },
+            {
+              "field": "last_order_days",
+              "operator": "lte",
+              "value": 30
+            }
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Create segment",
+        "method": "POST",
+        "path": "/admin/segments",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "High spenders",
+          "type": "DYNAMIC",
+          "matchLogic": "ALL",
+          "rules": [
+            {
+              "field": "total_spend",
+              "operator": "gte",
+              "value": 50
+            },
+            {
+              "field": "last_order_days",
+              "operator": "lte",
+              "value": 30
+            }
+          ],
+          "channels": [
+            "PUSH",
+            "EMAIL"
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Get segment",
+        "method": "GET",
+        "path": "/admin/segments/{{segmentId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Update segment",
+        "method": "PATCH",
+        "path": "/admin/segments/{{segmentId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "High spenders — active 30d",
+          "channels": [
+            "PUSH",
+            "EMAIL",
+            "SMS"
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Recalculate",
+        "method": "POST",
+        "path": "/admin/segments/{{segmentId}}/recalculate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Segment customers",
+        "method": "GET",
+        "path": "/admin/segments/{{segmentId}}/customers",
+        "query": [
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "09. Segments",
+        "folder": "09. Segments",
+        "name": "Delete segment",
+        "method": "DELETE",
+        "path": "/admin/segments/{{segmentId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "10. Stores catalog": [
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "List store vendors",
+        "method": "GET",
+        "path": "/admin/stores",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "List products",
+        "method": "GET",
+        "path": "/admin/stores/products",
+        "query": [
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "productId"
+        ]
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Get product",
+        "method": "GET",
+        "path": "/admin/stores/products/{{productId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Update product",
+        "method": "PATCH",
+        "path": "/admin/stores/products/{{productId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "isActive": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Delete product",
+        "method": "DELETE",
+        "path": "/admin/stores/products/{{productId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "List categories",
+        "method": "GET",
+        "path": "/admin/stores/categories",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "categoryId"
+        ]
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Create category",
+        "method": "POST",
+        "path": "/admin/stores/categories",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Admin Test Cat",
+          "slug": "admin-test-cat"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Update category",
+        "method": "PATCH",
+        "path": "/admin/stores/categories/{{categoryId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "isFeatured": true,
+          "sortOrder": 1
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "10. Stores catalog",
+        "folder": "10. Stores catalog",
+        "name": "Vendor catalog",
+        "method": "GET",
+        "path": "/admin/stores/vendors/{{vendorId}}/catalog",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "11. Store types": [
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Summary",
+        "method": "GET",
+        "path": "/admin/store-types/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "List",
+        "method": "GET",
+        "path": "/admin/store-types",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "storeTypeId"
+        ]
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Get",
+        "method": "GET",
+        "path": "/admin/store-types/{{storeTypeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Create",
+        "method": "POST",
+        "path": "/admin/store-types",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Food",
+          "slug": "food",
+          "iconUrl": "https://cdn.yjeek.com/store-types/food.png",
+          "iconEmoji": "🍔",
+          "sortOrder": 5,
+          "isActive": false,
+          "onDemandDelivery": true,
+          "pickup": true,
+          "dineIn": true,
+          "scheduled": false,
+          "services": false,
+          "publishStatus": "DRAFT"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Update",
+        "method": "PATCH",
+        "path": "/admin/store-types/{{storeTypeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Food",
+          "iconUrl": "https://cdn.yjeek.com/store-types/food-v2.png",
+          "sortOrder": 5,
+          "onDemandDelivery": true,
+          "pickup": true,
+          "dineIn": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Publish",
+        "method": "POST",
+        "path": "/admin/store-types/{{storeTypeId}}/publish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Draft",
+        "method": "POST",
+        "path": "/admin/store-types/{{storeTypeId}}/draft",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Add menu category",
+        "method": "POST",
+        "path": "/admin/store-types/{{storeTypeId}}/menu-categories",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Mains",
+          "sortOrder": 1
+        },
+        "description": "",
+        "saves": [
+          "menuCategoryId"
+        ]
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Update menu category",
+        "method": "PATCH",
+        "path": "/admin/store-types/{{storeTypeId}}/menu-categories/{{menuCategoryId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Main course",
+          "isVisible": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Delete menu category",
+        "method": "DELETE",
+        "path": "/admin/store-types/{{storeTypeId}}/menu-categories/{{menuCategoryId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Add badge",
+        "method": "POST",
+        "path": "/admin/store-types/{{storeTypeId}}/badges",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "label": "New",
+          "icon": "✨",
+          "color": "#3B82F6",
+          "sortOrder": 5
+        },
+        "description": "",
+        "saves": [
+          "badgeId"
+        ]
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Update badge",
+        "method": "PATCH",
+        "path": "/admin/store-types/{{storeTypeId}}/badges/{{badgeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "label": "New arrival",
+          "color": "#2563EB",
+          "sortOrder": 6
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Delete badge",
+        "method": "DELETE",
+        "path": "/admin/store-types/{{storeTypeId}}/badges/{{badgeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "11. Store types",
+        "folder": "11. Store types",
+        "name": "Delete store type",
+        "method": "DELETE",
+        "path": "/admin/store-types/{{storeTypeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "12. Marketing": [
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Summary",
+        "method": "GET",
+        "path": "/admin/marketing/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Notifications meta",
+        "method": "GET",
+        "path": "/admin/marketing/notifications/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "List notifications",
+        "method": "GET",
+        "path": "/admin/marketing/notifications",
+        "query": [
+          {
+            "key": "target",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "notificationId"
+        ]
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Get notification detail",
+        "method": "GET",
+        "path": "/admin/marketing/notifications/{{notificationId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Estimate customer audience",
+        "method": "POST",
+        "path": "/admin/marketing/notifications/estimate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "target": "customer",
+          "audience": "all"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Send customer notification",
+        "method": "POST",
+        "path": "/admin/marketing/notifications",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "target": "customer",
+          "audience": "by_segment",
+          "segmentIds": [
+            "{{segmentId}}"
+          ],
+          "type": "Promo",
+          "title": "Ramadan cashback — 10% back!",
+          "body": "Order this Ramadan and get 10% wallet cashback on every order.",
+          "push": true,
+          "email": true,
+          "sms": false,
+          "schedule": "now"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Send vendor notification",
+        "method": "POST",
+        "path": "/admin/marketing/notifications",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "target": "vendor",
+          "audience": "selected",
+          "vendorIds": [
+            "{{vendorId}}"
+          ],
+          "type": "Promo",
+          "title": "New: Ramadan vendor program",
+          "body": "Enroll now to get featured placement during Ramadan.",
+          "push": true,
+          "email": true,
+          "schedule": "now"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Resend notification",
+        "method": "POST",
+        "path": "/admin/marketing/notifications/{{notificationId}}/resend",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Delete / cancel notification",
+        "method": "DELETE",
+        "path": "/admin/marketing/notifications/{{notificationId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Promo codes summary",
+        "method": "GET",
+        "path": "/admin/marketing/promo-codes/summary",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "List promo codes",
+        "method": "GET",
+        "path": "/admin/marketing/promo-codes",
+        "query": [
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "promoCodeId"
+        ]
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Create promo code",
+        "method": "POST",
+        "path": "/admin/marketing/promo-codes",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "code": "WELCOME50",
+          "description": "50% off first order",
+          "discountType": "PERCENT",
+          "discountValue": 50,
+          "maxDiscountAmount": 2,
+          "maxUses": 1000,
+          "isActive": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Update promo code (pause)",
+        "method": "PATCH",
+        "path": "/admin/marketing/promo-codes/{{promoCodeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "isActive": false
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "Get promo code",
+        "method": "GET",
+        "path": "/admin/marketing/promo-codes/{{promoCodeId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "List banners",
+        "method": "GET",
+        "path": "/admin/marketing/banners",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "bannerId"
+        ]
+      },
+      {
+        "module": "12. Marketing",
+        "folder": "12. Marketing",
+        "name": "List offers",
+        "method": "GET",
+        "path": "/admin/marketing/offers",
+        "query": [
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "offerId"
+        ]
+      }
+    ],
+    "13. Settings": [
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Meta (dropdowns)",
+        "method": "GET",
+        "path": "/admin/settings/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get all settings",
+        "method": "GET",
+        "path": "/admin/settings",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get General",
+        "method": "GET",
+        "path": "/admin/settings/general",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Patch General",
+        "method": "PATCH",
+        "path": "/admin/settings/general",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "companyName": "Yjeek",
+          "supportEmail": "{{email}}",
+          "supportPhone": "+973 1700 0000",
+          "timeFormat": "24h",
+          "maintenanceMode": false
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get Localization",
+        "method": "GET",
+        "path": "/admin/settings/localization",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Patch Localization",
+        "method": "PATCH",
+        "path": "/admin/settings/localization",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "activeCountries": [
+            "BH"
+          ],
+          "defaultCountry": "BH",
+          "timezone": "Asia/Bahrain",
+          "currency": "BHD",
+          "languages": [
+            "en",
+            "ar"
+          ],
+          "rtlSupport": true,
+          "commission": {
+            "defaultCommissionPct": 12,
+            "onlineGatewayFeePct": 2.5,
+            "vatPct": 10,
+            "payoutCycle": "weekly",
+            "minPayout": 10,
+            "payoutDay": "sunday"
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get Notifications",
+        "method": "GET",
+        "path": "/admin/settings/notifications",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Patch Notifications",
+        "method": "PATCH",
+        "path": "/admin/settings/notifications",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "channels": {
+            "push": true,
+            "sms": true,
+            "email": true,
+            "inApp": true
+          },
+          "operational": {
+            "incidentEscalation": true,
+            "dailySummaryEmail": true
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get Security",
+        "method": "GET",
+        "path": "/admin/settings/security",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Patch Security",
+        "method": "PATCH",
+        "path": "/admin/settings/security",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "enforce2FA": true,
+          "passwordPolicy": "strong_12",
+          "sessionTimeoutMin": 30,
+          "auditLogRetentionMonths": 12,
+          "ipAllowlist": "disabled",
+          "loginAlerts": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Get Integrations",
+        "method": "GET",
+        "path": "/admin/settings/integrations",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Update (flat + sections)",
+        "method": "PATCH",
+        "path": "/admin/settings",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "minCustomerAppVersion": "3.0.0",
+          "rpiMinimum": 62,
+          "vendorAcceptSlaSec": 60,
+          "general": {
+            "companyName": "Yjeek"
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "13. Settings",
+        "folder": "13. Settings",
+        "name": "Reset settings",
+        "method": "POST",
+        "path": "/admin/settings/reset",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "14. SLA Models": [
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Setup — create Dispatcher for SLA assignment",
+        "method": "POST",
+        "path": "/admin/users",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "fullName": "SLA Test Dispatcher",
+          "email": "sla.dispatcher.{{$timestamp}}@example.com",
+          "phone": "39000{{$randomInt}}",
+          "countryCode": "+973",
+          "jobTitle": "Dispatcher",
+          "temporaryPassword": "YjeekSLA#2026",
+          "roleId": "{{dispatcherRoleId}}",
+          "scopeLevel": "ZONE",
+          "countries": [
+            "BH"
+          ],
+          "zones": [
+            "Manama"
+          ],
+          "sendInvite": false
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Setup — activate Dispatcher invitation",
+        "method": "POST",
+        "path": "/admin/invitations/accept",
+        "query": [],
+        "pathParams": [],
+        "auth": "Public (noauth)",
+        "body": {
+          "token": "{{adminInviteToken}}",
+          "password": "YjeekSLA#2026"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Template",
+        "method": "GET",
+        "path": "/admin/sla-models/template",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "List",
+        "method": "GET",
+        "path": "/admin/sla-models",
+        "query": [
+          {
+            "key": "active",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "status",
+            "value": "PUBLISHED",
+            "description": ""
+          },
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "slaModelId"
+        ]
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Get",
+        "method": "GET",
+        "path": "/admin/sla-models/{{slaModelId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Create",
+        "method": "POST",
+        "path": "/admin/sla-models",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Express — Groceries {{$timestamp}}",
+          "categoryLabel": "Groceries",
+          "description": "Pickup / scheduled focused",
+          "isDefault": false,
+          "config": {
+            "serviceModes": {
+              "hotFoodOnDemand": false,
+              "dineIn": false,
+              "pickup": true,
+              "scheduledDelivery": true,
+              "services": false
+            },
+            "vendor": {
+              "groceries": {
+                "acceptanceTimeSec": 120,
+                "aggregationLeadTime": "REAL_TIME_PICKER"
+              }
+            },
+            "champ": {
+              "acceptanceTimeByMode": {
+                "hotFood": 90,
+                "sameDay": 180
+              },
+              "performance": {
+                "onTimeDeliveryPct": 94,
+                "orderCompletionRatePct": 98,
+                "customerRating": 4.6
+              },
+              "tiers": {
+                "elite": {
+                  "min": 90,
+                  "max": 100
+                },
+                "gold": {
+                  "min": 80,
+                  "max": 89
+                },
+                "silver": {
+                  "min": 70,
+                  "max": 79
+                },
+                "bronze": {
+                  "min": 60,
+                  "max": 69
+                },
+                "atRisk": {
+                  "min": 0,
+                  "max": 59
+                }
+              }
+            },
+            "dispatcher": {
+              "assignmentTimeByMode": {
+                "hotFood": 90,
+                "sameDay": 180
+              },
+              "reassignWindowSec": 300,
+              "coverageTargetPct": 98
+            }
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Update",
+        "method": "PATCH",
+        "path": "/admin/sla-models/{{slaModelId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "description": "Updated",
+          "config": {
+            "vendor": {
+              "hotFoodOnDemand": {
+                "acceptanceTimeSec": 180,
+                "orderAccuracyPct": 99
+              }
+            }
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Publish SLA version",
+        "method": "POST",
+        "path": "/admin/sla-models/{{slaModelId}}/publish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "note": "Approved SLA settings from Admin Console",
+          "updateActiveAssignments": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Set default",
+        "method": "POST",
+        "path": "/admin/sla-models/{{slaModelId}}/set-default",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Version history",
+        "method": "GET",
+        "path": "/admin/sla-models/{{slaModelId}}/versions",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Rollback SLA version",
+        "method": "POST",
+        "path": "/admin/sla-models/{{slaModelId}}/rollback",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "version": 1,
+          "note": "Rollback after ops review"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Duplicate",
+        "method": "POST",
+        "path": "/admin/sla-models/{{slaModelId}}/duplicate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Assign to Vendor, Champ & Dispatcher",
+        "method": "POST",
+        "path": "/admin/sla-models/{{slaModelId}}/apply",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "vendorIds": [
+            "{{vendorId}}"
+          ],
+          "champIds": [
+            "{{champId}}"
+          ],
+          "dispatcherIds": [
+            "{{dispatcherAdminId}}"
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Effective Vendor SLA",
+        "method": "GET",
+        "path": "/admin/sla-models/effective/VENDOR/{{vendorId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Effective Champ SLA",
+        "method": "GET",
+        "path": "/admin/sla-models/effective/CHAMP/{{champId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Effective Dispatcher SLA",
+        "method": "GET",
+        "path": "/admin/sla-models/effective/DISPATCHER/{{dispatcherAdminId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Vendor SLA compliance",
+        "method": "GET",
+        "path": "/admin/sla-models/compliance/VENDOR/{{vendorId}}",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01T00:00:00.000Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30T23:59:59.999Z",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Champ SLA compliance",
+        "method": "GET",
+        "path": "/admin/sla-models/compliance/CHAMP/{{champId}}",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01T00:00:00.000Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30T23:59:59.999Z",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Dispatcher SLA compliance",
+        "method": "GET",
+        "path": "/admin/sla-models/compliance/DISPATCHER/{{dispatcherAdminId}}",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-01T00:00:00.000Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-06-30T23:59:59.999Z",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "SLA breach queue",
+        "method": "GET",
+        "path": "/admin/sla-models/breaches",
+        "query": [
+          {
+            "key": "status",
+            "value": "OPEN",
+            "description": ""
+          },
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "50",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "slaBreachId"
+        ]
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Resolve SLA breach",
+        "method": "PATCH",
+        "path": "/admin/sla-models/breaches/{{slaBreachId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "status": "RESOLVED",
+          "note": "Reviewed and resolved by operations"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "14. SLA Models",
+        "folder": "14. SLA Models",
+        "name": "Delete",
+        "method": "DELETE",
+        "path": "/admin/sla-models/{{slaModelId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "15. Dispatch Rules": [
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Template",
+        "method": "GET",
+        "path": "/admin/dispatch-rules/template",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "List",
+        "method": "GET",
+        "path": "/admin/dispatch-rules",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "dispatchRuleId"
+        ]
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Create",
+        "method": "POST",
+        "path": "/admin/dispatch-rules",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Bahrain stacking rules {{$timestamp}}"
+        },
+        "description": "",
+        "saves": [
+          "dispatchRuleId"
+        ]
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Get",
+        "method": "GET",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Update",
+        "method": "PATCH",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Bahrain stacking rules (updated)"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Test mode",
+        "method": "POST",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}/test",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Shadow simulate",
+        "method": "POST",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}/simulate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "orderIds": [
+            "cmrkp75u10047v99439esgfv5"
+          ],
+          "limit": 20
+        },
+        "description": "Side-effect-free replay against historical evaluations for the listed orders (or recent orders when orderIds omitted). Does not write offers.",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Activate / publish",
+        "method": "POST",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}/activate",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "note": "Promote dispatch automation rule set"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Pause",
+        "method": "POST",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}/pause",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "15. Dispatch Rules",
+        "folder": "15. Dispatch Rules",
+        "name": "Rollback",
+        "method": "POST",
+        "path": "/admin/dispatch-rules/{{dispatchRuleId}}/rollback",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "version": 1,
+          "note": "Rollback after ops review"
+        },
+        "description": "",
+        "saves": []
+      }
+    ],
+    "16. Reports": [
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Overview 30d",
+        "method": "GET",
+        "path": "/admin/reports/overview",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Overview 7d",
+        "method": "GET",
+        "path": "/admin/reports/overview",
+        "query": [
+          {
+            "key": "preset",
+            "value": "7d",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Top vendors",
+        "method": "GET",
+        "path": "/admin/reports/vendors",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Fleet",
+        "method": "GET",
+        "path": "/admin/reports/fleet",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Customers",
+        "method": "GET",
+        "path": "/admin/reports/customers",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Promotions",
+        "method": "GET",
+        "path": "/admin/reports/promotions",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "20",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Orders report meta",
+        "method": "GET",
+        "path": "/admin/reports/orders/meta",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Orders report",
+        "method": "GET",
+        "path": "/admin/reports/orders",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "page",
+            "value": "1",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "10",
+            "description": ""
+          },
+          {
+            "key": "sort",
+            "value": "newest",
+            "description": ""
+          },
+          {
+            "key": "search",
+            "value": "",
+            "description": ""
+          },
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          },
+          {
+            "key": "sla",
+            "value": "all",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Reports → Orders — KPIs + table",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Orders report export CSV",
+        "method": "GET",
+        "path": "/admin/reports/orders/export",
+        "query": [
+          {
+            "key": "preset",
+            "value": "30d",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "100",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "Download text/csv for Export button",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Dispatch evaluations export CSV",
+        "method": "GET",
+        "path": "/admin/reports/dispatch-evaluations/export",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-23T13:39:40.906Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-07-20T21:10:53.285Z",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "500",
+            "description": ""
+          },
+          {
+            "key": "orderId",
+            "value": "cmrkp75u10047v99439esgfv5",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "CSV of Gate evaluation evidence. from/to are ISO timestamps from DB seed.",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Dispatch attempts export CSV",
+        "method": "GET",
+        "path": "/admin/reports/dispatch-attempts/export",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-23T13:39:40.906Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-07-20T21:10:53.285Z",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "500",
+            "description": ""
+          },
+          {
+            "key": "orderId",
+            "value": "cmrkp75u10047v99439esgfv5",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "16. Reports",
+        "folder": "16. Reports",
+        "name": "Vendor acceptance export CSV",
+        "method": "GET",
+        "path": "/admin/reports/vendor-acceptance/export",
+        "query": [
+          {
+            "key": "from",
+            "value": "2026-06-23T13:39:40.906Z",
+            "description": ""
+          },
+          {
+            "key": "to",
+            "value": "2026-07-20T21:10:53.285Z",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "500",
+            "description": ""
+          },
+          {
+            "key": "vendorId",
+            "value": "cmreb3tha000ev9b8rv65ldi6",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "17. UI Editor": [
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Apps",
+        "method": "GET",
+        "path": "/admin/ui-editor/apps",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Screen map (Customer)",
+        "method": "GET",
+        "path": "/admin/ui-editor/screen-map",
+        "query": [
+          {
+            "key": "app",
+            "value": "CUSTOMER",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Placements",
+        "method": "GET",
+        "path": "/admin/ui-editor/placements",
+        "query": [
+          {
+            "key": "app",
+            "value": "CUSTOMER",
+            "description": ""
+          },
+          {
+            "key": "screen",
+            "value": "home",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Preview screen",
+        "method": "GET",
+        "path": "/admin/ui-editor/preview",
+        "query": [
+          {
+            "key": "app",
+            "value": "CUSTOMER",
+            "description": ""
+          },
+          {
+            "key": "screen",
+            "value": "home",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Banners meta",
+        "method": "GET",
+        "path": "/admin/ui-editor/banners/meta",
+        "query": [
+          {
+            "key": "app",
+            "value": "CUSTOMER",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Banner targets (stores)",
+        "method": "GET",
+        "path": "/admin/ui-editor/banners/targets",
+        "query": [
+          {
+            "key": "tapAction",
+            "value": "OPEN_STORE",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "List banners",
+        "method": "GET",
+        "path": "/admin/ui-editor/banners",
+        "query": [
+          {
+            "key": "app",
+            "value": "CUSTOMER",
+            "description": ""
+          },
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "uiBannerId"
+        ]
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Create banner",
+        "method": "POST",
+        "path": "/admin/ui-editor/banners",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "title": "Ramadan offers",
+          "subtitle": "Up to 30% off",
+          "bannerType": "SCROLL",
+          "placementKey": "home_top",
+          "appTarget": "CUSTOMER",
+          "tapAction": "OPEN_STORE",
+          "audience": "ALL",
+          "publishImmediately": true,
+          "startsAt": "2026-03-22T00:00:00.000Z",
+          "endsAt": "2026-03-30T23:59:59.000Z"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Get banner",
+        "method": "GET",
+        "path": "/admin/ui-editor/banners/{{uiBannerId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Update banner",
+        "method": "PATCH",
+        "path": "/admin/ui-editor/banners/{{uiBannerId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "subtitle": "Updated CTA"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Publish UI",
+        "method": "POST",
+        "path": "/admin/ui-editor/publish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "app": "CUSTOMER"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Catalog (CMS)",
+        "method": "GET",
+        "path": "/admin/ui-editor/catalog",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "List pages",
+        "method": "GET",
+        "path": "/admin/ui-editor/pages",
+        "query": [
+          {
+            "key": "status",
+            "value": "all",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Ensure known pages",
+        "method": "POST",
+        "path": "/admin/ui-editor/pages/ensure",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Get help page",
+        "method": "GET",
+        "path": "/admin/ui-editor/pages/help",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Upsert help page",
+        "method": "PUT",
+        "path": "/admin/ui-editor/pages/help",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "title": "Help & Support",
+          "isPublished": false,
+          "content": {
+            "title": "Help & Support",
+            "subtitle": "Updated from admin",
+            "supportEmail": "{{email}}",
+            "topics": [],
+            "faq": []
+          }
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Publish help",
+        "method": "POST",
+        "path": "/admin/ui-editor/pages/help/publish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Unpublish help",
+        "method": "POST",
+        "path": "/admin/ui-editor/pages/help/unpublish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Home preview",
+        "method": "GET",
+        "path": "/admin/ui-editor/home",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": [
+          "categoryId"
+        ]
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Home categories",
+        "method": "GET",
+        "path": "/admin/ui-editor/home/categories",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Create category",
+        "method": "POST",
+        "path": "/admin/ui-editor/home/categories",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "New Category",
+          "isFeatured": true,
+          "iconEmoji": "✨"
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Reorder categories",
+        "method": "PATCH",
+        "path": "/admin/ui-editor/home/categories/reorder",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "items": [
+            {
+              "id": "{{categoryId}}",
+              "sortOrder": 0,
+              "isFeatured": true
+            }
+          ]
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Patch category (rename/hide)",
+        "method": "PATCH",
+        "path": "/admin/ui-editor/home/categories/{{categoryId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": {
+          "name": "Food",
+          "isFeatured": true,
+          "sortOrder": 1,
+          "isActive": true
+        },
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Publish categories",
+        "method": "POST",
+        "path": "/admin/ui-editor/home/categories/publish",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "17. UI Editor",
+        "folder": "17. UI Editor",
+        "name": "Delete banner",
+        "method": "DELETE",
+        "path": "/admin/ui-editor/banners/{{uiBannerId}}",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ],
+    "18. Search (global header)": [
+      {
+        "module": "18. Search (global header)",
+        "folder": "18. Search (global header)",
+        "name": "Global search",
+        "method": "GET",
+        "path": "/admin/search",
+        "query": [
+          {
+            "key": "q",
+            "value": "green",
+            "description": ""
+          },
+          {
+            "key": "limit",
+            "value": "8",
+            "description": ""
+          }
+        ],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      },
+      {
+        "module": "18. Search (global header)",
+        "folder": "18. Search (global header)",
+        "name": "Notifications bell",
+        "method": "GET",
+        "path": "/admin/search/notifications",
+        "query": [],
+        "pathParams": [],
+        "auth": "Bearer {{accessToken}}",
+        "body": null,
+        "description": "",
+        "saves": []
+      }
+    ]
+  }
+}

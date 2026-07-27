@@ -183,7 +183,9 @@ function AdminSidebar() {
               : 'bg-[#234438] hover:bg-[#2a5544]',
           )}
         >
-          <div className="grid h-[18px] w-[25px] place-items-center rounded-full bg-[#36c66b] text-[9px] font-bold text-[#0e3423]">SA</div>
+          <div className="grid h-[18px] w-[25px] place-items-center rounded-full bg-[#36c66b] text-[9px] font-bold text-[#0e3423]">
+            {user?.initials || '—'}
+          </div>
           <div className="min-w-0">
             <div className="text-[12px] text-white">{user?.name}</div>
             <div className="truncate text-[10px] font-normal text-[#9fb2a8]">{user?.email}</div>

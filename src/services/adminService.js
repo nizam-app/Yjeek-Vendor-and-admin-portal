@@ -1,22 +1,26 @@
 import { apiClient } from '../api/client'
+import { adminDashboardService } from './admin/dashboardService'
 
 export const adminService = {
   getDashboard(options) {
-    return apiClient.get('/admin/dashboard', options)
+    return adminDashboardService.getDashboard(options)
   },
   getLiveOrders(options) {
-    return apiClient.get('/admin/live-orders', options)
+    return adminDashboardService.getLiveOrders(options)
   },
   getPickup(options) {
-    return apiClient.get('/admin/pickup', options)
+    return adminDashboardService.getPickupBoard(options)
   },
   getDineIn(options) {
-    return apiClient.get('/admin/dine-in', options)
+    return adminDashboardService.getDineInBoard(options)
   },
   getServices(options) {
-    return apiClient.get('/admin/services', options)
+    return adminDashboardService.getServicesBoard(options)
   },
   getOperations(mode, options = {}) {
+    if (mode === 'scheduled') {
+      return adminDashboardService.getScheduledBoard(options)
+    }
     return apiClient.get('/admin/operations', { ...options, params: { ...options.params, mode } })
   },
   getManagement(type, options = {}) {

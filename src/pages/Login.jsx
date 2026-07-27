@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { isAdminRealApiFeature } from '../api/config'
 import { demoAccounts, useAuth } from '../context/AuthContext'
 import { loginFeatures } from '../data/mockData'
+import { adminAuthService } from '../services/admin/authService'
 import { authService } from '../services/vendor/authService'
 
 export default function Login() {
@@ -29,9 +31,16 @@ export default function Login() {
         setError('Incorrect email or password. Please recheck and try again.')
         return
       }
-      navigate(nextUser.requiresTwoFactor ? '/admin/verify' : '/dashboard')
+      if (nextUser.requiresTwoFactor) {
+        navigate('/admin/verify')
+        return
+      }
+      navigate(nextUser.role === 'admin' ? '/admin/dashboard' : '/dashboard')
     } catch (err) {
-      setError(authService.getLoginErrorMessage(err))
+      const message = isAdminRealApiFeature('auth')
+        ? adminAuthService.getLoginErrorMessage(err)
+        : authService.getLoginErrorMessage(err)
+      setError(message)
     } finally {
       setIsLoading(false)
     }

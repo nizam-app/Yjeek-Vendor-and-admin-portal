@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { LogOut, Pencil } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { isAdminRealApiFeature } from '../../api/config'
 import { useAuth } from '../../context/AuthContext'
 import { cn } from '../../components/admin/cn'
 
-const ACCOUNT_PROFILE = {
+const MOCK_ACCOUNT_PROFILE = {
   initials: 'SA',
   fullName: 'Super Admin',
   email: 'Superadmin@yjeek.com',
@@ -19,6 +21,63 @@ const ACCOUNT_PROFILE = {
   status: 'Active',
   createdBy: 'System',
   userId: 'USR-0001',
+}
+
+function formatMemberSince(iso, style = 'long') {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '—'
+  if (style === 'short') {
+    return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+  }
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function profileFromAdminUser(user) {
+  if (!user) {
+    return {
+      initials: '—',
+      fullName: '—',
+      email: '—',
+      displayEmail: '—',
+      phone: '—',
+      jobTitle: '—',
+      memberSince: '—',
+      memberSinceShort: '—',
+      role: '—',
+      scope: '—',
+      scopeShort: '—',
+      accessLevel: '—',
+      status: '—',
+      createdBy: '—',
+      userId: '—',
+    }
+  }
+
+  const fullName = user.fullName || user.name || '—'
+  const scope = user.scopeLabel || user.scopeLevel || '—'
+
+  return {
+    initials: user.initials || '—',
+    fullName,
+    email: user.email || '—',
+    displayEmail: user.email || '—',
+    phone: user.phone || '—',
+    jobTitle: user.jobTitle || '—',
+    memberSince: formatMemberSince(user.memberSince, 'long'),
+    memberSinceShort: formatMemberSince(user.memberSince, 'short'),
+    role: user.roleBadge || user.backendRole || '—',
+    scope,
+    scopeShort: user.scopeLabel || user.scopeLevel || '—',
+    accessLevel: user.accessLevel || '—',
+    status: user.statusLabel || user.status || '—',
+    createdBy: user.createdBy || '—',
+    userId: user.userId || user.userCode || '—',
+  }
 }
 
 function Card({ title, children }) {
@@ -41,8 +100,37 @@ function InfoItem({ label, value, valueClass }) {
 
 export default function AdminAccountPage() {
   const navigate = useNavigate()
-  const { logout } = useAuth()
-  const profile = ACCOUNT_PROFILE
+  const { user, logout, refreshAdminSession } = useAuth()
+  const useReal = isAdminRealApiFeature('auth')
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+
+  useEffect(() => {
+    if (!useReal) return undefined
+
+    let cancelled = false
+
+    async function loadMe() {
+      setIsRefreshing(true)
+      setLoadError(null)
+      try {
+        await refreshAdminSession()
+      } catch (error) {
+        if (!cancelled) setLoadError(error)
+      } finally {
+        if (!cancelled) setIsRefreshing(false)
+      }
+    }
+
+    loadMe()
+    return () => {
+      cancelled = true
+    }
+  }, [useReal, refreshAdminSession])
+
+  const profile = useReal
+    ? profileFromAdminUser(user?.role === 'admin' ? user : null)
+    : MOCK_ACCOUNT_PROFILE
 
   function signOut() {
     logout()
@@ -82,6 +170,15 @@ export default function AdminAccountPage() {
             Edit profile
           </button>
         </div>
+
+        {useReal && isRefreshing ? (
+          <p className="mb-3 text-[12px] text-[#7c8780]">Refreshing account…</p>
+        ) : null}
+        {useReal && loadError ? (
+          <p className="mb-3 text-[12px] text-[#d64044]">
+            Unable to refresh account from server. Showing last saved session.
+          </p>
+        ) : null}
 
         <div className="space-y-3">
           <Card title="Profile">

@@ -1,6 +1,16 @@
-import { adminService } from '../../../services/adminService'
+import { useAdminServicesBoard } from '../../../hooks/admin/useAdminServicesBoard'
 import { AdminIncidentBoard } from '../../../components/admin/operations/AdminIncidentBoard'
 
 export default function AdminServicesPage() {
-  return <AdminIncidentBoard key="services" fetchData={() => adminService.getServices()} />
+  const { data, error, isLoading, refetch } = useAdminServicesBoard({ limit: 50 })
+
+  return (
+    <AdminIncidentBoard
+      key="services"
+      data={data}
+      error={error}
+      isLoading={isLoading}
+      onRetry={refetch}
+    />
+  )
 }

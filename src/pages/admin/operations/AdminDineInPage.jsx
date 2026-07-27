@@ -1,6 +1,16 @@
-import { adminService } from '../../../services/adminService'
+import { useAdminDineInBoard } from '../../../hooks/admin/useAdminDineInBoard'
 import { AdminIncidentBoard } from '../../../components/admin/operations/AdminIncidentBoard'
 
 export default function AdminDineInPage() {
-  return <AdminIncidentBoard key="dine-in" fetchData={() => adminService.getDineIn()} />
+  const { data, error, isLoading, refetch } = useAdminDineInBoard({ limit: 50 })
+
+  return (
+    <AdminIncidentBoard
+      key="dine-in"
+      data={data}
+      error={error}
+      isLoading={isLoading}
+      onRetry={refetch}
+    />
+  )
 }
