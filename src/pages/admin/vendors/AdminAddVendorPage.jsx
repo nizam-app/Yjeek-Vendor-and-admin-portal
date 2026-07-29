@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Check,
@@ -12,6 +12,9 @@ import houseIcon from '../../../assets/icon-house.png'
 import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
 import { AdminVendorSlaConfigs, SERVICE_MODE_OPTIONS } from '../../../components/admin/AdminVendorSlaConfigs'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { adminService } from '../../../services/adminService'
+import { matchAdminStoreTypeId } from '../../../mappers/admin/mapAdminStoreTypes'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -81,20 +84,32 @@ function VendorSelect({ children, className = '', ...props }) {
       >
         {children}
       </select>
-      ▾
+      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] leading-none text-[#69756d]">
+        ▾
+      </span>
     </div>
   )
 }
 
-function VendorUploadBox({ label }) {
+function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
   return (
     <VendorField label={label}>
       <button
         type="button"
-        className="flex h-[120px] w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-[#e4e8e4] bg-[#f3f5f3] text-[#7c8780] transition hover:border-[#1aa054] hover:bg-[#eef7f1]"
+        onClick={() => {
+          const next = window.prompt(`${label} image URL`, imageUrl || '')
+          if (next == null) return
+          onUrlChange?.(next.trim())
+        }}
+        className="relative flex h-[120px] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-[#f3f5f3] text-[#7c8780] transition hover:border-[#1aa054] hover:bg-[#eef7f1]"
       >
-        <Upload size={18} strokeWidth={1.8} />
-        <span className="text-[12px] font-medium">Upload image</span>
+        {imageUrl ? (
+          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : null}
+        <span className={cn('relative z-[1] flex flex-col items-center gap-2', imageUrl && 'rounded-md bg-white/90 px-3 py-2')}>
+          <Upload size={18} strokeWidth={1.8} />
+          <span className="text-[12px] font-medium">{imageUrl ? 'Change image URL' : 'Upload image'}</span>
+        </span>
       </button>
     </VendorField>
   )
@@ -131,8 +146,13 @@ export default function AdminAddVendorPage({ onBack }) {
     storeName: 'Green Kitchen',
     legalName: 'Green Kitchen W.L.L',
     storeType: 'Food & Beverage',
+    storeTypeId: '',
     subCategory: 'None',
     description: 'Healthy home-style meals across Bahrain',
+    logoUrl: '',
+    coverUrl: '',
+    area: '',
+    cuisineTags: [],
     ownerName: 'Mohammed Ahmed',
     ownerEmail: 'owner@greenkitchen.bh',
     ownerPhone: '+973 3812 1212',
@@ -156,7 +176,13 @@ export default function AdminAddVendorPage({ onBack }) {
     readySla: '20 min',
     hotFood: 'Required',
   })
+  const [storeTypes, setStoreTypes] = useState([])
+  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileError, setProfileError] = useState(null)
   const [branches, setBranches] = useState(INITIAL_BRANCHES)
+  const [branchesLoading, setBranchesLoading] = useState(false)
+  const [branchesError, setBranchesError] = useState(null)
   const [users, setUsers] = useState(INITIAL_USERS)
   const [customFees, setCustomFees] = useState([
     { id: 'f1', name: 'Packaging fee', value: 'BHD 0.250' },
@@ -167,15 +193,174 @@ export default function AdminAddVendorPage({ onBack }) {
 
   const current = ADD_VENDOR_STEPS[step - 1]
   const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
+  const useRealStoreApi = isEdit && Boolean(editVendorId) && isAdminRealApiFeature('vendors')
 
-  const goNext = () => {
+  useEffect(() => {
+    if (location.state?.step != null) setStep(location.state.step)
+  }, [location.key, location.state?.step])
+
+  useEffect(() => {
+    if (!useRealStoreApi) return undefined
+
+    let cancelled = false
+    setProfileLoading(true)
+    setProfileError(null)
+
+    Promise.all([
+      adminService.getVendorDetail(editVendorId),
+      adminService.listStoreTypes(),
+    ])
+      .then(([vendorRes, typesRes]) => {
+        if (cancelled) return
+        const vendor = vendorRes?.data || {}
+        const types = typesRes?.data?.storeTypes || []
+        setStoreTypes(types)
+
+        const matchedTypeId =
+          vendor.storeTypeId || matchAdminStoreTypeId(types, vendor.categoryLabel || vendor.storeType)
+
+        setForm((prev) => ({
+          ...prev,
+          storeName: vendor.name || '',
+          legalName:
+            vendor.legalNameRaw && vendor.legalNameRaw !== '—'
+              ? vendor.legalNameRaw
+              : vendor.legalName && vendor.legalName !== '—'
+                ? vendor.legalName
+                : '',
+          storeType: vendor.categoryLabel || vendor.storeType || prev.storeType,
+          storeTypeId: matchedTypeId || '',
+          subCategory: vendor.subCategory || 'None',
+          description: vendor.description || '',
+          logoUrl: vendor.logoUrl || '',
+          coverUrl: vendor.coverUrl || '',
+          area: vendor.area || '',
+          cuisineTags: vendor.cuisineTags || [],
+        }))
+      })
+      .catch((err) => {
+        if (!cancelled) setProfileError(err?.message || 'Failed to load store profile.')
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStoreApi, editVendorId])
+
+  useEffect(() => {
+    if (!useRealStoreApi) return undefined
+
+    let cancelled = false
+    setBranchesLoading(true)
+    setBranchesError(null)
+
+    adminService
+      .listVendorBranches(editVendorId)
+      .then((response) => {
+        if (cancelled) return
+        setBranches(response?.data?.branches || [])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setBranches([])
+        setBranchesError(err?.message || 'Failed to load branches.')
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStoreApi, editVendorId, location.key])
+
+  async function saveStoreProfile() {
+    if (!useRealStoreApi) return true
+    setProfileError(null)
+    setProfileSaving(true)
+    try {
+      const response = await adminService.updateVendor(editVendorId, form)
+      const vendor = response?.data
+      if (vendor) {
+        setForm((prev) => ({
+          ...prev,
+          storeName: vendor.name || prev.storeName,
+          legalName:
+            vendor.legalNameRaw && vendor.legalNameRaw !== '—'
+              ? vendor.legalNameRaw
+              : prev.legalName,
+          description: vendor.description ?? prev.description,
+          logoUrl: vendor.logoUrl || prev.logoUrl,
+          coverUrl: vendor.coverUrl || prev.coverUrl,
+          area: vendor.area || prev.area,
+          cuisineTags: vendor.cuisineTags || prev.cuisineTags,
+          storeType: vendor.categoryLabel || prev.storeType,
+        }))
+      }
+      return true
+    } catch (err) {
+      setProfileError(err?.message || 'Failed to update store profile.')
+      return false
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  const goNext = async () => {
+    if (step === 1 && useRealStoreApi) {
+      const ok = await saveStoreProfile()
+      if (!ok) return
+    }
     if (step < ADD_VENDOR_STEPS.length) setStep(step + 1)
     else handleBack()
   }
 
+  const handleSaveDraft = async () => {
+    if (step === 1 && useRealStoreApi) {
+      await saveStoreProfile()
+    }
+  }
+
   const addBranch = () => {
+    if (useRealStoreApi) {
+      navigate(`/admin/vendors/${encodeURIComponent(editVendorId)}/branches/new`, {
+        state: {
+          storeName: form.storeName,
+          vendorId: editVendorId,
+          mode: 'create',
+          returnTo: 'wizard',
+          step: 2,
+        },
+      })
+      return
+    }
     navigate('/admin/vendors/new/branches/new', {
       state: { storeName: form.storeName, mode: 'create', step: 2 },
+    })
+  }
+
+  const editBranch = (branch) => {
+    if (useRealStoreApi) {
+      navigate(
+        `/admin/vendors/${encodeURIComponent(editVendorId)}/branches/${encodeURIComponent(branch.id)}`,
+        {
+          state: {
+            branch,
+            storeName: form.storeName,
+            vendorId: editVendorId,
+            mode: 'edit',
+            returnTo: 'wizard',
+            step: 2,
+          },
+        },
+      )
+      return
+    }
+    navigate(`/admin/vendors/new/branches/${encodeURIComponent(branch.id)}`, {
+      state: { branch, storeName: form.storeName },
     })
   }
 
@@ -267,6 +452,14 @@ export default function AdminAddVendorPage({ onBack }) {
       <div className="space-y-3">
         {step === 1 ? (
           <VendorCard title="Store profile">
+            {profileLoading ? (
+              <p className="mb-3 text-[13px] text-[#7c8780]">Loading store profile…</p>
+            ) : null}
+            {profileError ? (
+              <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                {profileError}
+              </div>
+            ) : null}
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
               <VendorField label="Store name">
                 <VendorInput value={form.storeName} onChange={update('storeName')} />
@@ -275,34 +468,78 @@ export default function AdminAddVendorPage({ onBack }) {
                 <VendorInput value={form.legalName} onChange={update('legalName')} />
               </VendorField>
               <VendorField label="Store type">
-                <VendorSelect value={form.storeType} onChange={update('storeType')}>
-                  <option>Food & Beverage</option>
-                  <option>Grocery</option>
-                  <option>Electronics</option>
-                  <option>Fashion</option>
-                  <option>Other</option>
+                <VendorSelect
+                  value={form.storeTypeId || form.storeType}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    const matched = storeTypes.find((t) => t.id === value)
+                    setForm((prev) => ({
+                      ...prev,
+                      storeTypeId: matched ? matched.id : '',
+                      storeType: matched ? matched.name : value,
+                    }))
+                  }}
+                >
+                  {storeTypes.length ? (
+                    storeTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option>Food & Beverage</option>
+                      <option>Grocery</option>
+                      <option>Electronics</option>
+                      <option>Fashion</option>
+                      <option>Other</option>
+                    </>
+                  )}
                 </VendorSelect>
               </VendorField>
               <VendorField label="Sub-category">
                 <VendorSelect value={form.subCategory} onChange={update('subCategory')}>
-                  <option>None</option>
-                  <option>Healthy food</option>
-                  <option>Fast food</option>
-                  <option>Cafe</option>
+                  {['None', 'Healthy food', 'Fast food', 'Cafe', 'Hot food', form.subCategory]
+                    .filter(Boolean)
+                    .filter((item, index, all) => all.indexOf(item) === index)
+                    .map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
                 </VendorSelect>
               </VendorField>
               <VendorField label="Short description" className="col-span-2 max-[700px]:col-span-1">
                 <VendorInput value={form.description} onChange={update('description')} />
               </VendorField>
-              <VendorUploadBox label="Logo" />
-              <VendorUploadBox label="Cover image" />
+              <VendorUploadBox
+                label="Logo"
+                imageUrl={form.logoUrl}
+                onUrlChange={(logoUrl) => setForm((prev) => ({ ...prev, logoUrl }))}
+              />
+              <VendorUploadBox
+                label="Cover image"
+                imageUrl={form.coverUrl}
+                onUrlChange={(coverUrl) => setForm((prev) => ({ ...prev, coverUrl }))}
+              />
             </div>
           </VendorCard>
         ) : null}
 
         {step === 2 ? (
           <VendorCard title="Branches" subtitle="Add each physical branch. You can fine-tune each one after.">
+            {branchesLoading ? (
+              <p className="mb-3 text-[13px] text-[#7c8780]">Loading branches…</p>
+            ) : null}
+            {branchesError ? (
+              <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                {branchesError}
+              </div>
+            ) : null}
             <div className="space-y-2.5">
+              {!branchesLoading && !branchesError && branches.length === 0 ? (
+                <p className="text-[13px] text-[#7c8780]">No branches yet. Add a branch to get started.</p>
+              ) : null}
               {branches.map((branch) => (
                 <div
                   key={branch.id}
@@ -313,18 +550,16 @@ export default function AdminAddVendorPage({ onBack }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] font-bold text-[#17231c]">{branch.name}</p>
-                    <p className="mt-0.5 truncate text-[11px] text-[#7c8780]">{branch.detail}</p>
+                    <p className="mt-0.5 truncate text-[11px] text-[#7c8780]">
+                      {branch.detail ||
+                        `${branch.block || '—'} · radius ${branch.radius || '—'} · ETA ${branch.eta || '—'} · min ${branch.minOrder || '—'}`}
+                    </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      navigate(`/admin/vendors/new/branches/${encodeURIComponent(branch.id)}`, {
-                        state: { branch, storeName: form.storeName },
-                      })
-                    }
+                    onClick={() => editBranch(branch)}
                     className="inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#127338] hover:underline"
                   >
-                    
                     Edit ›
                   </button>
                 </div>
@@ -334,7 +569,7 @@ export default function AdminAddVendorPage({ onBack }) {
                 onClick={addBranch}
                 className="flex h-[42px] w-full items-center justify-center gap-1.5 rounded-sm border border border-[#1aa054] bg-white text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
               >
-                <Plus size={15} strokeWidth={2.2} /> Add branch 
+                <Plus size={15} strokeWidth={2.2} /> Add branch
               </button>
             </div>
           </VendorCard>
@@ -599,9 +834,11 @@ export default function AdminAddVendorPage({ onBack }) {
       <div className="mt-12 flex flex-wrap justify-end gap-2">
         <button
           type="button"
-          className="inline-flex h-[36px] items-center rounded-full border border-[#d7e8dc] bg-white px-4 text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
+          onClick={handleSaveDraft}
+          disabled={profileSaving || profileLoading}
+          className="inline-flex h-[36px] items-center rounded-full border border-[#d7e8dc] bg-white px-4 text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
         >
-          Save draft
+          {profileSaving && step === 1 ? 'Saving…' : 'Save draft'}
         </button>
         {step === 6 ? (
           <AdminAddVendorActivateButton onClick={() => handleBack()} />
@@ -609,9 +846,10 @@ export default function AdminAddVendorPage({ onBack }) {
           <button
             type="button"
             onClick={goNext}
-            className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+            disabled={profileSaving || (step === 1 && profileLoading)}
+            className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Continue → {current.continueTo}
+            {profileSaving && step === 1 ? 'Saving…' : `Continue → ${current.continueTo}`}
           </button>
         )}
       </div>

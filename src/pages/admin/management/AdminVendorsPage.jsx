@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, Copy, MoreVertical, Plus, Search } from 'lucide-react'
+import { Copy, MoreVertical, Plus, Search } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
-import { adminService } from '../../../services/adminService'
+import { adminVendorService } from '../../../services/admin/vendorService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
@@ -11,17 +11,42 @@ export default function AdminVendorsPage() {
   const navigate = useNavigate()
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
-  const { data, error, isLoading, refetch } = useApiResource(() => adminService.getManagement('vendors'), [])
+  const [category, setCategory] = useState('')
+  const { data, error, isLoading, refetch } = useApiResource(
+    () =>
+      adminVendorService.listVendors({
+        search: query,
+        status: tab,
+        category,
+        limit: 20,
+      }),
+    [tab, query, category],
+  )
 
   const rows = useMemo(() => {
     if (!data?.rows) return []
+    // Real API already filters; this also covers mock management fallback.
     return data.rows.filter((row) => {
-      const matchesTab = tab === 'All'
-        || (tab === 'Pending' ? ['Pending', 'Draft'].includes(row.status) : row.status === tab)
-      const haystack = `${row.name} ${row.id} ${row.category} ${row.status}`.toLowerCase()
-      return matchesTab && haystack.includes(query.toLowerCase())
+      const status = String(row.status || '')
+      const matchesTab =
+        tab === 'All' ||
+        (tab === 'Pending'
+          ? /pending|draft/i.test(status)
+          : status.toLowerCase() === tab.toLowerCase())
+      const matchesCategory = !category || row.category === category
+      const haystack = `${row.name} ${row.displayCode || ''} ${row.id} ${row.category} ${status}`.toLowerCase()
+      const matchesQuery = !query.trim() || haystack.includes(query.trim().toLowerCase())
+      return matchesTab && matchesCategory && matchesQuery
     })
-  }, [data, tab, query])
+  }, [data, tab, query, category])
+
+  const categories = useMemo(() => {
+    const set = new Set()
+    ;(data?.rows || []).forEach((row) => {
+      if (row.category && row.category !== '—') set.add(row.category)
+    })
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [data])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
@@ -37,9 +62,10 @@ export default function AdminVendorsPage() {
   }
 
   const vendorStatusTone = (status) => {
-    if (status === 'Active') return 'green'
-    if (status === 'Suspended') return 'red'
-    if (status === 'Pending') return 'yellow'
+    const normalized = String(status || '').toLowerCase()
+    if (normalized === 'active') return 'green'
+    if (normalized === 'suspended') return 'red'
+    if (normalized === 'pending' || normalized.includes('pending')) return 'yellow'
     return 'gray'
   }
 
@@ -87,12 +113,22 @@ export default function AdminVendorsPage() {
           ))}
         </div>
         <span className="flex-1" />
-        <button
-          type="button"
-          className="inline-flex h-[32px] items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3.5 text-[12px] font-bold text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-        >
-          All categories ▾
-        </button>
+        <label className="relative inline-flex h-[32px] items-center">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-[32px] appearance-none rounded-full border border-[#e4e8e4] bg-white py-0 pl-3.5 pr-8 text-[12px] font-bold text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] outline-none hover:bg-[#fafbfa]"
+            aria-label="Filter by category"
+          >
+            <option value="">All categories</option>
+            {categories.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+          <span className="pointer-events-none absolute right-3 text-[10px] text-[#69756d]">▾</span>
+        </label>
         <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
           <Search size={14} className="text-[#9aa49d]" />
           <input
@@ -121,60 +157,83 @@ export default function AdminVendorsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr
-                  key={row.id}
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => openVendor(row.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      openVendor(row.id)
-                    }
-                  }}
-                  className="cursor-pointer border-b border-[#f0f2f0] last:border-0 even:bg-[#fafbfa] hover:bg-[#f6f8f6]"
-                >
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-bold text-[#17231c]">{row.name}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5">
-                    <span className="inline-flex items-center gap-1.5 text-[12px] text-[#59655e]">
-                      {row.id}
-                      <button
-                        type="button"
-                        className="text-[#b0b8b2] hover:text-[#59655e]"
-                        aria-label={`Copy ${row.id}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          navigator.clipboard?.writeText(row.id)
-                        }}
-                      >
-                        <Copy size={12} />
-                      </button>
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.category}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.orders}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.branches}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">{row.users}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12px] font-medium text-[#17231c]">★ {row.rating}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 ">
-                    <Badge tone={vendorStatusTone(row.status)}>{row.status}</Badge>
-                  </td>
-                  <td className="px-2">
-                    <button
-                      type="button"
-                      className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
-                      aria-label={`Open ${row.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        openVendor(row.id)
-                      }}
-                    >
-                      <MoreVertical size={15} />
-                    </button>
+              {rows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={data.columns.length + 1}
+                    className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
+                  >
+                    No vendors found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => openVendor(row.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        openVendor(row.id)
+                      }
+                    }}
+                    className="cursor-pointer border-b border-[#f0f2f0] last:border-0 even:bg-[#fafbfa] hover:bg-[#f6f8f6]"
+                  >
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-bold text-[#17231c]">
+                      {row.name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5">
+                      <span className="inline-flex items-center gap-1.5 text-[12px] text-[#59655e]">
+                        {row.displayCode || row.id}
+                        <button
+                          type="button"
+                          className="text-[#b0b8b2] hover:text-[#59655e]"
+                          aria-label={`Copy ${row.displayCode || row.id}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            navigator.clipboard?.writeText(row.displayCode || row.id)
+                          }}
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">
+                      {row.category}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">
+                      {row.orders}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">
+                      {row.branches}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12px] text-[#455249]">
+                      {row.users}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12px] font-medium text-[#17231c]">
+                      ★ {row.rating}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 ">
+                      <Badge tone={vendorStatusTone(row.status)}>{row.status}</Badge>
+                    </td>
+                    <td className="px-2">
+                      <button
+                        type="button"
+                        className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
+                        aria-label={`Open ${row.name}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          openVendor(row.id)
+                        }}
+                      >
+                        <MoreVertical size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -9,7 +9,7 @@ const roleTone = (role) => {
   return 'gray'
 }
 
-export function AdminVendorUsers({ users, vendorId, storeName, branches }) {
+export function AdminVendorUsers({ users, vendorId, storeName, branches, isLoading = false }) {
   const navigate = useNavigate()
 
   const openUser = (user) => {
@@ -36,7 +36,20 @@ export function AdminVendorUsers({ users, vendorId, storeName, branches }) {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {isLoading ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                  Loading staff…
+                </td>
+              </tr>
+            ) : users.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                  No staff yet. Add a user to get started.
+                </td>
+              </tr>
+            ) : (
+              users.map((user) => (
               <tr key={user.id} className="border-b border-[#f0f2f0] last:border-0 even:bg-[#fafbfa] hover:bg-[#f6f8f6]">
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <p className="text-[13px] font-bold text-[#17231c]">{user.name}</p>
@@ -54,7 +67,7 @@ export function AdminVendorUsers({ users, vendorId, storeName, branches }) {
                   {user.lastActive}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5">
-                  <Badge tone="green">{user.status}</Badge>
+                  <Badge tone={user.status === 'Active' ? 'green' : 'gray'}>{user.status}</Badge>
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <button
@@ -67,7 +80,8 @@ export function AdminVendorUsers({ users, vendorId, storeName, branches }) {
                   </button>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>

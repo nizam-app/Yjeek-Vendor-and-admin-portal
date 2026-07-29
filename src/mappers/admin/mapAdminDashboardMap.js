@@ -217,8 +217,8 @@ export function mapAdminDashboardMapPoint(point, legendByKey = {}) {
 }
 
 /**
- * Project lat/lng points into percentage positions inside the map panel.
- * No external map SDK — preserves the existing Live map chrome.
+ * Project lat/lng points into percentage positions (legacy placeholder plane).
+ * Google Maps Live map uses `lat`/`lng` directly; leftPct/topPct kept for fallbacks.
  */
 export function projectAdminDashboardMapPoints(points) {
   const list = Array.isArray(points) ? points : []

@@ -123,11 +123,12 @@ AdminDashboardPage
     → adminDashboardService.getMap
       → apiClient.get(endpoints.admin.dashboard.map, { feature: 'dashboard' })
       → mapAdminDashboardMapResponse
-  → AdminLiveMap
+  → AdminLiveMap (Google Maps via VITE_GOOGLE_MAPS_API_KEY)
 ```
+
+Markers use confirmed `lat` / `lng` on a Google Maps basemap. Legend colors unchanged.
 
 ## Unconfirmed (do not invent)
 
 - Zones / Heatmap endpoints
-- Tile basemap / real GIS SDK
 - Error response bodies

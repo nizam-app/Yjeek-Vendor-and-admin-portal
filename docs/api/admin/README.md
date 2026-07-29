@@ -9,6 +9,17 @@ Feature-scoped real APIs use `VITE_ADMIN_REAL_API_FEATURES` (see `.env.example`)
 Current contracts:
 
 - [`contracts/admin-auth.md`](./contracts/admin-auth.md) — Login + Get Me + Logout (confirmed). 2FA Verify pending screenshots.
+- [`contracts/admin-vendors-list.md`](./contracts/admin-vendors-list.md) — Vendor Management list + KPIs + filters.
+- [`contracts/admin-vendors-detail.md`](./contracts/admin-vendors-detail.md) — Vendor detail Overview (Get vendor).
+- [`contracts/admin-vendors-store-update.md`](./contracts/admin-vendors-store-update.md) — PATCH update store info.
+- [`contracts/admin-vendors-force-close.md`](./contracts/admin-vendors-force-close.md) — Force close store.
+- [`contracts/admin-vendors-reopen.md`](./contracts/admin-vendors-reopen.md) — Reopen / Resume after force close.
+- [`contracts/admin-vendors-suspend.md`](./contracts/admin-vendors-suspend.md) — Suspend / Unsuspend vendor.
+- [`contracts/admin-vendors-branches.md`](./contracts/admin-vendors-branches.md) — List + create vendor branches.
+- [`contracts/admin-vendors-branch-update.md`](./contracts/admin-vendors-branch-update.md) — PATCH update branch.
+- [`contracts/admin-vendors-branch-delete.md`](./contracts/admin-vendors-branch-delete.md) — DELETE branch.
+- [`contracts/admin-vendors-staff.md`](./contracts/admin-vendors-staff.md) — List + create vendor staff.
+- [`contracts/admin-vendors-delivery-zones.md`](./contracts/admin-vendors-delivery-zones.md) — Delivery zones GET + apply-all.
 - [`contracts/admin-dashboard-overview.md`](./contracts/admin-dashboard-overview.md) — Dashboard Full Overview KPIs + bucket counts.
 - [`contracts/admin-dashboard-map.md`](./contracts/admin-dashboard-map.md) — Live map (`layer=champs` confirmed; orders/vendors same path).
 - [`contracts/admin-dashboard-live-orders.md`](./contracts/admin-dashboard-live-orders.md) — Live Orders board columns + cards.

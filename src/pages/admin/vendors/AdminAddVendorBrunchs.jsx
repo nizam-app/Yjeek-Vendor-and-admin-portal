@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, Copy, Map, MapPin, Pause, Pencil, Trash2 } from 'lucide-react'
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
+import AdminDeleteBranchModal from '../../../components/admin/AdminDeleteBranchModal'
+import AdminBranchLocationPicker from '../../../components/admin/AdminBranchLocationPicker'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { adminService } from '../../../services/adminService'
+import { isPlottableLatLng } from '../../../lib/googleMaps'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -190,14 +195,22 @@ function normalizeBranch(branch) {
   if (!branch) return null
   if (branch.detail) return branch
 
-  const radiusKm = String(branch.radius || '').replace(/[^\d.]/g, '')
-  const etaMin = String(branch.eta || '').replace(/[^\d.]/g, '')
-  const minOrderValue = String(branch.minOrder || '').replace(/[^\d.]/g, '')
+  const radiusKmRaw =
+    branch.radiusKm != null ? String(branch.radiusKm) : String(branch.radius || '').replace(/[^\d.]/g, '')
+  const etaMinRaw =
+    branch.etaMin != null ? String(branch.etaMin) : String(branch.eta || '').replace(/[^\d.]/g, '')
+  const minOrderRaw =
+    branch.minOrderAmount != null
+      ? String(branch.minOrderAmount)
+      : String(branch.minOrder || '').replace(/[^\d.]/g, '')
 
   return {
     ...branch,
-    detail: `Block ${branch.block || '—'} · radius ${radiusKm || '5'} km · ETA ${etaMin || '35'} min · min BHD ${minOrderValue || '3.000'}`,
-    areaCity: branch.area || 'Manama',
+    radiusKm: branch.radiusKm ?? (radiusKmRaw ? Number(radiusKmRaw) : null),
+    etaMin: branch.etaMin ?? (etaMinRaw ? Number(etaMinRaw) : null),
+    minOrderAmount: branch.minOrderAmount ?? (minOrderRaw ? Number(minOrderRaw) : null),
+    detail: `Block ${branch.block || '—'} · radius ${radiusKmRaw || '—'} km · ETA ${etaMinRaw || '—'} min · min BHD ${minOrderRaw || '—'}`,
+    areaCity: branch.areaCity || branch.area || 'Manama',
   }
 }
 
@@ -212,57 +225,50 @@ export default function AdminAddVendorBrunchs() {
   const navigate = useNavigate()
   const { state } = useLocation()
 
-  const isVendorDetailFlow = Boolean(vendorId)
-  const isNewBranch = branchId === 'new'
-  const returnPath = isVendorDetailFlow
-    ? `/admin/vendors/${encodeURIComponent(vendorId)}`
-    : '/admin/vendors/new'
-  const returnState = isVendorDetailFlow ? { tab: 'Branches' } : { step: 2 }
-
-  const branch = useMemo(() => {
-    if (isNewBranch) {
-      return { id: 'new', name: '', block: '', area: 'Manama', areaCity: 'Manama' }
-    }
-    if (state?.branch) return normalizeBranch(state.branch)
-    return normalizeBranch(
-      INITIAL_BRANCHES.find((b) => String(b.id) === String(branchId)) ?? INITIAL_BRANCHES[0],
-    )
-  }, [branchId, isNewBranch, state?.branch])
-
-  const parsed = useMemo(() => parseBranchDetail(branch?.detail || ''), [branch?.detail])
+  const isVendorDetailFlow = Boolean(vendorId) && vendorId !== 'new'
+  // Route `/vendors/:vendorId/branches/new` has no :branchId param.
+  // Route `/vendors/.../branches/:branchId` uses branchId === 'new' for create.
+  const isNewBranch = branchId === 'new' || (isVendorDetailFlow && !branchId)
+  const returnToWizard = state?.returnTo === 'wizard'
+  const returnPath = returnToWizard
+    ? '/admin/vendors/new'
+    : isVendorDetailFlow
+      ? `/admin/vendors/${encodeURIComponent(vendorId)}`
+      : '/admin/vendors/new'
+  const returnState = returnToWizard
+    ? {
+        mode: 'edit',
+        vendorId: state?.vendorId || vendorId,
+        storeName: state?.storeName,
+        step: 2,
+      }
+    : isVendorDetailFlow
+      ? { tab: 'Branches' }
+      : { step: 2 }
 
   const storeName = state?.storeName || 'Green Kitchen'
+  const useRealBranchApi = isVendorDetailFlow && isAdminRealApiFeature('vendors')
 
-  const [form, setForm] = useState({
-    name: branch?.name || '',
-    areaCity: branch?.areaCity || 'Manama',
-    address: parsed.block
-      ? `Building 2732, Road 3649, Block ${parsed.block}, Al Seef`
-      : '',
-    pinnedLocation: '26.2361° N, 50.5860° E · Al Seef, Manama',
-    latitude: '26.236100',
-    longitude: '50.586000',
-    radiusKm: parsed.radiusKm || '5',
-    etaMin: parsed.etaMin || '35',
-    minOrderValue: parsed.minOrderValue || '3.000',
+  const [loadedBranch, setLoadedBranch] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(null)
+  const [form, setForm] = useState(() => ({
+    name: '',
+    areaCity: 'Seef',
+    address: '',
+    pinnedLocation: '',
+    latitude: '',
+    longitude: '',
+    radiusKm: '',
+    etaMin: '',
+    minOrderValue: '',
+    deliveryContribution: '0.300',
+    freeDeliveryOver: '8.000',
+    maxDistanceKm: '8',
+    extraContributionPerKm: '0.100',
+    maxContribution: '0.800',
     hours: defaultHours(),
-  })
-
-  useEffect(() => {
-    setForm((prev) => ({
-      ...prev,
-      name: branch?.name || '',
-      areaCity: branch?.areaCity || prev.areaCity,
-      address: parsed.block
-        ? `Building 2732, Road 3649, Block ${parsed.block}, Al Seef`
-        : prev.address,
-      radiusKm: parsed.radiusKm || prev.radiusKm,
-      etaMin: parsed.etaMin || prev.etaMin,
-      minOrderValue: parsed.minOrderValue || prev.minOrderValue,
-    }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branch?.name, branch?.areaCity, branch?.detail, parsed.block, parsed.radiusKm, parsed.etaMin, parsed.minOrderValue])
-
+  }))
   const [branchOnline, setBranchOnline] = useState(true)
   const [allowPickup, setAllowPickup] = useState(true)
   const [allowDineIn, setAllowDineIn] = useState(true)
@@ -270,9 +276,112 @@ export default function AdminAddVendorBrunchs() {
   const [applyVendorDeliveryToAll, setApplyVendorDeliveryToAll] = useState(false)
   const [applyCustomerDeliveryToAll, setApplyCustomerDeliveryToAll] = useState(false)
   const [forceCloseOpen, setForceCloseOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  const branch = useMemo(() => {
+    if (isNewBranch) {
+      return { id: 'new', name: '', block: '', area: 'Manama', areaCity: 'Manama' }
+    }
+    if (loadedBranch) return normalizeBranch(loadedBranch)
+    if (state?.branch) return normalizeBranch(state.branch)
+    if (useRealBranchApi) return null
+    return normalizeBranch(
+      INITIAL_BRANCHES.find((b) => String(b.id) === String(branchId)) ?? INITIAL_BRANCHES[0],
+    )
+  }, [branchId, isNewBranch, loadedBranch, state?.branch, useRealBranchApi])
+
+  useEffect(() => {
+    if (!useRealBranchApi) {
+      setLoadedBranch(null)
+      setLoading(false)
+      setLoadError(null)
+      return undefined
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+
+    const tasks = [adminService.getVendorDeliveryZones(vendorId)]
+    if (!isNewBranch) tasks.unshift(adminService.listVendorBranches(vendorId))
+
+    Promise.all(tasks)
+      .then((results) => {
+        if (cancelled) return
+
+        if (!isNewBranch) {
+          const list = results[0]?.data?.branches || []
+          const found = list.find((item) => String(item.id) === String(branchId))
+          if (!found) {
+            setLoadError('Branch not found.')
+            setLoadedBranch(null)
+          } else {
+            setLoadedBranch(found)
+          }
+        }
+
+        const zones = (!isNewBranch ? results[1] : results[0])?.data?.defaults || null
+        if (zones) {
+          setFreeDeliveryEnabled(Boolean(zones.freeDeliveryEnabled))
+          setForm((prev) => ({
+            ...prev,
+            deliveryContribution: zones.deliveryContribution || prev.deliveryContribution,
+            freeDeliveryOver: zones.freeDeliveryOver || prev.freeDeliveryOver,
+            maxDistanceKm: zones.maxDistanceKm || prev.maxDistanceKm,
+            extraContributionPerKm: zones.extraContributionPerKm || prev.extraContributionPerKm,
+            maxContribution: zones.maxContribution || prev.maxContribution,
+          }))
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(err?.message || 'Failed to load branch.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealBranchApi, vendorId, branchId, isNewBranch])
+
+  useEffect(() => {
+    if (isNewBranch || !branch) return
+    setForm((prev) => ({
+      ...prev,
+      name: branch.name || '',
+      areaCity: branch.areaCity || branch.area || prev.areaCity,
+      address: branch.address ?? prev.address,
+      latitude: isPlottableLatLng(branch.latitude, branch.longitude)
+        ? String(branch.latitude)
+        : prev.latitude,
+      longitude: isPlottableLatLng(branch.latitude, branch.longitude)
+        ? String(branch.longitude)
+        : prev.longitude,
+      radiusKm: branch.radiusKm != null ? String(branch.radiusKm) : prev.radiusKm,
+      etaMin: branch.etaMin != null ? String(branch.etaMin) : prev.etaMin,
+      minOrderValue:
+        branch.minOrderAmount != null ? String(branch.minOrderAmount) : prev.minOrderValue,
+      pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
+        ? `${branch.latitude}° N, ${branch.longitude}° E`
+        : prev.pinnedLocation,
+    }))
+  }, [branch, isNewBranch])
 
   function updateField(field, value) {
     setForm((c) => ({ ...c, [field]: value }))
+  }
+
+  function handlePinChange({ latitude, longitude }) {
+    setForm((prev) => ({
+      ...prev,
+      latitude,
+      longitude,
+      pinnedLocation:
+        isPlottableLatLng(latitude, longitude) ? `${latitude}° N, ${longitude}° E` : '',
+    }))
   }
 
   function toggleDay(day) {
@@ -356,11 +465,59 @@ export default function AdminAddVendorBrunchs() {
     navigate(returnPath, { state: returnState })
   }
 
-  function handleSaveBranch() {
-    navigate(returnPath, { state: returnState })
+  async function handleSaveBranch() {
+    if (!useRealBranchApi) {
+      navigate(returnPath, { state: returnState })
+      return
+    }
+
+    setSaveError(null)
+    setSaving(true)
+    try {
+      if (isNewBranch) {
+        await adminService.createVendorBranch(vendorId, form)
+      } else {
+        await adminService.updateVendorBranch(vendorId, branchId, form)
+      }
+
+      if (applyVendorDeliveryToAll) {
+        await adminService.updateVendorDeliveryZones(vendorId, {
+          radiusKm: form.radiusKm,
+          etaMin: form.etaMin,
+          minOrder: form.minOrderValue,
+          deliveryContribution: form.deliveryContribution,
+          freeDeliveryOver: form.freeDeliveryOver,
+          freeDeliveryEnabled,
+          maxDistanceKm: form.maxDistanceKm,
+          extraContributionPerKm: form.extraContributionPerKm,
+          maxContribution: form.maxContribution,
+        })
+        await adminService.applyVendorDeliveryZonesToAll(vendorId)
+      }
+
+      navigate(returnPath, { state: returnState })
+    } catch (err) {
+      setSaveError(err?.message || (isNewBranch ? 'Failed to create branch.' : 'Failed to update branch.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleDelete() {
+    if (isNewBranch || loading) return
+    setDeleteOpen(true)
+  }
+
+  async function handleConfirmDelete() {
+    if (isNewBranch) {
+      throw new Error('Cannot delete a branch that has not been created yet.')
+    }
+    if (!useRealBranchApi) {
+      throw new Error('Real vendors API is required to delete a branch.')
+    }
+
+    await adminService.deleteVendorBranch(vendorId, branchId)
+    setDeleteOpen(false)
     navigate(returnPath, { state: returnState })
   }
 
@@ -382,7 +539,7 @@ export default function AdminAddVendorBrunchs() {
           <div className="min-w-0">
             <h2 className="text-[18px] font-bold tracking-[-0.02em] text-[#17231c]">Branch setup</h2>
             <p className="mt-0.5 text-[12px] text-[#7c8780]">
-              {storeName} · edit name, address, delivery, hours, status
+              {storeName} · {isNewBranch ? 'add name, address, delivery, hours, status' : 'edit name, address, delivery, hours, status'}
             </p>
           </div>
         </div>
@@ -399,12 +556,23 @@ export default function AdminAddVendorBrunchs() {
           <button
             type="button"
             onClick={handleSaveBranch}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+            disabled={saving}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Save changes
+            {saving ? 'Saving…' : isNewBranch ? 'Save branch' : 'Save changes'}
           </button>
         </div>
       </div>
+
+      {loadError ? (
+        <p className="mb-3 text-[12px] font-medium text-[#d64044]">{loadError}</p>
+      ) : null}
+      {loading ? (
+        <p className="mb-3 text-[13px] text-[#7c8780]">Loading branch…</p>
+      ) : null}
+      {saveError ? (
+        <p className="mb-3 text-[12px] font-medium text-[#d64044]">{saveError}</p>
+      ) : null}
 
       <div className="space-y-4">
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
@@ -426,13 +594,25 @@ export default function AdminAddVendorBrunchs() {
                   value={form.areaCity}
                   onChange={(e) => updateField('areaCity', e.target.value)}
                 >
-                  <option>Manama</option>
-                  <option>Muharraq</option>
-                  <option>Riffa</option>
-                  <option>Juffair</option>
-                  <option>Seef</option>
+                  {[
+                    'Manama',
+                    'Muharraq',
+                    'Riffa',
+                    'Juffair',
+                    'Seef',
+                    form.areaCity,
+                  ]
+                    .filter(Boolean)
+                    .filter((item, index, all) => all.indexOf(item) === index)
+                    .map((area) => (
+                      <option key={area} value={area}>
+                        {area}
+                      </option>
+                    ))}
                 </select>
-                ▾
+                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] leading-none text-[#69756d]">
+                  ▾
+                </span>
               </div>
             </Field>
 
@@ -445,13 +625,11 @@ export default function AdminAddVendorBrunchs() {
             </Field>
 
             <div className="col-span-2 max-[700px]:col-span-1">
-              <button
-                type="button"
-                className="flex h-[160px] w-full flex-col items-center justify-center gap-2 rounded-[10px] border border-[#e4e8e4] bg-[#f3f5f3] text-[#7c8780] transition hover:border-[#1aa054] hover:bg-[#eef7f1]"
-              >
-                <MapPin size={18} className="text-[#e14b42]" fill="#e14b42" strokeWidth={1.5} />
-                <span className="text-[12px] font-medium">Pin location on map</span>
-              </button>
+              <AdminBranchLocationPicker
+                latitude={form.latitude}
+                longitude={form.longitude}
+                onChange={handlePinChange}
+              />
             </div>
 
             <Field label="Pinned location" className="col-span-2 max-[700px]:col-span-1">
@@ -465,7 +643,8 @@ export default function AdminAddVendorBrunchs() {
                 <input
                   className={cn(inputClass, 'pl-9')}
                   value={form.pinnedLocation}
-                  onChange={(e) => updateField('pinnedLocation', e.target.value)}
+                  readOnly
+                  placeholder="Click the map to pin a location"
                 />
               </div>
             </Field>
@@ -474,7 +653,16 @@ export default function AdminAddVendorBrunchs() {
               <input
                 className={inputClass}
                 value={form.latitude}
-                onChange={(e) => updateField('latitude', e.target.value)}
+                onChange={(e) => {
+                  const latitude = e.target.value
+                  setForm((prev) => ({
+                    ...prev,
+                    latitude,
+                    pinnedLocation: isPlottableLatLng(latitude, prev.longitude)
+                      ? `${latitude}° N, ${prev.longitude}° E`
+                      : prev.pinnedLocation,
+                  }))
+                }}
               />
             </Field>
 
@@ -482,7 +670,16 @@ export default function AdminAddVendorBrunchs() {
               <input
                 className={inputClass}
                 value={form.longitude}
-                onChange={(e) => updateField('longitude', e.target.value)}
+                onChange={(e) => {
+                  const longitude = e.target.value
+                  setForm((prev) => ({
+                    ...prev,
+                    longitude,
+                    pinnedLocation: isPlottableLatLng(prev.latitude, longitude)
+                      ? `${prev.latitude}° N, ${longitude}° E`
+                      : prev.pinnedLocation,
+                  }))
+                }}
               />
             </Field>
           </div>
@@ -495,17 +692,33 @@ export default function AdminAddVendorBrunchs() {
 
             <div className="grid grid-cols-3 gap-x-4 gap-y-4 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
               <Field label="Delivery radius (km)">
-                <input className={inputClass} value="5" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.radiusKm}
+                  onChange={(e) => updateField('radiusKm', e.target.value)}
+                />
               </Field>
               <Field label="Delivery ETA (min)">
-                <input className={inputClass} value="35" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.etaMin}
+                  onChange={(e) => updateField('etaMin', e.target.value)}
+                />
               </Field>
               <Field label="Min order for delivery (BHD)">
-                <input className={inputClass} value="2.000" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.minOrderValue}
+                  onChange={(e) => updateField('minOrderValue', e.target.value)}
+                />
               </Field>
 
               <Field label="Delivery contribution (BHD) / per order">
-                <input className={inputClass} value="0.300" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.deliveryContribution}
+                  onChange={(e) => updateField('deliveryContribution', e.target.value)}
+                />
               </Field>
 
               <Field
@@ -513,26 +726,44 @@ export default function AdminAddVendorBrunchs() {
                 className="max-[560px]:col-span-1"
               >
                 <div className="mb-1.5 flex items-center gap-2">
-                  <span className="text-[12px] font-bold text-[#1aa054]">Enabled</span>
+                  <span className="text-[12px] font-bold text-[#1aa054]">
+                    {freeDeliveryEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
                   <Toggle
                     checked={freeDeliveryEnabled}
                     onChange={() => setFreeDeliveryEnabled((prev) => !prev)}
                     label="Free delivery enabled"
                   />
                 </div>
-                <input className={inputClass} value="8.000" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.freeDeliveryOver}
+                  onChange={(e) => updateField('freeDeliveryOver', e.target.value)}
+                />
               </Field>
 
               <Field label="Max distance (km)">
-                <input className={inputClass} value="8" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.maxDistanceKm}
+                  onChange={(e) => updateField('maxDistanceKm', e.target.value)}
+                />
               </Field>
 
               <Field label="Extra contribution per km (BHD)">
-                <input className={inputClass} value="0.100" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.extraContributionPerKm}
+                  onChange={(e) => updateField('extraContributionPerKm', e.target.value)}
+                />
               </Field>
 
               <Field label="Max contribution (BHD)">
-                <input className={inputClass} value="0.800" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.maxContribution}
+                  onChange={(e) => updateField('maxContribution', e.target.value)}
+                />
               </Field>
             </div>
 
@@ -697,14 +928,19 @@ export default function AdminAddVendorBrunchs() {
 
         {/* Bottom actions */}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#d64044] bg-white px-4 text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
-          >
-            <Trash2 size={15} />
-            Delete branch
-          </button>
+          {!isNewBranch ? (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={loading || saving}
+              className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#d64044] bg-white px-4 text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec] disabled:opacity-60"
+            >
+              <Trash2 size={15} />
+              Delete branch
+            </button>
+          ) : (
+            <span />
+          )}
 
           <div className="flex items-center gap-2">
             <button
@@ -717,13 +953,21 @@ export default function AdminAddVendorBrunchs() {
             <button
               type="button"
               onClick={handleSaveBranch}
-              className="inline-flex h-[36px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+              disabled={saving}
+              className="inline-flex h-[36px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
             >
-              Save branch
+              {saving ? 'Saving…' : 'Save branch'}
             </button>
           </div>
         </div>
       </div>
+
+      <AdminDeleteBranchModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        branchName={form.name || branch?.name || ''}
+        onConfirm={handleConfirmDelete}
+      />
 
       <AdminForceCloseModal
         open={forceCloseOpen}

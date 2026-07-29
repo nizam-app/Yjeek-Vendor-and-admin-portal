@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { AlertTriangle, ChevronDown, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { AlertTriangle, X } from 'lucide-react'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -12,39 +12,60 @@ const REASONS = [
   'Out of stock',
   'Staff shortage',
   'Kitchen closed',
+  'Hygiene inspection',
   'Other',
 ]
-
-const DEFAULT_BRANCHES = ['Manama — Al Seef', 'Juffair — Road 2401', 'Riffa — East']
 
 export default function AdminForceCloseModal({
   open,
   onClose,
   storeName = 'Green Kitchen',
-  branchName = 'Manama — Al Seef',
-  branches = DEFAULT_BRANCHES,
+  branchName = '',
+  branches = [],
   defaultScope = 'branch',
   onConfirm,
 }) {
   const [scope, setScope] = useState(defaultScope === 'store' ? 'Whole store' : 'Single branch')
-  const [branch, setBranch] = useState(branchName || branches[0] || 'Manama — Al Seef')
+  const [branch, setBranch] = useState(branchName || branches[0] || '')
   const [reason, setReason] = useState(REASONS[0])
   const [from, setFrom] = useState('9 Apr 2026 · 14:00')
   const [to, setTo] = useState('9 Apr 2026 · 18:00')
   const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (!open) return
+    setScope(defaultScope === 'store' ? 'Whole store' : 'Single branch')
+    setBranch(branchName || branches[0] || '')
+    setReason(REASONS[0])
+    setFrom('9 Apr 2026 · 14:00')
+    setTo('9 Apr 2026 · 18:00')
+    setNote('')
+    setSubmitting(false)
+    setError(null)
+  }, [open, defaultScope, branchName, branches])
 
   if (!open) return null
 
-  const handleConfirm = () => {
-    onConfirm?.({
-      scope,
-      branch: scope === 'Single branch' ? branch : null,
-      reason,
-      from,
-      to,
-      note,
-    })
-    onClose?.()
+  const handleConfirm = async () => {
+    setError(null)
+    setSubmitting(true)
+    try {
+      await onConfirm?.({
+        scope,
+        branch: scope === 'Single branch' ? branch : null,
+        reason,
+        from,
+        to,
+        note,
+      })
+      onClose?.()
+    } catch (err) {
+      setError(err?.message || 'Force close failed.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -54,6 +75,7 @@ export default function AdminForceCloseModal({
         aria-label="Close force close modal"
         onClick={onClose}
         className="absolute inset-0 bg-black/40"
+        disabled={submitting}
       />
 
       <div
@@ -77,6 +99,7 @@ export default function AdminForceCloseModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={submitting}
             className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
             aria-label="Close"
           >
@@ -100,6 +123,7 @@ export default function AdminForceCloseModal({
                   key={option}
                   type="button"
                   onClick={() => setScope(option)}
+                  disabled={submitting}
                   className={cn(
                     'h-[32px] rounded-[8px] px-3 text-[12px]',
                     scope === option
@@ -113,47 +137,66 @@ export default function AdminForceCloseModal({
             </div>
           </div>
 
-          <label className="block w-fit">
+          <label className="block w-fit min-w-[220px]">
             <span className={labelClass}>Branch (if single)</span>
             <div className="relative">
               <select
                 className={cn(inputClass, 'appearance-none pr-9', scope !== 'Single branch' && 'opacity-60')}
                 value={branch}
-                disabled={scope !== 'Single branch'}
+                disabled={scope !== 'Single branch' || submitting}
                 onChange={(e) => setBranch(e.target.value)}
               >
-                {branches.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
+                {branches.length === 0 ? (
+                  <option value="">No branches loaded</option>
+                ) : (
+                  branches.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))
+                )}
               </select>
-              ▾
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] leading-none text-[#69756d]">
+                ▾
+              </span>
             </div>
           </label>
 
-          <label className="block w-fit">
+          <label className="block w-fit min-w-[220px]">
             <span className={labelClass}>Reason</span>
             <div className="relative">
               <select
                 className={cn(inputClass, 'appearance-none pr-9')}
                 value={reason}
+                disabled={submitting}
                 onChange={(e) => setReason(e.target.value)}
               >
                 {REASONS.map((item) => (
                   <option key={item} value={item}>{item}</option>
                 ))}
               </select>
-              ▾
+              <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] leading-none text-[#69756d]">
+                ▾
+              </span>
             </div>
           </label>
 
           <div className="grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
             <label className="block">
               <span className={labelClass}>From</span>
-              <input className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} />
+              <input
+                className={inputClass}
+                value={from}
+                disabled={submitting}
+                onChange={(e) => setFrom(e.target.value)}
+              />
             </label>
             <label className="block">
               <span className={labelClass}>To</span>
-              <input className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
+              <input
+                className={inputClass}
+                value={to}
+                disabled={submitting}
+                onChange={(e) => setTo(e.target.value)}
+              />
             </label>
           </div>
 
@@ -162,16 +205,22 @@ export default function AdminForceCloseModal({
             <input
               className={inputClass}
               value={note}
+              disabled={submitting}
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. kitchen maintenance until 5 PM"
             />
           </label>
+
+          {error ? (
+            <p className="text-[12px] font-medium text-[#d64044]">{error}</p>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between gap-3 border-t border-[#edf0ee] px-5 py-4">
           <button
             type="button"
             onClick={onClose}
+            disabled={submitting}
             className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#455249] hover:bg-[#f6f8f6]"
           >
             Cancel
@@ -179,9 +228,10 @@ export default function AdminForceCloseModal({
           <button
             type="button"
             onClick={handleConfirm}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#c4841a] px-4 text-[13px] font-bold text-white hover:bg-[#a86f12]"
+            disabled={submitting}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#c4841a] px-4 text-[13px] font-bold text-white hover:bg-[#a86f12] disabled:opacity-60"
           >
-            Force close
+            {submitting ? 'Closing…' : 'Force close'}
           </button>
         </div>
       </div>

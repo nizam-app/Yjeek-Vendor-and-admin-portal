@@ -55,14 +55,16 @@ export function useApiResource(loader, dependencies = []) {
     }
   }, [load])
 
+  const setData = useCallback((updater) => {
+    setState((current) => ({
+      ...current,
+      data: typeof updater === 'function' ? updater(current.data) : updater,
+    }))
+  }, [])
+
   return {
     ...state,
     refetch: load,
-    setData: (updater) => {
-      setState((current) => ({
-        ...current,
-        data: typeof updater === 'function' ? updater(current.data) : updater,
-      }))
-    },
+    setData,
   }
 }

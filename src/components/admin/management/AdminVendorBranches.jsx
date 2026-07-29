@@ -10,7 +10,7 @@ const branchStatusTone = (status) => {
   return 'gray'
 }
 
-export function AdminVendorBranches({ branches, vendorId, storeName }) {
+export function AdminVendorBranches({ branches, vendorId, storeName, isLoading = false }) {
   const navigate = useNavigate()
 
   const openBranch = (branch) => {
@@ -37,7 +37,20 @@ export function AdminVendorBranches({ branches, vendorId, storeName }) {
             </tr>
           </thead>
           <tbody>
-            {branches.map((branch) => (
+            {isLoading ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                  Loading branches…
+                </td>
+              </tr>
+            ) : branches.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                  No branches yet. Add a branch to get started.
+                </td>
+              </tr>
+            ) : (
+              branches.map((branch) => (
               <tr key={branch.id} className="border-b border-[#f0f2f0] last:border-0 even:bg-[#fafbfa] hover:bg-[#f6f8f6]">
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <p className="text-[13px] font-bold text-[#17231c]">{branch.name}</p>
@@ -76,7 +89,8 @@ export function AdminVendorBranches({ branches, vendorId, storeName }) {
                   </div>
                 </td>
               </tr>
-            ))}
+              ))
+            )}
           </tbody>
         </table>
       </div>

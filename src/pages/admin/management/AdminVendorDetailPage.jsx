@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronLeft, Pause, Pencil, Plus, Star } from 'lucide-react'
+import { ChevronLeft, Pause, Play, Plus, Star } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
+import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
+import AdminSuspendVendorModal from '../../../components/admin/AdminSuspendVendorModal'
+import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { AdminVendorBranches } from '../../../components/admin/management/AdminVendorBranches'
 import { AdminVendorDeliveryZones } from '../../../components/admin/management/AdminVendorDeliveryZones'
 import { AdminVendorUsers } from '../../../components/admin/management/AdminVendorUsers'
@@ -11,6 +15,10 @@ import { AdminVendorPromotions } from '../../../components/admin/management/Admi
 import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
 import { AdminVendorSla } from '../../../components/admin/management/AdminVendorSla'
 import { cn } from '../../../components/admin/cn'
+import {
+  emptyAdminDeliveryZones,
+  mapAdminDeliveryZoneOverridesFromBranches,
+} from '../../../mappers/admin/mapAdminVendors'
 
 export default function AdminVendorDetailPage() {
   const { vendorId } = useParams()
@@ -18,14 +26,256 @@ export default function AdminVendorDetailPage() {
   const location = useLocation()
   const [tab, setTab] = useState(location.state?.tab ?? 'Overview')
   const [storeOnline, setStoreOnline] = useState(null)
-  const { data, error, isLoading, refetch } = useApiResource(
+  const [forceCloseOpen, setForceCloseOpen] = useState(false)
+  const [suspendOpen, setSuspendOpen] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const [unsuspending, setUnsuspending] = useState(false)
+  const [actionError, setActionError] = useState(null)
+  const [branches, setBranches] = useState([])
+  const [branchesCount, setBranchesCount] = useState(0)
+  const [branchesLoading, setBranchesLoading] = useState(false)
+  const [branchesError, setBranchesError] = useState(null)
+  const [staff, setStaff] = useState([])
+  const [staffCount, setStaffCount] = useState(0)
+  const [staffLoading, setStaffLoading] = useState(false)
+  const [staffError, setStaffError] = useState(null)
+  const [deliveryZones, setDeliveryZones] = useState(null)
+  const [deliveryZonesLoading, setDeliveryZonesLoading] = useState(false)
+  const [deliveryZonesError, setDeliveryZonesError] = useState(null)
+  const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getVendorDetail(vendorId),
     [vendorId],
   )
 
+  useEffect(() => {
+    if (location.state?.tab) setTab(location.state.tab)
+  }, [location.state?.tab])
+
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setBranches([])
+      setBranchesCount(0)
+      setBranchesError(null)
+      setBranchesLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setBranchesLoading(true)
+    setBranchesError(null)
+
+    adminService
+      .listVendorBranches(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        const list = response?.data?.branches || []
+        const count = Number(response?.data?.count) || list.length
+        setBranches(list)
+        setBranchesCount(count)
+        setData((prev) => (prev ? { ...prev, branches: list } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setBranches([])
+        setBranchesCount(0)
+        setBranchesError(err?.message || 'Failed to load branches.')
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+    // setData is stable (useCallback). Do not depend on render-only values.
+  }, [vendorId, location.key, setData])
+
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setStaff([])
+      setStaffCount(0)
+      setStaffError(null)
+      setStaffLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setStaffLoading(true)
+    setStaffError(null)
+
+    adminService
+      .listVendorStaff(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        const list = response?.data?.users || []
+        const count = Number(response?.data?.count) || list.length
+        setStaff(list)
+        setStaffCount(count)
+        setData((prev) => (prev ? { ...prev, users: list } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setStaff([])
+        setStaffCount(0)
+        setStaffError(err?.message || 'Failed to load staff.')
+      })
+      .finally(() => {
+        if (!cancelled) setStaffLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, setData])
+
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setDeliveryZones(null)
+      setDeliveryZonesError(null)
+      setDeliveryZonesLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setDeliveryZonesLoading(true)
+    setDeliveryZonesError(null)
+
+    adminService
+      .getVendorDeliveryZones(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        setDeliveryZones(response?.data || null)
+        setData((prev) => (prev ? { ...prev, deliveryZones: response?.data || prev.deliveryZones } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setDeliveryZones(null)
+        setDeliveryZonesError(err?.message || 'Failed to load delivery zones.')
+      })
+      .finally(() => {
+        if (!cancelled) setDeliveryZonesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, setData])
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const online = storeOnline ?? data.storeOnline
+  const statusLower = String(data.status || '').toLowerCase()
+  const isForceClosed =
+    Boolean(data.forceClosed) || statusLower.includes('force-closed')
+  const isSuspended =
+    statusLower === 'suspended' ||
+    String(data.accountStatus || '').toUpperCase() === 'SUSPENDED'
+
+  const statusBadgeClass = isSuspended
+    ? 'bg-[#fdebea] text-[#bf3c36]'
+    : isForceClosed
+      ? 'bg-[#fff3d6] text-[#9E6B0D]'
+      : 'bg-[#e8f7ed] text-[#147940]'
+
+  const deliveryZonesForTab = (() => {
+    if (deliveryZones?.defaults) return deliveryZones
+    const base =
+      data.deliveryZones &&
+      typeof data.deliveryZones === 'object' &&
+      !Array.isArray(data.deliveryZones) &&
+      data.deliveryZones.defaults
+        ? data.deliveryZones
+        : emptyAdminDeliveryZones()
+    const branchSource = branches.length ? branches : data.branches
+    return {
+      defaults: base.defaults || emptyAdminDeliveryZones().defaults,
+      overrides: Array.isArray(base.overrides) && base.overrides.length
+        ? base.overrides
+        : mapAdminDeliveryZoneOverridesFromBranches(branchSource),
+      coverage: base.coverage || null,
+    }
+  })()
+
+  const refreshDeliveryZones = async () => {
+    const response = await adminService.getVendorDeliveryZones(vendorId)
+    setDeliveryZones(response?.data || null)
+    setData((prev) => (prev ? { ...prev, deliveryZones: response?.data || prev.deliveryZones } : prev))
+    return response?.data
+  }
+
+  const handleApplyDeliveryZonesToAll = async (formDefaults = {}) => {
+    // 1) PATCH current Delivery form → general defaults
+    await adminService.updateVendorDeliveryZones(vendorId, formDefaults)
+
+    // 2) POST apply-all → overwrite every branch from general
+    const response = await adminService.applyVendorDeliveryZonesToAll(vendorId)
+    if (response?.data) {
+      setDeliveryZones(response.data)
+      setData((prev) => (prev ? { ...prev, deliveryZones: response.data } : prev))
+      return response.data
+    }
+    return refreshDeliveryZones()
+  }
+
+  const applyVendorDetail = (next) => {
+    if (!next) return
+    setData(next)
+    setStoreOnline(next.storeOnline === false ? false : Boolean(next.storeOnline))
+  }
+
+  const handleForceClose = async (form) => {
+    const response = await adminService.forceCloseVendor(vendorId, form)
+    applyVendorDetail(response?.data)
+    if (!response?.data) {
+      await refetch()
+      setStoreOnline(false)
+    }
+  }
+
+  const handleReopen = async () => {
+    if (reopening) return
+    setActionError(null)
+    setReopening(true)
+    try {
+      const response = await adminService.reopenVendor(vendorId)
+      applyVendorDetail(response?.data)
+      if (!response?.data) {
+        await refetch()
+        setStoreOnline(true)
+      }
+    } catch (err) {
+      setActionError(err?.message || 'Failed to reopen vendor.')
+    } finally {
+      setReopening(false)
+    }
+  }
+
+  const handleSuspend = async (form) => {
+    const response = await adminService.suspendVendor(vendorId, form)
+    applyVendorDetail(response?.data)
+    if (!response?.data) {
+      await refetch()
+      setStoreOnline(false)
+    }
+  }
+
+  const handleUnsuspend = async () => {
+    if (unsuspending) return
+    setActionError(null)
+    setUnsuspending(true)
+    try {
+      const response = await adminService.unsuspendVendor(vendorId)
+      applyVendorDetail(response?.data)
+      if (!response?.data) {
+        await refetch()
+        setStoreOnline(true)
+      }
+    } catch (err) {
+      setActionError(err?.message || 'Failed to unsuspend vendor.')
+    } finally {
+      setUnsuspending(false)
+    }
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -47,7 +297,7 @@ export default function AdminVendorDetailPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#17231c]">{data.name}</h2>
-              <span className="inline-flex rounded-full bg-[#e8f7ed] px-2.5 py-[3px] text-[11px] font-bold text-[#147940]">
+              <span className={cn('inline-flex rounded-full px-2.5 py-[3px] text-[11px] font-bold', statusBadgeClass)}>
                 {data.status}
               </span>
             </div>
@@ -178,33 +428,81 @@ export default function AdminVendorDetailPage() {
               </div>
 
               <div className="mt-5 flex flex-col gap-2.5">
-                <button
-                  type="button"
-                  className="inline-flex h-[42px] w-fit items-center justify-center gap-2 rounded-full bg-[#fff3d6] px-4 text-[13px] font-bold text-[#9E6B0D] hover:bg-[#ffecc0]"
-                >
-                  <Pause size={15} className="text-[#3b82f6]" fill="#3b82f6" strokeWidth={0} />
-                  Force close store
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
-                >
-                  Suspend vendor
-                </button>
+                {isForceClosed ? (
+                  <button
+                    type="button"
+                    onClick={handleReopen}
+                    disabled={reopening}
+                    className="inline-flex h-[42px] w-fit items-center justify-center gap-2 rounded-full bg-[#e8f7ed] px-4 text-[13px] font-bold text-[#147940] hover:bg-[#d8f1e1] disabled:opacity-60"
+                  >
+                    <Play size={15} className="fill-[#147940] text-[#147940]" strokeWidth={0} />
+                    {reopening ? 'Resuming…' : 'Resume'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setForceCloseOpen(true)}
+                    className="inline-flex h-[42px] w-fit items-center justify-center gap-2 rounded-full bg-[#fff3d6] px-4 text-[13px] font-bold text-[#9E6B0D] hover:bg-[#ffecc0]"
+                  >
+                    <Pause size={15} className="text-[#3b82f6]" fill="#3b82f6" strokeWidth={0} />
+                    Force close store
+                  </button>
+                )}
+                {actionError ? (
+                  <p className="text-[12px] font-medium text-[#d64044]">{actionError}</p>
+                ) : null}
+                {isSuspended ? (
+                  <button
+                    type="button"
+                    onClick={handleUnsuspend}
+                    disabled={unsuspending}
+                    className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#e8f7ed] px-4 text-[13px] font-bold text-[#147940] hover:bg-[#d8f1e1] disabled:opacity-60"
+                  >
+                    {unsuspending ? 'Unsuspending…' : 'Unsuspend'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActionError(null)
+                      setSuspendOpen(true)
+                    }}
+                    className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+                  >
+                    Suspend vendor
+                  </button>
+                )}
               </div>
             </section>
           </div>
+
+          <section className="mt-4 rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-[15px] font-bold text-[#17231c]">Coverage map</h3>
+              {deliveryZonesError ? (
+                <p className="text-[12px] text-[#d64044]">{deliveryZonesError}</p>
+              ) : null}
+            </div>
+            {deliveryZonesLoading && !deliveryZones?.coverage ? (
+              <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading coverage map…</p>
+            ) : (
+              <AdminDeliveryCoverageMap coverage={deliveryZonesForTab.coverage} />
+            )}
+          </section>
         </>
       ) : tab === 'Branches' ? (
         <>
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-[15px] font-bold text-[#17231c]">
-                Branches ({data.branches.length})
+                Branches ({branchesCount || branches.length})
               </h3>
               <p className="mt-1 max-w-[520px] text-[12px] leading-[18px] text-[#7c8780]">
                 Add, edit, force-close or delete branches. Each has its own radius, ETA &amp; min order.
               </p>
+              {branchesError ? (
+                <p className="mt-2 text-[12px] font-medium text-[#d64044]">{branchesError}</p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -220,9 +518,10 @@ export default function AdminVendorDetailPage() {
             </button>
           </div>
           <AdminVendorBranches
-            branches={data.branches}
+            branches={branches}
             vendorId={vendorId}
             storeName={data.name}
+            isLoading={branchesLoading}
           />
         </>
       ) : tab === 'Users & staff' ? (
@@ -230,11 +529,14 @@ export default function AdminVendorDetailPage() {
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h3 className="text-[15px] font-bold text-[#17231c]">
-                Users &amp; staff ({data.users.length})
+                Users &amp; staff ({isAdminRealApiFeature('vendors') ? staffCount || staff.length : data.users.length})
               </h3>
               <p className="mt-1 max-w-[520px] text-[12px] leading-[18px] text-[#7c8780]">
                 Vendor admins, branch managers and staff with scoped, role-based access.
               </p>
+              {staffError ? (
+                <p className="mt-1 text-[12px] text-[#d64044]">{staffError}</p>
+              ) : null}
             </div>
             <button
               type="button"
@@ -244,7 +546,7 @@ export default function AdminVendorDetailPage() {
                     storeName: data.name,
                     vendorId,
                     mode: 'create',
-                    branches: data.branches,
+                    branches: branches.length ? branches : data.branches,
                   },
                 })
               }
@@ -255,26 +557,72 @@ export default function AdminVendorDetailPage() {
             </button>
           </div>
           <AdminVendorUsers
-            users={data.users}
+            users={isAdminRealApiFeature('vendors') ? staff : data.users}
             vendorId={vendorId}
             storeName={data.name}
-            branches={data.branches}
+            branches={branches.length ? branches : data.branches}
+            isLoading={staffLoading}
           />
         </>
       ) : tab === 'Delivery zones' ? (
-        <AdminVendorDeliveryZones deliveryZones={data.deliveryZones} />
+        <div className="space-y-3">
+          {deliveryZonesError ? (
+            <p className="text-[12px] text-[#d64044]">{deliveryZonesError}</p>
+          ) : null}
+          {deliveryZonesLoading && !deliveryZones ? (
+            <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading delivery zones…</p>
+          ) : (
+            <AdminVendorDeliveryZones
+              deliveryZones={deliveryZonesForTab}
+              onApplyToAll={
+                isAdminRealApiFeature('vendors') ? handleApplyDeliveryZonesToAll : undefined
+              }
+            />
+          )}
+        </div>
       ) : tab === 'Promotions' ? (
         <AdminVendorPromotions promotions={data.promotions} />
       ) : tab === 'Commission & fees' ? (
-        <AdminVendorCommission commission={data.commission} />
+        data.commission ? (
+          <AdminVendorCommission commission={data.commission} />
+        ) : (
+          <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+            <p className="text-[15px] font-bold text-[#17231c]">Commission &amp; fees</p>
+            <p className="mt-1 text-[12px] text-[#7c8780]">
+              Waiting for vendor commission API.
+            </p>
+          </div>
+        )
       ) : tab === 'SLA' ? (
-        <AdminVendorSla sla={data.sla} />
+        data.sla ? (
+          <AdminVendorSla sla={data.sla} />
+        ) : (
+          <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+            <p className="text-[15px] font-bold text-[#17231c]">SLA</p>
+            <p className="mt-1 text-[12px] text-[#7c8780]">Waiting for vendor SLA API.</p>
+          </div>
+        )
       ) : (
         <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[15px] font-bold text-[#17231c]">{tab}</p>
           <p className="mt-1 text-[12px] text-[#7c8780]">This section will be available in a later update.</p>
         </div>
       )}
+
+      <AdminForceCloseModal
+        open={forceCloseOpen}
+        onClose={() => setForceCloseOpen(false)}
+        storeName={data.name}
+        branches={(data.branches || []).map((branch) => branch.name).filter(Boolean)}
+        defaultScope="store"
+        onConfirm={handleForceClose}
+      />
+      <AdminSuspendVendorModal
+        open={suspendOpen}
+        onClose={() => setSuspendOpen(false)}
+        storeName={data.name}
+        onConfirm={handleSuspend}
+      />
     </div>
   )
 }

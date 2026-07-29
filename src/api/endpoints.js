@@ -208,6 +208,92 @@ export const endpoints = {
        */
       messages: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/messages`,
     },
+    vendors: {
+      /**
+       * Confirmed: GET /admin/vendors?search=&status=all&category=&limit=
+       * Postman: "List vendors (KPIs + filters)"
+       */
+      list: '/admin/vendors',
+      /**
+       * Confirmed: GET + PATCH /admin/vendors/:vendorId
+       * Postman: "Get vendor" / "Update vendor (store info)"
+       * @param {string} vendorId
+       */
+      detail: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}`,
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/force-close
+       * Body: { scope: "whole_store", reason, to }
+       * @param {string} vendorId
+       */
+      forceClose: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/force-close`,
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/reopen
+       * Body: { scope: "whole_store" }
+       * @param {string} vendorId
+       */
+      reopen: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/reopen`,
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/suspend
+       * Body: { reason }
+       * @param {string} vendorId
+       */
+      suspend: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/suspend`,
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/unsuspend
+       * Body: none
+       * @param {string} vendorId
+       */
+      unsuspend: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/unsuspend`,
+      /**
+       * Confirmed: GET/POST /admin/vendors/:vendorId/branches
+       * @param {string} vendorId
+       */
+      branches: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/branches`,
+      /**
+       * Confirmed: PATCH + DELETE /admin/vendors/:vendorId/branches/:branchId
+       * @param {string} vendorId
+       * @param {string} branchId
+       */
+      branch: (vendorId, branchId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/branches/${encodeURIComponent(branchId)}`,
+      /**
+       * Confirmed: GET/POST /admin/vendors/:vendorId/staff
+       * @param {string} vendorId
+       */
+      staff: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/staff`,
+      /**
+       * Confirmed: PATCH /admin/vendors/:vendorId/staff/:staffId
+       * @param {string} vendorId
+       * @param {string} staffId
+       */
+      staffMember: (vendorId, staffId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/staff/${encodeURIComponent(staffId)}`,
+      /**
+       * Confirmed: GET/PATCH /admin/vendors/:vendorId/delivery-zones
+       * @param {string} vendorId
+       */
+      deliveryZones: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones`,
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/delivery-zones/apply-all
+       * @param {string} vendorId
+       */
+      deliveryZonesApplyAll: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones/apply-all`,
+      /**
+       * Confirmed: PATCH /admin/vendors/:vendorId/delivery-zones/branches/:branchId
+       * @param {string} vendorId
+       * @param {string} branchId
+       */
+      deliveryZoneBranch: (vendorId, branchId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones/branches/${encodeURIComponent(branchId)}`,
+    },
+    /**
+     * Confirmed: GET /admin/store-types
+     * Used by Edit vendor Store type dropdown.
+     */
+    storeTypes: '/admin/store-types',
   },
 }
 

@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Map } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { cn } from '../cn'
+import AdminDeliveryCoverageMap from '../AdminDeliveryCoverageMap'
 
 function ZoneField({ label, aside, children, className = '' }) {
   return (
@@ -53,12 +53,53 @@ function ZoneToggle({ enabled, onChange }) {
   )
 }
 
-export function AdminVendorDeliveryZones({ deliveryZones }) {
-  const [defaults, setDefaults] = useState(deliveryZones.defaults)
-  const { overrides } = deliveryZones
+export function AdminVendorDeliveryZones({ deliveryZones, onApplyToAll }) {
+  const safeZones =
+    deliveryZones && typeof deliveryZones === 'object' && !Array.isArray(deliveryZones)
+      ? deliveryZones
+      : { defaults: {}, overrides: [], coverage: null }
+
+  const [defaults, setDefaults] = useState(() => ({
+    radiusKm: '',
+    etaMin: '',
+    minOrder: '',
+    deliveryContribution: '',
+    freeDeliveryOver: '',
+    freeDeliveryEnabled: false,
+    maxDistanceKm: '',
+    extraContributionPerKm: '',
+    maxContribution: '',
+    ...(safeZones.defaults || {}),
+  }))
+  const [applying, setApplying] = useState(false)
+  const [applyError, setApplyError] = useState(null)
+
+  const overrides = Array.isArray(safeZones.overrides) ? safeZones.overrides : []
+  const coverage = safeZones.coverage || null
+
+  useEffect(() => {
+    if (!deliveryZones?.defaults) return
+    setDefaults((prev) => ({
+      ...prev,
+      ...deliveryZones.defaults,
+    }))
+  }, [deliveryZones])
 
   const updateDefault = (key) => (event) => {
     setDefaults((prev) => ({ ...prev, [key]: event.target.value }))
+  }
+
+  async function handleApplyToAll() {
+    if (!onApplyToAll || applying) return
+    setApplyError(null)
+    setApplying(true)
+    try {
+      await onApplyToAll(defaults)
+    } catch (err) {
+      setApplyError(err?.message || 'Failed to apply delivery zones.')
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (
@@ -68,36 +109,53 @@ export function AdminVendorDeliveryZones({ deliveryZones }) {
 
         <div className="grid grid-cols-3 gap-x-4 gap-y-4 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
           <ZoneField label="Delivery radius (km)">
-            <ZoneInput value={defaults.radiusKm} onChange={updateDefault('radiusKm')} />
+            <ZoneInput value={defaults.radiusKm ?? ''} onChange={updateDefault('radiusKm')} />
           </ZoneField>
           <ZoneField label="Delivery ETA (min)">
-            <ZoneInput value={defaults.etaMin} onChange={updateDefault('etaMin')} />
+            <ZoneInput value={defaults.etaMin ?? ''} onChange={updateDefault('etaMin')} />
           </ZoneField>
           <ZoneField label="Min order for delivery (BHD)">
-            <ZoneInput value={defaults.minOrder} onChange={updateDefault('minOrder')} />
+            <ZoneInput value={defaults.minOrder ?? ''} onChange={updateDefault('minOrder')} />
           </ZoneField>
           <ZoneField label="Delivery contribution (BHD) / per order">
-            <ZoneInput value={defaults.deliveryContribution} onChange={updateDefault('deliveryContribution')} />
+            <ZoneInput
+              value={defaults.deliveryContribution ?? ''}
+              onChange={updateDefault('deliveryContribution')}
+            />
           </ZoneField>
           <ZoneField
             label="Free delivery over (BHD)"
             aside={(
               <ZoneToggle
-                enabled={defaults.freeDeliveryEnabled}
-                onChange={() => setDefaults((prev) => ({ ...prev, freeDeliveryEnabled: !prev.freeDeliveryEnabled }))}
+                enabled={Boolean(defaults.freeDeliveryEnabled)}
+                onChange={() =>
+                  setDefaults((prev) => ({
+                    ...prev,
+                    freeDeliveryEnabled: !prev.freeDeliveryEnabled,
+                  }))
+                }
               />
             )}
           >
-            <ZoneInput value={defaults.freeDeliveryOver} onChange={updateDefault('freeDeliveryOver')} />
+            <ZoneInput
+              value={defaults.freeDeliveryOver ?? ''}
+              onChange={updateDefault('freeDeliveryOver')}
+            />
           </ZoneField>
           <ZoneField label="Max distance (km)">
-            <ZoneInput value={defaults.maxDistanceKm} onChange={updateDefault('maxDistanceKm')} />
+            <ZoneInput value={defaults.maxDistanceKm ?? ''} onChange={updateDefault('maxDistanceKm')} />
           </ZoneField>
           <ZoneField label="Extra contribution per km (BHD)">
-            <ZoneInput value={defaults.extraContributionPerKm} onChange={updateDefault('extraContributionPerKm')} />
+            <ZoneInput
+              value={defaults.extraContributionPerKm ?? ''}
+              onChange={updateDefault('extraContributionPerKm')}
+            />
           </ZoneField>
           <ZoneField label="Max contribution (BHD)">
-            <ZoneInput value={defaults.maxContribution} onChange={updateDefault('maxContribution')} />
+            <ZoneInput
+              value={defaults.maxContribution ?? ''}
+              onChange={updateDefault('maxContribution')}
+            />
           </ZoneField>
         </div>
 
@@ -107,15 +165,20 @@ export function AdminVendorDeliveryZones({ deliveryZones }) {
           </p>
           <button
             type="button"
-            className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+            onClick={handleApplyToAll}
+            disabled={!onApplyToAll || applying}
+            className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:opacity-60"
           >
-            Apply to all branches
+            {applying ? 'Applying…' : 'Apply to all branches'}
           </button>
         </div>
+        {applyError ? (
+          <p className="mt-2 text-[12px] text-[#d64044]">{applyError}</p>
+        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-        <div className="  px-5 py-4">
+        <div className="px-5 py-4">
           <h3 className="text-[15px] font-bold text-[#17231c]">Per-branch overrides</h3>
           <p className="mt-1 text-[12px] leading-[18px] text-[#7c8780]">
             Custom radius, ETA and minimum order for individual branches.
@@ -151,15 +214,31 @@ export function AdminVendorDeliveryZones({ deliveryZones }) {
               </tr>
             </thead>
             <tbody>
-              {overrides.map((row) => (
-                <tr key={row.id} className="border-b border-[#f0f2f0] last:border-0">
-                  <td className="px-5 py-3.5 text-[13px] font-medium text-[#17231c]">{row.name}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">{row.radius}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">{row.eta}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">{row.minOrder}</td>
-                  <td className="whitespace-nowrap px-5 py-3.5 text-right text-[13px] text-[#17231c]">{row.deliveryFee}</td>
+              {overrides.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-5 py-8 text-center text-[13px] text-[#7c8780]">
+                    No branch delivery overrides yet.
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                overrides.map((row) => (
+                  <tr key={row.id} className="border-b border-[#f0f2f0] last:border-0">
+                    <td className="px-5 py-3.5 text-[13px] font-medium text-[#17231c]">{row.name}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">
+                      {row.radius}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">
+                      {row.eta}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right text-[13px] text-[#17231c]">
+                      {row.minOrder}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3.5 text-right text-[13px] text-[#17231c]">
+                      {row.deliveryFee}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -167,10 +246,7 @@ export function AdminVendorDeliveryZones({ deliveryZones }) {
 
       <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Coverage map</h3>
-        <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[12px] border border-dashed border-[#dfe4e0] bg-[#fafbfa] px-6 py-10 text-center">
-          <Map size={28} className="mb-2 text-[#b0b8b2]" strokeWidth={1.6} />
-          <p className="text-[13px] font-medium text-[#7c8780]">Delivery radius &amp; zones map</p>
-        </div>
+        <AdminDeliveryCoverageMap coverage={coverage} />
       </section>
     </div>
   )
