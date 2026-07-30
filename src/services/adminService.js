@@ -1,6 +1,7 @@
 import { apiClient } from '../api/client'
 import { adminDashboardService } from './admin/dashboardService'
 import { adminVendorService } from './admin/vendorService'
+import { adminUserService } from './admin/userService'
 
 export const adminService = {
   getDashboard(options) {
@@ -28,13 +29,74 @@ export const adminService = {
     if (type === 'vendors') {
       return adminVendorService.listVendors(options)
     }
+    // Users list uses listAdminUsers() — keep mock management blob for Roles / Activity tabs.
     return apiClient.get('/admin/management', { ...options, params: { ...options.params, type } })
+  },
+  listAdminUsers(options = {}) {
+    return adminUserService.listUsers(options)
+  },
+  getAdminUsersSummary(options = {}) {
+    return adminUserService.getUsersSummary(options)
+  },
+  getAdminUsersMeta(options = {}) {
+    return adminUserService.getUsersMeta(options)
+  },
+  getAdminUserDetail(userId, options = {}) {
+    return adminUserService.getUserDetail(userId, options)
+  },
+  createAdminUser(form, options = {}) {
+    return adminUserService.createUser(form, options)
+  },
+  updateAdminUser(userId, form, options = {}) {
+    return adminUserService.updateUser(userId, form, options)
+  },
+  resetAdminUserPassword(userId, options = {}) {
+    return adminUserService.resetUserPassword(userId, options)
+  },
+  resendAdminUserInvite(userId, options = {}) {
+    return adminUserService.resendUserInvite(userId, options)
+  },
+  suspendAdminUser(userId, options = {}) {
+    return adminUserService.suspendUser(userId, options)
+  },
+  unsuspendAdminUser(userId, options = {}) {
+    return adminUserService.unsuspendUser(userId, options)
+  },
+  listAdminRoles(options = {}) {
+    return adminUserService.listRoles(options)
+  },
+  getAdminRolesMeta(options = {}) {
+    return adminUserService.getRolesMeta(options)
+  },
+  getAdminRoleDetail(roleId, options = {}) {
+    return adminUserService.getRoleDetail(roleId, options)
+  },
+  createAdminRole(form, options = {}) {
+    return adminUserService.createRole(form, options)
+  },
+  getAdminActivityMeta(options = {}) {
+    return adminUserService.getActivityMeta(options)
+  },
+  listAdminActivity(filters, options = {}) {
+    return adminUserService.listActivity(filters, options)
+  },
+  exportAdminActivity(filters, options = {}) {
+    return adminUserService.exportActivity(filters, options)
   },
   getVendors(options = {}) {
     return adminVendorService.listVendors(options)
   },
   getVendorDetail(vendorId, options = {}) {
     return adminVendorService.getVendorDetail(vendorId, options)
+  },
+  createVendor(wizard, options = {}) {
+    return adminVendorService.createVendor(wizard, options)
+  },
+  activateVendor(vendorId, options = {}) {
+    return adminVendorService.activateVendor(vendorId, options)
+  },
+  listSlaModels(options = {}) {
+    return adminVendorService.listSlaModels(options)
   },
   updateVendor(vendorId, form, options = {}) {
     return adminVendorService.updateVendor(vendorId, form, options)
@@ -80,6 +142,30 @@ export const adminService = {
   },
   applyVendorDeliveryZonesToAll(vendorId, options = {}) {
     return adminVendorService.applyDeliveryZonesToAll(vendorId, options)
+  },
+  getVendorCommission(vendorId, options = {}) {
+    return adminVendorService.getCommission(vendorId, options)
+  },
+  updateVendorCommission(vendorId, form, options = {}) {
+    return adminVendorService.updateCommission(vendorId, form, options)
+  },
+  listVendorPromotions(vendorId, options = {}) {
+    return adminVendorService.listPromotions(vendorId, options)
+  },
+  getVendorPromotion(vendorId, promotionId, options = {}) {
+    return adminVendorService.getPromotion(vendorId, promotionId, options)
+  },
+  createVendorPromotion(vendorId, form, options = {}) {
+    return adminVendorService.createPromotion(vendorId, form, options)
+  },
+  updateVendorPromotion(vendorId, promotionId, form, options = {}) {
+    return adminVendorService.updatePromotion(vendorId, promotionId, form, options)
+  },
+  getVendorSla(vendorId, options = {}) {
+    return adminVendorService.getSla(vendorId, options)
+  },
+  updateVendorSla(vendorId, form, options = {}) {
+    return adminVendorService.updateSla(vendorId, form, options)
   },
   getCustomerDetail(customerId, options = {}) {
     return apiClient.get('/admin/customers/detail', { ...options, params: { ...options.params, id: customerId } })

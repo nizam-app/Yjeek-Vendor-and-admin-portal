@@ -10,6 +10,10 @@ import {
   emptyAdminNearbyChamps,
   mapAdminNearbyChampsResponse,
 } from '../../mappers/admin/mapAdminNearbyChamps'
+import {
+  emptyAdminDispatchAttempts,
+  mapAdminDispatchAttemptsResponse,
+} from '../../mappers/admin/mapAdminDispatchAttempts'
 import { ApiError } from '../../api/errors'
 
 /**
@@ -19,6 +23,7 @@ import { ApiError } from '../../api/errors'
  * - GET /admin/orders/:orderId
  * - GET /admin/orders/action-options
  * - GET /admin/orders/:orderId/nearby-champs
+ * - GET /admin/orders/:orderId/dispatch-attempts
  * - POST action paths (bodies from Postman samples)
  */
 export const adminOrderService = {
@@ -99,6 +104,34 @@ export const adminOrderService = {
 
     return {
       data: mapAdminNearbyChampsResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * GET /admin/orders/:orderId/dispatch-attempts
+   * Confirmed empty: { success: true, data: [] }
+   * @param {string} orderId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async listDispatchAttempts(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new ApiError({ message: 'Order id is required.' })
+    }
+
+    if (!isAdminRealApiFeature('dashboard')) {
+      return { data: emptyAdminDispatchAttempts(), meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.orders.dispatchAttempts(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+
+    return {
+      data: mapAdminDispatchAttemptsResponse(response?.data),
       meta: response?.meta ?? null,
     }
   },

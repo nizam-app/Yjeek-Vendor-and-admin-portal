@@ -8,6 +8,7 @@ import {
   mapAdminVendorsListResponse,
   mapAdminVendorsStatusQuery,
 } from '../../mappers/admin/mapAdminVendors'
+import { mapAdminCreateVendorRequest } from '../../mappers/admin/mapAdminCreateVendor'
 import { mapAdminStoreTypesResponse } from '../../mappers/admin/mapAdminStoreTypes'
 import {
   mapAdminCreateBranchRequest,
@@ -22,13 +23,33 @@ import {
   mapAdminDeliveryZonesResponse,
   mapAdminUpdateDeliveryZonesRequest,
 } from '../../mappers/admin/mapAdminVendorDeliveryZones'
+import {
+  mapAdminUpdateVendorCommissionRequest,
+  mapAdminVendorCommissionResponse,
+  mapAdminWizardCommissionRequest,
+} from '../../mappers/admin/mapAdminVendorCommission'
+import {
+  emptyAdminVendorPromotions,
+  mapAdminCreateVendorPromotionRequest,
+  mapAdminUpdateVendorPromotionRequest,
+  mapAdminVendorPromotionItem,
+  mapAdminVendorPromotionsResponse,
+} from '../../mappers/admin/mapAdminVendorPromotions'
+import {
+  mapAdminUpdateVendorSlaRequest,
+  mapAdminVendorSlaResponse,
+} from '../../mappers/admin/mapAdminVendorSla'
 
 /**
  * Admin vendors service.
  *
  * Confirmed:
  *   GET /admin/vendors?search=&status=all&category=&limit=
+ *   POST /admin/vendors
+ *   POST /admin/vendors/:vendorId/activate
  *   GET /admin/vendors/:vendorId
+ *   GET /admin/store-types
+ *   GET /admin/sla-models
  *   POST /admin/vendors/:vendorId/force-close
  *   POST /admin/vendors/:vendorId/reopen
  *   POST /admin/vendors/:vendorId/suspend
@@ -38,6 +59,10 @@ import {
  *   GET/POST /admin/vendors/:vendorId/staff
  *   GET/PATCH /admin/vendors/:vendorId/delivery-zones
  *   POST /admin/vendors/:vendorId/delivery-zones/apply-all
+ *   GET/PATCH /admin/vendors/:vendorId/commission
+ *   GET/POST /admin/vendors/:vendorId/promotions
+ *   GET/PATCH/DELETE /admin/vendors/:vendorId/promotions/:promotionId
+ *   GET/PATCH /admin/vendors/:vendorId/sla
  *
  * Feature flag: `vendors` in VITE_ADMIN_REAL_API_FEATURES.
  * Falls back to mock management payload when the feature is not enabled.
@@ -125,6 +150,122 @@ export const adminVendorService = {
 
     return {
       data: mapAdminVendorDetailResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Create vendor (Add vendor wizard).
+   * Confirmed: POST /admin/vendors
+   * Confirmed conflict: 409 CONFLICT when owner email/phone exists.
+   *
+   * @param {object} wizard — { form, branches, users, customFees, commissionTiers, serviceModes, activate }
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async createVendor(wizard = {}, options = {}) {
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to create a vendor.')
+    }
+
+    const body = mapAdminCreateVendorRequest(wizard)
+
+    const response = await apiClient.post(endpoints.admin.vendors.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    const raw = response?.data
+    const id =
+      raw?.id ||
+      raw?.vendorId ||
+      raw?.vendor?.id ||
+      null
+
+    return {
+      data: {
+        id: id != null ? String(id) : null,
+        raw,
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Activate draft vendor.
+   * Confirmed: POST /admin/vendors/:vendorId/activate { activate: true }
+   */
+  async activateVendor(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to activate a vendor.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.vendors.activate(id),
+      { activate: true },
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'vendors',
+      },
+    )
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * List SLA models for Add vendor picker.
+   * Confirmed path: GET /admin/sla-models
+   */
+  async listSlaModels(options = {}) {
+    const { search = '', active = 'all', status = 'PUBLISHED', limit = 50, page = 1, ...requestOptions } =
+      options
+
+    if (!isAdminRealApiFeature('vendors')) {
+      return { data: { slaModels: [], count: 0 }, meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.slaModels.list, {
+      ...requestOptions,
+      params: {
+        search: String(search || '').trim(),
+        active,
+        status,
+        limit,
+        page,
+      },
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    const raw = response?.data
+    const list = Array.isArray(raw?.items)
+      ? raw.items
+      : Array.isArray(raw?.slaModels)
+        ? raw.slaModels
+        : Array.isArray(raw)
+          ? raw
+          : []
+
+    const slaModels = list
+      .filter((item) => item && (item.id || item.slaModelId))
+      .map((item) => ({
+        id: String(item.id || item.slaModelId),
+        name: String(item.name || item.title || item.id),
+        categoryLabel: item.categoryLabel || null,
+        isDefault: Boolean(item.isDefault),
+      }))
+
+    return {
+      data: { slaModels, count: slaModels.length },
       meta: response?.meta ?? null,
     }
   },
@@ -634,5 +775,260 @@ export const adminVendorService = {
       meta: response?.meta ?? null,
       raw: response,
     }
+  },
+
+  /**
+   * Get commission & fees.
+   * Confirmed: GET /admin/vendors/:vendorId/commission
+   *
+   * @param {string} vendorId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getCommission(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load commission.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.commission(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorCommissionResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update commission & fees.
+   * Confirmed percent: { model: "PERCENT_OF_ORDER", commissionRate: 15 }
+   * Confirmed tiered: { model: "TIERED", commissionTiers, customFees }
+   * Response data matches GET commission shape (percent confirmed full object).
+   *
+   * @param {string} vendorId
+   * @param {object} form — detail modal UI object, or wizard form when options.wizard
+   * @param {{
+   *   signal?: AbortSignal,
+   *   wizard?: boolean,
+   *   customFees?: array,
+   *   commissionTiers?: array,
+   *   includeSharedFees?: boolean,
+   * }} [options]
+   */
+  async updateCommission(vendorId, form = {}, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    const {
+      wizard = false,
+      customFees,
+      commissionTiers,
+      includeSharedFees,
+      ...requestOptions
+    } = options
+
+    const body = wizard
+      ? mapAdminWizardCommissionRequest(form, {
+          customFees,
+          commissionTiers,
+          includeSharedFees,
+        })
+      : mapAdminUpdateVendorCommissionRequest(form)
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update commission.')
+    }
+
+    const response = await apiClient.patch(endpoints.admin.vendors.commission(id), body, {
+      ...requestOptions,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    if (response?.data) {
+      return {
+        data: mapAdminVendorCommissionResponse(response.data),
+        meta: response?.meta ?? null,
+      }
+    }
+
+    return this.getCommission(id, requestOptions)
+  },
+
+  /**
+   * List promotions.
+   * Confirmed: GET /admin/vendors/:vendorId/promotions → { count, promotions[] }
+   */
+  async listPromotions(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      return { data: emptyAdminVendorPromotions(), meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.promotions(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorPromotionsResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Get one promotion.
+   * Confirmed 404: { success:false, error:{ code:"NOT_FOUND", message:"Promotion not found" } }
+   */
+  async getPromotion(vendorId, promotionId, options = {}) {
+    const id = String(vendorId || '').trim()
+    const promoId = String(promotionId || '').trim()
+    if (!id || !promoId) {
+      throw new Error('Vendor id and promotion id are required.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load a promotion.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.promotion(id, promoId), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorPromotionItem(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Create promotion.
+   * Confirmed POST body: name, type, discountValue, scope, startsAt, endsAt
+   */
+  async createPromotion(vendorId, form = {}, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    const body = mapAdminCreateVendorPromotionRequest(form)
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to create a promotion.')
+    }
+
+    const response = await apiClient.post(endpoints.admin.vendors.promotions(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorPromotionItem(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update promotion.
+   * Confirmed Postman sample: { name }
+   */
+  async updatePromotion(vendorId, promotionId, form = {}, options = {}) {
+    const id = String(vendorId || '').trim()
+    const promoId = String(promotionId || '').trim()
+    if (!id || !promoId) {
+      throw new Error('Vendor id and promotion id are required.')
+    }
+
+    const body = mapAdminUpdateVendorPromotionRequest(form)
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update a promotion.')
+    }
+
+    const response = await apiClient.patch(endpoints.admin.vendors.promotion(id, promoId), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: response?.data ? mapAdminVendorPromotionItem(response.data) : null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Get vendor SLA (rules + 30d compliance when present).
+   * Confirmed: GET /admin/vendors/:vendorId/sla
+   */
+  async getSla(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load SLA.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.sla(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorSlaResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update vendor SLA (apply model / customize).
+   * Confirmed sample: { slaModelId, serviceModes, config }
+   */
+  async updateSla(vendorId, form = {}, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    const body = mapAdminUpdateVendorSlaRequest(form)
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update SLA.')
+    }
+
+    const response = await apiClient.patch(endpoints.admin.vendors.sla(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    if (response?.data) {
+      return {
+        data: mapAdminVendorSlaResponse(response.data),
+        meta: response?.meta ?? null,
+      }
+    }
+
+    return this.getSla(id, options)
   },
 }

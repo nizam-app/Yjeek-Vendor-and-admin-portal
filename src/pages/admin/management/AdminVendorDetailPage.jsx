@@ -42,6 +42,19 @@ export default function AdminVendorDetailPage() {
   const [deliveryZones, setDeliveryZones] = useState(null)
   const [deliveryZonesLoading, setDeliveryZonesLoading] = useState(false)
   const [deliveryZonesError, setDeliveryZonesError] = useState(null)
+  const [commission, setCommission] = useState(null)
+  const [commissionLoading, setCommissionLoading] = useState(false)
+  const [commissionError, setCommissionError] = useState(null)
+  const [commissionSaving, setCommissionSaving] = useState(false)
+  const [commissionSaveError, setCommissionSaveError] = useState(null)
+  const [promotions, setPromotions] = useState([])
+  const [promotionsLoading, setPromotionsLoading] = useState(false)
+  const [promotionsError, setPromotionsError] = useState(null)
+  const [promotionSaving, setPromotionSaving] = useState(false)
+  const [promotionSaveError, setPromotionSaveError] = useState(null)
+  const [sla, setSla] = useState(null)
+  const [slaLoading, setSlaLoading] = useState(false)
+  const [slaError, setSlaError] = useState(null)
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getVendorDetail(vendorId),
     [vendorId],
@@ -161,6 +174,108 @@ export default function AdminVendorDetailPage() {
     }
   }, [vendorId, location.key, setData])
 
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setCommission(null)
+      setCommissionError(null)
+      setCommissionLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setCommissionLoading(true)
+    setCommissionError(null)
+
+    adminService
+      .getVendorCommission(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        const next = response?.data || null
+        setCommission(next)
+        setData((prev) => (prev ? { ...prev, commission: next } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setCommission(null)
+        setCommissionError(err?.message || 'Failed to load commission.')
+      })
+      .finally(() => {
+        if (!cancelled) setCommissionLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, setData])
+
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setPromotions([])
+      setPromotionsError(null)
+      setPromotionsLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setPromotionsLoading(true)
+    setPromotionsError(null)
+
+    adminService
+      .listVendorPromotions(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        const list = response?.data?.promotions || []
+        setPromotions(list)
+        setData((prev) => (prev ? { ...prev, promotions: list } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setPromotions([])
+        setPromotionsError(err?.message || 'Failed to load promotions.')
+      })
+      .finally(() => {
+        if (!cancelled) setPromotionsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, setData])
+
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors')) {
+      setSla(null)
+      setSlaError(null)
+      setSlaLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setSlaLoading(true)
+    setSlaError(null)
+
+    adminService
+      .getVendorSla(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        const next = response?.data || null
+        setSla(next)
+        setData((prev) => (prev ? { ...prev, sla: next } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setSla(null)
+        setSlaError(err?.message || 'Failed to load SLA.')
+      })
+      .finally(() => {
+        if (!cancelled) setSlaLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, setData])
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const online = storeOnline ?? data.storeOnline
@@ -215,6 +330,88 @@ export default function AdminVendorDetailPage() {
       return response.data
     }
     return refreshDeliveryZones()
+  }
+
+  const commissionForTab = commission || data.commission || null
+
+  const handleSaveCommission = async (updated) => {
+    setCommissionSaving(true)
+    setCommissionSaveError(null)
+    try {
+      if (!isAdminRealApiFeature('vendors')) {
+        setCommission(updated)
+        setData((prev) => (prev ? { ...prev, commission: updated } : prev))
+        return updated
+      }
+      const response = await adminService.updateVendorCommission(vendorId, updated)
+      const next = response?.data || null
+      setCommission(next)
+      setData((prev) => (prev ? { ...prev, commission: next } : prev))
+      return next
+    } catch (err) {
+      setCommissionSaveError(err)
+      throw err
+    } finally {
+      setCommissionSaving(false)
+    }
+  }
+
+  const promotionsForTab = isAdminRealApiFeature('vendors')
+    ? promotions
+    : (Array.isArray(data.promotions) ? data.promotions : [])
+
+  const refreshPromotions = async () => {
+    if (!isAdminRealApiFeature('vendors')) return promotionsForTab
+    const response = await adminService.listVendorPromotions(vendorId)
+    const list = response?.data?.promotions || []
+    setPromotions(list)
+    setData((prev) => (prev ? { ...prev, promotions: list } : prev))
+    return list
+  }
+
+  const handleViewPromotion = async (promo) => {
+    if (!isAdminRealApiFeature('vendors') || !promo?.id) return promo
+    const response = await adminService.getVendorPromotion(vendorId, promo.id)
+    return response?.data || promo
+  }
+
+  const handleSavePromotion = async (form) => {
+    setPromotionSaving(true)
+    setPromotionSaveError(null)
+    try {
+      if (!isAdminRealApiFeature('vendors')) {
+        if (form.__create || !form.id) {
+          const created = {
+            ...form,
+            id: `local-${Date.now()}`,
+            __create: undefined,
+            period: form.detailPeriod || form.period,
+          }
+          setPromotions((prev) => [created, ...prev])
+          setData((prev) =>
+            prev ? { ...prev, promotions: [created, ...(prev.promotions || [])] } : prev,
+          )
+          return created
+        }
+        setPromotions((prev) => prev.map((p) => (p.id === form.id ? { ...p, ...form } : p)))
+        return form
+      }
+
+      if (form.__create || !form.id) {
+        const response = await adminService.createVendorPromotion(vendorId, form)
+        await refreshPromotions()
+        return response?.data
+      }
+
+      const response = await adminService.updateVendorPromotion(vendorId, form.id, form)
+      await refreshPromotions()
+      return response?.data
+    } catch (err) {
+      setPromotionSaveError(err)
+      throw err
+    } finally {
+      setPromotionSaving(false)
+    }
   }
 
   const applyVendorDetail = (next) => {
@@ -581,27 +778,60 @@ export default function AdminVendorDetailPage() {
           )}
         </div>
       ) : tab === 'Promotions' ? (
-        <AdminVendorPromotions promotions={data.promotions} />
+        <AdminVendorPromotions
+          promotions={promotionsForTab}
+          isLoading={promotionsLoading}
+          error={promotionsError}
+          onRetry={() => {
+            setPromotionsError(null)
+            refreshPromotions().catch((err) => {
+              setPromotionsError(err?.message || 'Failed to load promotions.')
+            })
+          }}
+          onViewPromotion={handleViewPromotion}
+          onSavePromotion={handleSavePromotion}
+          saving={promotionSaving}
+          saveError={promotionSaveError}
+        />
       ) : tab === 'Commission & fees' ? (
-        data.commission ? (
-          <AdminVendorCommission commission={data.commission} />
-        ) : (
-          <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-            <p className="text-[15px] font-bold text-[#17231c]">Commission &amp; fees</p>
-            <p className="mt-1 text-[12px] text-[#7c8780]">
-              Waiting for vendor commission API.
-            </p>
-          </div>
-        )
+        <div className="space-y-3">
+          {commissionError ? (
+            <p className="text-[12px] text-[#d64044]">{commissionError}</p>
+          ) : null}
+          {commissionLoading && !commissionForTab ? (
+            <p className="text-[12px] text-[#7c8780]">Loading commission…</p>
+          ) : commissionForTab ? (
+            <AdminVendorCommission
+              commission={commissionForTab}
+              onSaveCommission={handleSaveCommission}
+              isSaving={commissionSaving}
+              saveError={commissionSaveError}
+            />
+          ) : (
+            <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+              <p className="text-[15px] font-bold text-[#17231c]">Commission &amp; fees</p>
+              <p className="mt-1 text-[12px] text-[#7c8780]">
+                No commission data for this vendor.
+              </p>
+            </div>
+          )}
+        </div>
       ) : tab === 'SLA' ? (
-        data.sla ? (
-          <AdminVendorSla sla={data.sla} />
-        ) : (
-          <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-            <p className="text-[15px] font-bold text-[#17231c]">SLA</p>
-            <p className="mt-1 text-[12px] text-[#7c8780]">Waiting for vendor SLA API.</p>
-          </div>
-        )
+        <div className="space-y-3">
+          {slaError ? (
+            <p className="text-[12px] text-[#d64044]">{slaError}</p>
+          ) : null}
+          {slaLoading && !(sla || data.sla) ? (
+            <p className="text-[12px] text-[#7c8780]">Loading SLA…</p>
+          ) : (sla || data.sla) ? (
+            <AdminVendorSla sla={sla || data.sla} />
+          ) : (
+            <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+              <p className="text-[15px] font-bold text-[#17231c]">SLA</p>
+              <p className="mt-1 text-[12px] text-[#7c8780]">No SLA data for this vendor.</p>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[15px] font-bold text-[#17231c]">{tab}</p>

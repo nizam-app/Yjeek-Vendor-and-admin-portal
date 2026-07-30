@@ -1,13 +1,18 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, Info } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 
 const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#68736c]'
 
-const TEMPLATES = [
+const FALLBACK_TEMPLATES = [
   'Operations Manager',
   'Country Manager',
   'Operations Supervisor',
@@ -18,35 +23,41 @@ const TEMPLATES = [
   'Start from scratch',
 ]
 
-const SCOPE_LEVELS = ['Global (all countries)', 'Country', 'Zone / City']
+const FALLBACK_SCOPE_LEVELS = [
+  { value: 'GLOBAL', label: 'Global (all countries)' },
+  { value: 'COUNTRY', label: 'Country' },
+  { value: 'ZONE', label: 'Zone / City' },
+]
 
-const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve']
-const ACTION_LABELS = {
+const FALLBACK_ACTIONS = ['view', 'create', 'edit', 'delete', 'approve']
+const FALLBACK_ACTION_LABELS = {
   view: 'View',
   create: 'Create',
   edit: 'Edit',
   delete: 'Delete',
   approve: 'Approve / Export',
+  export: 'Export',
 }
 
-const MODULES = [
-  { id: 'live-dashboard', label: 'Live Dashboard', defaults: ['view', 'edit'] },
-  { id: 'scheduled-orders', label: 'Scheduled Orders', defaults: ['view', 'create', 'edit', 'approve'] },
-  { id: 'vendor-management', label: 'Vendor Management', defaults: ['view', 'edit'] },
-  { id: 'store-management', label: 'Store Management', defaults: ['view'] },
-  { id: 'fleet-management', label: 'Fleet Management', defaults: ['view', 'create', 'edit', 'approve'] },
-  { id: 'customer-management', label: 'Customer Management', defaults: ['view', 'create', 'edit'] },
-  { id: 'marketing', label: 'Marketing', defaults: ['view'] },
-  { id: 'ui-editor', label: 'UI Editor', defaults: [] },
-  { id: 'users-roles', label: 'Users & Roles', defaults: [] },
-  { id: 'reports', label: 'Reports', defaults: ['view', 'approve'] },
-  { id: 'settings', label: 'Settings', defaults: [] },
+const FALLBACK_MODULES = [
+  { id: 'live-dashboard', key: 'LIVE_DASHBOARD', label: 'Live Dashboard' },
+  { id: 'scheduled-orders', key: 'SCHEDULED_ORDERS', label: 'Scheduled Orders' },
+  { id: 'vendor-management', key: 'VENDOR_MANAGEMENT', label: 'Vendor Management' },
+  { id: 'store-management', key: 'STORE_MANAGEMENT', label: 'Store Management' },
+  { id: 'fleet-management', key: 'FLEET_MANAGEMENT', label: 'Fleet Management' },
+  { id: 'customer-management', key: 'CUSTOMER_MANAGEMENT', label: 'Customer Management' },
+  { id: 'marketing', key: 'MARKETING', label: 'Marketing' },
+  { id: 'ui-editor', key: 'UI_EDITOR', label: 'UI Editor' },
+  { id: 'users-roles', key: 'USERS_ROLES', label: 'Users & Roles' },
+  { id: 'reports', key: 'REPORTS', label: 'Reports' },
+  { id: 'settings', key: 'SETTINGS', label: 'Settings' },
 ]
 
-function buildDefaultPermissions() {
-  return MODULES.reduce((acc, module) => {
-    acc[module.id] = ACTIONS.reduce((row, action) => {
-      row[action] = module.defaults.includes(action)
+function buildFallbackPermissions() {
+  return FALLBACK_MODULES.reduce((acc, module) => {
+    const key = module.key || module.id
+    acc[key] = FALLBACK_ACTIONS.reduce((row, action) => {
+      row[action] = false
       return row
     }, {})
     return acc
@@ -58,7 +69,7 @@ function Card({ title, subtitle, children }) {
     <section className="rounded-[14px] border border-[#e3e7e4] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:p-4">
       <h3 className="text-[15px] font-bold text-[#17231c]">{title}</h3>
       {subtitle ? <p className="mt-0.5 text-[12px] text-[#7c8780]">{subtitle}</p> : null}
-      <div className={subtitle ? 'mt-4' : 'mt-4'}>{children}</div>
+      <div className="mt-4">{children}</div>
     </section>
   )
 }
@@ -94,28 +105,133 @@ function PermissionCheckbox({ checked, onChange, label }) {
 
 export default function AdminCreateRolePage() {
   const navigate = useNavigate()
+  const useRealUsers = isAdminRealApiFeature('users')
+
+  const { data: meta, error: metaError, isLoading, refetch } = useApiResource(
+    () => (useRealUsers ? adminService.getAdminRolesMeta() : Promise.resolve({ data: null })),
+    [useRealUsers],
+  )
+
+  const modules = useMemo(() => {
+    if (meta?.modules?.length) return meta.modules
+    return FALLBACK_MODULES
+  }, [meta])
+
+  const actionKeys = useMemo(() => {
+    if (meta?.actionKeys?.length) return meta.actionKeys
+    return FALLBACK_ACTIONS
+  }, [meta])
+
+  const scopeLevels = useMemo(() => {
+    if (meta?.scopeLevels?.length) return meta.scopeLevels
+    return FALLBACK_SCOPE_LEVELS
+  }, [meta])
+
+  const templates = useMemo(() => {
+    const scratch = {
+      id: '__scratch__',
+      name: 'Start from scratch',
+      permissions: {},
+      scopeLevel: 'COUNTRY',
+    }
+    if (meta?.templates?.length) {
+      // Scratch first — avoids inheriting a base role until the admin picks a template.
+      return [scratch, ...meta.templates]
+    }
+    return [
+      scratch,
+      ...FALLBACK_TEMPLATES.filter((name) => name !== 'Start from scratch').map((name) => ({
+        id: name,
+        name,
+        permissions: {},
+      })),
+    ]
+  }, [meta])
+
   const [form, setForm] = useState({
     name: '',
-    template: 'Operations Manager',
+    templateId: '__scratch__',
     description: '',
-    scopeLevel: 'Zone / City',
+    scopeLevel: 'COUNTRY',
   })
-  const [permissions, setPermissions] = useState(buildDefaultPermissions)
+  const [permissions, setPermissions] = useState(buildFallbackPermissions)
+  const [metaApplied, setMetaApplied] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+
+  useEffect(() => {
+    if (!meta || metaApplied) return
+    const nextScope = meta.scopeLevels?.[0]?.value || 'COUNTRY'
+    setForm((current) => ({
+      ...current,
+      templateId: '__scratch__',
+      scopeLevel: nextScope,
+    }))
+    setPermissions(meta.emptyPermissions ? meta.emptyPermissions() : buildFallbackPermissions())
+    setMetaApplied(true)
+  }, [meta, metaApplied])
 
   const update = (key) => (event) => {
     setForm((current) => ({ ...current, [key]: event.target.value }))
   }
 
-  const toggle = (moduleId, action) => {
+  const onTemplateChange = (templateId) => {
+    const template = templates.find((item) => String(item.id) === String(templateId))
+    setForm((current) => ({
+      ...current,
+      templateId,
+      description: template?.description || current.description,
+      scopeLevel: template?.scopeLevel || current.scopeLevel,
+    }))
+    if (meta?.permissionsFromTemplate && template && templateId !== '__scratch__') {
+      setPermissions(meta.permissionsFromTemplate(template))
+    } else if (meta?.emptyPermissions) {
+      setPermissions(meta.emptyPermissions())
+    }
+  }
+
+  const toggle = (moduleKey, action) => {
     setPermissions((current) => ({
       ...current,
-      [moduleId]: { ...current[moduleId], [action]: !current[moduleId][action] },
+      [moduleKey]: { ...current[moduleKey], [action]: !current[moduleKey]?.[action] },
     }))
   }
 
-  const submit = (event) => {
+  const selectedTemplateLabel =
+    templates.find((item) => String(item.id) === String(form.templateId))?.name ||
+    form.templateId ||
+    'Start from scratch'
+
+  const submit = async (event) => {
     event.preventDefault()
-    navigate('/admin/users/roles')
+    setSubmitError(null)
+
+    if (!useRealUsers) {
+      navigate('/admin/users/roles')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await adminService.createAdminRole({
+        name: form.name,
+        description: form.description,
+        scopeLevel: form.scopeLevel,
+        templateId: form.templateId,
+        basedOnRoleId: form.templateId,
+        permissionsMatrix: permissions,
+        modules,
+      })
+      navigate('/admin/users/roles')
+    } catch (err) {
+      setSubmitError(formatApiErrorMessage(err, 'Failed to create role.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (useRealUsers && isLoading && !meta) {
+    return <ApiState isLoading error={metaError} onRetry={refetch} />
   }
 
   return (
@@ -149,6 +265,17 @@ export default function AdminCreateRolePage() {
         ))}
       </div>
 
+      {metaError ? (
+        <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {metaError.message || 'Failed to load role meta.'}
+        </div>
+      ) : null}
+      {submitError ? (
+        <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {submitError}
+        </div>
+      ) : null}
+
       <div className="space-y-4">
         <Card title="Role details">
           <div className="space-y-4">
@@ -164,13 +291,8 @@ export default function AdminCreateRolePage() {
               </Field>
               <Field label="Based on (template)">
                 <div className="relative">
-                  <div
-                    className={cn(
-                      inputClass,
-                      'flex items-center pr-9',
-                    )}
-                  >
-                    <span className="truncate">{form.template}</span>
+                  <div className={cn(inputClass, 'flex items-center pr-9')}>
+                    <span className="truncate">{selectedTemplateLabel}</span>
                   </div>
                   <ChevronDown
                     size={15}
@@ -181,12 +303,12 @@ export default function AdminCreateRolePage() {
                   <select
                     aria-label="Based on template"
                     className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
-                    value={form.template}
-                    onChange={update('template')}
+                    value={form.templateId}
+                    onChange={(event) => onTemplateChange(event.target.value)}
                   >
-                    {TEMPLATES.map((template) => (
-                      <option key={template} value={template}>
-                        {template}
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
                       </option>
                     ))}
                   </select>
@@ -206,21 +328,25 @@ export default function AdminCreateRolePage() {
             <div>
               <p className={labelClass}>Scope level</p>
               <div className="flex flex-wrap gap-2">
-                {SCOPE_LEVELS.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setForm((current) => ({ ...current, scopeLevel: level }))}
-                    className={cn(
-                      'h-[32px] rounded-full border px-3.5 text-[12.5px] transition',
-                      form.scopeLevel === level
-                        ? 'border-[#1aa054] bg-[#e8f7ed] font-bold text-[#147940]'
-                        : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
-                    )}
-                  >
-                    {level}
-                  </button>
-                ))}
+                {scopeLevels.map((level) => {
+                  const value = level.value || level
+                  const label = level.label || level
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm((current) => ({ ...current, scopeLevel: value }))}
+                      className={cn(
+                        'h-[32px] rounded-full border px-3.5 text-[12.5px] transition',
+                        form.scopeLevel === value
+                          ? 'border-[#1aa054] bg-[#e8f7ed] font-bold text-[#147940]'
+                          : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -235,35 +361,38 @@ export default function AdminCreateRolePage() {
                     <th className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]">
                       Module
                     </th>
-                    {ACTIONS.map((action) => (
+                    {actionKeys.map((action) => (
                       <th
                         key={action}
                         className="whitespace-nowrap px-4 py-2.5 text-center text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
                       >
-                        {ACTION_LABELS[action]}
+                        {FALLBACK_ACTION_LABELS[action] || action}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {MODULES.map((module) => (
-                    <tr key={module.id} className="border-b border-[#edf0ee] bg-white last:border-0">
-                      <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
-                        {module.label}
-                      </td>
-                      {ACTIONS.map((action) => (
-                        <td key={action} className="px-4 py-3">
-                          <div className="flex justify-center">
-                            <PermissionCheckbox
-                              checked={permissions[module.id][action]}
-                              onChange={() => toggle(module.id, action)}
-                              label={`${ACTION_LABELS[action]} ${module.label}`}
-                            />
-                          </div>
+                  {modules.map((module) => {
+                    const moduleKey = module.key || module.id
+                    return (
+                      <tr key={moduleKey} className="border-b border-[#edf0ee] bg-white last:border-0">
+                        <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
+                          {module.label}
                         </td>
-                      ))}
-                    </tr>
-                  ))}
+                        {actionKeys.map((action) => (
+                          <td key={action} className="px-4 py-3">
+                            <div className="flex justify-center">
+                              <PermissionCheckbox
+                                checked={Boolean(permissions[moduleKey]?.[action])}
+                                onChange={() => toggle(moduleKey, action)}
+                                label={`${FALLBACK_ACTION_LABELS[action] || action} ${module.label}`}
+                              />
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -273,7 +402,8 @@ export default function AdminCreateRolePage() {
             <Info size={14} strokeWidth={2} className="mt-[1px] shrink-0 text-[#2b66a5]" aria-hidden />
             <p className="text-[12px] leading-[17px] text-[#2b66a5]">
               Scope (country / zone) is set per-user when assigning this role. Permissions here define
-              WHAT, scope defines WHERE.
+              WHAT, scope defines WHERE. Prefer “Start from scratch” unless you want the API to
+              inherit unspecified modules from a template role.
             </p>
           </div>
         </Card>
@@ -283,15 +413,17 @@ export default function AdminCreateRolePage() {
         <button
           type="button"
           onClick={() => navigate('/admin/users/roles')}
-          className="inline-flex h-[36px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6]"
+          disabled={saving}
+          className="inline-flex h-[36px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-5 text-[12.5px] font-bold text-white hover:bg-[#158a47]"
+          disabled={saving}
+          className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-5 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          Create role
+          {saving ? 'Creating…' : 'Create role'}
         </button>
       </div>
     </form>

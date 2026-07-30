@@ -31,6 +31,8 @@ Confirmed from Postman screenshots. Real credentials, tokens, and record IDs are
 | Incidents (incident modal) | `incidents[]` |
 | Take action menu | `availableActions[]` (confirmed codes only) |
 
+Related evidence (separate request): `GET /admin/orders/:orderId/dispatch-attempts` — see `admin-order-dispatch-attempts.md`.
+
 ### Confirmed `availableActions` codes
 
 `REASSIGN_CHAMP`, `REDISPATCH`, `REFUND`, `CANCEL`, `SUSPEND_CHAMP`, `FLAG_VENDOR`, `MARK_RESOLVED`

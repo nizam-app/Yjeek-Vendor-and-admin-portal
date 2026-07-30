@@ -175,6 +175,12 @@ export const endpoints = {
        * @param {string} orderId
        */
       nearbyChamps: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/nearby-champs`,
+      /**
+       * Confirmed: GET /admin/orders/:orderId/dispatch-attempts
+       * @param {string} orderId
+       */
+      dispatchAttempts: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/dispatch-attempts`,
       /** Confirmed POST action paths */
       redispatch: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/redispatch`,
       refund: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/refund`,
@@ -217,9 +223,21 @@ export const endpoints = {
       /**
        * Confirmed: GET + PATCH /admin/vendors/:vendorId
        * Postman: "Get vendor" / "Update vendor (store info)"
+       * Also: POST /admin/vendors (create wizard)
        * @param {string} vendorId
        */
       detail: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}`,
+      /**
+       * Confirmed: POST /admin/vendors
+       * Create vendor (Add vendor wizard)
+       */
+      create: '/admin/vendors',
+      /**
+       * Confirmed: POST /admin/vendors/:vendorId/activate
+       * @param {string} vendorId
+       */
+      activate: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/activate`,
       /**
        * Confirmed: POST /admin/vendors/:vendorId/force-close
        * Body: { scope: "whole_store", reason, to }
@@ -288,12 +306,113 @@ export const endpoints = {
        */
       deliveryZoneBranch: (vendorId, branchId) =>
         `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones/branches/${encodeURIComponent(branchId)}`,
+      /**
+       * Confirmed: GET/PATCH /admin/vendors/:vendorId/commission
+       * @param {string} vendorId
+       */
+      commission: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/commission`,
+      /**
+       * Confirmed: GET/POST /admin/vendors/:vendorId/promotions
+       * @param {string} vendorId
+       */
+      promotions: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/promotions`,
+      /**
+       * Confirmed: GET/PATCH/DELETE /admin/vendors/:vendorId/promotions/:promotionId
+       * @param {string} vendorId
+       * @param {string} promotionId
+       */
+      promotion: (vendorId, promotionId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/promotions/${encodeURIComponent(promotionId)}`,
+      /**
+       * Confirmed: GET/PATCH /admin/vendors/:vendorId/sla
+       * @param {string} vendorId
+       */
+      sla: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/sla`,
     },
     /**
      * Confirmed: GET /admin/store-types
      * Used by Edit vendor Store type dropdown.
      */
     storeTypes: '/admin/store-types',
+    /**
+     * Confirmed: GET /admin/sla-models
+     * Used by Add vendor SLA model picker.
+     */
+    slaModels: {
+      list: '/admin/sla-models',
+    },
+    /**
+     * Confirmed Users & Roles — admin panel staff accounts.
+     * Postman folder: 02. Users & Roles
+     */
+    users: {
+      /** Confirmed: GET /admin/users/summary */
+      summary: '/admin/users/summary',
+      /** Confirmed: GET /admin/users/meta (create-user meta / permissions modules) */
+      meta: '/admin/users/meta',
+      /** Confirmed: GET /admin/users?search=&page=1&limit=20 */
+      list: '/admin/users',
+      /** Confirmed: POST /admin/users — Create user (invite) */
+      create: '/admin/users',
+      /**
+       * Confirmed: GET + PATCH /admin/users/:adminUserId
+       * @param {string} userId
+       */
+      detail: (userId) => `/admin/users/${encodeURIComponent(userId)}`,
+      /**
+       * Confirmed: POST /admin/users/:id/reset-password body `{}`
+       * @param {string} userId
+       */
+      resetPassword: (userId) =>
+        `/admin/users/${encodeURIComponent(userId)}/reset-password`,
+      /**
+       * Confirmed: POST /admin/users/:id/resend-invite
+       * @param {string} userId
+       */
+      resendInvite: (userId) =>
+        `/admin/users/${encodeURIComponent(userId)}/resend-invite`,
+      /**
+       * Confirmed: POST /admin/users/:id/suspend
+       * Pending invitations cannot be suspended (400).
+       * @param {string} userId
+       */
+      suspend: (userId) => `/admin/users/${encodeURIComponent(userId)}/suspend`,
+      /**
+       * Confirmed: POST /admin/users/:id/unsuspend
+       * @param {string} userId
+       */
+      unsuspend: (userId) => `/admin/users/${encodeURIComponent(userId)}/unsuspend`,
+    },
+    /**
+     * Confirmed Users & Roles — roles.
+     * Postman: Roles meta / List roles / Get role
+     */
+    roles: {
+      /** Confirmed: GET /admin/roles/meta */
+      meta: '/admin/roles/meta',
+      /** Confirmed: GET /admin/roles + POST /admin/roles (create) */
+      list: '/admin/roles',
+      create: '/admin/roles',
+      /**
+       * Confirmed: GET /admin/roles/:roleId
+       * @param {string} roleId
+       */
+      detail: (roleId) => `/admin/roles/${encodeURIComponent(roleId)}`,
+    },
+    /**
+     * Confirmed Users & Roles — activity log.
+     * Postman: GET Activity log / Activity filters metadata / Export activity CSV
+     */
+    activity: {
+      /** Confirmed: GET /admin/activity?search=&module=&actionType=&from=&to=&page=&limit= */
+      list: '/admin/activity',
+      /** Confirmed: GET /admin/activity/meta */
+      meta: '/admin/activity/meta',
+      /** Confirmed: GET /admin/activity/export?from=&to= → CSV text */
+      export: '/admin/activity/export',
+    },
   },
 }
 

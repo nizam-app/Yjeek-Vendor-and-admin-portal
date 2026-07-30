@@ -6,6 +6,8 @@ import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { useAdminOrderDetail } from '../../../hooks/admin/useAdminOrderDetail'
 import { useAdminOrderActionOptions } from '../../../hooks/admin/useAdminOrderActionOptions'
+import { useAdminDispatchAttempts } from '../../../hooks/admin/useAdminDispatchAttempts'
+import { AdminOrderDispatchAttempts } from '../../../components/admin/operations/AdminOrderDispatchAttempts'
 import { adminLiveOrdersBucketForColumnId } from '../../../mappers/admin/mapAdminLiveOrders'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
@@ -14,6 +16,12 @@ import { cn } from '../../../components/admin/cn'
 import { AdminChatPanel } from '../../../components/admin/operations/AdminChatPanel'
 import { AdminOpenChats } from '../../../components/admin/operations/AdminOpenChats'
 import { AdminOrderTakeActionPanel } from '../../../components/admin/operations/AdminOrderTakeActionPanel'
+import AdminReassignChampModal from '../../../components/admin/AdminReassignChampModal'
+import AdminRedispatchOrderModal from '../../../components/admin/AdminRedispatchOrderModal'
+import AdminRefundModal from '../../../components/admin/AdminRefundModal'
+import AdminCancelOrderModal from '../../../components/admin/AdminCancelOrderModal'
+import AdminOrderSuspendChampModal from '../../../components/admin/AdminOrderSuspendChampModal'
+import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal'
 
 function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOrderClick }) {
   return (
@@ -94,6 +102,12 @@ function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOr
 function AdminOrderDetailModal({ order, onClose }) {
   const orderId = order?.orderId || null
   const { data: detail, error, isLoading, refetch } = useAdminOrderDetail(orderId)
+  const {
+    data: dispatchAttempts,
+    error: dispatchAttemptsError,
+    isLoading: dispatchAttemptsLoading,
+    refetch: refetchDispatchAttempts,
+  } = useAdminDispatchAttempts(orderId)
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -211,6 +225,13 @@ function AdminOrderDetailModal({ order, onClose }) {
                   </section>
                 ))}
               </div>
+
+              <AdminOrderDispatchAttempts
+                attempts={dispatchAttempts?.attempts || []}
+                isLoading={dispatchAttemptsLoading}
+                error={dispatchAttemptsError}
+                onRetry={refetchDispatchAttempts}
+              />
             </div>
 
             <footer className="flex shrink-0 justify-end border-t border-[#e3e7e4] px-[14px] py-2.5">
@@ -233,6 +254,12 @@ function IncidentOrderModal({ order, onClose }) {
     error: actionOptionsError,
     isLoading: actionOptionsLoading,
   } = useAdminOrderActionOptions()
+  const {
+    data: dispatchAttempts,
+    error: dispatchAttemptsError,
+    isLoading: dispatchAttemptsLoading,
+    refetch: refetchDispatchAttempts,
+  } = useAdminDispatchAttempts(orderId)
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -366,6 +393,13 @@ function IncidentOrderModal({ order, onClose }) {
                 ))}
               </div>
 
+              <AdminOrderDispatchAttempts
+                attempts={dispatchAttempts?.attempts || []}
+                isLoading={dispatchAttemptsLoading}
+                error={dispatchAttemptsError}
+                onRetry={refetchDispatchAttempts}
+              />
+
               <section className="mt-2 rounded-md border border-[#dfe4e0] p-2.5">
                 <h3 className="mb-2 text-[10px] font-bold">Incidents</h3>
                 {detail.incidents.length === 0 ? (
@@ -431,7 +465,99 @@ function IncidentOrderModal({ order, onClose }) {
               ) : null}
             </footer>
 
-            {activeAction ? (
+            {activeAction?.code === 'REASSIGN_CHAMP' ? (
+              <AdminReassignChampModal
+                open
+                orderId={detail.orderId || orderId}
+                orderNumber={detail.orderNumber || detail.id}
+                orderStatus={detail.stageLabel || detail.status}
+                currentChamp={detail.champ}
+                reasons={actionOptions?.reassignReasons || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'REDISPATCH' ? (
+              <AdminRedispatchOrderModal
+                open
+                orderId={detail.orderId || orderId}
+                orderNumber={detail.orderNumber || detail.id}
+                orderStatus={detail.stageLabel || detail.status}
+                vendorName={detail.vendor?.name}
+                items={detail.items || []}
+                reasons={actionOptions?.redispatchReasons || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'REFUND' ? (
+              <AdminRefundModal
+                open
+                orderId={detail.orderId || orderId}
+                orderValueLabel={detail.orderValue}
+                orderValueAmount={detail.orderValueAmount}
+                remainingRefundable={detail.remainingRefundable}
+                paymentLabel={detail.paymentLabel}
+                currency={detail.currency || 'BHD'}
+                reasons={actionOptions?.refundReasons || []}
+                destinations={actionOptions?.refundDestinations || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'CANCEL' ? (
+              <AdminCancelOrderModal
+                open
+                orderId={detail.orderId || orderId}
+                orderNumber={detail.orderNumber || detail.id}
+                orderValueLabel={detail.orderValue}
+                causes={actionOptions?.cancelCauses || []}
+                reasonsByCause={actionOptions?.cancelReasonsByCause || {}}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'SUSPEND_CHAMP' ? (
+              <AdminOrderSuspendChampModal
+                open
+                orderId={detail.orderId || orderId}
+                champ={detail.champ}
+                champId={detail.champ?.id || null}
+                types={actionOptions?.suspendTypes || []}
+                durations={actionOptions?.suspendDurations || []}
+                reasons={actionOptions?.suspendReasons || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'FLAG_VENDOR' ? (
+              <AdminFlagVendorModal
+                open
+                orderId={detail.orderId || orderId}
+                orderNumber={detail.orderNumber || detail.id}
+                vendorName={detail.vendor?.name}
+                vendorBranch={detail.vendor?.branch}
+                metrics={actionOptions?.flagMetrics || []}
+                severities={actionOptions?.flagSeverities || []}
+                actions={actionOptions?.flagActions || []}
+                reasons={actionOptions?.flagReasons || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction ? (
               <AdminOrderTakeActionPanel
                 actionCode={activeAction.code}
                 orderId={detail.orderId || orderId}

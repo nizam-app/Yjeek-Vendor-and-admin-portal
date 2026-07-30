@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Eye, MoreVertical, Pencil, Plus } from 'lucide-react'
+import { Eye, MoreVertical, Plus } from 'lucide-react'
 import { Badge } from '../Badge'
 import AdminPromotionEditModal from '../AdminPromotionEditModal'
 
@@ -9,24 +9,44 @@ const statusTone = (status) => {
   return 'gray'
 }
 
+function createDraftPromotion() {
+  const start = new Date()
+  const end = new Date()
+  end.setDate(end.getDate() + 7)
+  return {
+    id: null,
+    __create: true,
+    name: '',
+    type: '% off',
+    value: 10,
+    scope: 'All branches',
+    status: 'Scheduled',
+    from: start.toISOString(),
+    to: end.toISOString(),
+    discountCap: '—',
+    minOrder: '—',
+    used: '—',
+  }
+}
+
 function getPromotionDetails(promo) {
   if (!promo) return []
   if (promo.details?.length) return promo.details
 
   return [
-    ['Type', promo.detailType || (promo.type === '% off' ? 'Percentage off (20%)' : promo.type)],
-    ['Discount cap', promo.discountCap || 'BHD 3.000'],
-    ['Min order', promo.minOrder || 'BHD 5.000'],
-    ['Scope', promo.detailScope || `${promo.scope} · entire menu`],
-    ['Period', promo.detailPeriod || promo.period],
-    ['Eligibility', promo.eligibility || 'Everyone · code RAMADAN20'],
-    ['Used', promo.usedLabel || (promo.usedLimit ? `${promo.used} of ${promo.usedLimit}` : `${promo.used}`)],
-    ['Status', promo.status],
+    ['Type', promo.detailType || promo.type || '—'],
+    ['Discount cap', promo.discountCap || '—'],
+    ['Min order', promo.minOrder || '—'],
+    ['Scope', promo.detailScope || promo.scope || '—'],
+    ['Period', promo.detailPeriod || promo.period || '—'],
+    ['Eligibility', promo.eligibility || '—'],
+    ['Used', promo.usedLabel || (promo.used != null ? String(promo.used) : '—')],
+    ['Status', promo.status || '—'],
   ]
 }
 
-function PromotionViewModal({ promo, onClose, onEdit }) {
-  if (!promo) return null
+function PromotionViewModal({ promo, onClose, onEdit, loading = false, error = null }) {
+  if (!promo && !loading && !error) return null
 
   const rows = getPromotionDetails(promo)
 
@@ -47,13 +67,21 @@ function PromotionViewModal({ promo, onClose, onEdit }) {
       >
         <div className="flex items-center gap-2.5   px-5 py-4">
           <h2 id="promotion-view-title" className="min-w-0 text-[16px] font-bold text-[#17231c]">
-            {promo.name}
+            {promo?.name || 'Promotion'}
           </h2>
-          <Badge tone={statusTone(promo.status)}>{promo.status}</Badge>
+          {promo?.status ? <Badge tone={statusTone(promo.status)}>{promo.status}</Badge> : null}
         </div>
 
         <div className="px-5 py-1">
-          {rows.map(([label, value]) => (
+          {loading ? (
+            <p className="py-6 text-center text-[12px] text-[#7c8780]">Loading promotion…</p>
+          ) : null}
+          {error ? (
+            <p className="py-6 text-center text-[12px] text-[#d64044]">
+              {error.message || 'Promotion not found'}
+            </p>
+          ) : null}
+          {!loading && !error && rows.map(([label, value]) => (
             <div
               key={label}
               className="flex items-center gap-4 border-b border-[#f0f2f0] py-3 last:border-0"
@@ -72,17 +100,19 @@ function PromotionViewModal({ promo, onClose, onEdit }) {
           >
             Close
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              onEdit?.(promo)
-              onClose?.()
-            }}
-            className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
-          >
-           ✎
-            Edit
-          </button>
+          {promo && !error ? (
+            <button
+              type="button"
+              onClick={() => {
+                onEdit?.(promo)
+                onClose?.()
+              }}
+              className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+            >
+              ✎
+              Edit
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -91,21 +121,51 @@ function PromotionViewModal({ promo, onClose, onEdit }) {
 
 export function AdminVendorPromotions({
   promotions = [],
+  isLoading = false,
+  error = null,
+  onRetry,
   onNewPromotion,
   onViewPromotion,
   onEditPromotion,
   onSavePromotion,
+  saving = false,
+  saveError = null,
 }) {
   const [menuId, setMenuId] = useState(null)
   const [viewPromo, setViewPromo] = useState(null)
+  const [viewLoading, setViewLoading] = useState(false)
+  const [viewError, setViewError] = useState(null)
   const [editPromo, setEditPromo] = useState(null)
   const menuRef = useRef(null)
+  const list = Array.isArray(promotions) ? promotions : []
 
   const openEditPromotion = (promo) => {
     setViewPromo(null)
     setMenuId(null)
     setEditPromo(promo)
     onEditPromotion?.(promo)
+  }
+
+  const openCreatePromotion = () => {
+    setMenuId(null)
+    setEditPromo(createDraftPromotion())
+    onNewPromotion?.()
+  }
+
+  const handleView = async (promo) => {
+    setMenuId(null)
+    setViewError(null)
+    setViewPromo(promo)
+    if (!onViewPromotion || !promo?.id) return
+    setViewLoading(true)
+    try {
+      const detailed = await onViewPromotion(promo)
+      if (detailed) setViewPromo(detailed)
+    } catch (err) {
+      setViewError(err)
+    } finally {
+      setViewLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -140,13 +200,24 @@ export function AdminVendorPromotions({
         </div>
         <button
           type="button"
-          onClick={onNewPromotion}
+          onClick={openCreatePromotion}
           className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
         >
           <Plus size={14} strokeWidth={2.2} />
           New promotion
         </button>
       </div>
+
+      {error ? (
+        <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {error.message || error}
+          {onRetry ? (
+            <button type="button" onClick={onRetry} className="ml-2 font-medium underline">
+              Retry
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -164,7 +235,21 @@ export function AdminVendorPromotions({
               </tr>
             </thead>
             <tbody>
-              {promotions.map((promo) => {
+              {isLoading && list.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                    Loading promotions…
+                  </td>
+                </tr>
+              ) : null}
+              {!isLoading && list.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                    No promotions
+                  </td>
+                </tr>
+              ) : null}
+              {list.map((promo) => {
                 const menuOpen = menuId === promo.id
 
                 return (
@@ -212,11 +297,7 @@ export function AdminVendorPromotions({
                               type="button"
                               role="menuitem"
                               className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
-                              onClick={() => {
-                                setMenuId(null)
-                                setViewPromo(promo)
-                                onViewPromotion?.(promo)
-                              }}
+                              onClick={() => handleView(promo)}
                             >
                               <Eye size={14} strokeWidth={2} className="text-[#69756d]" />
                               View
@@ -244,16 +325,29 @@ export function AdminVendorPromotions({
 
       <PromotionViewModal
         promo={viewPromo}
-        onClose={() => setViewPromo(null)}
+        loading={viewLoading}
+        error={viewError}
+        onClose={() => {
+          setViewPromo(null)
+          setViewError(null)
+          setViewLoading(false)
+        }}
         onEdit={openEditPromotion}
       />
 
       <AdminPromotionEditModal
         open={Boolean(editPromo)}
         promotion={editPromo}
+        mode={editPromo?.__create ? 'create' : 'edit'}
+        saving={saving}
+        error={saveError}
         onClose={() => setEditPromo(null)}
-        onSave={(updated) => {
-          onSavePromotion?.(updated)
+        onSave={async (updated) => {
+          if (!onSavePromotion) {
+            setEditPromo(null)
+            return
+          }
+          await onSavePromotion(updated)
           setEditPromo(null)
         }}
       />

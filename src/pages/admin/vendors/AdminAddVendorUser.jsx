@@ -123,7 +123,15 @@ export default function AdminAddVendorUser() {
   const returnPath = isVendorDetailFlow
     ? `/admin/vendors/${encodeURIComponent(vendorId)}`
     : '/admin/vendors/new'
-  const returnState = isVendorDetailFlow ? { tab: 'Users & staff' } : { step: 3 }
+  const returnState = isVendorDetailFlow
+    ? { tab: 'Users & staff' }
+    : {
+        mode: state?.mode || 'create',
+        step: 3,
+        wizardDraft: state?.wizardDraft || null,
+        storeName: state?.storeName,
+      }
+  const isLocalWizardCreate = !useRealStaffApi && Boolean(state?.wizardDraft || state?.mode === 'create')
 
   const user = useMemo(() => {
     if (isNewUser) return null
@@ -260,6 +268,29 @@ export default function AdminAddVendorUser() {
 
   async function handleSave() {
     if (!isNewUser || !useRealStaffApi) {
+      if (isLocalWizardCreate || (!useRealStaffApi && returnPath === '/admin/vendors/new')) {
+        const branch =
+          branchList.find((b) => String(b.id) === String(form.branchId)) || branchList[0]
+        const savedUser = {
+          id: `local-user-${Date.now()}`,
+          name: form.fullName.trim() || 'New user',
+          displayName: form.fullName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          password: form.password,
+          role: form.role,
+          branch: branch?.name || '',
+          branchId: branch?.id || form.branchId || '',
+          status: form.status || 'Active',
+        }
+        navigate(returnPath, {
+          state: {
+            ...returnState,
+            savedUser,
+          },
+        })
+        return
+      }
       navigate(returnPath, { state: returnState })
       return
     }

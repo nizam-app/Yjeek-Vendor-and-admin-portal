@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react'
 import AdminCommissionEditModal from '../AdminCommissionEditModal'
 
-export function AdminVendorCommission({ commission: initialCommission, onSaveCommission }) {
+export function AdminVendorCommission({
+  commission: initialCommission,
+  onSaveCommission,
+  isSaving = false,
+  saveError = null,
+}) {
   const [commission, setCommission] = useState(initialCommission)
   const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
     setCommission(initialCommission)
   }, [initialCommission])
+
+  if (!commission) return null
 
   const rows = [
     ['Model', commission.model],
@@ -45,10 +52,18 @@ export function AdminVendorCommission({ commission: initialCommission, onSaveCom
       <AdminCommissionEditModal
         open={editOpen}
         commission={commission}
+        saving={isSaving}
+        error={saveError}
         onClose={() => setEditOpen(false)}
-        onSave={(updated) => {
-          setCommission(updated)
-          onSaveCommission?.(updated)
+        onSave={async (updated) => {
+          if (!onSaveCommission) {
+            setCommission(updated)
+            setEditOpen(false)
+            return
+          }
+          const saved = await onSaveCommission(updated)
+          if (saved) setCommission(saved)
+          setEditOpen(false)
         }}
       />
     </>

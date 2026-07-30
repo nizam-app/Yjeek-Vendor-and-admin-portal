@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft, KeyRound, Pencil } from 'lucide-react'
+import { Check, ChevronLeft } from 'lucide-react'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
@@ -27,6 +28,7 @@ const ACTION_LABELS = {
   edit: 'Edit',
   delete: 'Delete',
   approve: 'Approve',
+  export: 'Export',
 }
 
 function Card({ title, subtitle, children }) {
@@ -47,6 +49,18 @@ function InfoItem({ label, value, valueClass }) {
     </div>
   )
 }
+
+function Field({ label, children }) {
+  return (
+    <label className="min-w-0 block">
+      <span className="text-[11.5px] text-[#7c8780]">{label}</span>
+      <div className="mt-1">{children}</div>
+    </label>
+  )
+}
+
+const inputClass =
+  'h-9 w-full rounded-[10px] border border-[#dfe4e0] bg-white px-3 text-[13px] text-[#17231c] outline-none focus:border-[#1aa054]'
 
 function PermissionMark({ granted, label }) {
   return (
@@ -69,20 +83,42 @@ function tabPath(item) {
   return '/admin/users'
 }
 
+function blankEditForm(detail) {
+  return {
+    fullName: detail?.fullNameValue || '',
+    jobTitle: detail?.jobTitleValue || '',
+    phone: detail?.phoneValue || '',
+    countryCode: detail?.countryCode || '+973',
+  }
+}
+
 export default function AdminUserDetailPage() {
   const navigate = useNavigate()
   const { userId } = useParams()
-  const [statusOverride, setStatusOverride] = useState(null)
+  const [editing, setEditing] = useState(false)
+  const [editForm, setEditForm] = useState(null)
+  const [actionBusy, setActionBusy] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
+  const [tempPassword, setTempPassword] = useState(null)
 
   const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('users'),
-    [],
+    () => adminService.getAdminUserDetail(userId),
+    [userId],
   )
+
+  useEffect(() => {
+    setEditing(false)
+    setEditForm(null)
+    setActionError('')
+    setActionSuccess('')
+    setTempPassword(null)
+  }, [userId])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
-  const row = data.rows?.find((item) => item.id === userId)
-  const detail = data.details?.[userId]
+  const row = data.row
+  const detail = data.detail
 
   if (!row || !detail) {
     return (
@@ -102,10 +138,103 @@ export default function AdminUserDetailPage() {
     )
   }
 
-  const status = statusOverride || row.status
+  const status = row.status
+  const statusValue = String(row.statusValue || '').toUpperCase()
+  const isPending = statusValue === 'PENDING' || status === 'Pending'
+  const isSuspended = statusValue === 'SUSPENDED' || status === 'Suspended'
   const tone = statusStyle[status] || statusStyle.Active
-  const actions = data.permissionActions || []
-  const permissions = data.rolePermissions?.[detail.roleFull] || []
+  const actions = data.permissionActions || ['view', 'create', 'edit', 'delete', 'approve', 'export']
+  const permissions = detail.permissions || []
+  const activity = detail.activity || []
+  const busy = Boolean(actionBusy)
+  const form = editForm || blankEditForm(detail)
+
+  const startEdit = () => {
+    setActionError('')
+    setActionSuccess('')
+    setEditForm(blankEditForm(detail))
+    setEditing(true)
+  }
+
+  const cancelEdit = () => {
+    setEditing(false)
+    setEditForm(null)
+    setActionError('')
+  }
+
+  const saveEdit = async () => {
+    setActionBusy('edit')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      await adminService.updateAdminUser(userId, {
+        fullName: form.fullName,
+        jobTitle: form.jobTitle,
+        phone: form.phone,
+        countryCode: form.countryCode,
+      })
+      setEditing(false)
+      setEditForm(null)
+      setActionSuccess('User updated.')
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to update user.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const handleResetPassword = async () => {
+    setActionBusy('reset')
+    setActionError('')
+    setActionSuccess('')
+    setTempPassword(null)
+    try {
+      const result = await adminService.resetAdminUserPassword(userId)
+      const password = result?.data?.temporaryPassword || null
+      setTempPassword(password)
+      setActionSuccess(
+        password
+          ? 'Password reset. Copy the temporary password below.'
+          : 'Password reset successfully.',
+      )
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to reset password.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const handleSuspendToggle = async () => {
+    if (isPending) {
+      setActionError('Pending invitations cannot be suspended or activated.')
+      return
+    }
+
+    setActionBusy('suspend')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      if (isSuspended) {
+        await adminService.unsuspendAdminUser(userId)
+        setActionSuccess('User reactivated.')
+      } else {
+        await adminService.suspendAdminUser(userId)
+        setActionSuccess('User suspended.')
+      }
+      await refetch()
+    } catch (err) {
+      setActionError(
+        formatApiErrorMessage(
+          err,
+          isSuspended ? 'Failed to reactivate user.' : 'Failed to suspend user.',
+        ),
+      )
+    } finally {
+      setActionBusy('')
+    }
+  }
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -163,31 +292,79 @@ export default function AdminUserDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate('/admin/users/new')}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
+            disabled={busy}
+            onClick={() => (editing ? cancelEdit() : startEdit())}
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
           >
             ✎
-            Edit
+            {editing ? 'Cancel' : 'Edit'}
           </button>
           <button
             type="button"
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
+            disabled={busy}
+            onClick={handleResetPassword}
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
           >
-            
-            Reset password
+            {actionBusy === 'reset' ? 'Resetting…' : 'Reset password'}
           </button>
           <button
             type="button"
-            onClick={() => setStatusOverride(status === 'Suspended' ? 'Active' : 'Suspended')}
-            className="inline-flex h-[34px] items-center rounded-full bg-[#fdebec] px-3.5 text-[12.5px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+            disabled={busy || isPending}
+            title={
+              isPending
+                ? 'Pending invitations cannot be suspended or activated'
+                : undefined
+            }
+            onClick={handleSuspendToggle}
+            className={cn(
+              'inline-flex h-[34px] items-center rounded-full px-3.5 text-[12.5px] font-bold disabled:cursor-not-allowed disabled:opacity-50',
+              isSuspended
+                ? 'bg-[#e8f7ed] text-[#147940] hover:bg-[#d8f0e1]'
+                : 'bg-[#fdebec] text-[#d64044] hover:bg-[#f9d9da]',
+            )}
           >
-            {status === 'Suspended' ? 'Reactivate' : 'Suspend'}
+            {actionBusy === 'suspend'
+              ? isSuspended
+                ? 'Reactivating…'
+                : 'Suspending…'
+              : isSuspended
+                ? 'Reactivate'
+                : 'Suspend'}
           </button>
         </div>
       </div>
 
+      {actionError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f3c6c3] bg-[#fdf2f1] px-4 py-3 text-[13px] text-[#bf3c36]">
+          {actionError}
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#c6e8d2] bg-[#f1faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {actionSuccess}
+          {tempPassword ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <code className="rounded-[8px] bg-white px-2.5 py-1 text-[13px] font-bold text-[#17231c] ring-1 ring-[#d7ebe0]">
+                {tempPassword}
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  if (navigator?.clipboard?.writeText) {
+                    navigator.clipboard.writeText(tempPassword)
+                  }
+                }}
+                className="text-[12px] font-bold text-[#1aa054] hover:underline"
+              >
+                Copy
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="mb-4 inline-flex items-center gap-1">
-        {(data.viewTabs || []).map((item) => (
+        {(data.viewTabs || ['Users', 'Roles', 'Activity log']).map((item) => (
           <button
             key={item}
             type="button"
@@ -206,14 +383,70 @@ export default function AdminUserDetailPage() {
 
       <div className="space-y-4">
         <Card title="Account info">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
-            <InfoItem label="Full name" value={detail.fullName} />
-            <InfoItem label="Email" value={row.email} />
-            <InfoItem label="Phone" value={detail.phone} />
-            <InfoItem label="Job title" value={detail.jobTitle} />
-            <InfoItem label="Created" value={detail.created} />
-            <InfoItem label="Created by" value={detail.createdBy} />
-          </div>
+          {editing ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
+                <Field label="Full name">
+                  <input
+                    className={inputClass}
+                    value={form.fullName}
+                    onChange={(e) => setEditForm({ ...form, fullName: e.target.value })}
+                  />
+                </Field>
+                <InfoItem label="Email" value={row.email} />
+                <Field label="Phone">
+                  <div className="flex gap-2">
+                    <input
+                      className={cn(inputClass, 'w-[88px] shrink-0')}
+                      value={form.countryCode}
+                      onChange={(e) => setEditForm({ ...form, countryCode: e.target.value })}
+                    />
+                    <input
+                      className={inputClass}
+                      value={form.phone}
+                      onChange={(e) => setEditForm({ ...form, phone: e.target.value })}
+                    />
+                  </div>
+                </Field>
+                <Field label="Job title">
+                  <input
+                    className={inputClass}
+                    value={form.jobTitle}
+                    onChange={(e) => setEditForm({ ...form, jobTitle: e.target.value })}
+                  />
+                </Field>
+                <InfoItem label="Created" value={detail.created} />
+                <InfoItem label="Created by" value={detail.createdBy} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={saveEdit}
+                  className="inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+                >
+                  {actionBusy === 'edit' ? 'Saving…' : 'Save changes'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={cancelEdit}
+                  className="inline-flex h-[34px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
+              <InfoItem label="Full name" value={detail.fullName} />
+              <InfoItem label="Email" value={row.email} />
+              <InfoItem label="Phone" value={detail.phone} />
+              <InfoItem label="Job title" value={detail.jobTitle} />
+              <InfoItem label="Created" value={detail.created} />
+              <InfoItem label="Created by" value={detail.createdBy} />
+            </div>
+          )}
         </Card>
 
         <Card title="Role & scope">
@@ -227,7 +460,10 @@ export default function AdminUserDetailPage() {
           </div>
         </Card>
 
-        <Card title="Permissions" subtitle={`Inherited from role — ${detail.roleFull}`}>
+        <Card
+          title="Permissions"
+          subtitle={detail.roleInheritedFrom || `Inherited from role — ${detail.roleFull}`}
+        >
           <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
             <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
               <table className="w-full min-w-[680px] border-collapse text-left">
@@ -247,8 +483,18 @@ export default function AdminUserDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
+                  {permissions.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={actions.length + 1}
+                        className="px-4 py-6 text-[13px] text-[#7c8780]"
+                      >
+                        No permissions returned.
+                      </td>
+                    </tr>
+                  ) : null}
                   {permissions.map((entry) => (
-                    <tr key={entry.module} className="border-b border-[#edf0ee] bg-white last:border-0">
+                    <tr key={entry.moduleKey || entry.module} className="border-b border-[#edf0ee] bg-white last:border-0">
                       <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
                         {entry.module}
                       </td>
@@ -289,9 +535,16 @@ export default function AdminUserDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {detail.activity.map((entry, index) => (
+                  {activity.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-6 text-[13px] text-[#7c8780]">
+                        No recent activity.
+                      </td>
+                    </tr>
+                  ) : null}
+                  {activity.map((entry, index) => (
                     <tr
-                      key={`${entry.time}-${index}`}
+                      key={entry.id || `${entry.time}-${index}`}
                       className="border-b border-[#edf0ee] bg-white last:border-0"
                     >
                       <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">

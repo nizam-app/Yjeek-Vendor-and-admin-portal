@@ -11,7 +11,7 @@ Confirmed from Postman response screenshots.
 | Auth | Bearer Admin access token |
 | Registry | `endpoints.admin.orders.nearbyChamps(orderId)` |
 | Feature flag | `dashboard` |
-| UI | Reassign champ Take-action form |
+| UI | Incident details → Take action → Reassign champ; Scheduled pipeline → Reassign champ |
 
 ### Confirmed success envelope
 
@@ -30,7 +30,7 @@ Confirmed from Postman response screenshots.
 
 `nearby: []` and `currentChamp: null` are valid. Do not invent champ rows.
 
-When items exist, mapper reads id from `id` | `driverId` | `champId` and optional `name` / `displayName` / `fullName` / `status` if present. A non-empty item screenshot is still preferred for richer UI.
+When items exist, mapper reads id from `id` | `driverId` | `champId` and optional `name` / `displayName` / `fullName` / `status` / `rating` / `distanceKm` / `vehicle` / `activeCount` if present.
 
 ## Reassign champ
 
@@ -52,19 +52,26 @@ When items exist, mapper reads id from `id` | `driverId` | `champId` and optiona
 }
 ```
 
-Shown in the Take-action form error area via `ApiError.message`.
+Shown in the modal error area via `ApiError.message`.
 
 ### UX rules
 
-- `driverId` is the **new** champ — do not prefill the currently assigned champ.
+- `driverId` is the **new** champ — do not prefill the currently assigned champ as the only option; first nearby champ may be pre-selected when list is non-empty.
 - Reasons come from action-options `reassignReasons`.
-- Nearby list (when non-empty) populates a select; manual id entry remains as fallback.
+- Nearby list populates radio cards; empty list allows manual driver id entry.
 
-## App wiring
+## App wiring (admin)
+
+| Surface | Entry | Nearby API |
+| --- | --- | --- |
+| Live / incident details | Take action → Reassign champ | `AdminReassignChampModal` → `getNearbyChamps` |
+| Scheduled column | Declined / No response → **Reassign champ** | same modal |
 
 ```
-AdminOrderTakeActionPanel (REASSIGN_CHAMP)
-  → adminOrderService.getNearbyChamps(orderId)
+AdminReassignChampModal
+  → GET /admin/orders/:orderId/nearby-champs
   → mapAdminNearbyChampsResponse
-  → on Confirm: adminOrderService.reassignChamp(orderId, body)
+  → POST /admin/orders/:orderId/reassign-champ
 ```
+
+**Not wired yet:** Scheduled **Assign champ** page (`AdminAssignChamp.jsx`) still uses mock champ profiles — different assign flow (date/window). Use nearby-champs there only when that screen is converted to real assign/reassign.

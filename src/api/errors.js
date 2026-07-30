@@ -102,6 +102,7 @@ export class ApiError extends Error {
 /**
  * Best-effort extraction of field-level validation errors from unknown payloads.
  * Supports confirmed Vendor shape: `{ error: { details: { email: ["..."] } } }`.
+ * Also supports array details: `[{ path: ["owner","email"], message: "..." }]`.
  */
 export function extractFieldErrors(payload) {
   if (!payload || typeof payload !== 'object') return null
@@ -115,8 +116,25 @@ export function extractFieldErrors(payload) {
     payload.details,
   ]
   for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) continue
-    return candidate
+    if (!candidate) continue
+
+    if (Array.isArray(candidate)) {
+      const mapped = {}
+      for (const item of candidate) {
+        if (!item || typeof item !== 'object') continue
+        const key = Array.isArray(item.path)
+          ? item.path.join('.')
+          : String(item.field || item.path || item.code || '').trim() || 'field'
+        const msg = item.message || item.msg || item.description
+        if (!msg) continue
+        if (!mapped[key]) mapped[key] = []
+        mapped[key].push(String(msg))
+      }
+      if (Object.keys(mapped).length) return mapped
+      continue
+    }
+
+    if (typeof candidate === 'object') return candidate
   }
 
   return null
@@ -136,6 +154,9 @@ export function getFirstFieldErrorMessage(fieldErrors, preferredFields = ['email
       return first || null
     }
     if (typeof value === 'string' && value.trim()) return value
+    if (value && typeof value === 'object') {
+      return getFirstFieldErrorMessage(value, [])
+    }
     return null
   }
 
@@ -144,12 +165,39 @@ export function getFirstFieldErrorMessage(fieldErrors, preferredFields = ['email
     if (message) return message
   }
 
-  for (const value of Object.values(fieldErrors)) {
+  for (const [key, value] of Object.entries(fieldErrors)) {
     const message = readMessage(value)
-    if (message) return message
+    if (message) {
+      // Prefer "owner.email: …" when key is a path
+      if (key && key !== 'field' && !preferredFields.includes(key)) {
+        return `${key}: ${message}`
+      }
+      return message
+    }
   }
 
   return null
+}
+
+/**
+ * User-facing API error text: field details first when message is generic.
+ */
+export function formatApiErrorMessage(error, fallback = 'Request failed.') {
+  if (!error) return fallback
+
+  if (error instanceof ApiError) {
+    const fieldMessage = getFirstFieldErrorMessage(error.fieldErrors)
+    const top = typeof error.message === 'string' ? error.message.trim() : ''
+    const generic = !top || /^validation failed\.?$/i.test(top) || /^the request could not be processed\.?$/i.test(top)
+
+    if (fieldMessage && generic) return fieldMessage
+    if (fieldMessage && top && !top.includes(fieldMessage)) return `${top}: ${fieldMessage}`
+    if (top) return top
+    return fallback
+  }
+
+  if (typeof error?.message === 'string' && error.message.trim()) return error.message
+  return fallback
 }
 
 export function createApiErrorFromResponse({ status, payload, requestId = null, fallbackMessage }) {
@@ -159,7 +207,10 @@ export function createApiErrorFromResponse({ status, payload, requestId = null, 
       ? payload.error
       : null
 
-  const message =
+  const fieldErrors = extractFieldErrors(payload)
+  const fieldMessage = getFirstFieldErrorMessage(fieldErrors)
+
+  let message =
     (typeof payload?.message === 'string' && payload.message) ||
     (typeof nestedError?.message === 'string' && nestedError.message) ||
     (typeof payload?.error === 'string' && payload.error) ||
@@ -167,12 +218,17 @@ export function createApiErrorFromResponse({ status, payload, requestId = null, 
     fallbackMessage ||
     defaultMessageForType(type, status)
 
+  if (fieldMessage) {
+    const generic = /^validation failed\.?$/i.test(String(message).trim())
+    message = generic ? fieldMessage : `${message}: ${fieldMessage}`
+  }
+
   return new ApiError({
     type,
     status,
     message,
     details: nestedError?.details ?? payload?.details ?? payload?.data ?? null,
-    fieldErrors: extractFieldErrors(payload),
+    fieldErrors,
     requestId: requestId || payload?.requestId || payload?.meta?.requestId || null,
     raw: payload,
   })

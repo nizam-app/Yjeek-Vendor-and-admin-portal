@@ -1,6 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 
 const inputClass =
@@ -8,48 +13,53 @@ const inputClass =
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#68736c]'
 
 const steps = ['Account', 'Role & scope', 'Review']
-const roles = [
-  'Super Admin',
-  'Admin',
-  'Country Manager',
-  'Operations Manager',
-  'Operations Supervisor',
-  'Dispatcher',
-  'Support Agent',
-  'Finance',
-  'Marketing Manager',
-]
-const SCOPE_LEVELS = ['Global (all countries)', 'Country', 'Zone / City']
-const COUNTRIES = ['Bahrain', 'Saudi Arabia', 'UAE', 'Kuwait', 'Qatar', 'Oman']
-const ZONES = ['Manama', 'Muharraq', 'Riffa', 'Isa Town', 'Hamad Town', 'Sitra']
 
-const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve']
+const FALLBACK_SCOPE_LEVELS = [
+  { value: 'GLOBAL', label: 'Global (all countries)' },
+  { value: 'COUNTRY', label: 'Country' },
+  { value: 'ZONE', label: 'Zone / City' },
+]
+
+const FALLBACK_COUNTRIES = [
+  { code: 'BH', name: 'Bahrain' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'AE', name: 'UAE' },
+  { code: 'KW', name: 'Kuwait' },
+  { code: 'QA', name: 'Qatar' },
+  { code: 'OM', name: 'Oman' },
+]
+
+const FALLBACK_ZONES = ['Manama', 'Muharraq', 'Riffa', 'Isa Town', 'Hamad Town', 'Sitra']
+
+const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export']
 const ACTION_LABELS = {
   view: 'View',
   create: 'Create',
   edit: 'Edit',
   delete: 'Delete',
   approve: 'Approve',
+  export: 'Export',
 }
 
-const MODULES = [
-  { id: 'live-dashboard', label: 'Live Dashboard', defaults: ['view', 'edit'] },
-  { id: 'scheduled-orders', label: 'Scheduled Orders', defaults: ['view', 'create', 'edit', 'approve'] },
-  { id: 'vendor-management', label: 'Vendor Management', defaults: ['view', 'edit'] },
-  { id: 'store-management', label: 'Store Management', defaults: ['view'] },
-  { id: 'fleet-management', label: 'Fleet Management', defaults: ['view', 'create', 'edit', 'approve'] },
-  { id: 'customer-management', label: 'Customer Management', defaults: ['view', 'create', 'edit'] },
-  { id: 'marketing', label: 'Marketing', defaults: ['view'] },
-  { id: 'ui-editor', label: 'UI Editor', defaults: [] },
-  { id: 'users-roles', label: 'Users & Roles', defaults: [] },
-  { id: 'reports', label: 'Reports', defaults: ['view', 'approve'] },
-  { id: 'settings', label: 'Settings', defaults: [] },
+const FALLBACK_MODULES = [
+  { key: 'LIVE_DASHBOARD', label: 'Live Dashboard' },
+  { key: 'SCHEDULED_ORDERS', label: 'Scheduled Orders' },
+  { key: 'VENDOR_MANAGEMENT', label: 'Vendor Management' },
+  { key: 'STORE_MANAGEMENT', label: 'Store Management' },
+  { key: 'FLEET_MANAGEMENT', label: 'Fleet Management' },
+  { key: 'CUSTOMER_MANAGEMENT', label: 'Customer Management' },
+  { key: 'MARKETING', label: 'Marketing' },
+  { key: 'UI_EDITOR', label: 'UI Editor' },
+  { key: 'USERS_ROLES', label: 'Users & Roles' },
+  { key: 'REPORTS', label: 'Reports' },
+  { key: 'SETTINGS', label: 'Settings' },
 ]
 
-function buildDefaultPermissions() {
-  return MODULES.reduce((acc, module) => {
-    acc[module.id] = ACTIONS.reduce((row, action) => {
-      row[action] = module.defaults.includes(action)
+function emptyPermissions(modules) {
+  return modules.reduce((acc, module) => {
+    const key = module.key || module.module || module.id
+    acc[key] = ACTIONS.reduce((row, action) => {
+      row[action] = false
       return row
     }, {})
     return acc
@@ -113,25 +123,30 @@ function Select({ value, onChange, children, label }) {
 }
 
 function PillGroup({ options, value, onChange, multi = false }) {
+  const normalized = options.map((option) =>
+    typeof option === 'object'
+      ? { value: option.value ?? option.code ?? option.id, label: option.label ?? option.name ?? option.value }
+      : { value: option, label: option },
+  )
   const selected = multi ? value : [value]
 
   return (
     <div className="flex flex-wrap gap-2">
-      {options.map((option) => {
-        const isActive = selected.includes(option)
+      {normalized.map((option) => {
+        const isActive = selected.includes(option.value)
         return (
           <button
-            key={option}
+            key={option.value}
             type="button"
             onClick={() => {
               if (!multi) {
-                onChange(option)
+                onChange(option.value)
                 return
               }
               onChange(
                 isActive
-                  ? value.filter((item) => item !== option)
-                  : [...value, option],
+                  ? value.filter((item) => item !== option.value)
+                  : [...value, option.value],
               )
             }}
             className={cn(
@@ -141,7 +156,7 @@ function PillGroup({ options, value, onChange, multi = false }) {
                 : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
             )}
           >
-            {option}
+            {option.label}
           </button>
         )
       })}
@@ -171,28 +186,106 @@ function PermissionCheckbox({ checked, onChange, label }) {
 
 export default function AdminCreateUserPage() {
   const navigate = useNavigate()
+  const useRealUsers = isAdminRealApiFeature('users')
   const [step, setStep] = useState(0)
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+
+  const { data: meta, error: metaError, isLoading: metaLoading, refetch: refetchMeta } =
+    useApiResource(
+      () => (useRealUsers ? adminService.getAdminUsersMeta() : Promise.resolve({ data: null })),
+      [useRealUsers],
+    )
+
+  const { data: rolesPage, error: rolesError, isLoading: rolesLoading, refetch: refetchRoles } =
+    useApiResource(
+      () => (useRealUsers ? adminService.listAdminRoles() : Promise.resolve({ data: null })),
+      [useRealUsers],
+    )
+
+  const roleOptions = useMemo(() => {
+    if (meta?.roles?.length) return meta.roles
+    const rows = rolesPage?.roles?.rows || []
+    return rows.map((row) => ({ id: row.id, name: row.name, scopeLevel: row.scopeLevelValue }))
+  }, [meta, rolesPage])
+
+  const countryOptions = useMemo(() => {
+    if (meta?.countries?.length) return meta.countries
+    return FALLBACK_COUNTRIES
+  }, [meta])
+
+  const zoneOptions = useMemo(() => {
+    if (meta?.zones?.length) {
+      return meta.zones.map((z) => z.name || z.id)
+    }
+    return FALLBACK_ZONES
+  }, [meta])
+
+  const modules = useMemo(() => {
+    if (meta?.modules?.length) {
+      return meta.modules.map((m) => ({
+        key: m.module || m.key,
+        label: m.moduleLabel || m.label || m.module || m.key,
+      }))
+    }
+    return FALLBACK_MODULES
+  }, [meta])
+
   const [form, setForm] = useState({
     fullName: '',
     email: '',
     phone: '',
+    countryCode: '+973',
     jobTitle: '',
-    username: 'name@yjeek.com',
-    password: 'Yj#9kQ2m!',
-    role: 'Operations Manager',
-    scopeLevel: 'Country',
-    countries: ['Bahrain'],
-    zones: ['Manama', 'Muharraq'],
+    username: '',
+    password: '',
+    roleId: '',
+    scopeLevel: 'COUNTRY',
+    countries: ['BH'],
+    zones: [],
   })
-  const [permissions, setPermissions] = useState(buildDefaultPermissions)
+  const [permissions, setPermissions] = useState(() => emptyPermissions(FALLBACK_MODULES))
+  const [bootstrapped, setBootstrapped] = useState(false)
+
+  useEffect(() => {
+    if (!useRealUsers || bootstrapped) return
+    if (metaLoading || rolesLoading) return
+
+    const firstRole = roleOptions[0]
+    setForm((current) => ({
+      ...current,
+      roleId: current.roleId || firstRole?.id || '',
+      password: meta?.suggestedTemporaryPassword || current.password,
+      countries: current.countries.length
+        ? current.countries
+        : countryOptions[0]?.code
+          ? [countryOptions[0].code]
+          : ['BH'],
+    }))
+    setPermissions(emptyPermissions(modules))
+    setBootstrapped(true)
+  }, [
+    useRealUsers,
+    bootstrapped,
+    metaLoading,
+    rolesLoading,
+    roleOptions,
+    meta,
+    countryOptions,
+    modules,
+  ])
+
+  const selectedRole = roleOptions.find((role) => String(role.id) === String(form.roleId))
+  const scopeLabel =
+    FALLBACK_SCOPE_LEVELS.find((item) => item.value === form.scopeLevel)?.label || form.scopeLevel
 
   const update = (key) => (event) => {
     const value = event.target.value
     setForm((current) => ({
       ...current,
       [key]: value,
-      ...(key === 'email' && (!current.username || current.username === current.email || current.username === 'name@yjeek.com')
-        ? { username: value || 'name@yjeek.com' }
+      ...(key === 'email' && (!current.username || current.username === current.email)
+        ? { username: value }
         : {}),
     }))
   }
@@ -201,33 +294,79 @@ export default function AdminCreateUserPage() {
     setForm((current) => ({
       ...current,
       scopeLevel,
-      ...(scopeLevel === 'Global (all countries)'
+      ...(scopeLevel === 'GLOBAL'
         ? { countries: [], zones: [] }
         : {
-            countries: current.countries.length ? current.countries : ['Bahrain'],
-            zones: current.zones.length ? current.zones : ['Manama', 'Muharraq'],
+            countries: current.countries.length
+              ? current.countries
+              : countryOptions[0]?.code
+                ? [countryOptions[0].code]
+                : ['BH'],
+            zones: scopeLevel === 'ZONE' ? current.zones : [],
           }),
     }))
   }
 
-  const togglePermission = (moduleId, action) => {
+  const togglePermission = (moduleKey, action) => {
     setPermissions((current) => ({
       ...current,
-      [moduleId]: { ...current[moduleId], [action]: !current[moduleId][action] },
+      [moduleKey]: { ...current[moduleKey], [action]: !current[moduleKey]?.[action] },
     }))
   }
 
   const cancel = () => navigate('/admin/users')
-  const showCountries = form.scopeLevel !== 'Global (all countries)'
-  const showZones = form.scopeLevel !== 'Global (all countries)'
-  const scopeLevelLabel = form.scopeLevel.replace(' (all countries)', '').replace(' / City', '')
+  const showCountries = form.scopeLevel !== 'GLOBAL'
+  const showZones = form.scopeLevel === 'ZONE'
 
-  const goNext = () => {
+  const countryLabels = form.countries
+    .map((code) => countryOptions.find((c) => c.code === code)?.name || code)
+    .join(', ')
+
+  async function handleCreate() {
+    setSubmitError(null)
+
+    if (!useRealUsers) {
+      navigate('/admin/users')
+      return
+    }
+
+    setSaving(true)
+    try {
+      const created = await adminService.createAdminUser({
+        ...form,
+        username: form.username || form.email,
+        sendInvite: true,
+        temporaryPassword: form.password,
+        permissionOverrides: {},
+      })
+      const id = created?.data?.row?.id
+      navigate(id ? `/admin/users/${encodeURIComponent(id)}` : '/admin/users')
+    } catch (err) {
+      setSubmitError(formatApiErrorMessage(err, 'Failed to create user.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const goNext = async () => {
     if (step < steps.length - 1) {
       setStep((current) => current + 1)
       return
     }
-    navigate('/admin/users')
+    await handleCreate()
+  }
+
+  if (useRealUsers && (metaLoading || rolesLoading) && !bootstrapped) {
+    return (
+      <ApiState
+        isLoading
+        error={metaError || rolesError}
+        onRetry={() => {
+          refetchMeta()
+          refetchRoles()
+        }}
+      />
+    )
   }
 
   return (
@@ -279,6 +418,12 @@ export default function AdminCreateUserPage() {
           </button>
         ))}
       </div>
+
+      {submitError ? (
+        <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {submitError}
+        </div>
+      ) : null}
 
       {step === 0 ? (
         <div className="space-y-4">
@@ -337,6 +482,9 @@ export default function AdminCreateUserPage() {
                   onChange={update('password')}
                 />
               </Field>
+              <p className="text-[11px] text-[#8a948e]">
+                Invite flow uses email invitation (`sendInvite: true`). Temporary password is optional.
+              </p>
             </div>
           </Card>
         </div>
@@ -350,10 +498,15 @@ export default function AdminCreateUserPage() {
           <div className="space-y-4">
             <Field label="Role">
               <div className="max-w-[420px]">
-                <Select label="Role" value={form.role} onChange={update('role')}>
-                  {roles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
+                <Select
+                  label="Role"
+                  value={form.roleId}
+                  onChange={(event) => setForm((current) => ({ ...current, roleId: event.target.value }))}
+                >
+                  {!roleOptions.length ? <option value="">No roles available</option> : null}
+                  {roleOptions.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
                     </option>
                   ))}
                 </Select>
@@ -363,7 +516,7 @@ export default function AdminCreateUserPage() {
             <div>
               <p className={labelClass}>Scope level</p>
               <PillGroup
-                options={SCOPE_LEVELS}
+                options={FALLBACK_SCOPE_LEVELS}
                 value={form.scopeLevel}
                 onChange={setScopeLevel}
               />
@@ -374,7 +527,7 @@ export default function AdminCreateUserPage() {
                 <p className={labelClass}>Countries</p>
                 <PillGroup
                   multi
-                  options={COUNTRIES}
+                  options={countryOptions.map((c) => ({ value: c.code, label: c.name }))}
                   value={form.countries}
                   onChange={(countries) => setForm((current) => ({ ...current, countries }))}
                 />
@@ -386,7 +539,7 @@ export default function AdminCreateUserPage() {
                 <p className={labelClass}>Zones / Cities</p>
                 <PillGroup
                   multi
-                  options={ZONES}
+                  options={zoneOptions}
                   value={form.zones}
                   onChange={(zones) => setForm((current) => ({ ...current, zones }))}
                 />
@@ -409,18 +562,18 @@ export default function AdminCreateUserPage() {
 
           <Card title="Login credentials">
             <div className="grid grid-cols-2 gap-4 max-[700px]:grid-cols-1">
-              <ReviewField label="Username" value={form.username} />
-              <ReviewField label="Password" value={form.password} />
+              <ReviewField label="Username" value={form.username || form.email} />
+              <ReviewField label="Password" value={form.password || '— (invite email)'} />
             </div>
           </Card>
 
           <Card title="Role & scope">
             <div className="grid grid-cols-4 gap-4 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
-              <ReviewField label="Role" value={form.role} />
-              <ReviewField label="Scope level" value={scopeLevelLabel} />
+              <ReviewField label="Role" value={selectedRole?.name || '—'} />
+              <ReviewField label="Scope level" value={scopeLabel} />
               <ReviewField
                 label="Countries"
-                value={form.countries.length ? form.countries.join(', ') : 'All'}
+                value={form.scopeLevel === 'GLOBAL' ? 'All' : countryLabels || '—'}
               />
               <ReviewField
                 label="Zones"
@@ -431,7 +584,7 @@ export default function AdminCreateUserPage() {
 
           <Card
             title="Permissions"
-            subtitle="Inherited from role — toggle to override for this user."
+            subtitle="Inherited from role — toggle preview only (invite sends empty permissionOverrides)."
           >
             <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
               <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -452,24 +605,27 @@ export default function AdminCreateUserPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {MODULES.map((module) => (
-                      <tr key={module.id} className="border-b border-[#edf0ee] bg-white last:border-0">
-                        <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
-                          {module.label}
-                        </td>
-                        {ACTIONS.map((action) => (
-                          <td key={action} className="px-4 py-3">
-                            <div className="flex justify-center">
-                              <PermissionCheckbox
-                                checked={permissions[module.id][action]}
-                                onChange={() => togglePermission(module.id, action)}
-                                label={`${ACTION_LABELS[action]} ${module.label}`}
-                              />
-                            </div>
+                    {modules.map((module) => {
+                      const key = module.key
+                      return (
+                        <tr key={key} className="border-b border-[#edf0ee] bg-white last:border-0">
+                          <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
+                            {module.label}
                           </td>
-                        ))}
-                      </tr>
-                    ))}
+                          {ACTIONS.map((action) => (
+                            <td key={action} className="px-4 py-3">
+                              <div className="flex justify-center">
+                                <PermissionCheckbox
+                                  checked={Boolean(permissions[key]?.[action])}
+                                  onChange={() => togglePermission(key, action)}
+                                  label={`${ACTION_LABELS[action]} ${module.label}`}
+                                />
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -482,8 +638,9 @@ export default function AdminCreateUserPage() {
         {step > 0 ? (
           <button
             type="button"
+            disabled={saving}
             onClick={() => setStep((current) => current - 1)}
-            className="inline-flex h-[36px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6]"
+            className="inline-flex h-[36px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
           >
             Back
           </button>
@@ -498,10 +655,17 @@ export default function AdminCreateUserPage() {
         )}
         <button
           type="button"
+          disabled={saving}
           onClick={goNext}
-          className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-5 text-[12.5px] font-bold text-white hover:bg-[#158a47]"
+          className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-5 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          {step === 0 ? 'Next: Role & scope' : step === 1 ? 'Next: Review' : 'Create & invite'}
+          {saving
+            ? 'Creating…'
+            : step === 0
+              ? 'Next: Role & scope'
+              : step === 1
+                ? 'Next: Review'
+                : 'Create & invite'}
         </button>
       </div>
     </div>

@@ -235,19 +235,22 @@ export default function AdminAddVendorBrunchs() {
     : isVendorDetailFlow
       ? `/admin/vendors/${encodeURIComponent(vendorId)}`
       : '/admin/vendors/new'
-  const returnState = returnToWizard
+  const baseReturnState = returnToWizard
     ? {
-        mode: 'edit',
-        vendorId: state?.vendorId || vendorId,
+        mode: state?.mode || (state?.vendorId && state.vendorId !== 'new' ? 'edit' : 'create'),
+        vendorId: state?.vendorId || (isVendorDetailFlow ? vendorId : undefined),
         storeName: state?.storeName,
-        step: 2,
+        step: state?.step || 2,
+        wizardDraft: state?.wizardDraft || null,
       }
     : isVendorDetailFlow
       ? { tab: 'Branches' }
       : { step: 2 }
+  const returnState = baseReturnState
 
   const storeName = state?.storeName || 'Green Kitchen'
   const useRealBranchApi = isVendorDetailFlow && isAdminRealApiFeature('vendors')
+  const isLocalWizardCreate = returnToWizard && !useRealBranchApi
 
   const [loadedBranch, setLoadedBranch] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -256,6 +259,7 @@ export default function AdminAddVendorBrunchs() {
     name: '',
     areaCity: 'Seef',
     address: '',
+    phone: '',
     pinnedLocation: '',
     latitude: '',
     longitude: '',
@@ -467,6 +471,35 @@ export default function AdminAddVendorBrunchs() {
 
   async function handleSaveBranch() {
     if (!useRealBranchApi) {
+      if (isLocalWizardCreate || returnToWizard) {
+        const radiusKm = form.radiusKm || '5'
+        const etaMin = form.etaMin || '30'
+        const minOrder = form.minOrderValue || '3'
+        const area = form.areaCity || 'Manama'
+        const savedBranch = {
+          id: state?.branch?.id || `local-${Date.now()}`,
+          name: form.name.trim() || 'New branch',
+          area,
+          city: area,
+          address: form.address || '',
+          phone: form.phone || state?.wizardDraft?.form?.ownerPhone || '+973 1700 0000',
+          latitude: form.latitude || '26.2285',
+          longitude: form.longitude || '50.535',
+          deliveryRadiusKm: radiusKm,
+          radiusKm,
+          minOrderAmount: minOrder,
+          etaMin,
+          isPrimary: Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
+          detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
+        }
+        navigate(returnPath, {
+          state: {
+            ...baseReturnState,
+            savedBranch,
+          },
+        })
+        return
+      }
       navigate(returnPath, { state: returnState })
       return
     }
@@ -621,6 +654,15 @@ export default function AdminAddVendorBrunchs() {
                 className={inputClass}
                 value={form.address}
                 onChange={(e) => updateField('address', e.target.value)}
+              />
+            </Field>
+
+            <Field label="Phone">
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={(e) => updateField('phone', e.target.value)}
+                placeholder="+973 1770 0001"
               />
             </Field>
 

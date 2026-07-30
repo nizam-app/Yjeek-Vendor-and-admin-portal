@@ -13,8 +13,13 @@ import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
 import { AdminVendorSlaConfigs, SERVICE_MODE_OPTIONS } from '../../../components/admin/AdminVendorSlaConfigs'
 import { isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { matchAdminStoreTypeId } from '../../../mappers/admin/mapAdminStoreTypes'
+import {
+  mapAdminCommissionToWizardForm,
+  mapAdminCustomFeesToWizard,
+} from '../../../mappers/admin/mapAdminVendorCommission'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -151,11 +156,13 @@ export default function AdminAddVendorPage({ onBack }) {
     description: 'Healthy home-style meals across Bahrain',
     logoUrl: '',
     coverUrl: '',
-    area: '',
+    city: 'Manama',
+    area: 'Seef',
     cuisineTags: [],
     ownerName: 'Mohammed Ahmed',
     ownerEmail: 'owner@greenkitchen.bh',
     ownerPhone: '+973 3812 1212',
+    ownerCountryCode: '+973',
     ownerPassword: '12&cdq#poin*123456',
     crNumber: '110111-3',
     vatNumber: '220011223300',
@@ -175,29 +182,150 @@ export default function AdminAddVendorPage({ onBack }) {
     prepSla: '18 min',
     readySla: '20 min',
     hotFood: 'Required',
+    slaModelId: '',
   })
+  const useRealCreateApi = !isEdit && isAdminRealApiFeature('vendors')
   const [storeTypes, setStoreTypes] = useState([])
+  const [slaModels, setSlaModels] = useState([])
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState(null)
-  const [branches, setBranches] = useState(INITIAL_BRANCHES)
+  const [branches, setBranches] = useState(() => (useRealCreateApi ? [] : INITIAL_BRANCHES))
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [branchesError, setBranchesError] = useState(null)
-  const [users, setUsers] = useState(INITIAL_USERS)
-  const [customFees, setCustomFees] = useState([
-    { id: 'f1', name: 'Packaging fee', value: 'BHD 0.250' },
-    { id: 'f2', name: 'Priority handling', value: '2.5 %' },
-  ])
-  const [serviceModes, setServiceModes] = useState([])
+  const [users, setUsers] = useState(() => (useRealCreateApi ? [] : INITIAL_USERS))
+  const [customFees, setCustomFees] = useState(() =>
+    isAdminRealApiFeature('vendors') ? [] : [
+      { id: 'f1', name: 'Packaging fee', value: 'BHD 0.250', amount: 0.25, type: 'BHD' },
+      { id: 'f2', name: 'Priority handling', value: '2.5 %', amount: 2.5, type: '%' },
+    ],
+  )
+  const [commissionTiers, setCommissionTiers] = useState([])
+  const [commissionLoading, setCommissionLoading] = useState(false)
+  const [commissionSaving, setCommissionSaving] = useState(false)
+  const [commissionError, setCommissionError] = useState(null)
+  const [serviceModes, setServiceModes] = useState(['Hot food · on demand', 'Pickup'])
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
+  const [createSaving, setCreateSaving] = useState(false)
+  const [createError, setCreateError] = useState(null)
+  const [activateImmediately, setActivateImmediately] = useState(true)
 
   const current = ADD_VENDOR_STEPS[step - 1]
   const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
   const useRealStoreApi = isEdit && Boolean(editVendorId) && isAdminRealApiFeature('vendors')
+  const stepBusy = profileSaving || commissionSaving || createSaving
+  const stepLoading = (step === 1 && profileLoading) || (step === 4 && commissionLoading)
+
+  function buildWizardDraft(overrides = {}) {
+    return {
+      form,
+      branches,
+      users,
+      customFees,
+      commissionTiers,
+      serviceModes,
+      ...overrides,
+    }
+  }
 
   useEffect(() => {
     if (location.state?.step != null) setStep(location.state.step)
   }, [location.key, location.state?.step])
+
+  useEffect(() => {
+    if (isEdit) return
+
+    const st = location.state
+    if (!st) return
+
+    const draft = st.wizardDraft
+    if (draft) {
+      if (draft.form && typeof draft.form === 'object') {
+        setForm((prev) => ({ ...prev, ...draft.form }))
+      }
+      if (Array.isArray(draft.branches)) setBranches(draft.branches)
+      if (Array.isArray(draft.users)) setUsers(draft.users)
+      if (Array.isArray(draft.customFees)) setCustomFees(draft.customFees)
+      if (Array.isArray(draft.commissionTiers)) setCommissionTiers(draft.commissionTiers)
+      if (Array.isArray(draft.serviceModes)) setServiceModes(draft.serviceModes)
+    }
+
+    if (st.savedBranch) {
+      const saved = st.savedBranch
+      setBranches((prev) => {
+        const idx = prev.findIndex((b) => String(b.id) === String(saved.id))
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = { ...prev[idx], ...saved }
+          return next
+        }
+        return [...prev, saved]
+      })
+    }
+
+    if (st.savedUser) {
+      const saved = st.savedUser
+      setUsers((prev) => {
+        const idx = prev.findIndex((u) => String(u.id) === String(saved.id))
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = { ...prev[idx], ...saved }
+          return next
+        }
+        return [...prev, saved]
+      })
+    }
+  }, [location.key, isEdit])
+
+  useEffect(() => {
+    if (!useRealCreateApi) return undefined
+
+    let cancelled = false
+    setProfileLoading(true)
+    setProfileError(null)
+
+    Promise.all([
+      adminService.listStoreTypes(),
+      adminService.listSlaModels({ limit: 50 }),
+    ])
+      .then(([typesRes, slaRes]) => {
+        if (cancelled) return
+        const types = typesRes?.data?.storeTypes || []
+        const models = slaRes?.data?.slaModels || []
+        setStoreTypes(types)
+        setSlaModels(models)
+
+        setForm((prev) => {
+          let next = prev
+          if (!prev.storeTypeId) {
+            const matched =
+              types.find((t) => t.name === prev.storeType) || types[0]
+            if (matched) {
+              next = {
+                ...next,
+                storeTypeId: matched.id,
+                storeType: matched.name || prev.storeType,
+              }
+            }
+          }
+          if (!next.slaModelId) {
+            const preferred = models.find((m) => m.isDefault) || models[0]
+            if (preferred) next = { ...next, slaModelId: preferred.id }
+          }
+          return next
+        })
+      })
+      .catch((err) => {
+        if (!cancelled) setProfileError(err?.message || 'Failed to load store types / SLA models.')
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealCreateApi])
 
   useEffect(() => {
     if (!useRealStoreApi) return undefined
@@ -277,6 +405,43 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }, [useRealStoreApi, editVendorId, location.key])
 
+  useEffect(() => {
+    if (!useRealStoreApi) return undefined
+
+    let cancelled = false
+    setCommissionLoading(true)
+    setCommissionError(null)
+
+    adminService
+      .getVendorCommission(editVendorId)
+      .then((response) => {
+        if (cancelled) return
+        const commission = response?.data
+        if (!commission) {
+          setCustomFees([])
+          setCommissionTiers([])
+          return
+        }
+        setForm((prev) => ({
+          ...prev,
+          ...mapAdminCommissionToWizardForm(commission),
+        }))
+        setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
+        setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setCommissionError(err?.message || 'Failed to load commission.')
+      })
+      .finally(() => {
+        if (!cancelled) setCommissionLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStoreApi, editVendorId, location.key])
+
   async function saveStoreProfile() {
     if (!useRealStoreApi) return true
     setProfileError(null)
@@ -309,9 +474,73 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }
 
+  async function saveCommission() {
+    if (!useRealStoreApi) return true
+    setCommissionError(null)
+    setCommissionSaving(true)
+    try {
+      const response = await adminService.updateVendorCommission(editVendorId, form, {
+        wizard: true,
+        customFees,
+        commissionTiers,
+      })
+      const commission = response?.data
+      if (commission) {
+        setForm((prev) => ({
+          ...prev,
+          ...mapAdminCommissionToWizardForm(commission),
+        }))
+        setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
+        setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
+      }
+      return true
+    } catch (err) {
+      setCommissionError(err?.message || 'Failed to update commission.')
+      return false
+    } finally {
+      setCommissionSaving(false)
+    }
+  }
+
+  async function submitCreateVendor({ activate }) {
+    if (!useRealCreateApi) {
+      handleBack()
+      return false
+    }
+
+    setCreateError(null)
+    setCreateSaving(true)
+    try {
+      const response = await adminService.createVendor({
+        form,
+        branches,
+        users,
+        customFees,
+        commissionTiers,
+        serviceModes,
+        activate: Boolean(activate),
+      })
+      const id = response?.data?.id
+      if (!id) {
+        throw new Error('Vendor created but no id was returned.')
+      }
+      navigate(`/admin/vendors/${encodeURIComponent(id)}`)
+      return true
+    } catch (err) {
+      setCreateError(formatApiErrorMessage(err, 'Failed to create vendor.'))
+      return false
+    } finally {
+      setCreateSaving(false)
+    }
+  }
+
   const goNext = async () => {
     if (step === 1 && useRealStoreApi) {
       const ok = await saveStoreProfile()
+      if (!ok) return
+    }
+    if (step === 4 && useRealStoreApi) {
+      const ok = await saveCommission()
       if (!ok) return
     }
     if (step < ADD_VENDOR_STEPS.length) setStep(step + 1)
@@ -319,9 +548,26 @@ export default function AdminAddVendorPage({ onBack }) {
   }
 
   const handleSaveDraft = async () => {
+    if (useRealCreateApi) {
+      if (step === 6) {
+        await submitCreateVendor({ activate: false })
+      }
+      return
+    }
     if (step === 1 && useRealStoreApi) {
       await saveStoreProfile()
     }
+    if (step === 4 && useRealStoreApi) {
+      await saveCommission()
+    }
+  }
+
+  const handleActivateVendor = async () => {
+    if (useRealCreateApi) {
+      await submitCreateVendor({ activate: activateImmediately })
+      return
+    }
+    handleBack()
   }
 
   const addBranch = () => {
@@ -330,15 +576,22 @@ export default function AdminAddVendorPage({ onBack }) {
         state: {
           storeName: form.storeName,
           vendorId: editVendorId,
-          mode: 'create',
+          mode: 'edit',
           returnTo: 'wizard',
           step: 2,
+          wizardDraft: buildWizardDraft(),
         },
       })
       return
     }
     navigate('/admin/vendors/new/branches/new', {
-      state: { storeName: form.storeName, mode: 'create', step: 2 },
+      state: {
+        storeName: form.storeName,
+        mode: 'create',
+        returnTo: 'wizard',
+        step: 2,
+        wizardDraft: buildWizardDraft(),
+      },
     })
   }
 
@@ -354,13 +607,21 @@ export default function AdminAddVendorPage({ onBack }) {
             mode: 'edit',
             returnTo: 'wizard',
             step: 2,
+            wizardDraft: buildWizardDraft(),
           },
         },
       )
       return
     }
     navigate(`/admin/vendors/new/branches/${encodeURIComponent(branch.id)}`, {
-      state: { branch, storeName: form.storeName },
+      state: {
+        branch,
+        storeName: form.storeName,
+        mode: 'create',
+        returnTo: 'wizard',
+        step: 2,
+        wizardDraft: buildWizardDraft(),
+      },
     })
   }
 
@@ -371,17 +632,21 @@ export default function AdminAddVendorPage({ onBack }) {
         mode: 'create',
         step: 3,
         branches,
+        wizardDraft: buildWizardDraft(),
       },
     })
   }
 
   const addCustomFee = () => {
     if (!feeDraft.name.trim() || !feeDraft.amount.trim()) return
+    const amountNum = Number(feeDraft.amount)
     setCustomFees((prev) => [
       ...prev,
       {
         id: `f${Date.now()}`,
         name: feeDraft.name.trim(),
+        amount: Number.isNaN(amountNum) ? 0 : amountNum,
+        type: feeDraft.type,
         value: feeDraft.type === 'BHD' ? `BHD ${feeDraft.amount}` : `${feeDraft.amount} %`,
       },
     ])
@@ -481,11 +746,14 @@ export default function AdminAddVendorPage({ onBack }) {
                   }}
                 >
                   {storeTypes.length ? (
-                    storeTypes.map((type) => (
-                      <option key={type.id} value={type.id}>
-                        {type.name}
-                      </option>
-                    ))
+                    <>
+                      <option value="">Select store type</option>
+                      {storeTypes.map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.name}
+                        </option>
+                      ))}
+                    </>
                   ) : (
                     <>
                       <option>Food & Beverage</option>
@@ -511,6 +779,12 @@ export default function AdminAddVendorPage({ onBack }) {
               </VendorField>
               <VendorField label="Short description" className="col-span-2 max-[700px]:col-span-1">
                 <VendorInput value={form.description} onChange={update('description')} />
+              </VendorField>
+              <VendorField label="City">
+                <VendorInput value={form.city} onChange={update('city')} />
+              </VendorField>
+              <VendorField label="Area">
+                <VendorInput value={form.area} onChange={update('area')} />
               </VendorField>
               <VendorUploadBox
                 label="Logo"
@@ -620,7 +894,14 @@ export default function AdminAddVendorPage({ onBack }) {
                             type="button"
                             onClick={() =>
                               navigate(`/admin/vendors/new/users/${encodeURIComponent(user.id)}`, {
-                                state: { user, storeName: form.storeName, step: 3, branches },
+                                state: {
+                                  user,
+                                  storeName: form.storeName,
+                                  mode: 'create',
+                                  step: 3,
+                                  branches,
+                                  wizardDraft: buildWizardDraft(),
+                                },
                               })
                             }
                             className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3]"
@@ -647,6 +928,15 @@ export default function AdminAddVendorPage({ onBack }) {
 
         {step === 4 ? (
           <>
+            {commissionLoading ? (
+              <p className="text-[13px] text-[#7c8780]">Loading commission…</p>
+            ) : null}
+            {commissionError ? (
+              <div className="rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                {commissionError}
+              </div>
+            ) : null}
+
             <VendorCard title="Documents & compliance">
               <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
                 <VendorField label="CR number">
@@ -656,6 +946,11 @@ export default function AdminAddVendorPage({ onBack }) {
                   <VendorInput value={form.vatNumber} onChange={update('vatNumber')} />
                 </VendorField>
               </div>
+              {useRealStoreApi ? (
+                <p className="mt-3 text-[11px] text-[#8a948e]">
+                  CR / VAT are not part of the commission API — not saved with this step yet.
+                </p>
+              ) : null}
             </VendorCard>
 
             <VendorCard title="Commission & fees">
@@ -691,6 +986,24 @@ export default function AdminAddVendorPage({ onBack }) {
                   <VendorInput value={form.currency} onChange={update('currency')} />
                 </VendorField>
               </div>
+              {form.commissionModel === 'Tiered' ? (
+                <div className="mt-4 rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3">
+                  <p className="text-[12px] font-medium text-[#455249]">Commission tiers</p>
+                  {commissionTiers.length === 0 ? (
+                    <p className="mt-1 text-[11px] text-[#8a948e]">
+                      No tiers from API yet. Saving Tiered will send an empty tiers list (UI has no tier editor).
+                    </p>
+                  ) : (
+                    <ul className="mt-2 space-y-1">
+                      {commissionTiers.map((tier, index) => (
+                        <li key={`${tier.fromAmount}-${tier.ratePct}-${index}`} className="text-[12px] text-[#17231c]">
+                          From {tier.fromAmount} → {tier.ratePct}%
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
             </VendorCard>
 
             <VendorCard title="Online gateway fees">
@@ -754,6 +1067,9 @@ export default function AdminAddVendorPage({ onBack }) {
 
               <p className="mb-2 mt-4 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8a948e]">Added fees</p>
               <div className="space-y-2">
+                {customFees.length === 0 ? (
+                  <p className="text-[12px] text-[#8a948e]">No custom fees</p>
+                ) : null}
                 {customFees.map((fee) => (
                   <div
                     key={fee.id}
@@ -772,6 +1088,11 @@ export default function AdminAddVendorPage({ onBack }) {
                   </div>
                 ))}
               </div>
+              {useRealStoreApi && form.commissionModel !== 'Tiered' ? (
+                <p className="mt-3 text-[11px] text-[#8a948e]">
+                  Custom fees are included in the confirmed Tiered PATCH body. They are kept locally for other models.
+                </p>
+              ) : null}
             </VendorCard>
           </>
         ) : null}
@@ -779,6 +1100,21 @@ export default function AdminAddVendorPage({ onBack }) {
         {step === 5 ? (
           <>
             <VendorCard title="Service modes & SLA">
+              {useRealCreateApi ? (
+                <div className="mb-4 max-w-md">
+                  <VendorField label="SLA model">
+                    <VendorSelect value={form.slaModelId} onChange={update('slaModelId')}>
+                      <option value="">Select SLA model</option>
+                      {slaModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name}
+                          {model.isDefault ? ' (default)' : ''}
+                        </option>
+                      ))}
+                    </VendorSelect>
+                  </VendorField>
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2.5">
                 {SERVICE_MODE_OPTIONS.map((mode) => {
                   const selected = serviceModes.includes(mode)
@@ -826,30 +1162,51 @@ export default function AdminAddVendorPage({ onBack }) {
             form={form}
             branches={branches}
             users={users}
-            onActivate={() => handleBack()}
+            activateImmediately={activateImmediately}
+            onActivateImmediatelyChange={setActivateImmediately}
           />
         ) : null}
       </div>
+
+      {createError ? (
+        <div className="mt-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {createError}
+        </div>
+      ) : null}
 
       <div className="mt-12 flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={handleSaveDraft}
-          disabled={profileSaving || profileLoading}
+          disabled={stepBusy || stepLoading}
           className="inline-flex h-[36px] items-center rounded-full border border-[#d7e8dc] bg-white px-4 text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
         >
-          {profileSaving && step === 1 ? 'Saving…' : 'Save draft'}
+          {createSaving && useRealCreateApi
+            ? 'Saving…'
+            : stepBusy && (step === 1 || step === 4)
+              ? 'Saving…'
+              : 'Save draft'}
         </button>
         {step === 6 ? (
-          <AdminAddVendorActivateButton onClick={() => handleBack()} />
+          <AdminAddVendorActivateButton
+            onClick={handleActivateVendor}
+            disabled={stepBusy || stepLoading}
+            label={
+              createSaving
+                ? 'Saving…'
+                : activateImmediately
+                  ? 'Activate vendor'
+                  : 'Save as draft'
+            }
+          />
         ) : (
           <button
             type="button"
             onClick={goNext}
-            disabled={profileSaving || (step === 1 && profileLoading)}
+            disabled={stepBusy || stepLoading}
             className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {profileSaving && step === 1 ? 'Saving…' : `Continue → ${current.continueTo}`}
+            {stepBusy && (step === 1 || step === 4) ? 'Saving…' : `Continue → ${current.continueTo}`}
           </button>
         )}
       </div>

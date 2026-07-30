@@ -119,15 +119,19 @@ function mapOrderIncidents(incidents) {
  * Group confirmed availableActions into Take-action menu sections.
  * Unknown action codes are skipped (not invented).
  * @param {unknown[]} actions
+ * @param {{ hasChamp?: boolean }} [options]
  */
-export function mapAdminAvailableActions(actions) {
+export function mapAdminAvailableActions(actions, options = {}) {
   const list = Array.isArray(actions) ? actions : []
   const groups = new Map()
+  const hasChamp = options.hasChamp == null ? true : Boolean(options.hasChamp)
 
   for (const code of list) {
     const key = String(code || '')
     const meta = ACTION_LABELS[key]
     if (!meta) continue
+    // Suspend requires an assigned champ (driverId) — hide when unassigned.
+    if (key === 'SUSPEND_CHAMP' && !hasChamp) continue
     if (!groups.has(meta.group)) groups.set(meta.group, [])
     groups.get(meta.group).push({
       code: key,
@@ -138,6 +142,27 @@ export function mapAdminAvailableActions(actions) {
   }
 
   return Array.from(groups.entries()).map(([title, items]) => ({ title, actions: items }))
+}
+
+function computeRemainingRefundable(data, payment) {
+  if (data?.remainingRefundable != null && data.remainingRefundable !== '') {
+    const n = Number(data.remainingRefundable)
+    if (!Number.isNaN(n)) return Math.max(0, n)
+  }
+
+  const paid = Number(payment?.amount ?? data?.summary?.orderValue ?? data?.totals?.totalAmount)
+  if (Number.isNaN(paid)) return null
+
+  const refunds = Array.isArray(data?.refunds) ? data.refunds : []
+  const refunded = refunds.reduce((sum, entry) => {
+    if (!entry || typeof entry !== 'object') return sum
+    const status = String(entry.status || '').toUpperCase()
+    if (status && !['COMPLETED', 'PAID', 'SUCCESS'].includes(status)) return sum
+    const amount = Number(entry.amount)
+    return sum + (Number.isNaN(amount) ? 0 : amount)
+  }, 0)
+
+  return Math.max(0, paid - refunded)
 }
 
 /**
@@ -206,6 +231,15 @@ export function mapAdminOrderDetailResponse(data) {
     incidentCount: Number(data.incidentCount) || 0,
     bucket: data.bucket ?? null,
     paymentLabel: formatPayment(payment),
+    orderValue,
+    orderValueAmount: (() => {
+      const raw = summary.orderValue ?? totals.totalAmount ?? payment?.amount
+      if (raw == null || raw === '') return null
+      const n = Number(raw)
+      return Number.isNaN(n) ? null : n
+    })(),
+    remainingRefundable: computeRemainingRefundable(data, payment),
+    currency,
     distanceLabel: distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`,
     summaryRows: [
       ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
@@ -269,7 +303,9 @@ export function mapAdminOrderDetailResponse(data) {
       },
     ],
     incidents: mapOrderIncidents(data.incidents),
-    actionGroups: mapAdminAvailableActions(data.availableActions),
+    actionGroups: mapAdminAvailableActions(data.availableActions, {
+      hasChamp: Boolean(champ?.id),
+    }),
     availableActions: Array.isArray(data.availableActions) ? data.availableActions.map(String) : [],
     conversationId: data.conversationId ?? null,
   }

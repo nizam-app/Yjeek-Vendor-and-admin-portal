@@ -3,7 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Bell, Check, ChevronDown, Search, Zap } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
 import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
+import { useAdminOrderActionOptions } from '../../hooks/admin/useAdminOrderActionOptions'
 import { ApiState } from '../../components/admin/ApiState'
+import AdminReassignChampModal from '../../components/admin/AdminReassignChampModal'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -58,7 +60,7 @@ function statusBadge(order) {
   return { label: 'Awaiting', tone: 'bg-[#fff3d6] text-[#9a6d12]' }
 }
 
-function ColumnOrderCard({ order }) {
+function ColumnOrderCard({ order, onReassign }) {
   const status = statusBadge(order)
   const typeTag = order.tags?.find((tag) => !tag.includes('Special') && tag !== 'Normal') || 'Standard'
   const isSpecial = order.tags?.some((tag) => tag.includes('Special'))
@@ -120,7 +122,11 @@ function ColumnOrderCard({ order }) {
       ) : null}
 
       {showReassign ? (
-        <button type="button" className="mt-3.5 h-[32px] w-full rounded-[8px] bg-[#e12e32] text-[11px] font-medium text-white">
+        <button
+          type="button"
+          onClick={() => onReassign?.(order)}
+          className="mt-3.5 h-[32px] w-full rounded-[8px] bg-[#e12e32] text-[11px] font-medium text-white hover:brightness-[0.97]"
+        >
           Reassign champ
         </button>
       ) : null}
@@ -165,10 +171,12 @@ function ColumnOrderCard({ order }) {
 export function AdminScheduledColumn() {
   const { columnKey } = useParams()
   const [query, setQuery] = useState('')
+  const [reassignOrder, setReassignOrder] = useState(null)
   const { data, error, isLoading, refetch } = useAdminScheduledBoard({
     sort: 'time_left',
     limit: 50,
   })
+  const { data: actionOptions } = useAdminOrderActionOptions()
   const meta = columnMeta[columnKey]
 
   const orders = useMemo(() => {
@@ -179,6 +187,8 @@ export function AdminScheduledColumn() {
       return [order.id, order.route, order.champ, ...(order.tags || [])].join(' ').toLowerCase().includes(query.toLowerCase())
     })
   }, [data, columnKey, query])
+
+  const reassignOrderId = reassignOrder?.orderId || String(reassignOrder?.id || '').replace(/^#/, '') || null
 
   if (!data) {
     return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
@@ -263,10 +273,28 @@ export function AdminScheduledColumn() {
       ) : (
         <div className="grid grid-cols-4 gap-3.5 max-[1200px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
           {orders.map((order, index) => (
-            <ColumnOrderCard key={`${order.id}-${index}`} order={order} />
+            <ColumnOrderCard
+              key={`${order.id}-${index}`}
+              order={order}
+              onReassign={setReassignOrder}
+            />
           ))}
         </div>
       )}
+
+      <AdminReassignChampModal
+        open={Boolean(reassignOrderId)}
+        orderId={reassignOrderId}
+        orderNumber={reassignOrder?.id || null}
+        orderStatus={reassignOrder?.statusLabel || reassignOrder?.status || null}
+        currentChamp={reassignOrder?.champ ? { name: reassignOrder.champ } : null}
+        reasons={actionOptions?.reassignReasons || []}
+        onClose={() => setReassignOrder(null)}
+        onSuccess={async () => {
+          setReassignOrder(null)
+          await refetch()
+        }}
+      />
     </div>
   )
 }
