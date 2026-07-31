@@ -1,7 +1,7 @@
 import { apiClient } from '../../api/client'
 import { isAdminRealApiFeature } from '../../api/config'
 import { endpoints } from '../../api/endpoints'
-import { mapAdminDashboardOverviewResponse } from '../../mappers/admin/mapAdminDashboardOverview'
+import { mapAdminDashboardOverviewResponse, attachOverviewBucketOrderPreviews } from '../../mappers/admin/mapAdminDashboardOverview'
 import { mapAdminDashboardMapResponse } from '../../mappers/admin/mapAdminDashboardMap'
 import { mapAdminLiveOrdersResponse } from '../../mappers/admin/mapAdminLiveOrders'
 import { mapAdminScheduledBoardResponse } from '../../mappers/admin/mapAdminScheduledBoard'
@@ -45,8 +45,47 @@ export const adminDashboardService = {
         feature: 'dashboard',
       })
 
+      let data = mapAdminDashboardOverviewResponse(response?.data)
+
+      // Full Overview bucket cards — recent 2 per column from live-orders API
+      // (same path as Live Orders board). Empty items[] stays empty.
+      // Use allSettled so one bucket failing does not wipe the other previews.
+      // Do not pass `region` here — Postman live-orders query is bucket/sort/limit only;
+      // overview already scoped by region.
+      const settled = await Promise.allSettled([
+        this.getLiveOrders({
+          bucket: 'critical',
+          sort: 'time_left',
+          limit: 2,
+          ...requestOptions,
+        }),
+        this.getLiveOrders({
+          bucket: 'at_risk',
+          sort: 'time_left',
+          limit: 2,
+          ...requestOptions,
+        }),
+        this.getLiveOrders({
+          bucket: 'on_track',
+          sort: 'time_left',
+          limit: 2,
+          ...requestOptions,
+        }),
+      ])
+
+      const [criticalResult, atRiskResult, onTrackResult] = settled
+      data = attachOverviewBucketOrderPreviews(
+        data,
+        {
+          critical: criticalResult.status === 'fulfilled' ? criticalResult.value?.data : null,
+          at_risk: atRiskResult.status === 'fulfilled' ? atRiskResult.value?.data : null,
+          on_track: onTrackResult.status === 'fulfilled' ? onTrackResult.value?.data : null,
+        },
+        2,
+      )
+
       return {
-        data: mapAdminDashboardOverviewResponse(response?.data),
+        data,
         meta: response?.meta ?? null,
       }
     }

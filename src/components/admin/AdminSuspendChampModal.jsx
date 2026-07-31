@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import banIcon from '../../assets/⛔.png'
 import warningIcon from '../../assets/⚠.png'
+import { formatApiErrorMessage } from '../../api/errors'
+import { adminService } from '../../services/adminService'
 import { cn } from './cn'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
@@ -18,17 +20,59 @@ const REASONS = [
 
 const DURATIONS = ['Until reviewed', '7 days', '30 days', 'Permanent']
 
-export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
+/**
+ * Suspend champ — Fleet champ detail.
+ * Confirmed: POST /admin/fleet/champs/:champId/suspend
+ * Body: { reason, duration, note?, notifyChamp }
+ */
+export default function AdminSuspendChampModal({
+  open,
+  onClose,
+  champId = null,
+  onSuccess,
+}) {
   const [reason, setReason] = useState(REASONS[0])
   const [duration, setDuration] = useState(DURATIONS[0])
   const [note, setNote] = useState('')
   const [notify, setNotify] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setReason(REASONS[0])
+    setDuration(DURATIONS[0])
+    setNote('')
+    setNotify(true)
+    setError('')
+    setSubmitting(false)
+  }, [open, champId])
 
   if (!open) return null
 
-  const handleConfirm = () => {
-    onConfirm?.({ reason, duration, note, notify })
-    onClose?.()
+  const handleConfirm = async () => {
+    setError('')
+    const id = String(champId || '').trim()
+    if (!id) {
+      setError('Champ id is missing.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await adminService.suspendAdminFleetChamp(id, {
+        reason,
+        duration,
+        note,
+        notifyChamp: notify,
+      })
+      onSuccess?.()
+      onClose?.()
+    } catch (err) {
+      setError(formatApiErrorMessage(err, 'Failed to suspend champ.'))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -38,6 +82,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
         aria-label="Close suspend champ modal"
         onClick={onClose}
         className="absolute inset-0 bg-black/40"
+        disabled={submitting}
       />
 
       <div
@@ -56,6 +101,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
           <button
             type="button"
             onClick={onClose}
+            disabled={submitting}
             className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
             aria-label="Close"
           >
@@ -71,6 +117,12 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
             </p>
           </div>
 
+          {error ? (
+            <div className="rounded-[10px] border border-[#f0c9c6] bg-[#fff5f4] px-3.5 py-3 text-[12.5px] text-[#b42318]">
+              {error}
+            </div>
+          ) : null}
+
           <label className="block">
             <span className={labelClass}>Reason</span>
             <div className="relative">
@@ -78,6 +130,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
                 className={cn(inputClass, 'appearance-none pr-9')}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
+                disabled={submitting}
               >
                 {REASONS.map((item) => (
                   <option key={item} value={item}>
@@ -99,6 +152,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
                 <button
                   key={option}
                   type="button"
+                  disabled={submitting}
                   onClick={() => setDuration(option)}
                   className={cn(
                     'h-[32px] flex-1 rounded-[8px] px-2.5 text-[12px] whitespace-nowrap',
@@ -120,10 +174,11 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="e.g. insurance expired — reupload required"
+              disabled={submitting}
             />
           </label>
 
-          <div className="flex items-center justify-between gap-3 rounded-[10px] bg-[#f6f8f6] px-3.5 py-3 w-fit">
+          <div className="flex w-fit items-center justify-between gap-3 rounded-[10px] bg-[#f6f8f6] px-3.5 py-3">
             <div>
               <p className="text-[13px] font-bold text-[#17231c]">Notify champ</p>
               <p className="mt-0.5 text-[12px] text-[#7c8780]">Send suspension notification</p>
@@ -132,6 +187,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
               type="button"
               role="switch"
               aria-checked={notify}
+              disabled={submitting}
               onClick={() => setNotify((prev) => !prev)}
               className={cn(
                 'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
@@ -152,6 +208,7 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
           <button
             type="button"
             onClick={onClose}
+            disabled={submitting}
             className="inline-flex h-[40px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
           >
             Cancel
@@ -159,9 +216,10 @@ export default function AdminSuspendChampModal({ open, onClose, onConfirm }) {
           <button
             type="button"
             onClick={handleConfirm}
-            className="inline-flex h-[40px] items-center rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c]"
+            disabled={submitting}
+            className="inline-flex h-[40px] items-center rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c] disabled:opacity-60"
           >
-            Suspend champ
+            {submitting ? 'Suspending…' : 'Suspend champ'}
           </button>
         </div>
       </div>

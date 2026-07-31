@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, MoreVertical, Plus } from 'lucide-react'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 
-const SUPPLIERS = [
+const MOCK_SUPPLIERS = [
   {
     id: 'sup-yjeek',
     name: 'Yjeek Fleet',
@@ -36,10 +40,29 @@ function typeTone(type) {
   return 'gray'
 }
 
+function statusTone(status) {
+  if (status === 'Active') return 'green'
+  if (status === 'Inactive') return 'gray'
+  return 'gray'
+}
+
 export default function AdminFleetSuppliersPage() {
   const navigate = useNavigate()
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
+
+  const { data, error, isLoading, refetch } = useApiResource(
+    () => {
+      if (!useRealFleet) {
+        return Promise.resolve({ data: { suppliers: MOCK_SUPPLIERS } })
+      }
+      return adminService.listAdminFleetSuppliers()
+    },
+    [useRealFleet],
+  )
+
+  const rows = data?.suppliers || (!useRealFleet ? MOCK_SUPPLIERS : [])
 
   useEffect(() => {
     if (!menuId) return undefined
@@ -60,6 +83,10 @@ export default function AdminFleetSuppliersPage() {
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [menuId])
+
+  if (useRealFleet && !data && (isLoading || error)) {
+    return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  }
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -103,7 +130,14 @@ export default function AdminFleetSuppliersPage() {
               </tr>
             </thead>
             <tbody>
-              {SUPPLIERS.map((row) => {
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-[13px] text-[#7c8780]">
+                    No suppliers found.
+                  </td>
+                </tr>
+              ) : null}
+              {rows.map((row) => {
                 const menuOpen = menuId === row.id
 
                 return (
@@ -125,7 +159,7 @@ export default function AdminFleetSuppliersPage() {
                       {row.commission}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
-                      <Badge tone="green">{row.status}</Badge>
+                      <Badge tone={statusTone(row.status)}>{row.status}</Badge>
                     </td>
                     <td className="relative whitespace-nowrap px-4 py-3.5 text-right">
                       <div className="inline-block" ref={menuOpen ? menuRef : null}>
@@ -166,6 +200,7 @@ export default function AdminFleetSuppliersPage() {
                               onClick={(event) => {
                                 event.stopPropagation()
                                 setMenuId(null)
+                                navigate(`/admin/fleet/suppliers/${encodeURIComponent(row.id)}/edit`)
                               }}
                             >
                               Edit

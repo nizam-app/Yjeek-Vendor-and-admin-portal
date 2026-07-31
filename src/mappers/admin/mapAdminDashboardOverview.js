@@ -21,16 +21,71 @@ const KPI_STRIP = [
 ]
 
 const BUCKET_COLUMNS = [
-  { key: 'critical', title: 'Critical', tone: 'red' },
-  { key: 'at_risk', title: 'At Risk', tone: 'yellow' },
-  { key: 'on_track', title: 'On Track', tone: 'green' },
+  { key: 'critical', title: 'Critical', tone: 'red', columnId: 'critical' },
+  { key: 'at_risk', title: 'At Risk', tone: 'yellow', columnId: 'at-risk' },
+  { key: 'on_track', title: 'On Track', tone: 'green', columnId: 'on-track' },
 ]
+
+/**
+ * Map a live-order board item into the Full Overview bucket card shape.
+ */
+export function mapAdminOverviewBucketOrderCard(order) {
+  if (!order) return null
+  const detail = [order.vendor, order.vendorArea, order.temperature, order.state]
+    .filter((part) => part && part !== '—')
+    .join(' · ')
+
+  return {
+    id: order.id,
+    orderId: order.orderId || null,
+    timeLeft: order.timeLeft || '—',
+    detail: detail || '—',
+    hasIncident: Boolean(order.hasIncident),
+  }
+}
+
+/**
+ * Attach recent live-order previews (max `limit` each) onto overview slaColumns.
+ * Source: GET /admin/dashboard/orders per bucket (same as Live Orders).
+ */
+export function attachOverviewBucketOrderPreviews(overview, liveByBucket = {}, limit = 2) {
+  if (!overview || typeof overview !== 'object') return overview
+
+  const columns = Array.isArray(overview.slaColumns) ? overview.slaColumns : []
+
+  return {
+    ...overview,
+    slaColumns: columns.map((column) => {
+      const meta = BUCKET_COLUMNS.find((item) => item.title === column.title)
+      if (!meta) return { ...column, orders: Array.isArray(column.orders) ? column.orders : [] }
+
+      const live = liveByBucket[meta.key]
+      const liveColumns = Array.isArray(live?.columns) ? live.columns : []
+      const matched =
+        liveColumns.find((col) => col.id === meta.columnId) ||
+        liveColumns.find((col) => Array.isArray(col.orders) && col.orders.length > 0) ||
+        null
+
+      const orders = Array.isArray(matched?.orders)
+        ? matched.orders
+        : liveColumns.flatMap((col) => (Array.isArray(col.orders) ? col.orders : []))
+
+      return {
+        ...column,
+        orders: orders
+          .slice(0, limit)
+          .map(mapAdminOverviewBucketOrderCard)
+          .filter(Boolean),
+      }
+    }),
+  }
+}
 
 /**
  * Map confirmed Admin dashboard overview `data` into the existing UI shape.
  *
  * Confirmed from overview: region, kpis, activeOrders, buckets, openIncidents, autoRefreshSeconds.
- * Unconfirmed sections (incidents list, bucket order cards) stay empty — no mock padding.
+ * Bucket order cards are attached from GET /admin/dashboard/orders in dashboardService.
  *
  * @param {Record<string, unknown>|null|undefined} data
  */

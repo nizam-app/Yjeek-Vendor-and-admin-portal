@@ -113,17 +113,19 @@ export default function AdminDashboardPage() {
             </div>
             {column.orders.length ? (
               <div className="mt-1.5 space-y-2.5">
-                {column.orders.map(({ id, detail, timeLeft }) => (
+                {column.orders.map(({ id, detail, timeLeft, hasIncident }) => (
                   <article key={id} className="h-[74px] rounded-[8px] border border-[#e5e8e5] bg-white px-2.5 py-2 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
                     <div className="flex items-center justify-between">
                       <strong className="text-[11px] font-medium leading-3 tracking-[.02em]">{id}</strong>
-                      <span className={cn('flex items-center gap-3 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : 'text-[#b27b17]')}>
+                      <span className={cn('flex items-center gap-3 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : column.tone === 'yellow' ? 'text-[#b27b17]' : 'text-[#32815a]')}>
                       ⏱ 
                         {timeLeft}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] font-medium leading-3 text-[#727c76]">{detail}</p>
-                    <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'bg-[#fdecec] text-[#d44749]' : 'bg-[#fff4dc] text-[#b67f17]')}>Incident</span>
+                    <p className="mt-1 truncate text-[11px] font-medium leading-3 text-[#727c76]">{detail}</p>
+                    {hasIncident ? (
+                      <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'bg-[#fdecec] text-[#d44749]' : 'bg-[#fff4dc] text-[#b67f17]')}>Incident</span>
+                    ) : null}
                   </article>
                 ))}
               </div>

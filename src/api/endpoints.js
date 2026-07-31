@@ -413,6 +413,55 @@ export const endpoints = {
       /** Confirmed: GET /admin/activity/export?from=&to= → CSV text */
       export: '/admin/activity/export',
     },
+    /**
+     * Confirmed Fleet Management — champs.
+     * Postman folder: 07. Fleet
+     */
+    fleet: {
+      /** Confirmed: GET /admin/fleet/summary — Fleet KPI summary */
+      summary: '/admin/fleet/summary',
+      /**
+       * Confirmed: GET /admin/fleet/champs?search=&statusTab=&vehicle=&tier=&category=&limit=
+       * Confirmed: POST /admin/fleet/champs — create champ
+       */
+      champs: '/admin/fleet/champs',
+      /**
+       * Confirmed: GET + PATCH /admin/fleet/champs/:champId
+       * @param {string} champId
+       */
+      champ: (champId) => `/admin/fleet/champs/${encodeURIComponent(champId)}`,
+      /**
+       * Confirmed: GET /admin/fleet/champs/:champId/earnings?from=&to=&limit=
+       * @param {string} champId
+       */
+      champEarnings: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/earnings`,
+      /**
+       * Confirmed: POST /admin/fleet/champs/:champId/suspend
+       * Body: { reason, duration, note, notifyChamp }
+       * @param {string} champId
+       */
+      champSuspend: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/suspend`,
+      /**
+       * Confirmed: POST /admin/fleet/champs/:champId/unsuspend
+       * @param {string} champId
+       */
+      champUnsuspend: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/unsuspend`,
+      /**
+       * Confirmed: GET /admin/fleet/suppliers — list suppliers
+       * Also POST create supplier.
+       */
+      suppliers: '/admin/fleet/suppliers',
+      /**
+       * Confirmed: GET /admin/fleet/suppliers/:supplierId?from=&to=
+       * Supplier detail & performance
+       * @param {string} supplierId
+       */
+      supplier: (supplierId) =>
+        `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`,
+    },
   },
 }
 

@@ -60,8 +60,21 @@ Confirmed from Postman screenshots. Real credentials, tokens, and record IDs are
 | Critical / At Risk / On Track counts | `data.buckets.critical` / `at_risk` / `on_track` |
 | Auto-refresh interval | `data.autoRefreshSeconds` |
 | Live map | Separate `GET /admin/dashboard/map` (empty if layer not confirmed) |
-| Incidents Log rows | `GET /admin/dashboard/incidents` via `useAdminIncidents` |
-| Bucket order cards | Empty until live-orders board cards are shown on this page |
+| Incidents Log rows | `GET /admin/incidents` via `useAdminIncidents` |
+| Bucket order cards (recent 2) | `GET /admin/dashboard/orders?bucket=critical\|at_risk\|on_track&sort=time_left&limit=2` |
+
+Preview fetches do **not** send `region` (Postman live-orders uses `bucket` / `sort` / `limit` only). Overview stays region-scoped via `/overview?region=BH`. Each bucket is loaded with `Promise.allSettled` so one failure does not clear the others.
+
+### Card fields (from live-order item)
+
+| UI | Source |
+| --- | --- |
+| Order id | `orderNumber` (fallback `id`) |
+| Time left | `timeLeftLabel` (fallback `elapsedMin` → `Nm`) |
+| Detail line | `vendor.name` · `vendor.area` · `category` · `statusLabel` |
+| Incident pill | `hasIncident` |
+
+If any of those item fields are missing, the card still renders with `—` placeholders.
 
 ## Architecture
 
@@ -69,8 +82,9 @@ Confirmed from Postman screenshots. Real credentials, tokens, and record IDs are
 AdminDashboardPage
   → useAdminDashboard
     → adminDashboardService.getDashboard
-      → apiClient.get(endpoints.admin.dashboard.overview, { feature: 'dashboard' })
-      → mapAdminDashboardOverviewResponse
+      → GET /admin/dashboard/overview
+      → GET /admin/dashboard/orders?bucket=critical|at_risk|on_track&limit=2  (bucket cards)
+      → mapAdminDashboardOverviewResponse + attachOverviewBucketOrderPreviews
 ```
 
 ## Modes
@@ -92,8 +106,11 @@ Do **not** set `VITE_ADMIN_USE_MOCK_API=false` unless you accept that unwired Ad
 
 ## Unconfirmed (do not invent)
 
-- Live map layers (`GET /admin/dashboard/map`)
-- Live order cards inside buckets (`GET /admin/dashboard/orders`)
-- Incidents feed list (`GET /admin/dashboard/incidents`)
-- Open chats (`GET /admin/dashboard/chats`)
+- Live map layers beyond confirmed `layer=champs` (and empty-safe others)
 - Exact error response bodies
+
+## Wired follow-ups
+
+- Bucket order cards: `GET /admin/dashboard/orders` with `limit=2` per bucket (same mapper as Live Orders)
+- Incidents Log: `GET /admin/incidents`
+- Open chats: separate chats strip (when on Live Orders)

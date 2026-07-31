@@ -82,6 +82,11 @@ export function mapAdminLiveOrdersResponse(data) {
     .map((item) => mapAdminLiveOrderItem(item))
     .filter(Boolean)
 
+  const responseBucket =
+    data.bucket === 'at_risk' || data.bucket === 'on_track' || data.bucket === 'critical'
+      ? data.bucket
+      : null
+
   const byBucket = {
     critical: [],
     at_risk: [],
@@ -89,9 +94,10 @@ export function mapAdminLiveOrdersResponse(data) {
   }
 
   for (const order of items) {
-    const key = order.bucket === 'at_risk' || order.bucket === 'on_track' || order.bucket === 'critical'
-      ? order.bucket
-      : 'critical'
+    const key =
+      order.bucket === 'at_risk' || order.bucket === 'on_track' || order.bucket === 'critical'
+        ? order.bucket
+        : responseBucket || 'critical'
     byBucket[key].push(order)
   }
 
@@ -106,6 +112,8 @@ export function mapAdminLiveOrdersResponse(data) {
       title: column.title,
       tone: column.tone,
       count: Number(counts[column.apiKey]) || byBucket[column.apiKey].length,
+      // When response is bucket-filtered, put items on that column even if
+      // item.bucket was missing (handled above via responseBucket).
       orders: byBucket[column.apiKey],
     })),
     incidents: [],

@@ -1,7 +1,9 @@
 import { apiClient } from '../api/client'
+import { apiConfig, isAdminRealApiFeature } from '../api/config'
 import { adminDashboardService } from './admin/dashboardService'
 import { adminVendorService } from './admin/vendorService'
 import { adminUserService } from './admin/userService'
+import { adminFleetService } from './admin/fleetService'
 
 export const adminService = {
   getDashboard(options) {
@@ -29,8 +31,39 @@ export const adminService = {
     if (type === 'vendors') {
       return adminVendorService.listVendors(options)
     }
-    // Users list uses listAdminUsers() — keep mock management blob for Roles / Activity tabs.
+    // Fleet list not wired yet — use getAdminFleetSummary for KPIs.
+    // Users list uses listAdminUsers().
     return apiClient.get('/admin/management', { ...options, params: { ...options.params, type } })
+  },
+  getAdminFleetSummary(options = {}) {
+    return adminFleetService.getFleetSummary(options)
+  },
+  listAdminFleetChamps(filters, options = {}) {
+    return adminFleetService.listChamps(filters, options)
+  },
+  listAdminFleetSuppliers(options = {}) {
+    return adminFleetService.listSuppliers(options)
+  },
+  getAdminFleetSupplier(supplierId, filters, options = {}) {
+    return adminFleetService.getSupplier(supplierId, filters, options)
+  },
+  createAdminFleetSupplier(form, options = {}) {
+    return adminFleetService.createSupplier(form, options)
+  },
+  updateAdminFleetSupplier(supplierId, form, options = {}) {
+    return adminFleetService.updateSupplier(supplierId, form, options)
+  },
+  createAdminFleetChamp(form, options = {}) {
+    return adminFleetService.createChamp(form, options)
+  },
+  getAdminFleetChampEarnings(champId, filters, options = {}) {
+    return adminFleetService.getChampEarnings(champId, filters, options)
+  },
+  suspendAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.suspendChamp(champId, form, options)
+  },
+  unsuspendAdminFleetChamp(champId, options = {}) {
+    return adminFleetService.unsuspendChamp(champId, options)
   },
   listAdminUsers(options = {}) {
     return adminUserService.listUsers(options)
@@ -171,6 +204,14 @@ export const adminService = {
     return apiClient.get('/admin/customers/detail', { ...options, params: { ...options.params, id: customerId } })
   },
   getChampDetail(champId, options = {}) {
-    return apiClient.get('/admin/champs/detail', { ...options, params: { ...options.params, id: champId } })
+    // Real admin mode (mocks off) or fleet feature flag → Postman overview endpoint.
+    // Avoid dead mock path `/admin/champs/detail` when VITE_ADMIN_USE_MOCK_API=false.
+    if (isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi) {
+      return adminFleetService.getChamp(champId, options)
+    }
+    return apiClient.get('/admin/champs/detail', {
+      ...options,
+      params: { ...options.params, id: champId },
+    })
   },
 }

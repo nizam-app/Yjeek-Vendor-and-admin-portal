@@ -19,6 +19,15 @@ Current contracts:
 - [`contracts/admin-users-create.md`](./contracts/admin-users-create.md) — POST create user (invite).
 - [`contracts/admin-users-actions.md`](./contracts/admin-users-actions.md) — PATCH update + reset password + suspend / unsuspend.
 - [`contracts/admin-activity.md`](./contracts/admin-activity.md) — Activity log list + meta filters + CSV export.
+- [`contracts/admin-fleet-summary.md`](./contracts/admin-fleet-summary.md) — Fleet KPI summary (Champs header cards).
+- [`contracts/admin-fleet-champs-list.md`](./contracts/admin-fleet-champs-list.md) — List champs (tabs + filters).
+- [`contracts/admin-fleet-champs-create.md`](./contracts/admin-fleet-champs-create.md) — Create champ (`POST` + temporary password).
+- [`contracts/admin-fleet-champ-overview.md`](./contracts/admin-fleet-champ-overview.md) — Champ Overview (`GET /admin/fleet/champs/:id`).
+- [`contracts/admin-fleet-champ-earnings.md`](./contracts/admin-fleet-champ-earnings.md) — Champ Earnings tab.
+- [`contracts/admin-fleet-supplier-detail.md`](./contracts/admin-fleet-supplier-detail.md) — Supplier detail & performance.
+- [`contracts/admin-fleet-supplier-create.md`](./contracts/admin-fleet-supplier-create.md) — Create supplier.
+- [`contracts/admin-fleet-supplier-update.md`](./contracts/admin-fleet-supplier-update.md) — Update supplier (Edit).
+- [`contracts/admin-fleet-champ-suspend.md`](./contracts/admin-fleet-champ-suspend.md) — Suspend / Unsuspend champ.
 - [`contracts/admin-roles.md`](./contracts/admin-roles.md) — Roles meta + list + get role.
 - [`contracts/admin-vendors-force-close.md`](./contracts/admin-vendors-force-close.md) — Force close store.
 - [`contracts/admin-vendors-reopen.md`](./contracts/admin-vendors-reopen.md) — Reopen / Resume after force close.

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
@@ -6,6 +6,9 @@ import carIcon from '../../../assets/💨.png'
 import uploadIcon from '../../../assets/⬆.png'
 import imageUploadIcon from '../../../assets/🖼.png'
 import { cn } from '../../../components/admin/cn'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { adminService } from '../../../services/adminService'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -33,6 +36,12 @@ const STORE_TYPES = [
   'Stationery',
   'Baby & Kids',
   'Sports',
+]
+
+const MOCK_SUPPLIERS = [
+  { id: '', name: 'Yjeek Fleet (In-house)' },
+  { id: '', name: 'SwiftFleet' },
+  { id: '', name: 'PrimeRide' },
 ]
 
 function Field({ label, children, className }) {
@@ -113,6 +122,7 @@ function DocSection({ title, items }) {
 
 export default function AdminAddChampPage() {
   const navigate = useNavigate()
+  const useRealFleet = isAdminRealApiFeature('fleet')
   const goBack = () => navigate('/admin/fleet')
 
   const [form, setForm] = useState({
@@ -120,7 +130,11 @@ export default function AdminAddChampPage() {
     phone: '+973 3xxx xxxx',
     email: 'champ@email.com',
     nationality: 'Bahraini',
+    supplierId: '',
     supplier: 'Yjeek Fleet (In-house)',
+    city: 'Manama',
+    zone: 'Adliya',
+    tier: 'BRONZE',
     cpr: '',
     cprExpiry: '',
     birthDate: '',
@@ -144,11 +158,99 @@ export default function AdminAddChampPage() {
 
   const [specialTypes, setSpecialTypes] = useState(['Age-restricted 18+', 'Pharmacy', 'Fragile'])
   const [storeTypes, setStoreTypes] = useState(['Groceries', 'Food'])
+  const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS)
+  const [suppliersError, setSuppliersError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [createdResult, setCreatedResult] = useState(null)
 
   const update = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   const toggleChip = (list, setList, value) => {
     setList((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]))
+  }
+
+  useEffect(() => {
+    if (!useRealFleet) return undefined
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await adminService.listAdminFleetSuppliers()
+        if (cancelled) return
+        const list = result?.data?.suppliers || []
+        setSuppliers(list)
+        setSuppliersError(list.length ? '' : 'No suppliers found. Create a supplier first.')
+        if (list.length) {
+          setForm((prev) => ({
+            ...prev,
+            supplierId: prev.supplierId || list[0].id,
+            supplier: prev.supplierId
+              ? prev.supplier
+              : list[0].name,
+          }))
+        }
+      } catch (err) {
+        if (cancelled) return
+        setSuppliersError(formatApiErrorMessage(err, 'Failed to load suppliers.'))
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealFleet])
+
+  const handleSupplierChange = (e) => {
+    const value = e.target.value
+    if (useRealFleet) {
+      const match = suppliers.find((s) => s.id === value)
+      setForm((prev) => ({
+        ...prev,
+        supplierId: value,
+        supplier: match?.name || prev.supplier,
+      }))
+      return
+    }
+    setForm((prev) => ({ ...prev, supplier: value, supplierId: '' }))
+  }
+
+  async function handleCreate() {
+    setSubmitError('')
+    setCreatedResult(null)
+
+    if (!useRealFleet) {
+      goBack()
+      return
+    }
+
+    setSaving(true)
+    try {
+      const result = await adminService.createAdminFleetChamp({
+        ...form,
+        storeTypes,
+        allowedCategories: storeTypes,
+      })
+      const created = result?.data
+      setCreatedResult(created)
+
+      if (created?.temporaryPassword) {
+        // Keep admin on page briefly so they can copy the temp password.
+        return
+      }
+
+      const id = created?.id
+      navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
+    } catch (err) {
+      setSubmitError(formatApiErrorMessage(err, 'Failed to create champ.'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const goToCreatedChamp = () => {
+    const id = createdResult?.id
+    navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
   }
 
   return (
@@ -164,6 +266,40 @@ export default function AdminAddChampPage() {
         </button>
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Add champ</h2>
       </div>
+
+      {submitError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {submitError}
+        </div>
+      ) : null}
+
+      {suppliersError && useRealFleet ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0e0b2] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+          {suppliersError}
+        </div>
+      ) : null}
+
+      {createdResult?.temporaryPassword ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          <p className="font-bold">
+            Champ created{createdResult.displayCode ? ` (${createdResult.displayCode})` : ''}.
+          </p>
+          <p className="mt-1">
+            Temporary password:{' '}
+            <span className="font-mono font-bold tracking-wide">{createdResult.temporaryPassword}</span>
+          </p>
+          {createdResult.passwordResetRequired ? (
+            <p className="mt-1 text-[#455249]">Password reset required on first login.</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={goToCreatedChamp}
+            className="mt-3 inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white hover:bg-[#158a47]"
+          >
+            Open champ profile
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <Card title="Personal">
@@ -188,13 +324,42 @@ export default function AdminAddChampPage() {
             </Field>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             <Field label="Supplier">
-              <Select value={form.supplier} onChange={update('supplier')}>
-                <option>Yjeek Fleet (In-house)</option>
-                <option>SwiftFleet</option>
-                <option>PrimeRide</option>
+              {useRealFleet ? (
+                <Select value={form.supplierId} onChange={handleSupplierChange} disabled={!suppliers.length}>
+                  {!suppliers.length ? <option value="">No suppliers</option> : null}
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Select value={form.supplier} onChange={handleSupplierChange}>
+                  <option>Yjeek Fleet (In-house)</option>
+                  <option>SwiftFleet</option>
+                  <option>PrimeRide</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="Tier">
+              <Select value={form.tier} onChange={update('tier')}>
+                <option value="BRONZE">Bronze</option>
+                <option value="SILVER">Silver</option>
+                <option value="GOLD">Gold</option>
+                <option value="ELITE">Elite</option>
+                <option value="AT_RISK">At Risk</option>
               </Select>
+            </Field>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+            <Field label="City">
+              <input className={inputClass} value={form.city} onChange={update('city')} />
+            </Field>
+            <Field label="Zone">
+              <input className={inputClass} value={form.zone} onChange={update('zone')} />
             </Field>
           </div>
 
@@ -254,7 +419,7 @@ export default function AdminAddChampPage() {
         </Card>
 
         <Card title="Vehicle type">
-          <div className="inline-flex items-center gap-2 rounded-[12px] bg-[#f3f5f3] p-1.5 w-[554px]">
+          <div className="inline-flex items-center gap-2 rounded-[12px] bg-[#f3f5f3] p-1.5 w-[554px] max-[700px]:w-full">
             {[
               { id: 'Bike', icon: <img src={motoBikeIcon} alt="" className="h-4 w-4 object-contain" /> },
               { id: 'Car', icon: <img src={carIcon} alt="" className="h-4 w-4 object-contain" /> },
@@ -288,12 +453,18 @@ export default function AdminAddChampPage() {
             { label: 'CPR - Back', variant: 'file' },
           ]}
         />
-        <DocSection title="Passport" items={[{ label: 'Passport', variant: 'file' }]} />
+        <DocSection
+          title="Passport"
+          items={[
+            { label: 'Passport - Front', variant: 'file' },
+            { label: 'Passport - Back', variant: 'file' },
+          ]}
+        />
         <DocSection
           title="Visa"
           items={[
-            { label: 'Resident permit', variant: 'file' },
-            { label: 'Work permit', variant: 'file' },
+            { label: 'Visa - Front', variant: 'file' },
+            { label: 'Visa - Back', variant: 'file' },
           ]}
         />
         <DocSection
@@ -318,8 +489,10 @@ export default function AdminAddChampPage() {
         <Card title="Delivery permissions & limits">
           <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
             <div>
-              <p className="text-[13px] font-bold text-[#17231c] mb-1"  >Can deliver special items</p>
-              <p className='text-[12px] font-medium text-[#7c8780]'>Alcohol, age-restricted, pharmacy, fragile or high-value items</p>
+              <p className="text-[13px] font-bold text-[#17231c] mb-1">Can deliver special items</p>
+              <p className="text-[12px] font-medium text-[#7c8780]">
+                Alcohol, age-restricted, pharmacy, fragile or high-value items
+              </p>
             </div>
             <button
               type="button"
@@ -390,7 +563,7 @@ export default function AdminAddChampPage() {
         <button
           type="button"
           onClick={goBack}
-          className="text-[13px] font-semibold hover:text-[#455249]  py-2.5 px-3 rounded-full bg-white text-black" 
+          className="text-[13px] font-semibold hover:text-[#455249]  py-2.5 px-3 rounded-full bg-white text-black"
         >
           Cancel
         </button>
@@ -403,10 +576,11 @@ export default function AdminAddChampPage() {
           </button>
           <button
             type="button"
-            onClick={goBack}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={saving || Boolean(createdResult?.id)}
+            onClick={handleCreate}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Create champ
+            {saving ? 'Creating…' : 'Create champ'}
           </button>
         </div>
       </div>

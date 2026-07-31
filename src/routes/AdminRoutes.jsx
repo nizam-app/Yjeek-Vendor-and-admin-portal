@@ -68,6 +68,7 @@ export const adminRoutes = (
     <Route path="fleet/new" element={<AdminAddChampPage />} />
     <Route path="fleet/notify" element={<AdminNotifyChampsPage />} />
     <Route path="fleet/suppliers/new" element={<AdminAddSupplierPage />} />
+    <Route path="fleet/suppliers/:supplierId/edit" element={<AdminAddSupplierPage />} />
     <Route path="fleet/suppliers/:supplierId" element={<AdminSupplierDetailPage />} />
     <Route path="fleet/suppliers" element={<AdminFleetSuppliersPage />} />
     <Route path="fleet/:champId" element={<AdminChampDetailPage />} />

@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Car, ChevronDown, MoreVertical, Plus, Search, Star } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
-import carIcon from '../../../assets/💨.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
@@ -32,32 +32,142 @@ function tierTone(tier) {
   return 'gray'
 }
 
+function mapVehicleMatch(rowVehicle, filter) {
+  if (!filter) return true
+  if (/^BIKE$/i.test(filter)) return String(rowVehicle).toLowerCase() === 'bike'
+  if (/^CAR$/i.test(filter)) return String(rowVehicle).toLowerCase() === 'car'
+  return String(rowVehicle).toUpperCase() === String(filter).toUpperCase()
+}
+
+function mapTierMatch(rowTier, filter) {
+  if (!filter) return true
+  if (/^AT_RISK$/i.test(filter)) return String(rowTier).toLowerCase() === 'at risk'
+  return String(rowTier).toUpperCase() === String(filter).toUpperCase()
+}
+
+function normalizeOptions(options = []) {
+  return (Array.isArray(options) ? options : []).map((option) => {
+    if (option && typeof option === 'object') {
+      return {
+        value: String(option.value ?? ''),
+        label: String(option.label ?? option.value ?? ''),
+      }
+    }
+    return { value: String(option), label: String(option) }
+  })
+}
+
+function FilterSelect({ options, value, onChange, label }) {
+  const normalized = normalizeOptions(options)
+  const currentLabel = normalized.find((option) => option.value === value)?.label || label || '—'
+
+  return (
+    <div className="relative inline-flex h-[32px] items-center rounded-full border border-[#e4e8e4] bg-white pl-3 pr-7 text-[12px] font-medium text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)]">
+      <span className="whitespace-nowrap">{currentLabel}</span>
+      <ChevronDown
+        size={13}
+        strokeWidth={2.2}
+        className="pointer-events-none absolute right-2.5 text-[#7c8780]"
+        aria-hidden
+      />
+      <select
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {normalized.map((option) => (
+          <option key={`${option.value}-${option.label}`} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function VehicleIcon({ type }) {
   if (type === 'Bike') {
     return <img src={motoBikeIcon} alt="" className="h-4 w-4 object-contain" />
   }
-  return <Car fill='#C91A24' className='h-4 w-4'></Car>
+  return <Car fill="#C91A24" className="h-4 w-4" />
 }
 
 export default function AdminFleetPage() {
   const navigate = useNavigate()
+  // Prefer real fleet APIs when feature flagged OR when admin mocks are fully off
+  // (avoids dead GET /admin/management?type=fleet which does not exist on backend).
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const [statusTab, setStatusTab] = useState('All')
   const [query, setQuery] = useState('')
+  const [vehicleFilter, setVehicleFilter] = useState('')
+  const [tierFilter, setTierFilter] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
+
   const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('fleet'),
-    [],
+    () => {
+      if (useRealFleet) {
+        return adminService.listAdminFleetChamps({
+          search: query,
+          statusTab,
+          vehicle: vehicleFilter,
+          tier: tierFilter,
+          category: categoryFilter,
+          limit: 20,
+          includeSummary: true,
+        })
+      }
+      return adminService.getManagement('fleet')
+    },
+    [useRealFleet, query, statusTab, vehicleFilter, tierFilter, categoryFilter],
   )
+
+  const stats = data?.stats || []
+  const filterOptions = data?.filterOptions || {
+    vehicles: [
+      { value: '', label: 'Vehicle' },
+      { value: 'BIKE', label: 'Bike' },
+      { value: 'CAR', label: 'Car' },
+    ],
+    tiers: [
+      { value: '', label: 'Tier' },
+      { value: 'ELITE', label: 'Elite' },
+      { value: 'GOLD', label: 'Gold' },
+      { value: 'SILVER', label: 'Silver' },
+      { value: 'BRONZE', label: 'Bronze' },
+      { value: 'AT_RISK', label: 'At Risk' },
+    ],
+    categories: [
+      { value: '', label: 'Categories' },
+      { value: 'Food', label: 'Food' },
+      { value: 'Groceries', label: 'Groceries' },
+      { value: 'Pharmacy', label: 'Pharmacy' },
+    ],
+  }
 
   const rows = useMemo(() => {
     if (!data?.rows) return []
+    if (useRealFleet) return data.rows
+
     return data.rows.filter((row) => {
       const matchesTab = statusTab === 'All' || row.status === statusTab
+      const matchesVehicle = !vehicleFilter || mapVehicleMatch(row.vehicle, vehicleFilter)
+      const matchesTier = !tierFilter || mapTierMatch(row.tier, tierFilter)
+      const matchesCategory =
+        !categoryFilter
+        || (row.categories || []).some((c) => String(c).toLowerCase() === categoryFilter.toLowerCase())
       const haystack = `${row.name} ${row.id} ${row.supplier} ${row.contact} ${row.status} ${row.tier}`.toLowerCase()
-      return matchesTab && haystack.includes(query.toLowerCase())
+      return (
+        matchesTab
+        && matchesVehicle
+        && matchesTier
+        && matchesCategory
+        && haystack.includes(query.toLowerCase())
+      )
     })
-  }, [data, statusTab, query])
+  }, [data, useRealFleet, statusTab, query, vehicleFilter, tierFilter, categoryFilter])
 
   const openChamp = (champId) => {
     navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
@@ -112,7 +222,7 @@ export default function AdminFleetPage() {
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1">
-        {data.viewTabs.map((item) => (
+        {(data.viewTabs || ['Champs', 'Suppliers']).map((item) => (
           <button
             key={item}
             type="button"
@@ -132,73 +242,81 @@ export default function AdminFleetPage() {
       </div>
 
       <div className="mb-4 grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-[700px]:grid-cols-2 max-[480px]:grid-cols-1">
-            {data.stats.map(({ label, value, tone, star }) => (
-              <div
-                key={label}
-                className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
-              >
-                <p className="text-[12px] text-[#7c8780]">{label}</p>
-                <p
-                  className={cn(
-                    'mt-1.5 flex items-center gap-1 text-[22px] font-bold leading-none tracking-[-0.02em]',
-                    statTone[tone] || statTone.ink,
-                  )}
-                >
-                  {star ? <Star size={15} className="shrink-0 fill-[#1aa054] text-[#1aa054]" /> : null}
-                  {value}
-                </p>
-              </div>
-            ))}
+        {stats.map(({ label, value, tone, star }) => (
+          <div
+            key={label}
+            className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
+          >
+            <p className="text-[12px] text-[#7c8780]">{label}</p>
+            <p
+              className={cn(
+                'mt-1.5 flex items-center gap-1 text-[22px] font-bold leading-none tracking-[-0.02em]',
+                statTone[tone] || statTone.ink,
+              )}
+            >
+              {star ? <Star size={15} className="shrink-0 fill-[#1aa054] text-[#1aa054]" /> : null}
+              {value}
+            </p>
           </div>
+        ))}
+      </div>
 
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
-              {data.statusTabs.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setStatusTab(item)}
-                  className={cn(
-                    'h-[28px] rounded-[8px] px-3.5 text-[12px]',
-                    statusTab === item
-                      ? 'bg-white font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
-                      : 'font-medium text-[#69756d] hover:text-[#455249]',
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
+          {(data.statusTabs || ['All', 'Online', 'On delivery', 'Offline', 'Suspended']).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setStatusTab(item)}
+              className={cn(
+                'h-[28px] rounded-[8px] px-3.5 text-[12px]',
+                statusTab === item
+                  ? 'bg-white font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
+                  : 'font-medium text-[#69756d] hover:text-[#455249]',
+              )}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
 
+        <span className="flex-1" />
+        <FilterSelect
+          label="Categories"
+          options={filterOptions.categories}
+          value={categoryFilter}
+          onChange={setCategoryFilter}
+        />
+        <FilterSelect
+          label="Vehicle"
+          options={filterOptions.vehicles}
+          value={vehicleFilter}
+          onChange={setVehicleFilter}
+        />
+        <FilterSelect
+          label="Tier"
+          options={filterOptions.tiers}
+          value={tierFilter}
+          onChange={setTierFilter}
+        />
 
-            <span className="flex-1" />
-            {['Categories', 'Vehicle', 'Tier'].map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                className="inline-flex h-[32px] items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3 text-[12px] font-medium text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-              >
-                {filter} ▾
-              </button>
-            ))}
-
-            <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
-              <Search size={14} className="text-[#9aa49d]" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="min-w-0 flex-1 border-0 bg-transparent text-[12px] text-[#17231c] outline-none placeholder:text-[#9aa49d]"
-                placeholder="Search champ"
-              />
-            </label>
-          </div>
+        <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
+          <Search size={14} className="text-[#9aa49d]" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="min-w-0 flex-1 border-0 bg-transparent text-[12px] text-[#17231c] outline-none placeholder:text-[#9aa49d]"
+            placeholder="Search champ"
+          />
+        </label>
+      </div>
 
           <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
             <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
               <table className="w-full min-w-[1180px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-[#edf0ee] bg-[#fafbfa]">
-                    {data.columns.map((column) => (
+                    {(data.columns || []).map((column) => (
                       <th
                         key={column || 'actions'}
                         className="whitespace-nowrap px-4 py-3 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -209,6 +327,16 @@ export default function AdminFleetPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {rows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={(data.columns || []).length || 11}
+                        className="px-4 py-8 text-center text-[13px] text-[#7c8780]"
+                      >
+                        No champs found.
+                      </td>
+                    </tr>
+                  ) : null}
                   {rows.map((row) => {
                     const menuOpen = menuId === row.id
 
@@ -228,7 +356,9 @@ export default function AdminFleetPage() {
                             <span className="text-[13px] font-medium text-[#1C211F]">{row.name}</span>
                           </div>
                         </td>
-                        <td className="whitespace-nowrap font-medium px-4 py-3.5 text-[12.5px] text-[#1C211F]">{row.id}</td>
+                        <td className="whitespace-nowrap font-medium px-4 py-3.5 text-[12.5px] text-[#1C211F]">
+                          {row.displayId || row.id}
+                        </td>
                         <td className="whitespace-nowrap font-medium px-4 py-3.5 text-[12.5px] text-[#1C211F]">{row.supplier}</td>
                         <td className="whitespace-nowrap font-medium px-4 py-3.5 text-[12.5px] text-[#1C211F]">{row.contact}</td>
                         <td className="whitespace-nowrap font-medium  px-4 py-3.5 text-[12.5px] text-[#1C211F]">{row.cpr}</td>
