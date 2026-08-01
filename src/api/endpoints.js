@@ -520,6 +520,21 @@ export const endpoints = {
       champUnsuspend: (champId) =>
         `/admin/fleet/champs/${encodeURIComponent(champId)}/unsuspend`,
       /**
+       * Confirmed: POST /admin/fleet/champs/:champId/online
+       * Body: { online: boolean }
+       * Errors: 403 POD_CASH_OUTSTANDING when POD cash must be reconciled first
+       * @param {string} champId
+       */
+      champOnline: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/online`,
+      /**
+       * Confirmed: POST /admin/fleet/champs/:champId/reconcile-pod
+       * Body: { note?: string }
+       * @param {string} champId
+       */
+      champReconcilePod: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/reconcile-pod`,
+      /**
        * Confirmed: GET /admin/fleet/suppliers — list suppliers
        * Also POST create supplier.
        */
@@ -556,6 +571,18 @@ export const endpoints = {
         /** Confirmed: POST /admin/marketing/promo-codes — Create promo code */
         create: '/admin/marketing/promo-codes',
       },
+    },
+    reports: {
+      /**
+       * Confirmed: GET /admin/reports/orders
+       * Query: preset, page, limit, sort, search, status, sla
+       * (+ optional mode, vendor, city, champ, payMethod, from, to when backend supports)
+       */
+      orders: '/admin/reports/orders',
+      /** Confirmed: GET /admin/reports/orders/meta — filter option lists */
+      ordersMeta: '/admin/reports/orders/meta',
+      /** Confirmed: GET /admin/reports/orders/export?preset=&limit= → CSV */
+      ordersExport: '/admin/reports/orders/export',
     },
   },
 }

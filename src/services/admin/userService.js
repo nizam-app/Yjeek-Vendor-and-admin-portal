@@ -1,5 +1,5 @@
 import { apiClient } from '../../api/client'
-import { isAdminRealApiFeature } from '../../api/config'
+import { apiConfig, isAdminRealApiFeature } from '../../api/config'
 import { endpoints } from '../../api/endpoints'
 import {
   mapAdminCreateUserRequest,
@@ -21,6 +21,10 @@ import {
   mapAdminRolesMetaResponse,
 } from '../../mappers/admin/mapAdminRoles'
 
+function useRealUsersApi() {
+  return isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
+}
+
 /**
  * Admin panel Users & Roles — staff accounts + roles.
  *
@@ -35,11 +39,11 @@ import {
  *   GET /admin/roles
  *   GET /admin/roles/:roleId
  *
- * Feature flag: `users`
+ * Feature flag: `users` (also on when VITE_ADMIN_USE_MOCK_API=false)
  */
 export const adminUserService = {
   async getUsersSummary(options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return { data: { stats: [], summary: {} }, meta: null }
     }
 
@@ -47,6 +51,7 @@ export const adminUserService = {
       ...options,
       scope: 'admin',
       feature: 'users',
+      forceReal: !apiConfig.adminUseMockApi,
     })
 
     return {
@@ -56,7 +61,7 @@ export const adminUserService = {
   },
 
   async getUsersMeta(options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return {
         data: { roles: [], countries: [], zones: [], modules: [], suggestedTemporaryPassword: '' },
         meta: null,
@@ -67,6 +72,7 @@ export const adminUserService = {
       ...options,
       scope: 'admin',
       feature: 'users',
+      forceReal: !apiConfig.adminUseMockApi,
     })
 
     return {
@@ -91,7 +97,7 @@ export const adminUserService = {
       ...requestOptions
     } = options
 
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return apiClient.get('/admin/management', {
         ...requestOptions,
         params: { type: 'users', ...(requestOptions.params || {}) },
@@ -113,6 +119,7 @@ export const adminUserService = {
       params,
       scope: 'admin',
       feature: 'users',
+      forceReal: !apiConfig.adminUseMockApi,
     })
 
     return {
@@ -126,7 +133,7 @@ export const adminUserService = {
    * Confirmed: POST /admin/users → 201 + user detail (+ invitation)
    */
   async createUser(form = {}, options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to create a user.')
     }
 
@@ -151,7 +158,7 @@ export const adminUserService = {
   async updateUser(userId, form = {}, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to update a user.')
     }
 
@@ -175,7 +182,7 @@ export const adminUserService = {
   async resetUserPassword(userId, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to reset a password.')
     }
 
@@ -202,7 +209,7 @@ export const adminUserService = {
   async resendUserInvite(userId, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to resend an invite.')
     }
 
@@ -228,7 +235,7 @@ export const adminUserService = {
   async suspendUser(userId, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to suspend a user.')
     }
 
@@ -251,7 +258,7 @@ export const adminUserService = {
   async unsuspendUser(userId, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to unsuspend a user.')
     }
 
@@ -277,7 +284,7 @@ export const adminUserService = {
       throw new Error('User id is required.')
     }
 
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       const response = await apiClient.get('/admin/management', {
         ...options,
         params: { type: 'users' },
@@ -318,7 +325,7 @@ export const adminUserService = {
   },
 
   async getRolesMeta(options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return {
         data: mapAdminRolesMetaResponse({
           modules: [],
@@ -343,7 +350,7 @@ export const adminUserService = {
   },
 
   async listRoles(options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return apiClient.get('/admin/management', {
         ...options,
         params: { type: 'users' },
@@ -369,7 +376,7 @@ export const adminUserService = {
       throw new Error('Role id is required.')
     }
 
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to load role detail.')
     }
 
@@ -390,7 +397,7 @@ export const adminUserService = {
    * Confirmed: POST /admin/roles → 201 + role object
    */
   async createRole(form = {}, options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to create a role.')
     }
 
@@ -413,7 +420,7 @@ export const adminUserService = {
    * Confirmed: GET /admin/activity/meta → users[], modules[], actionTypes[]
    */
   async getActivityMeta(options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       return {
         data: mapAdminActivityMetaResponse({ users: [], modules: [], actionTypes: [] }),
         meta: null,
@@ -438,7 +445,7 @@ export const adminUserService = {
    * Empty items[] is valid.
    */
   async listActivity(filters = {}, options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required for the activity log.')
     }
 
@@ -469,7 +476,7 @@ export const adminUserService = {
    * Response is CSV text (headers: Time, User, Action, Module, Type, Target, IP)
    */
   async exportActivity(filters = {}, options = {}) {
-    if (!isAdminRealApiFeature('users')) {
+    if (!useRealUsersApi()) {
       throw new Error('Real users API is required to export activity.')
     }
 

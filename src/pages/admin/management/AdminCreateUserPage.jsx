@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
-import { isAdminRealApiFeature } from '../../../api/config'
+import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
@@ -186,7 +186,7 @@ function PermissionCheckbox({ checked, onChange, label }) {
 
 export default function AdminCreateUserPage() {
   const navigate = useNavigate()
-  const useRealUsers = isAdminRealApiFeature('users')
+  const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState(null)

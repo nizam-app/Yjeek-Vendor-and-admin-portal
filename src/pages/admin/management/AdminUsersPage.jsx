@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Download, Plus, Search, ChevronDown } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
-import { isAdminRealApiFeature } from '../../../api/config'
+import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
@@ -154,7 +154,7 @@ export default function AdminUsersPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const tab = tabFromPath(pathname)
-  const useRealUsers = isAdminRealApiFeature('users')
+  const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
 
   const [roleFilter, setRoleFilter] = useState('')
   const [countryFilter, setCountryFilter] = useState('')

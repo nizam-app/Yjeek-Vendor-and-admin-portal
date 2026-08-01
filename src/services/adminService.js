@@ -7,6 +7,7 @@ import { adminFleetService } from './admin/fleetService'
 import { adminStoreTypeService } from './admin/storeTypeService'
 import { adminCustomerService } from './admin/customerService'
 import { adminMarketingService } from './admin/marketingService'
+import { adminReportService } from './admin/reportService'
 
 export const adminService = {
   getDashboard(options) {
@@ -104,6 +105,9 @@ export const adminService = {
   },
   unsuspendAdminFleetChamp(champId, options = {}) {
     return adminFleetService.unsuspendChamp(champId, options)
+  },
+  setAdminFleetChampOnline(champId, online, options = {}) {
+    return adminFleetService.setChampOnline(champId, online, options)
   },
   listAdminUsers(options = {}) {
     return adminUserService.listUsers(options)
@@ -290,6 +294,12 @@ export const adminService = {
   },
   listAdminVendorNotificationHistory(options = {}) {
     return adminMarketingService.listVendorNotificationHistory(options)
+  },
+  getOrdersReport(filters, options = {}) {
+    return adminReportService.getOrdersReport(filters, options)
+  },
+  exportOrdersReport(filters, options = {}) {
+    return adminReportService.exportOrdersReport(filters, options)
   },
   getChampDetail(champId, options = {}) {
     // Real admin mode (mocks off) or fleet feature flag → Postman overview endpoint.

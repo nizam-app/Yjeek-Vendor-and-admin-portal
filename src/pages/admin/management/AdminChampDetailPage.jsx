@@ -103,6 +103,38 @@ export default function AdminChampDetailPage() {
     }
   }
 
+  const handleToggleOnline = async () => {
+    if (actionBusy === 'online' || isSuspended || data.canToggleOnline === false) return
+
+    const nextOnline = !isOnline
+    setActionBusy('online')
+    setActionError('')
+    setActionSuccess('')
+
+    try {
+      // Use route id — same {{champId}} Postman uses for fleet champ actions.
+      const response = await adminService.setAdminFleetChampOnline(champId, nextOnline)
+      if (response?.data && typeof response.data.online === 'boolean') {
+        setOnline(response.data.online)
+      } else {
+        setOnline(nextOnline)
+      }
+      setActionSuccess(nextOnline ? 'Champ set online.' : 'Champ set offline.')
+      await refetch()
+      // Prefer server overview after refresh.
+      setOnline(null)
+    } catch (err) {
+      setActionError(
+        formatApiErrorMessage(
+          err,
+          nextOnline ? 'Failed to set champ online.' : 'Failed to set champ offline.',
+        ),
+      )
+    } finally {
+      setActionBusy('')
+    }
+  }
+
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
       <AdminSuspendChampModal
@@ -297,9 +329,13 @@ export default function AdminChampDetailPage() {
                   type="button"
                   role="switch"
                   aria-checked={isOnline}
-                  onClick={() => setOnline(!isOnline)}
+                  aria-busy={actionBusy === 'online'}
+                  disabled={
+                    actionBusy === 'online' || isSuspended || data.canToggleOnline === false
+                  }
+                  onClick={handleToggleOnline}
                   className={cn(
-                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition',
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50',
                     isOnline ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
                   )}
                 >

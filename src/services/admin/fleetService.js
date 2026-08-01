@@ -182,6 +182,54 @@ export const adminFleetService = {
   },
 
   /**
+   * Set champ online / offline.
+   * Confirmed: POST /admin/fleet/champs/:champId/online
+   * Body: { online: boolean }
+   * Errors: 403 POD_CASH_OUTSTANDING when outstanding POD cash must be reconciled.
+   *
+   * @param {string} champId
+   * @param {boolean} online
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async setChampOnline(champId, online, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to set champ online status.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.fleet.champOnline(id),
+      { online: Boolean(online) },
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'fleet',
+        forceReal: !apiConfig.adminUseMockApi,
+      },
+    )
+
+    const payload = response?.data
+    // Some responses return updated champ overview; otherwise keep raw payload.
+    let data = payload ?? null
+    if (payload && typeof payload === 'object') {
+      try {
+        data = mapAdminChampDetailResponse(payload)
+      } catch {
+        data = payload
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * Supplier options / partners list.
    * Confirmed path: GET /admin/fleet/suppliers
    * Envelope not fully screenshot-confirmed — mapped flexibly.
