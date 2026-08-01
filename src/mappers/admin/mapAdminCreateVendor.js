@@ -121,7 +121,9 @@ function mapAdditionalUsers(users = [], branches = []) {
         if (idx >= 0) branchIndex = idx
       }
 
-      const phoneRaw = trim(user.phone)
+      // Postman create body uses local digits only (e.g. "38001122"), not "+973 …"
+      const phoneDigits = splitOwnerPhone(user.phone).phone
+
       const item = {
         displayName,
         email,
@@ -129,7 +131,7 @@ function mapAdditionalUsers(users = [], branches = []) {
         role,
         branchIndex,
       }
-      if (phoneRaw) item.phone = phoneRaw
+      if (phoneDigits) item.phone = phoneDigits
       return item
     })
     .filter(Boolean)
@@ -154,7 +156,7 @@ function mapCommission(form = {}, { customFees = [], commissionTiers = [] } = {}
     const tiers = (Array.isArray(commissionTiers) ? commissionTiers : [])
       .map((tier) => {
         const fromAmount = num(tier.fromAmount)
-        const ratePct = num(tier.ratePct)
+        const ratePct = num(tier.ratePct ?? tier.rate)
         if (fromAmount == null || ratePct == null) return null
         return { fromAmount, ratePct }
       })
@@ -162,6 +164,7 @@ function mapCommission(form = {}, { customFees = [], commissionTiers = [] } = {}
     commission.commissionTiers = tiers.length
       ? tiers
       : [{ fromAmount: 0, ratePct: num(stripPercent(form.commissionRate)) || 15 }]
+    // Confirmed on TIERED create body — always send array (may be empty)
     commission.customFees = mapWizardCustomFeesToApi(customFees)
   }
 
@@ -273,7 +276,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     name,
     legalName: trim(form.legalName) || name,
     storeTypeId,
-    categoryLabel: trim(form.storeType) || undefined,
+    categoryLabel: trim(form.categoryLabel || form.storeType) || undefined,
     description: trim(form.description) || undefined,
     logoUrl: trim(form.logoUrl) || undefined,
     coverUrl: trim(form.coverUrl) || undefined,
@@ -285,17 +288,15 @@ export function mapAdminCreateVendorRequest(input = {}) {
     owner: {
       fullName: ownerName,
       email: ownerEmail,
-      phone: phone || trim(form.ownerPhone),
+      phone: phone || trim(form.ownerPhone).replace(/[^\d]/g, ''),
       countryCode,
       password: ownerPassword,
     },
+    additionalUsers: mapAdditionalUsers(users, branches),
     commission: mapCommission(form, { customFees, commissionTiers }),
     sla: mapSla(form, serviceModes),
     activate: Boolean(activate),
   }
-
-  const additionalUsers = mapAdditionalUsers(users, branches)
-  if (additionalUsers.length) body.additionalUsers = additionalUsers
 
   // Drop undefined keys at top level
   for (const key of Object.keys(body)) {

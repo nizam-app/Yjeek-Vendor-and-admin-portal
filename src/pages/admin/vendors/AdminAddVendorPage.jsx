@@ -148,28 +148,29 @@ export default function AdminAddVendorPage({ onBack }) {
   })
   const [step, setStep] = useState(location.state?.step ?? 1)
   const [form, setForm] = useState({
-    storeName: 'Green Kitchen',
-    legalName: 'Green Kitchen W.L.L',
+    storeName: '',
+    legalName: '',
     storeType: 'Food & Beverage',
     storeTypeId: '',
+    categoryLabel: 'Food & Beverage',
     subCategory: 'None',
-    description: 'Healthy home-style meals across Bahrain',
+    description: '',
     logoUrl: '',
     coverUrl: '',
     city: 'Manama',
     area: 'Seef',
     cuisineTags: [],
-    ownerName: 'Mohammed Ahmed',
-    ownerEmail: 'owner@greenkitchen.bh',
-    ownerPhone: '+973 3812 1212',
+    ownerName: '',
+    ownerEmail: '',
+    ownerPhone: '+973 ',
     ownerCountryCode: '+973',
-    ownerPassword: '12&cdq#poin*123456',
-    crNumber: '110111-3',
-    vatNumber: '220011223300',
-    commissionModel: '% of order',
+    ownerPassword: '',
+    crNumber: '',
+    vatNumber: '',
+    commissionModel: 'Tiered',
     commissionRate: '15',
     serviceFee: '0.300',
-    vatOnCommission: '10% (auto)',
+    vatOnCommission: '10',
     currency: 'BHD (fixed)',
     fixedPct: '1.000',
     debitPct: '0.500',
@@ -200,12 +201,21 @@ export default function AdminAddVendorPage({ onBack }) {
       { id: 'f2', name: 'Priority handling', value: '2.5 %', amount: 2.5, type: '%' },
     ],
   )
-  const [commissionTiers, setCommissionTiers] = useState([])
+  const [commissionTiers, setCommissionTiers] = useState(() => (
+    isAdminRealApiFeature('vendors')
+      ? [
+          { fromAmount: 0, ratePct: 18 },
+          { fromAmount: 5000, ratePct: 15 },
+          { fromAmount: 15000, ratePct: 12 },
+        ]
+      : []
+  ))
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [commissionSaving, setCommissionSaving] = useState(false)
   const [commissionError, setCommissionError] = useState(null)
-  const [serviceModes, setServiceModes] = useState(['Hot food · on demand', 'Pickup'])
+  const [serviceModes, setServiceModes] = useState(['Hot food · on demand', 'Pickup', 'Scheduled delivery'])
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
+  const [tierDraft, setTierDraft] = useState({ fromAmount: '0', ratePct: '15' })
   const [createSaving, setCreateSaving] = useState(false)
   const [createError, setCreateError] = useState(null)
   const [activateImmediately, setActivateImmediately] = useState(true)
@@ -653,6 +663,25 @@ export default function AdminAddVendorPage({ onBack }) {
     setFeeDraft({ name: '', amount: '0.000', type: 'BHD' })
   }
 
+  const addCommissionTier = () => {
+    const fromAmount = Number(tierDraft.fromAmount)
+    const ratePct = Number(tierDraft.ratePct)
+    if (Number.isNaN(fromAmount) || Number.isNaN(ratePct)) return
+    setCommissionTiers((prev) => [...prev, { fromAmount, ratePct }])
+    setTierDraft({ fromAmount: '0', ratePct: '15' })
+  }
+
+  const selectCommissionModel = (model) => {
+    setForm((prev) => ({ ...prev, commissionModel: model }))
+    if (model === 'Tiered' && commissionTiers.length === 0) {
+      setCommissionTiers([
+        { fromAmount: 0, ratePct: 18 },
+        { fromAmount: 5000, ratePct: 15 },
+        { fromAmount: 15000, ratePct: 12 },
+      ])
+    }
+  }
+
   const toggleServiceMode = (mode) => {
     setServiceModes((prev) => (
       prev.includes(mode) ? prev.filter((item) => item !== mode) : [...prev, mode]
@@ -727,10 +756,10 @@ export default function AdminAddVendorPage({ onBack }) {
             ) : null}
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
               <VendorField label="Store name">
-                <VendorInput value={form.storeName} onChange={update('storeName')} />
+                <VendorInput value={form.storeName} onChange={update('storeName')} placeholder="e.g. Green Kitchen test" />
               </VendorField>
               <VendorField label="Legal name">
-                <VendorInput value={form.legalName} onChange={update('legalName')} />
+                <VendorInput value={form.legalName} onChange={update('legalName')} placeholder="e.g. Green Kitchen Express W.L.L." />
               </VendorField>
               <VendorField label="Store type">
                 <VendorSelect
@@ -742,6 +771,8 @@ export default function AdminAddVendorPage({ onBack }) {
                       ...prev,
                       storeTypeId: matched ? matched.id : '',
                       storeType: matched ? matched.name : value,
+                      // Keep categoryLabel independent (Postman: "Food & Beverage")
+                      categoryLabel: prev.categoryLabel || (matched ? matched.name : value),
                     }))
                   }}
                 >
@@ -764,6 +795,13 @@ export default function AdminAddVendorPage({ onBack }) {
                     </>
                   )}
                 </VendorSelect>
+              </VendorField>
+              <VendorField label="Category label">
+                <VendorInput
+                  value={form.categoryLabel || ''}
+                  onChange={update('categoryLabel')}
+                  placeholder="Food & Beverage"
+                />
               </VendorField>
               <VendorField label="Sub-category">
                 <VendorSelect value={form.subCategory} onChange={update('subCategory')}>
@@ -960,7 +998,7 @@ export default function AdminAddVendorPage({ onBack }) {
                   <button
                     key={model}
                     type="button"
-                    onClick={() => setForm((prev) => ({ ...prev, commissionModel: model }))}
+                    onClick={() => selectCommissionModel(model)}
                     className={cn(
                       'h-[30px] rounded-[8px] px-3.5 text-[12px]',
                       form.commissionModel === model
@@ -989,15 +1027,50 @@ export default function AdminAddVendorPage({ onBack }) {
               {form.commissionModel === 'Tiered' ? (
                 <div className="mt-4 rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3">
                   <p className="text-[12px] font-medium text-[#455249]">Commission tiers</p>
+                  <p className="mt-1 text-[11px] text-[#8a948e]">
+                    Add rate bands by order volume (from amount → %).
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-end gap-2.5">
+                    <VendorField label="From amount" className="w-[140px]">
+                      <VendorInput
+                        value={tierDraft.fromAmount}
+                        onChange={(e) => setTierDraft((prev) => ({ ...prev, fromAmount: e.target.value }))}
+                        placeholder="0"
+                      />
+                    </VendorField>
+                    <VendorField label="Rate %" className="w-[120px]">
+                      <VendorInput
+                        value={tierDraft.ratePct}
+                        onChange={(e) => setTierDraft((prev) => ({ ...prev, ratePct: e.target.value }))}
+                        placeholder="15"
+                      />
+                    </VendorField>
+                    <button
+                      type="button"
+                      onClick={addCommissionTier}
+                      className="inline-flex h-[40px] items-center gap-1 rounded-[8px] bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+                    >
+                      <Plus size={14} /> Add tier
+                    </button>
+                  </div>
                   {commissionTiers.length === 0 ? (
-                    <p className="mt-1 text-[11px] text-[#8a948e]">
-                      No tiers from API yet. Saving Tiered will send an empty tiers list (UI has no tier editor).
-                    </p>
+                    <p className="mt-3 text-[11px] text-[#8a948e]">No tiers yet — add at least one before activating Tiered.</p>
                   ) : (
-                    <ul className="mt-2 space-y-1">
+                    <ul className="mt-3 space-y-1.5">
                       {commissionTiers.map((tier, index) => (
-                        <li key={`${tier.fromAmount}-${tier.ratePct}-${index}`} className="text-[12px] text-[#17231c]">
-                          From {tier.fromAmount} → {tier.ratePct}%
+                        <li
+                          key={`${tier.fromAmount}-${tier.ratePct}-${index}`}
+                          className="flex h-[36px] items-center gap-3 rounded-[8px] border border-[#dceee3] bg-white px-3 text-[12px] text-[#17231c]"
+                        >
+                          <span className="min-w-0 flex-1">From {tier.fromAmount} → {tier.ratePct}%</span>
+                          <button
+                            type="button"
+                            onClick={() => setCommissionTiers((prev) => prev.filter((_, i) => i !== index))}
+                            className="grid h-6 w-6 place-items-center rounded-full text-[16px] text-[#9aa49d] hover:bg-[#f3f5f3]"
+                            aria-label={`Remove tier ${index + 1}`}
+                          >
+                            ×
+                          </button>
                         </li>
                       ))}
                     </ul>

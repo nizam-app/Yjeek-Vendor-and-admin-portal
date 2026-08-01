@@ -11,7 +11,6 @@ const TITLES = {
   FLAG_VENDOR: 'Flag vendor',
   CANCEL: 'Cancel order',
   SUSPEND_CHAMP: 'Suspend champ',
-  MARK_RESOLVED: 'Mark resolved',
 }
 
 const fieldLabel = 'mb-1 block text-[9px] font-medium text-[#7c8780]'
@@ -83,8 +82,6 @@ function CheckboxField({ label, checked, onChange, disabled }) {
 export function AdminOrderTakeActionPanel({
   actionCode,
   orderId,
-  incidentId = null,
-  openIncidents = [],
   champId = null,
   options,
   optionsLoading = false,
@@ -110,14 +107,11 @@ export function AdminOrderTakeActionPanel({
   const [cancelRefund, setCancelRefund] = useState('FULL')
   const [suspendType, setSuspendType] = useState('')
   const [durationHours, setDurationHours] = useState('')
-  const [resolveIncidentId, setResolveIncidentId] = useState(incidentId || '')
-  const [outcome, setOutcome] = useState('')
 
   const [nearbyLoading, setNearbyLoading] = useState(false)
   const [nearbyError, setNearbyError] = useState(null)
   const [nearbyData, setNearbyData] = useState(null)
 
-  const firstOpenIncidentId = openIncidents[0]?.id || null
   const isReassign = actionCode === 'REASSIGN_CHAMP'
   const isSuspend = actionCode === 'SUSPEND_CHAMP'
 
@@ -144,11 +138,9 @@ export function AdminOrderTakeActionPanel({
         ? String(options.suspendDurations[0].hours)
         : '',
     )
-    setResolveIncidentId(incidentId || firstOpenIncidentId || '')
-    setOutcome('')
     setNearbyData(null)
     setNearbyError(null)
-  }, [actionCode, options, champId, incidentId, firstOpenIncidentId, isSuspend])
+  }, [actionCode, options, champId, isSuspend])
 
   useEffect(() => {
     if (!isReassign || !orderId) return undefined
@@ -284,13 +276,6 @@ export function AdminOrderTakeActionPanel({
           body.durationHours = hours
         }
         await adminOrderService.suspendChamp(orderId, body)
-      } else if (actionCode === 'MARK_RESOLVED') {
-        const id = String(resolveIncidentId || '').trim()
-        if (!id) throw new ApiError({ message: 'Select an incident to resolve.' })
-        if (!String(outcome || '').trim()) {
-          throw new ApiError({ message: 'Enter a resolution outcome.' })
-        }
-        await adminOrderService.resolveIncident(id, { outcome: String(outcome).trim() })
       } else {
         throw new ApiError({ message: `Action ${actionCode} is not supported yet.` })
       }
@@ -527,28 +512,6 @@ export function AdminOrderTakeActionPanel({
                 value={reason}
                 onChange={setReason}
                 options={options?.suspendReasons}
-              />
-            </>
-          ) : null}
-
-          {actionCode === 'MARK_RESOLVED' ? (
-            <>
-              {!incidentId ? (
-                <SelectField
-                  label="Incident"
-                  value={resolveIncidentId}
-                  onChange={setResolveIncidentId}
-                  options={openIncidents.map((item) => ({
-                    id: item.id,
-                    label: item.title || item.id,
-                  }))}
-                />
-              ) : null}
-              <TextField
-                label="Outcome"
-                value={outcome}
-                onChange={setOutcome}
-                placeholder="e.g. Resolved with refund"
               />
             </>
           ) : null}

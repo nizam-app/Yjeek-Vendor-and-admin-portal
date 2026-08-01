@@ -1,6 +1,7 @@
 import { ChevronLeft, Mail, RotateCcw, Smartphone, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
@@ -16,6 +17,10 @@ const typeTone = {
   Info: 'bg-[#eaf2fc] text-[#2b66a5]',
   Alert: 'bg-[#fff5d9] text-[#9a6510]',
   Policy: 'bg-[#f1eafe] text-[#7752a8]',
+}
+
+function useRealMarketing() {
+  return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
 }
 
 function Card({ title, children, className }) {
@@ -42,15 +47,21 @@ function ChannelIcon({ icon }) {
 export default function AdminNotificationDetailPage() {
   const navigate = useNavigate()
   const { notificationId } = useParams()
+  const useReal = useRealMarketing()
 
   const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('marketing'),
-    [],
+    () => {
+      if (useReal) {
+        return adminService.getAdminMarketingNotification(notificationId)
+      }
+      return adminService.getManagement('marketing')
+    },
+    [notificationId, useReal],
   )
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
-  const detail = data.notifications?.details?.[notificationId]
+  const detail = useReal ? data : data.notifications?.details?.[notificationId]
 
   if (!detail) {
     return (
@@ -138,7 +149,6 @@ export default function AdminNotificationDetailPage() {
       </div>
 
       <div className="mb-4 grid grid-cols-[minmax(0,1.35fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
-        
         <Card title="Message">
           <span
             className={cn(
@@ -154,7 +164,9 @@ export default function AdminNotificationDetailPage() {
                 Y
               </div>
               <div className="min-w-0">
-                <p className="text-[13px] font-bold text-[#17231c]">Yjeek Admin</p>
+                <p className="text-[13px] font-bold text-[#17231c]">
+                  {detail.sender || 'Yjeek Admin'}
+                </p>
                 <p className="mt-1 text-[13px] font-bold text-[#17231c]">{detail.title}</p>
                 <p className="mt-1.5 text-[12.5px] leading-[18px] text-[#59655e]">{detail.body}</p>
               </div>
@@ -165,7 +177,10 @@ export default function AdminNotificationDetailPage() {
         <Card title="Audience & delivery">
           <dl className="space-y-3">
             {metaRows.map(([label, value]) => (
-              <div key={label} className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 max-[420px]:grid-cols-1 border-b border-[#edf0ee] pb-3">
+              <div
+                key={label}
+                className="grid grid-cols-[120px_minmax(0,1fr)] gap-3 max-[420px]:grid-cols-1 border-b border-[#edf0ee] pb-3"
+              >
                 <dt className="text-[12.5px] text-[#7c8780]">{label}</dt>
                 <dd className="text-[12.5px] font-medium text-[#17231c]">{value}</dd>
               </div>
@@ -191,28 +206,36 @@ export default function AdminNotificationDetailPage() {
                 </tr>
               </thead>
               <tbody className="bg-white">
-                {detail.channelRows.map((row) => (
-                  <tr key={row.channel} className="border-b border-[#edf0ee] bg-white last:border-0">
-                    <td className="whitespace-nowrap px-4 py-3.5">
-                      <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[#17231c]">
-                        <ChannelIcon icon={row.icon} />
-                        {row.channel}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                      {row.sent}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                      {row.delivered}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                      {row.opened}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                      {row.failed}
+                {detail.channelRows?.length ? (
+                  detail.channelRows.map((row) => (
+                    <tr key={row.channel} className="border-b border-[#edf0ee] bg-white last:border-0">
+                      <td className="whitespace-nowrap px-4 py-3.5">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-medium text-[#17231c]">
+                          <ChannelIcon icon={row.icon} />
+                          {row.channel}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {row.sent}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {row.delivered}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {row.opened}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {row.failed}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#7c8780]">
+                      No channel delivery data yet.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>

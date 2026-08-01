@@ -314,7 +314,7 @@ export const adminVendorService = {
       return { data: { total: 0, storeTypes: [] }, meta: null }
     }
 
-    const response = await apiClient.get(endpoints.admin.storeTypes, {
+    const response = await apiClient.get(endpoints.admin.storeTypes.list, {
       ...options,
       scope: 'admin',
       feature: 'vendors',

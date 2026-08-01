@@ -113,7 +113,12 @@ export default function AdminStoresPage() {
                           style={{ background: row.iconBg || '#eef2ef' }}
                           aria-hidden
                         >
-                          <CatalogStoreIcon id={row.id} className="size-5" />
+                          <CatalogStoreIcon
+                            id={row.slug || row.id}
+                            emoji={row.iconEmoji || row.icon}
+                            iconUrl={row.iconUrl}
+                            className="size-5"
+                          />
                         </span>
                         <div className="min-w-0">
                           <p className="text-[13px] font-bold text-[#17231c]">{row.name}</p>

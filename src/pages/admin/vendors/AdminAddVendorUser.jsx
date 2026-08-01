@@ -281,6 +281,10 @@ export default function AdminAddVendorUser() {
           role: form.role,
           branch: branch?.name || '',
           branchId: branch?.id || form.branchId || '',
+          branchIndex: Math.max(
+            0,
+            branchList.findIndex((b) => String(b.id) === String(branch?.id || form.branchId)),
+          ),
           status: form.status || 'Active',
         }
         navigate(returnPath, {

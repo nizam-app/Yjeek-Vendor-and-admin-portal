@@ -92,5 +92,5 @@ IncidentOrderModal
        CANCEL          → AdminCancelOrderModal
        SUSPEND_CHAMP   → AdminOrderSuspendChampModal
        FLAG_VENDOR     → AdminFlagVendorModal
-       MARK_RESOLVED   → AdminOrderTakeActionPanel (outcome form)
+       MARK_RESOLVED   → POST /admin/incidents/:id/resolve directly (no form; outcome default "Resolved with refund")
 ```

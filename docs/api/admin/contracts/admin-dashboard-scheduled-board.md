@@ -23,55 +23,38 @@ Confirmed from Postman screenshots. Real credentials, tokens, and record IDs are
 
 Response includes `data.bucket` (e.g. `"all"`). A `bucket` query param was not confirmed in Postman for this board.
 
-### Success (HTTP 200) — confirmed
+### Success (HTTP 200) — confirmed fields
 
-```json
-{
-  "success": true,
-  "data": {
-    "board": "scheduled",
-    "counts": {
-      "critical": 0,
-      "at_risk": 0,
-      "on_track": 0,
-      "all": 0
-    },
-    "bucket": "all",
-    "sort": "time_left",
-    "items": [
-      {
-        "id": "<redacted>",
-        "orderNumber": "YJK-…",
-        "bucket": "critical",
-        "category": "Hot food",
-        "priorityLabel": "Critical",
-        "elapsedMin": 0,
-        "timeLeftLabel": "0m",
-        "status": "PENDING_VENDOR_ACCEPT",
-        "statusLabel": "Pending accept",
-        "orderType": "DELIVERY",
-        "fulfillmentType": "SCHEDULED",
-        "slaBreached": true,
-        "vendor": { "id": "<redacted>", "name": "<redacted>", "area": "<redacted>" },
-        "champ": null,
-        "hasIncident": false,
-        "incidentCount": 0,
-        "conversationId": null,
-        "tags": []
-      }
-    ]
-  }
-}
-```
+| Field | Notes |
+| --- | --- |
+| `pipelineCounts` | `{ new, awaiting_champ_response, awaiting_champ_confirmation, confirmed }` |
+| `counts` | SLA buckets `critical` / `at_risk` / `on_track` / `all` |
+| `items[].pipelineColumn` | Pipeline stage — **source of truth for column placement** |
+| `items[].actions` | e.g. `ASSIGN_DATE_TIME_CHAMP`, `REMIND_CHAMP`, `REASSIGN_CHAMP`, `FORCE_PICKUP_NOW` |
+| `items[].banner` | `{ tone, text }` or `null` |
+| `items[].windowLabel` | Delivery window label for the card |
+| `items[].status` / `statusLabel` | Order status display |
+| `items[].vendor` / `champ` | Nested refs; `champ` may be `null` |
+| `items[].tags` | Display chips |
 
-Confirmed sample statuses include `PENDING_VENDOR_ACCEPT` and `CONFIRMED`. `champ` may be `null`. `tags` may be empty.
+### `pipelineColumn` → UI column key
+
+| API `pipelineColumn` | UI key |
+| --- | --- |
+| `new` | `new` |
+| `awaiting_champ_response` | `response` |
+| `awaiting_champ_confirmation` | `confirmation` |
+| `confirmed` | `confirmed` |
+
+Do **not** place cards using SLA `bucket` or a status-only heuristic when `pipelineColumn` is present.
 
 ### UI mapping notes
 
-- API `bucket` is SLA urgency (`critical` / `at_risk` / `on_track`), **not** the Pipeline columns (New / Awaiting champ response / …).
-- Pipeline column assignment is a status heuristic in `mapAdminScheduledBoard` until the API exposes pipeline stage fields.
+- API `bucket` is SLA urgency (`critical` / `at_risk` / `on_track`), **not** the Pipeline columns.
+- Status heuristic remains only as fallback when `pipelineColumn` is missing.
 - Incidents + chats stay empty until those feeds are confirmed (no mock shell padding).
-- Board and Calendar tabs stay empty when `VITE_ADMIN_USE_MOCK_API=false` until those views have confirmed payloads.
+- Board tab reuses the same `GET …/boards/scheduled` items as a dispatch table (not a separate board API).
+- Calendar tab stays empty/mock when `VITE_ADMIN_USE_MOCK_API=false` until that view has a confirmed payload.
 
 ### App wiring
 

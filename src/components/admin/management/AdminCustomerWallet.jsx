@@ -29,32 +29,40 @@ function WalletTable({ rows }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, index) => (
-              <tr
-                key={`${row.type}-${row.description}-${row.date}`}
-                className={cn(
-                  'border-b border-[#edf0ee] last:border-0',
-                  index % 2 === 0 ? 'bg-white' : 'bg-[#f6f8f6]',
-                )}
-              >
-                <td className="whitespace-nowrap px-4 py-3">
-                  <Badge tone={typeTone(row.type)}>{row.type}</Badge>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">{row.description}</td>
-                <td
+            {rows.length ? (
+              rows.map((row, index) => (
+                <tr
+                  key={row.id || `${row.type}-${row.description}-${row.date}-${index}`}
                   className={cn(
-                    'whitespace-nowrap px-4 py-3 text-right text-[12.5px] font-bold',
-                    row.amount.startsWith('+') ? 'text-[#1aa054]' : 'text-[#17231c]',
+                    'border-b border-[#edf0ee] last:border-0',
+                    index % 2 === 0 ? 'bg-white' : 'bg-[#f6f8f6]',
                   )}
                 >
-                  {row.amount}
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <Badge tone={typeTone(row.type)}>{row.type}</Badge>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">{row.description}</td>
+                  <td
+                    className={cn(
+                      'whitespace-nowrap px-4 py-3 text-right text-[12.5px] font-bold',
+                      String(row.amount || '').startsWith('+') ? 'text-[#1aa054]' : 'text-[#17231c]',
+                    )}
+                  >
+                    {row.amount}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[12.5px] font-medium text-[#17231c]">
+                    {row.balance}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right text-[12.5px] text-[#7c8780]">{row.date}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-[13px] text-[#7c8780]">
+                  No transactions yet.
                 </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right text-[12.5px] font-medium text-[#17231c]">
-                  {row.balance}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-right text-[12.5px] text-[#7c8780]">{row.date}</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
@@ -74,7 +82,7 @@ export function AdminCustomerWallet({ wallet }) {
             {wallet.refundBalance}
           </span>
         </div>
-        <WalletTable rows={wallet.refundTransactions} />
+        <WalletTable rows={wallet.refundTransactions || []} />
       </section>
 
       <section className="rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:p-4">
@@ -130,7 +138,7 @@ export function AdminCustomerWallet({ wallet }) {
             </div>
           ))}
         </div>
-        <WalletTable rows={wallet.cashbackTransactions} />
+        <WalletTable rows={wallet.cashbackTransactions || []} />
       </section>
     </div>
   )

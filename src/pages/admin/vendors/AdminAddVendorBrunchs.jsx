@@ -378,14 +378,32 @@ export default function AdminAddVendorBrunchs() {
     setForm((c) => ({ ...c, [field]: value }))
   }
 
-  function handlePinChange({ latitude, longitude }) {
-    setForm((prev) => ({
-      ...prev,
-      latitude,
-      longitude,
-      pinnedLocation:
-        isPlottableLatLng(latitude, longitude) ? `${latitude}° N, ${longitude}° E` : '',
-    }))
+  function handlePinChange({ latitude, longitude, address, area, city }) {
+    setForm((prev) => {
+      const next = {
+        ...prev,
+        latitude: latitude != null ? String(latitude) : prev.latitude,
+        longitude: longitude != null ? String(longitude) : prev.longitude,
+      }
+
+      if (isPlottableLatLng(next.latitude, next.longitude)) {
+        next.pinnedLocation = `${next.latitude}° N, ${next.longitude}° E`
+      }
+
+      // Always apply address from map pin / current location.
+      if (address != null && address !== '') {
+        next.address = String(address)
+      }
+
+      // Only fill area/city from map when empty (don't overwrite Seef etc.).
+      if (area && !String(prev.areaCity || '').trim()) {
+        next.areaCity = city && area !== city ? `${area}, ${city}` : area
+      } else if (city && !String(prev.areaCity || '').trim()) {
+        next.areaCity = city
+      }
+
+      return next
+    })
   }
 
   function toggleDay(day) {

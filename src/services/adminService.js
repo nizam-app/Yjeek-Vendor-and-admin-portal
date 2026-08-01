@@ -4,6 +4,9 @@ import { adminDashboardService } from './admin/dashboardService'
 import { adminVendorService } from './admin/vendorService'
 import { adminUserService } from './admin/userService'
 import { adminFleetService } from './admin/fleetService'
+import { adminStoreTypeService } from './admin/storeTypeService'
+import { adminCustomerService } from './admin/customerService'
+import { adminMarketingService } from './admin/marketingService'
 
 export const adminService = {
   getDashboard(options) {
@@ -31,9 +34,46 @@ export const adminService = {
     if (type === 'vendors') {
       return adminVendorService.listVendors(options)
     }
+    if (type === 'stores' && (isAdminRealApiFeature('store-types') || !apiConfig.adminUseMockApi)) {
+      return adminStoreTypeService.listForPage(options)
+    }
+    if (type === 'customers' && (isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi)) {
+      return adminCustomerService.listForPage(options)
+    }
     // Fleet list not wired yet — use getAdminFleetSummary for KPIs.
     // Users list uses listAdminUsers().
+    // Marketing notifications / promo codes: use dedicated list methods.
     return apiClient.get('/admin/management', { ...options, params: { ...options.params, type } })
+  },
+  listAdminStoreTypes(options = {}) {
+    return adminStoreTypeService.listStoreTypes(options)
+  },
+  getAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.getStoreType(storeTypeId, options)
+  },
+  createAdminStoreType(form, options = {}) {
+    return adminStoreTypeService.createStoreType(form, options)
+  },
+  updateAdminStoreType(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.updateStoreType(storeTypeId, form, options)
+  },
+  addAdminStoreTypeMenuCategory(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.addMenuCategory(storeTypeId, form, options)
+  },
+  updateAdminStoreTypeMenuCategory(storeTypeId, menuCategoryId, form, options = {}) {
+    return adminStoreTypeService.updateMenuCategory(storeTypeId, menuCategoryId, form, options)
+  },
+  deleteAdminStoreTypeMenuCategory(storeTypeId, menuCategoryId, options = {}) {
+    return adminStoreTypeService.deleteMenuCategory(storeTypeId, menuCategoryId, options)
+  },
+  addAdminStoreTypeBadge(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.addBadge(storeTypeId, form, options)
+  },
+  updateAdminStoreTypeBadge(storeTypeId, badgeId, form, options = {}) {
+    return adminStoreTypeService.updateBadge(storeTypeId, badgeId, form, options)
+  },
+  deleteAdminStoreTypeBadge(storeTypeId, badgeId, options = {}) {
+    return adminStoreTypeService.deleteBadge(storeTypeId, badgeId, options)
   },
   getAdminFleetSummary(options = {}) {
     return adminFleetService.getFleetSummary(options)
@@ -201,7 +241,55 @@ export const adminService = {
     return adminVendorService.updateSla(vendorId, form, options)
   },
   getCustomerDetail(customerId, options = {}) {
-    return apiClient.get('/admin/customers/detail', { ...options, params: { ...options.params, id: customerId } })
+    if (isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi) {
+      return adminCustomerService.getCustomer(customerId, options)
+    }
+    return apiClient.get('/admin/customers/detail', {
+      ...options,
+      params: { ...options.params, id: customerId },
+    })
+  },
+  listAdminCustomers(filters, options = {}) {
+    return adminCustomerService.listForPage({ ...filters, ...options })
+  },
+  getAdminCustomer(customerId, options = {}) {
+    return adminCustomerService.getCustomer(customerId, options)
+  },
+  getAdminCustomerWallet(customerId, options = {}) {
+    return adminCustomerService.getWallet(customerId, options)
+  },
+  getAdminCustomerSupport(customerId, options = {}) {
+    return adminCustomerService.getSupportTickets(customerId, options)
+  },
+  suspendAdminCustomer(customerId, form, options = {}) {
+    return adminCustomerService.suspendCustomer(customerId, form, options)
+  },
+  activateAdminCustomer(customerId, options = {}) {
+    return adminCustomerService.activateCustomer(customerId, options)
+  },
+  listAdminMarketingNotifications(options = {}) {
+    return adminMarketingService.listNotifications(options)
+  },
+  getAdminMarketingNotification(notificationId, options = {}) {
+    return adminMarketingService.getNotification(notificationId, options)
+  },
+  listAdminMarketingPromoCodes(options = {}) {
+    return adminMarketingService.listPromoCodes(options)
+  },
+  createAdminMarketingPromoCode(form, options = {}) {
+    return adminMarketingService.createPromoCode(form, options)
+  },
+  sendAdminCustomerNotification(form, options = {}) {
+    return adminMarketingService.sendCustomerNotification(form, options)
+  },
+  listAdminCustomerNotificationHistory(options = {}) {
+    return adminMarketingService.listCustomerNotificationHistory(options)
+  },
+  sendAdminVendorNotification(form, options = {}) {
+    return adminMarketingService.sendVendorNotification(form, options)
+  },
+  listAdminVendorNotificationHistory(options = {}) {
+    return adminMarketingService.listVendorNotificationHistory(options)
   },
   getChampDetail(champId, options = {}) {
     // Real admin mode (mocks off) or fleet feature flag → Postman overview endpoint.

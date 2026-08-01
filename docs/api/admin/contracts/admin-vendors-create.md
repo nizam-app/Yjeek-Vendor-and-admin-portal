@@ -17,7 +17,7 @@ Confirmed from Postman **"Create vendor (Add vendor wizard)"** + conflict screen
 
 ```json
 {
-  "name": "Green Kitchen Express",
+  "name": "Green Kitchen test",
   "legalName": "Green Kitchen Express W.L.L.",
   "storeTypeId": "{{storeTypeId}}",
   "categoryLabel": "Food & Beverage",
@@ -27,14 +27,14 @@ Confirmed from Postman **"Create vendor (Add vendor wizard)"** + conflict screen
   "city": "Manama",
   "area": "Seef",
   "crNumber": "CR-123456-1",
-  "vatNumber": "200000858300002",
+  "vatNumber": "200000898300002",
   "branches": [
     {
       "name": "Seef Main",
-      "address": "Road 2011, Seef District",
+      "address": "Road 2811, Seef District",
       "area": "Seef",
       "city": "Manama",
-      "phone": "+973 1778 8881",
+      "phone": "+973 1770 003",
       "latitude": 26.2285,
       "longitude": 50.535,
       "deliveryRadiusKm": 6,
@@ -44,16 +44,32 @@ Confirmed from Postman **"Create vendor (Add vendor wizard)"** + conflict screen
     }
   ],
   "owner": {
-    "fullName": "Sara Owner",
-    "email": "owner@example.com",
-    "phone": "17788881",
+    "fullName": "Sara alii",
+    "email": "owner@greenkitchentest.bh",
+    "phone": "39001122",
     "countryCode": "+973",
-    "password": "Secret123!"
+    "password": "Owner@12345"
   },
-  "additionalUsers": [],
+  "additionalUsers": [
+    {
+      "displayName": "Branch Manager Bob",
+      "email": "bob@greenkitchen.bh",
+      "phone": "38001122",
+      "password": "Manager@123",
+      "role": "BRANCH_MANAGER",
+      "branchIndex": 0
+    }
+  ],
   "commission": {
-    "model": "PERCENT_OF_ORDER",
-    "commissionRate": 15,
+    "model": "TIERED",
+    "commissionTiers": [
+      { "fromAmount": 0, "ratePct": 18 },
+      { "fromAmount": 5000, "ratePct": 15 },
+      { "fromAmount": 15000, "ratePct": 12 }
+    ],
+    "customFees": [
+      { "name": "Marketing fee", "amount": 0.1, "type": "BHD" }
+    ],
     "platformServiceFee": 0.3,
     "vatOnCommissionPct": 10
   },
@@ -62,7 +78,7 @@ Confirmed from Postman **"Create vendor (Add vendor wizard)"** + conflict screen
     "serviceModes": {
       "hotFoodOnDemand": true,
       "pickup": true,
-      "scheduledDelivery": false,
+      "scheduledDelivery": true,
       "dineIn": false,
       "services": false
     },
@@ -77,6 +93,9 @@ Confirmed from Postman **"Create vendor (Add vendor wizard)"** + conflict screen
 
 - `activate: false` → draft
 - `activate: true` → live (requires owner + ≥1 branch)
+- Owner `phone` is local digits; `countryCode` is separate (`+973`)
+- Additional user `phone` is local digits (no country prefix)
+- `additionalUsers` is always sent (may be `[]`)
 
 ### Confirmed conflict
 
@@ -114,11 +133,11 @@ Create flow prefers embedding `activate` on `POST /admin/vendors`. Separate acti
 
 | Step | Behavior |
 | --- | --- |
-| 1 Store info | Local draft + store types load |
+| 1 Store info | Local draft + store types load; `categoryLabel` separate from store type name |
 | 2 Branches | Local branch editor; draft restored via `wizardDraft` / `savedBranch` |
-| 3 Users | Owner fields + local additional users via `savedUser` |
-| 4 Commission | Local commission / CR / VAT (sent on create) |
-| 5 SLA | Service modes + SLA model id |
+| 3 Users | Owner fields + local additional users (`password`, `phone` digits, `branchIndex`) |
+| 4 Commission | Tiered editor (`commissionTiers`) + custom fees + platform/VAT |
+| 5 SLA | Service modes (incl. scheduled) + SLA model id + acceptance/prep |
 | 6 Review | **Save draft** → `activate:false`; **Activate** → uses toggle (`activateImmediately`) |
 
 On success → navigate to `/admin/vendors/:id`.

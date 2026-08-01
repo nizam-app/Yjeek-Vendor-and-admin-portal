@@ -25,9 +25,26 @@ function mapChampRef(item) {
   const vehicle = item.vehicle || item.vehicleType || item.vehicle_type || null
   const activeCount =
     item.activeCount ?? item.activeOrders ?? item.active ?? null
+  const capacity =
+    item.capacity != null && item.capacity !== '' && !Number.isNaN(Number(item.capacity))
+      ? Number(item.capacity)
+      : null
+  const code = item.code || item.driverCode || item.champCode || null
+  const gov = item.gov || item.governorate || item.area || null
+  const city = item.city || null
+  const block = item.block != null ? String(item.block) : null
+  const tier = item.tier || item.tierLabel || null
+  const type = item.type || item.employmentType || item.champType || null
+  const allowed =
+    typeof item.allowed === 'boolean'
+      ? item.allowed
+      : typeof item.isAllowed === 'boolean'
+        ? item.isAllowed
+        : null
 
   return {
     id: String(id),
+    code: code ? String(code) : null,
     name: name ? String(name) : null,
     status,
     label: labelParts.length ? `${labelParts.join(' · ')}` : String(id),
@@ -38,6 +55,13 @@ function mapChampRef(item) {
       activeCount != null && activeCount !== '' && !Number.isNaN(Number(activeCount))
         ? Number(activeCount)
         : null,
+    capacity,
+    gov: gov ? String(gov) : null,
+    city: city ? String(city) : null,
+    block,
+    tier: tier ? String(tier) : null,
+    type: type ? String(type) : null,
+    allowed,
   }
 }
 

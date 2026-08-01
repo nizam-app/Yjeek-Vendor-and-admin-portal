@@ -25,6 +25,7 @@ export {
   mapAdminScheduledBoardItem,
   mapAdminScheduledBoardResponse,
   mapAdminScheduledPipelineColumn,
+  resolveAdminScheduledColumn,
 } from './mapAdminScheduledBoard'
 export {
   mapAdminPickupBoardItem,

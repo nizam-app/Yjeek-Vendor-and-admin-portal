@@ -22,6 +22,10 @@ import AdminRefundModal from '../../../components/admin/AdminRefundModal'
 import AdminCancelOrderModal from '../../../components/admin/AdminCancelOrderModal'
 import AdminOrderSuspendChampModal from '../../../components/admin/AdminOrderSuspendChampModal'
 import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal'
+import { adminOrderService } from '../../../services/admin/orderService'
+import { formatApiErrorMessage } from '../../../api/errors'
+
+const DEFAULT_RESOLVE_OUTCOME = 'Resolved with refund'
 
 function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOrderClick }) {
   return (
@@ -247,6 +251,8 @@ function AdminOrderDetailModal({ order, onClose }) {
 function IncidentOrderModal({ order, onClose }) {
   const [openActionMenu, setOpenActionMenu] = useState(null)
   const [activeAction, setActiveAction] = useState(null)
+  const [resolving, setResolving] = useState(false)
+  const [resolveError, setResolveError] = useState(null)
   const orderId = order?.orderId || null
   const { data: detail, error, isLoading, refetch } = useAdminOrderDetail(orderId)
   const {
@@ -291,8 +297,32 @@ function IncidentOrderModal({ order, onClose }) {
     (incident) => incident.id && String(incident.status || '').toLowerCase() !== 'resolved',
   )
 
+  async function markResolved(incidentId) {
+    const id = String(incidentId || '').trim()
+    if (!id || resolving) {
+      if (!id) setResolveError('No open incident to resolve.')
+      return
+    }
+
+    setResolveError(null)
+    setResolving(true)
+    setOpenActionMenu(null)
+    try {
+      await adminOrderService.resolveIncident(id, { outcome: DEFAULT_RESOLVE_OUTCOME })
+      await refetch()
+    } catch (err) {
+      setResolveError(formatApiErrorMessage(err, 'Failed to mark resolved.'))
+    } finally {
+      setResolving(false)
+    }
+  }
+
   function startAction(code, incidentId = null) {
     setOpenActionMenu(null)
+    if (code === 'MARK_RESOLVED') {
+      void markResolved(incidentId || openIncidents[0]?.id || null)
+      return
+    }
     setActiveAction({ code, incidentId })
   }
 
@@ -452,17 +482,23 @@ function IncidentOrderModal({ order, onClose }) {
               </section>
             </div>
 
-            <footer className="flex shrink-0 justify-end gap-2 border-t border-[#e3e7e4] bg-white px-[14px] py-2.5">
-              <Button onClick={onClose} className="h-[28px] rounded-full px-3">Close</Button>
-              {canMarkResolved ? (
-                <Button
-                  primary
-                  className="h-[28px] rounded-full px-3"
-                  onClick={() => startAction('MARK_RESOLVED', openIncidents[0]?.id || null)}
-                >
-                  Mark resolved
-                </Button>
+            <footer className="flex shrink-0 flex-col gap-2 border-t border-[#e3e7e4] bg-white px-[14px] py-2.5">
+              {resolveError ? (
+                <p className="text-right text-[10px] text-[#d92f35]">{resolveError}</p>
               ) : null}
+              <div className="flex justify-end gap-2">
+                <Button onClick={onClose} className="h-[28px] rounded-full px-3" disabled={resolving}>Close</Button>
+                {canMarkResolved ? (
+                  <Button
+                    primary
+                    className="h-[28px] rounded-full px-3"
+                    disabled={resolving || openIncidents.length === 0}
+                    onClick={() => markResolved(openIncidents[0]?.id || null)}
+                  >
+                    {resolving ? 'Resolving…' : 'Mark resolved'}
+                  </Button>
+                ) : null}
+              </div>
             </footer>
 
             {activeAction?.code === 'REASSIGN_CHAMP' ? (
@@ -561,8 +597,6 @@ function IncidentOrderModal({ order, onClose }) {
               <AdminOrderTakeActionPanel
                 actionCode={activeAction.code}
                 orderId={detail.orderId || orderId}
-                incidentId={activeAction.incidentId}
-                openIncidents={openIncidents}
                 champId={detail.champ?.id || null}
                 options={actionOptions}
                 optionsLoading={actionOptionsLoading}

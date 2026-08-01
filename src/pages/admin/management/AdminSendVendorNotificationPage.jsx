@@ -1,66 +1,27 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, MoreVertical, Plus, X } from 'lucide-react'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
 const AUDIENCE_OPTIONS = ['All vendors', 'By category', 'By status', 'Selected']
 const MESSAGE_TYPES = ['Info', 'Promo', 'Alert', 'Policy']
 const SCHEDULE_OPTIONS = ['Send now', 'Schedule later']
-const VENDOR_OPTIONS = ['Green Kitchen', 'Lulu Express', 'CityMeds', 'Marina Café', 'Fresh Mart']
 const DATE_RANGE_OPTIONS = ['Date range', 'Last 7 days', 'Last 30 days', 'This year']
 const CHANNEL_FILTERS = ['All channels', 'Push', 'Email', 'SMS']
-
-const HISTORY = [
-  {
-    id: 'ntf-ramadan',
-    notification: 'Ramadan vendor program',
-    type: 'Promo',
-    audience: 'All vendors',
-    channel: 'Push · Email',
-    sentTo: '48',
-    date: '2 Mar 2026',
-    time: '09:00',
-    status: 'Delivered',
-  },
-  {
-    id: 'ntf-commission',
-    notification: 'Commission policy update',
-    type: 'Policy',
-    audience: 'All vendors',
-    channel: 'Email',
-    sentTo: '52',
-    date: '26 Feb 2026',
-    time: '14:30',
-    status: 'Delivered',
-  },
-  {
-    id: 'ntf-pickup',
-    notification: 'Pickup feature is live',
-    type: 'Info',
-    audience: 'By category: Food',
-    channel: 'Push',
-    sentTo: '31',
-    date: '20 Feb 2026',
-    time: '11:00',
-    status: 'Delivered',
-  },
-  {
-    id: 'ntf-payout-change',
-    notification: 'Payout cycle change',
-    type: 'Alert',
-    audience: 'Selected',
-    channel: 'Push · Email',
-    sentTo: '12',
-    date: '9 Apr 2026',
-    time: '08:00',
-    status: 'Scheduled',
-  },
-]
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
+
+function useRealMarketing() {
+  return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
+}
 
 function Card({ title, children, className }) {
   return (
@@ -76,7 +37,7 @@ function Card({ title, children, className }) {
   )
 }
 
-function Segmented({ options, value, onChange, className }) {
+function Segmented({ options, value, onChange, className, disabled = false }) {
   return (
     <div
       className={cn(
@@ -88,9 +49,10 @@ function Segmented({ options, value, onChange, className }) {
         <button
           key={option}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(option)}
           className={cn(
-            'h-[32px] shrink-0 rounded-[8px] px-3 text-[12.5px] whitespace-nowrap transition',
+            'h-[32px] shrink-0 rounded-[8px] px-3 text-[12.5px] whitespace-nowrap transition disabled:opacity-60',
             value === option
               ? 'bg-white font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
               : 'font-medium text-[#69756d] hover:text-[#455249]',
@@ -103,16 +65,17 @@ function Segmented({ options, value, onChange, className }) {
   )
 }
 
-function Toggle({ label, checked, onChange }) {
+function Toggle({ label, checked, onChange, disabled = false }) {
   return (
     <div className="flex items-center gap-2.5">
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
-          'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
+          'relative h-[28px] w-[48px] shrink-0 rounded-full transition disabled:opacity-60',
           checked ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
         )}
       >
@@ -160,41 +123,113 @@ function FilterChip({ icon, options, value, onChange, label }) {
 }
 
 function historyTone(status) {
-  if (status === 'Delivered') return 'green'
+  if (status === 'Delivered' || status === 'Sent') return 'green'
   if (status === 'Scheduled') return 'yellow'
   return 'gray'
 }
 
+function buildScheduledAt(dateValue, timeValue) {
+  const dateRaw = String(dateValue || '').trim()
+  const timeRaw = String(timeValue || '').trim()
+  if (!dateRaw || !timeRaw) return ''
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+    const iso = new Date(`${dateRaw}T${timeRaw}:00`)
+    if (!Number.isNaN(iso.getTime())) return iso.toISOString()
+  }
+
+  const parsed = new Date(`${dateRaw} ${timeRaw}`)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
+  return ''
+}
+
+function openPicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    // Older browsers rely on native click.
+  }
+}
+
 export default function AdminSendVendorNotificationPage() {
   const navigate = useNavigate()
+  const useReal = useRealMarketing()
   const goBack = () => navigate('/admin/marketing')
 
-  const [audience, setAudience] = useState('All vendors')
-  const [vendors, setVendors] = useState(['Green Kitchen', 'Lulu Express', 'CityMeds'])
-  const [messageType, setMessageType] = useState('Info')
-  const [title, setTitle] = useState('New: Ramadan vendor program')
-  const [body, setBody] = useState('Enroll now to get featured placement during Ramadan…')
+  const [audience, setAudience] = useState('Selected')
+  const [vendorIds, setVendorIds] = useState([])
+  const [vendorInput, setVendorInput] = useState('')
+  const [messageType, setMessageType] = useState('Promo')
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
   const [push, setPush] = useState(true)
   const [email, setEmail] = useState(true)
   const [sms, setSms] = useState(false)
   const [schedule, setSchedule] = useState('Send now')
-  const [date, setDate] = useState('9 Apr 2026')
-  const [time, setTime] = useState('09:00')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
   const [dateRange, setDateRange] = useState('Date range')
   const [channelFilter, setChannelFilter] = useState('All channels')
+  const [submitting, setSubmitting] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
 
-  function removeVendor(name) {
-    setVendors((prev) => prev.filter((item) => item !== name))
-  }
-
-  function addVendor() {
-    const next = VENDOR_OPTIONS.find((item) => !vendors.includes(item))
-    if (next) setVendors((prev) => [...prev, next])
-  }
-
-  const visibleHistory = HISTORY.filter(
-    (row) => channelFilter === 'All channels' || row.channel.includes(channelFilter),
+  const {
+    data: historyData,
+    error: historyError,
+    isLoading: historyLoading,
+    refetch: refetchHistory,
+  } = useApiResource(
+    () => {
+      if (useReal) {
+        return adminService.listAdminVendorNotificationHistory({ limit: 20 })
+      }
+      return Promise.resolve({ data: { rows: [] } })
+    },
+    [useReal],
   )
+
+  const historyRows = (historyData?.rows || []).filter(
+    (row) => channelFilter === 'All channels' || String(row.channel || '').includes(channelFilter),
+  )
+
+  function removeVendorId(id) {
+    setVendorIds((prev) => prev.filter((item) => item !== id))
+  }
+
+  function addVendorId() {
+    const id = String(vendorInput || '').trim()
+    if (!id) return
+    setVendorIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setVendorInput('')
+  }
+
+  async function handleSend() {
+    setActionError('')
+    setActionSuccess('')
+    setSubmitting(true)
+    try {
+      const response = await adminService.sendAdminVendorNotification({
+        audience,
+        vendorIds,
+        type: messageType,
+        title,
+        body,
+        push,
+        email,
+        sms,
+        schedule,
+        scheduledAt: buildScheduledAt(date, time),
+      })
+      const createdTitle = response?.data?.title || title
+      setActionSuccess(`Sent: ${createdTitle}`)
+      navigate('/admin/vendors')
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to send notification.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -237,51 +272,106 @@ export default function AdminSendVendorNotificationPage() {
         ))}
       </div>
 
+      {actionError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {actionError}
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {actionSuccess}
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <div className="space-y-4">
           <Card title="Audience">
             <p className={labelClass}>Send to</p>
-            <Segmented options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
+            <Segmented
+              options={AUDIENCE_OPTIONS}
+              value={audience}
+              onChange={setAudience}
+              disabled={submitting}
+            />
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {vendors.map((vendor) => (
-                <span
-                  key={vendor}
-                  className="inline-flex h-[30px] items-center gap-1.5 rounded-full border border-[#1aa054] bg-[#e8f7ed] px-2.5 text-[12px] font-bold text-[#147940]"
-                >
-                  {vendor}
+            {audience === 'Selected' ? (
+              <div className="mt-4 space-y-2">
+                <p className={labelClass}>Vendor ids</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {vendorIds.map((id) => (
+                    <span
+                      key={id}
+                      className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-[#1aa054] bg-[#e8f7ed] px-2.5 text-[12px] font-bold text-[#147940]"
+                    >
+                      <span className="truncate">{id}</span>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${id}`}
+                        disabled={submitting}
+                        onClick={() => removeVendorId(id)}
+                        className="grid h-4 w-4 place-items-center rounded-full text-[#147940] hover:bg-[#d8f0e0]"
+                      >
+                        <X size={11} strokeWidth={2.4} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className={cn(inputClass, 'max-w-[320px]')}
+                    value={vendorInput}
+                    disabled={submitting}
+                    placeholder="Paste vendor id then Add"
+                    onChange={(event) => setVendorInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addVendorId()
+                      }
+                    }}
+                  />
                   <button
                     type="button"
-                    aria-label={`Remove ${vendor}`}
-                    onClick={() => removeVendor(vendor)}
-                    className="grid h-4 w-4 place-items-center rounded-full text-[#147940] hover:bg-[#d8f0e0]"
+                    disabled={submitting}
+                    onClick={addVendorId}
+                    className="inline-flex h-[40px] items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
                   >
-                    <X size={11} strokeWidth={2.4} />
+                    <Plus size={13} strokeWidth={2.4} />
+                    Add
                   </button>
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={addVendor}
-                className="inline-flex h-[30px] items-center gap-1 rounded-full border border-[#1aa054] bg-white px-2.5 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
-              >
-                <Plus size={13} strokeWidth={2.4} />
-                Add vendor
-              </button>
-            </div>
+                </div>
+                <p className="text-[11.5px] text-[#8a948e]">
+                  API expects real ids in <code>vendorIds</code>.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-4 text-[12.5px] text-[#7c8780]">
+                {audience === 'All vendors'
+                  ? 'Sends with audience: all (no vendorIds).'
+                  : `${audience} is mapped to API audience; category/status filters are not in the confirmed body yet.`}
+              </p>
+            )}
 
             <p className="mt-5 text-[12.5px] text-[#7c8780]">Estimated recipients</p>
+            <p className="text-[12px] text-[#8a948e]">Wire estimate API when you share a sample.</p>
           </Card>
 
           <Card title="Message">
             <p className={labelClass}>Type</p>
-            <Segmented options={MESSAGE_TYPES} value={messageType} onChange={setMessageType} />
+            <Segmented
+              options={MESSAGE_TYPES}
+              value={messageType}
+              onChange={setMessageType}
+              disabled={submitting}
+            />
 
             <label className="mt-4 block">
               <span className={labelClass}>Title</span>
               <input
                 className={inputClass}
                 value={title}
+                disabled={submitting}
+                placeholder="e.g. New: Ramadan vendor program"
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
@@ -291,53 +381,64 @@ export default function AdminSendVendorNotificationPage() {
               <textarea
                 className="box-border min-h-[96px] w-full resize-y rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
                 value={body}
+                disabled={submitting}
+                placeholder="Enroll now to get featured placement during Ramadan."
                 onChange={(event) => setBody(event.target.value)}
               />
             </label>
 
             <div className="mt-4 flex flex-wrap items-center gap-5">
-              <Toggle label="Push" checked={push} onChange={setPush} />
-              <Toggle label="Email" checked={email} onChange={setEmail} />
-              <Toggle label="SMS" checked={sms} onChange={setSms} />
+              <Toggle label="Push" checked={push} onChange={setPush} disabled={submitting} />
+              <Toggle label="Email" checked={email} onChange={setEmail} disabled={submitting} />
+              <Toggle label="SMS" checked={sms} onChange={setSms} disabled={submitting} />
             </div>
 
             <div className="mt-4">
               <p className={labelClass}>Schedule</p>
-              <Segmented options={SCHEDULE_OPTIONS} value={schedule} onChange={setSchedule} />
+              <Segmented
+                options={SCHEDULE_OPTIONS}
+                value={schedule}
+                onChange={setSchedule}
+                disabled={submitting}
+              />
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
               <label className="block min-w-0">
                 <span className={labelClass}>Date</span>
-                <div className="relative">
-                  <span
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px] leading-none"
-                    aria-hidden="true"
-                  >
-                    📅
-                  </span>
-                  <input
-                    className={cn(inputClass, 'pl-9')}
-                    value={date}
-                    onChange={(event) => setDate(event.target.value)}
-                  />
-                </div>
+                <input
+                  type="date"
+                  className={cn(inputClass, 'cursor-pointer')}
+                  value={date}
+                  disabled={submitting}
+                  onClick={(event) => {
+                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
+                    openPicker(event)
+                  }}
+                  onFocus={(event) => {
+                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
+                    openPicker(event)
+                  }}
+                  onChange={(event) => setDate(event.target.value)}
+                />
               </label>
               <label className="block min-w-0">
                 <span className={labelClass}>Time</span>
-                <div className="relative">
-                  <span
-                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[15px] leading-none"
-                    aria-hidden="true"
-                  >
-                    🕒
-                  </span>
-                  <input
-                    className={cn(inputClass, 'pl-9')}
-                    value={time}
-                    onChange={(event) => setTime(event.target.value)}
-                  />
-                </div>
+                <input
+                  type="time"
+                  className={cn(inputClass, 'cursor-pointer')}
+                  value={time}
+                  disabled={submitting}
+                  onClick={(event) => {
+                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
+                    openPicker(event)
+                  }}
+                  onFocus={(event) => {
+                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
+                    openPicker(event)
+                  }}
+                  onChange={(event) => setTime(event.target.value)}
+                />
               </label>
             </div>
           </Card>
@@ -361,10 +462,11 @@ export default function AdminSendVendorNotificationPage() {
 
           <button
             type="button"
-            onClick={goBack}
-            className="mt-4 inline-flex h-[36px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={submitting}
+            onClick={handleSend}
+            className="mt-4 inline-flex h-[36px] w-full items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Send notification
+            {submitting ? 'Sending…' : 'Send notification'}
           </button>
         </Card>
       </div>
@@ -392,77 +494,91 @@ export default function AdminSendVendorNotificationPage() {
           </div>
         </div>
 
-        <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
-          <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
-            <table className="w-full min-w-[860px] border-collapse text-left">
-              <thead>
-                <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
-                  {['Notification', 'Audience', 'Channel', 'Sent to', 'Date', 'Time', 'Status'].map(
-                    (column) => (
-                      <th
-                        key={column}
-                        className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
-                      >
-                        {column}
-                      </th>
-                    ),
-                  )}
-                  <th />
-                </tr>
-              </thead>
-              <tbody className="bg-white">
-                {visibleHistory.map((row) => (
-                  <tr
-                    key={row.id}
-                    role="link"
-                    tabIndex={0}
-                    onClick={() => navigate(`/admin/marketing/notifications/${row.id}`)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        navigate(`/admin/marketing/notifications/${row.id}`)
-                      }
-                    }}
-                    className="cursor-pointer border-b border-[#edf0ee] bg-white last:border-0 hover:bg-[#fafbfa]"
-                  >
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <p className="text-[13px] font-medium text-[#17231c]">{row.notification}</p>
-                      <p className="mt-0.5 text-[11px] text-[#8a948e]">{row.type}</p>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
-                      {row.audience}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
-                      {row.channel}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
-                      {row.sentTo}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
-                      {row.date}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
-                      {row.time}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <Badge tone={historyTone(row.status)}>{row.status}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <button
-                        type="button"
-                        aria-label={`More options for ${row.notification}`}
-                        onClick={(event) => event.stopPropagation()}
-                        className="grid h-7 w-7 place-items-center rounded-md text-[#7d8781] hover:bg-[#f3f6f4]"
-                      >
-                        <MoreVertical size={15} />
-                      </button>
-                    </td>
+        {historyLoading && !historyRows.length ? (
+          <ApiState isLoading />
+        ) : historyError && !historyRows.length ? (
+          <ApiState error={historyError} onRetry={refetchHistory} />
+        ) : (
+          <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
+            <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+              <table className="w-full min-w-[860px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
+                    {['Notification', 'Audience', 'Channel', 'Sent to', 'Date', 'Time', 'Status'].map(
+                      (column) => (
+                        <th
+                          key={column}
+                          className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
+                        >
+                          {column}
+                        </th>
+                      ),
+                    )}
+                    <th />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white">
+                  {historyRows.length ? (
+                    historyRows.map((row) => (
+                      <tr
+                        key={row.id}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(`/admin/marketing/notifications/${row.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            navigate(`/admin/marketing/notifications/${row.id}`)
+                          }
+                        }}
+                        className="cursor-pointer border-b border-[#edf0ee] bg-white last:border-0 hover:bg-[#fafbfa]"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <p className="text-[13px] font-medium text-[#17231c]">{row.notification}</p>
+                          <p className="mt-0.5 text-[11px] text-[#8a948e]">{row.type}</p>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
+                          {row.audience}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
+                          {row.channel}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
+                          {row.sentTo}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
+                          {row.date}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-[12.5px] text-[#455249]">
+                          {row.time}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <Badge tone={historyTone(row.status)}>{row.status}</Badge>
+                        </td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            aria-label={`More options for ${row.notification}`}
+                            onClick={(event) => event.stopPropagation()}
+                            className="grid h-7 w-7 place-items-center rounded-md text-[#7d8781] hover:bg-[#f3f6f4]"
+                          >
+                            <MoreVertical size={15} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                        No vendor notifications yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   )

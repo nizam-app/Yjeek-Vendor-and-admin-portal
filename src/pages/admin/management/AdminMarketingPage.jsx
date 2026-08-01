@@ -1,6 +1,8 @@
 import { ArrowRight, Plus } from 'lucide-react'
+import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
@@ -18,8 +20,14 @@ const codeToneClass = {
   gray: 'bg-[#eff2f0] text-[#637068]',
 }
 
+const VIEW_TABS = ['Notifications', 'Promo codes']
+
+function useRealMarketing() {
+  return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
+}
+
 function notificationTone(status) {
-  if (status === 'Sent') return 'green'
+  if (status === 'Sent' || status === 'Delivered') return 'green'
   if (status === 'Scheduled') return 'blue'
   if (status === 'Failed') return 'red'
   return 'gray'
@@ -30,6 +38,26 @@ function promoStatusTone(status) {
   if (status === 'Paused') return 'yellow'
   if (status === 'Expired') return 'gray'
   return 'gray'
+}
+
+function isPromoCodesModel(value) {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      Array.isArray(value.stats) &&
+      Array.isArray(value.columns) &&
+      Array.isArray(value.rows),
+  )
+}
+
+function isNotificationsModel(value) {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      Array.isArray(value.channels) &&
+      Array.isArray(value.columns) &&
+      Array.isArray(value.rows),
+  )
 }
 
 function Card({ title, children, className }) {
@@ -51,17 +79,51 @@ export default function AdminMarketingPage() {
   const { pathname } = useLocation()
   const isPromo = pathname.includes('/promo-codes')
   const tab = isPromo ? 'Promo codes' : 'Notifications'
+  const useReal = useRealMarketing()
 
-  const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('marketing'),
-    [],
+  const { data, error, isLoading, refetch, setData } = useApiResource(
+    () => {
+      if (useReal && isPromo) {
+        return adminService.listAdminMarketingPromoCodes({
+          status: 'all',
+          limit: 20,
+        })
+      }
+      if (useReal && !isPromo) {
+        return adminService.listAdminMarketingNotifications({
+          target: 'all',
+          status: 'all',
+          limit: 20,
+        })
+      }
+      return adminService.getManagement('marketing')
+    },
+    [useReal, isPromo],
   )
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  // Drop previous tab payload immediately so we never render notifications shape on
+  // the promo route (or vice versa) — that was crashing the page white.
+  useEffect(() => {
+    setData(null)
+  }, [isPromo, setData])
 
-  const notifications = data.notifications
-  const promoCodes = data.promoCodes
+  const promoCodes = isPromoCodesModel(data?.promoCodes) ? data.promoCodes : null
+  const notifications = isNotificationsModel(data?.notifications) ? data.notifications : null
+  const viewTabs = Array.isArray(data?.viewTabs) && data.viewTabs.length ? data.viewTabs : VIEW_TABS
   const header = isPromo ? promoCodes : notifications
+  const ready = isPromo ? Boolean(promoCodes) : Boolean(notifications)
+
+  if (!ready) {
+    // While switching Notifications ↔ Promo codes, previous tab data is ignored until
+    // the matching payload arrives (avoids crashing on .stats/.rows of the wrong shape).
+    return (
+      <ApiState
+        isLoading={isLoading || !error}
+        error={error}
+        onRetry={refetch}
+      />
+    )
+  }
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -79,13 +141,13 @@ export default function AdminMarketingPage() {
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
           >
             <Plus size={14} strokeWidth={2.2} />
-            {promoCodes.action}
+            {promoCodes.action || 'New promo code'}
           </button>
         ) : null}
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1">
-        {data.viewTabs.map((item) => (
+        {viewTabs.map((item) => (
           <button
             key={item}
             type="button"
@@ -142,38 +204,49 @@ export default function AdminMarketingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {promoCodes.rows.map((row) => (
-                      <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
-                        <td className="whitespace-nowrap px-4 py-3.5">
-                          <span
-                            className={cn(
-                              'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold',
-                              codeToneClass[row.codeTone] || codeToneClass.green,
-                            )}
-                          >
-                            {row.code}
-                          </span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.description}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.type}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.maxDisc}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.usedLimit}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5">
-                          <Badge tone={promoStatusTone(row.status)}>{row.status}</Badge>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.expiry}
+                    {promoCodes.rows.length ? (
+                      promoCodes.rows.map((row) => (
+                        <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            <span
+                              className={cn(
+                                'inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold',
+                                codeToneClass[row.codeTone] || codeToneClass.green,
+                              )}
+                            >
+                              {row.code}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.description}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.type}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.maxDisc}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.usedLimit}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            <Badge tone={promoStatusTone(row.status)}>{row.status}</Badge>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.expiry}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={promoCodes.columns.length}
+                          className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
+                        >
+                          No promo codes yet.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -218,37 +291,48 @@ export default function AdminMarketingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {notifications.rows.map((row) => (
-                      <tr
-                        key={row.id}
-                        role="link"
-                        tabIndex={0}
-                        onClick={() => navigate(`/admin/marketing/notifications/${row.id}`)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            navigate(`/admin/marketing/notifications/${row.id}`)
-                          }
-                        }}
-                        className="cursor-pointer border-b border-[#edf0ee] bg-white last:border-0 hover:bg-[#fafbfa]"
-                      >
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.target}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-[#17231c]">
-                          {row.title}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.channel}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                          {row.sentAt}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5">
-                          <Badge tone={notificationTone(row.status)}>{row.status}</Badge>
+                    {notifications.rows.length ? (
+                      notifications.rows.map((row) => (
+                        <tr
+                          key={row.id}
+                          role="link"
+                          tabIndex={0}
+                          onClick={() => navigate(`/admin/marketing/notifications/${row.id}`)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              event.preventDefault()
+                              navigate(`/admin/marketing/notifications/${row.id}`)
+                            }
+                          }}
+                          className="cursor-pointer border-b border-[#edf0ee] bg-white last:border-0 hover:bg-[#fafbfa]"
+                        >
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.target}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-[#17231c]">
+                            {row.title}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.channel}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                            {row.sentAt}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            <Badge tone={notificationTone(row.status)}>{row.status}</Badge>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={notifications.columns.length}
+                          className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
+                        >
+                          No notifications yet.
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>

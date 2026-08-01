@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '../cn'
 
 function orderTagClass(tag) {
@@ -35,13 +36,34 @@ function OrderPaymentBadge({ payment }) {
   )
 }
 
+function resolveOrderApiId(order) {
+  return order?.orderId || String(order?.id || '').replace(/^#/, '') || null
+}
+
 export function OrderCard({ order, mode }) {
+  const navigate = useNavigate()
   const actionStyles = {
     green: 'border-[#19ad5b] bg-[#19ad5b] text-white',
     red: 'border-[#e12e32] bg-[#e12e32] text-white',
     redSoft: 'border-[#fde5e5] bg-[#fde5e5] text-[#bd3b3e]',
     blue: 'border-[#dcecf8] bg-[#e8f3fb] text-[#35729d]',
   }
+
+  const openAssignChamp = () => {
+    const orderId = resolveOrderApiId(order)
+    if (!orderId || mode !== 'scheduled') return
+    navigate(`/admin/scheduled/assign/${encodeURIComponent(orderId)}`)
+  }
+
+  const isAssignAction = typeof order.action === 'string'
+    && /assign/i.test(order.action)
+    && !/reassign/i.test(order.action)
+
+  const opensAssignPage = order.actionCode === 'ASSIGN_DATE_TIME_CHAMP'
+    || order.actionCode === 'REASSIGN_CHAMP'
+    || isAssignAction
+    || (typeof order.action === 'string' && /reassign/i.test(order.action))
+
   return (
     <article className="rounded-[12px] border border-[#e1e5e2] bg-white p-[11px] shadow-[0_1px_2px_rgba(20,40,28,.04)]">
       <div className="flex items-start justify-between gap-2">
@@ -56,8 +78,26 @@ export function OrderCard({ order, mode }) {
       <p className="mt-1.5 text-[10px] font-medium">{order.route}</p>
       {order.slot ? <p className="mt-1 text-[9px] text-[#78827c]">{order.slot}</p> : null}
       {order.champ ? <p className="mt-1 text-[9px] text-[#536158]">♟ {order.champ}</p> : null}
-      {order.action ? <button className={cn('mt-2 h-[26px] w-full rounded-[8px] border text-[9px] font-medium', order.actionTone ? actionStyles[order.actionTone] : 'border-[#dfe4e0] bg-white text-[#4e5a52]')}>{order.action}</button> : null}
-      {order.timer ? <div className="mt-1.5 rounded-[8px] bg-[#fff3d7] px-2 py-1.5 text-center text-[9px] font-medium text-[#9c6b14]">{order.timer}</div> : null}
+      {order.action ? (
+        <button
+          type="button"
+          onClick={opensAssignPage ? openAssignChamp : undefined}
+          className={cn(
+            'mt-2 h-[26px] w-full rounded-[8px] border text-[9px] font-medium',
+            order.actionTone ? actionStyles[order.actionTone] : 'border-[#dfe4e0] bg-white text-[#4e5a52]',
+          )}
+        >
+          {order.action}
+        </button>
+      ) : null}
+      {order.timer ? (
+        <div className={cn(
+          'mt-1.5 rounded-[8px] px-2 py-1.5 text-center text-[9px] font-medium',
+          order.bannerTone === 'danger' ? 'bg-[#fdebec] text-[#c54749]' : 'bg-[#fff3d7] text-[#9c6b14]',
+        )}>
+          {order.timer}
+        </div>
+      ) : null}
       {order.note ? <p className="mt-1 text-[9px] leading-tight text-[#8a938d]">{order.note}</p> : null}
       {order.footer ? <button className="mt-1.5 h-[24px] w-full rounded-[8px] bg-[#ff940f] text-[9px] font-medium text-white">{order.footer}</button> : null}
     </article>

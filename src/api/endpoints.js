@@ -332,16 +332,86 @@ export const endpoints = {
       sla: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/sla`,
     },
     /**
-     * Confirmed: GET /admin/store-types
-     * Used by Edit vendor Store type dropdown.
+     * Confirmed Store types — Postman folder 11.
+     * List also used by Edit vendor Store type dropdown.
      */
-    storeTypes: '/admin/store-types',
+    storeTypes: {
+      /** Confirmed: GET /admin/store-types/summary */
+      summary: '/admin/store-types/summary',
+      /** Confirmed: GET /admin/store-types · POST /admin/store-types */
+      list: '/admin/store-types',
+      /**
+       * Confirmed: GET + PATCH /admin/store-types/:storeTypeId
+       * @param {string} storeTypeId
+       */
+      detail: (storeTypeId) => `/admin/store-types/${encodeURIComponent(storeTypeId)}`,
+      /**
+       * Confirmed menu categories under a store type.
+       * @param {string} storeTypeId
+       */
+      menuCategories: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/menu-categories`,
+      /**
+       * Confirmed: PATCH + DELETE .../menu-categories/:menuCategoryId
+       * @param {string} storeTypeId
+       * @param {string} menuCategoryId
+       */
+      menuCategory: (storeTypeId, menuCategoryId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/menu-categories/${encodeURIComponent(menuCategoryId)}`,
+      /**
+       * Confirmed: POST /admin/store-types/:storeTypeId/badges
+       * @param {string} storeTypeId
+       */
+      badges: (storeTypeId) => `/admin/store-types/${encodeURIComponent(storeTypeId)}/badges`,
+      /**
+       * Confirmed: PATCH + DELETE .../badges/:badgeId
+       * @param {string} storeTypeId
+       * @param {string} badgeId
+       */
+      badge: (storeTypeId, badgeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/badges/${encodeURIComponent(badgeId)}`,
+    },
     /**
      * Confirmed: GET /admin/sla-models
      * Used by Add vendor SLA model picker.
      */
     slaModels: {
       list: '/admin/sla-models',
+    },
+    /**
+     * Confirmed Customers — Postman folder 08.
+     */
+    customers: {
+      /** Confirmed: GET /admin/customers/summary */
+      summary: '/admin/customers/summary',
+      /** Confirmed: GET /admin/customers?search=&statusTab=all&limit=20 */
+      list: '/admin/customers',
+      /**
+       * Confirmed: GET /admin/customers/:customerId
+       * @param {string} customerId
+       */
+      detail: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}`,
+      /**
+       * Confirmed: GET /admin/customers/:customerId/wallet?page=&limit=
+       * @param {string} customerId
+       */
+      wallet: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/wallet`,
+      /**
+       * Confirmed: GET /admin/customers/:customerId/support?page=&limit=
+       * @param {string} customerId
+       */
+      support: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/support`,
+      /**
+       * Confirmed: POST /admin/customers/:customerId/suspend
+       * Body: { reason, duration, notifyCustomer }
+       * @param {string} customerId
+       */
+      suspend: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/suspend`,
+      /**
+       * Confirmed: POST /admin/customers/:customerId/activate
+       * @param {string} customerId
+       */
+      activate: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/activate`,
     },
     /**
      * Confirmed Users & Roles — admin panel staff accounts.
@@ -461,6 +531,31 @@ export const endpoints = {
        */
       supplier: (supplierId) =>
         `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`,
+    },
+    /**
+     * Confirmed Marketing — Postman folder 12.
+     */
+    marketing: {
+      notifications: {
+        /** Confirmed: GET /admin/marketing/notifications?target=&status=&limit= */
+        list: '/admin/marketing/notifications',
+        /**
+         * Confirmed: GET /admin/marketing/notifications/:notificationId
+         * @param {string} notificationId
+         */
+        detail: (notificationId) =>
+          `/admin/marketing/notifications/${encodeURIComponent(notificationId)}`,
+        /** Confirmed: POST /admin/marketing/notifications — Send customer/vendor notification */
+        send: '/admin/marketing/notifications',
+        /** Confirmed: POST /admin/marketing/notifications/estimate */
+        estimate: '/admin/marketing/notifications/estimate',
+      },
+      promoCodes: {
+        /** Confirmed: GET /admin/marketing/promo-codes?status=&limit= (includes summary) */
+        list: '/admin/marketing/promo-codes',
+        /** Confirmed: POST /admin/marketing/promo-codes — Create promo code */
+        create: '/admin/marketing/promo-codes',
+      },
     },
   },
 }

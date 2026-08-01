@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Star } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { AdminCustomerWallet } from '../../../components/admin/management/AdminCustomerWallet'
@@ -9,29 +11,173 @@ import { AdminCustomerSupport } from '../../../components/admin/management/Admin
 import AdminSuspendCustomerModal from '../../../components/admin/AdminSuspendCustomerModal'
 import { cn } from '../../../components/admin/cn'
 
+function useRealCustomers() {
+  return isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi
+}
+
 export default function AdminCustomerDetailPage() {
   const { customerId } = useParams()
   const navigate = useNavigate()
+  const useReal = useRealCustomers()
   const [tab, setTab] = useState('Overview')
   const [accountActive, setAccountActive] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
-  const { data, error, isLoading, refetch } = useApiResource(
+  const [actionBusy, setActionBusy] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
+
+  const [wallet, setWallet] = useState(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [walletError, setWalletError] = useState(null)
+
+  const [support, setSupport] = useState(null)
+  const [supportLoading, setSupportLoading] = useState(false)
+  const [supportError, setSupportError] = useState(null)
+
+  const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getCustomerDetail(customerId),
     [customerId],
   )
 
+  useEffect(() => {
+    setAccountActive(null)
+    setWallet(null)
+    setSupport(null)
+    setWalletError(null)
+    setSupportError(null)
+    setActionError('')
+    setActionSuccess('')
+    setActionBusy('')
+  }, [customerId])
+
+  useEffect(() => {
+    if (!customerId || !useReal) {
+      setWalletLoading(false)
+      setWalletError(null)
+      return undefined
+    }
+
+    let cancelled = false
+    setWalletLoading(true)
+    setWalletError(null)
+
+    adminService
+      .getAdminCustomerWallet(customerId)
+      .then((response) => {
+        if (cancelled) return
+        const next = response?.data || null
+        setWallet(next)
+        setData((prev) => (prev ? { ...prev, wallet: next } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setWallet(null)
+        setWalletError(err?.message || 'Failed to load wallet.')
+      })
+      .finally(() => {
+        if (!cancelled) setWalletLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [customerId, useReal, setData])
+
+  useEffect(() => {
+    if (!customerId || !useReal) {
+      setSupportLoading(false)
+      setSupportError(null)
+      return undefined
+    }
+
+    let cancelled = false
+    setSupportLoading(true)
+    setSupportError(null)
+
+    adminService
+      .getAdminCustomerSupport(customerId)
+      .then((response) => {
+        if (cancelled) return
+        const next = response?.data || null
+        setSupport(next)
+        setData((prev) => (prev ? { ...prev, support: next } : prev))
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setSupport(null)
+        setSupportError(err?.message || 'Failed to load support tickets.')
+      })
+      .finally(() => {
+        if (!cancelled) setSupportLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [customerId, useReal, setData])
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const active = accountActive ?? data.accountActive
+  const isSuspended =
+    !active || String(data.status || '').toLowerCase() === 'suspended'
+  const resolvedCustomerId = data.id || customerId
+  const walletForTab = useReal ? wallet : data.wallet
+  const supportForTab = useReal ? support : data.support
+
+  const handleSuspendSuccess = async () => {
+    setActionError('')
+    setActionSuccess('Customer suspended.')
+    setAccountActive(false)
+    await refetch()
+  }
+
+  const handleActivate = async () => {
+    setActionBusy('activate')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      await adminService.activateAdminCustomer(resolvedCustomerId)
+      setAccountActive(true)
+      setActionSuccess('Customer activated.')
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to activate customer.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const handleAccountToggle = () => {
+    if (actionBusy) return
+    if (active) {
+      setSuspendOpen(true)
+      return
+    }
+    handleActivate()
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
       <AdminSuspendCustomerModal
         open={suspendOpen}
         onClose={() => setSuspendOpen(false)}
+        customerId={resolvedCustomerId}
         customerName={data.name}
-        onConfirm={() => setAccountActive(false)}
+        onSuccess={handleSuspendSuccess}
       />
+
+      {actionError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {actionError}
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {actionSuccess}
+        </div>
+      ) : null}
+
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -52,8 +198,15 @@ export default function AdminCustomerDetailPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#17231c]">{data.name}</h2>
-              <span className="inline-flex rounded-full bg-[#e8f7ed] px-2.5 py-[3px] text-[11px] font-bold text-[#147940]">
-                {data.status}
+              <span
+                className={cn(
+                  'inline-flex rounded-full px-2.5 py-[3px] text-[11px] font-bold',
+                  isSuspended
+                    ? 'bg-[#fff0d6] text-[#9a6510]'
+                    : 'bg-[#e8f7ed] text-[#147940]',
+                )}
+              >
+                {isSuspended ? 'Suspended' : data.status}
               </span>
             </div>
             <p className="mt-1 truncate text-[12.5px] text-[#7c8780]">
@@ -137,9 +290,10 @@ export default function AdminCustomerDetailPage() {
                   type="button"
                   role="switch"
                   aria-checked={active}
-                  onClick={() => setAccountActive(!active)}
+                  disabled={Boolean(actionBusy)}
+                  onClick={handleAccountToggle}
                   className={cn(
-                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition',
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:opacity-60',
                     active ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
                   )}
                 >
@@ -169,21 +323,46 @@ export default function AdminCustomerDetailPage() {
                 >
                   Reset password
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setSuspendOpen(true)}
-                  className="inline-flex h-[40px] w-fit items-center justify-center rounded-full border border-[#f0b8b6] bg-white px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#fdebec]"
-                >
-                  Suspend customer
-                </button>
+                {isSuspended ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy === 'activate'}
+                    onClick={handleActivate}
+                    className="inline-flex h-[40px] w-fit items-center justify-center rounded-full border border-[#b7e4c7] bg-white px-4 text-[13px] font-bold text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
+                  >
+                    {actionBusy === 'activate' ? 'Activating…' : 'Activate customer'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSuspendOpen(true)}
+                    className="inline-flex h-[40px] w-fit items-center justify-center rounded-full border border-[#f0b8b6] bg-white px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#fdebec]"
+                  >
+                    Suspend customer
+                  </button>
+                )}
               </div>
             </section>
           </div>
         </>
       ) : tab === 'Wallet & cashback' ? (
-        <AdminCustomerWallet wallet={data.wallet} />
+        <div className="space-y-3">
+          {walletError ? <p className="text-[12px] text-[#d64044]">{walletError}</p> : null}
+          {walletLoading && !walletForTab ? (
+            <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading wallet…</p>
+          ) : (
+            <AdminCustomerWallet wallet={walletForTab} />
+          )}
+        </div>
       ) : tab === 'Support' ? (
-        <AdminCustomerSupport support={data.support} />
+        <div className="space-y-3">
+          {supportError ? <p className="text-[12px] text-[#d64044]">{supportError}</p> : null}
+          {supportLoading && !supportForTab ? (
+            <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading support tickets…</p>
+          ) : (
+            <AdminCustomerSupport support={supportForTab} />
+          )}
+        </div>
       ) : (
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[14px] font-medium text-[#17231c]">{tab}</p>

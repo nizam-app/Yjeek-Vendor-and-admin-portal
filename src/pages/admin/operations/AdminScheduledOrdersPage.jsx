@@ -15,18 +15,70 @@ import { OrderCard } from '../../../components/admin/operations/OrderCard'
 
 const useAdminMocks = () => apiConfig.adminUseMockApi
 
+function normalizeScheduledView(value) {
+  if (!value) return null
+  const key = String(value).toLowerCase()
+  if (key === 'pipeline') return 'Pipeline'
+  if (key === 'board') return 'Board'
+  if (key === 'calendar') return 'Calendar'
+  return null
+}
+
+const COLUMN_STAGE_LABEL = {
+  new: 'New',
+  response: 'Awaiting champ',
+  confirmation: 'Awaiting confirm',
+  confirmed: 'Confirmed',
+}
+
+function boardToneForOrder(order) {
+  if (order.bannerTone === 'danger' || /expired|declined/i.test(order.payment || '')) return 'red'
+  if (order.column === 'new') {
+    if (/payment/i.test(order.payment || '')) return 'blue'
+    if (/vendor/i.test(order.payment || '')) return 'blue'
+    return 'green'
+  }
+  if (order.column === 'response' || order.column === 'confirmation') return 'yellow'
+  return 'green'
+}
+
+function mapScheduledOrderToBoardRow(order) {
+  if (!order) return null
+  const type = order.deliverySpeedLabel
+    || order.tags?.find((tag) => ['Same Day', 'Next Day', 'Economy', 'Standard'].includes(tag))
+    || order.category
+    || '—'
+  const stage = order.column === 'new'
+    ? `New · ${order.statusLabel || order.payment || '—'}`
+    : (COLUMN_STAGE_LABEL[order.column] || order.statusLabel || '—')
+
+  return {
+    id: order.id,
+    orderId: order.orderId,
+    route: order.route || '—',
+    type: order.priorityLabel === 'Special' ? `★ ${type}` : type,
+    prep: order.prep || '—',
+    window: order.slot || order.windowLabel || '—',
+    champ: order.champ || '—',
+    stage,
+    timer: order.timer || order.timeLeftLabel || '—',
+    tone: boardToneForOrder(order),
+  }
+}
+
 function AdminOperationsBoard({ mode }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const viewParam = searchParams.get('view')
+  const viewParamRaw = searchParams.get('view')
+  const viewParam = normalizeScheduledView(viewParamRaw)
   const [view, setView] = useState(() => (
-    mode === 'scheduled' && ['Pipeline', 'Board', 'Calendar'].includes(viewParam)
+    mode === 'scheduled' && viewParam
       ? viewParam
       : 'Pipeline'
   ))
 
   useEffect(() => {
     if (mode !== 'scheduled') return
-    if (['Pipeline', 'Board', 'Calendar'].includes(viewParam) && viewParam !== view) {
+    if (viewParam && viewParam !== view) {
       setView(viewParam)
     }
   }, [mode, viewParam, view])
@@ -63,7 +115,13 @@ function AdminOperationsBoard({ mode }) {
         </div>
       )}
       {view === 'Board' && mode === 'scheduled' ? (
-        <ScheduledDispatchBoard data={data} incidents={incidents} view={view} onViewChange={onViewChange} />
+        <ScheduledDispatchBoard
+          data={data}
+          incidents={incidents}
+          incidentCountLabel={incidentCountLabel}
+          view={view}
+          onViewChange={onViewChange}
+        />
       ) : view === 'Calendar' && mode === 'scheduled' ? (
         <ScheduledCalendarDispatch view={view} onViewChange={onViewChange} />
       ) : (
@@ -466,17 +524,46 @@ const dispatchRows = [
   { id: '#YJK-…64', route: 'VEERA → Juffair', type: '★ Economy', prep: '~24 hrs', window: '01 Jul', champ: '—', stage: 'Auto-cancelled · expired', timer: '12m to confirm', tone: 'red' },
 ]
 
-function ScheduledDispatchBoard({ data, incidents: feedIncidents = [], view, onViewChange }) {
+function ScheduledDispatchBoard({
+  data,
+  incidents: feedIncidents = [],
+  incidentCountLabel = '0',
+  view,
+  onViewChange,
+}) {
   const showMockChrome = useAdminMocks()
-  const rows = showMockChrome ? dispatchRows : []
+  const apiRows = (Array.isArray(data?.orders) ? data.orders : [])
+    .map(mapScheduledOrderToBoardRow)
+    .filter(Boolean)
+  const rows = showMockChrome && apiRows.length === 0 ? dispatchRows : apiRows
   const incidents = Array.isArray(feedIncidents) ? feedIncidents : []
-  const snapshotRows = showMockChrome
+
+  const unassignedCount = apiRows.filter((row) => !row.champ || row.champ === '—').length
+  const reconfirmCount = (data?.orders || []).filter((order) => order.column === 'confirmation').length
+  const scheduledToday = Number(data?.counts?.all) || apiRows.length
+
+  const snapshotRows = showMockChrome && apiRows.length === 0
     ? [['Scheduled today', '18'], ['Unassigned', '5'], ['Re-confirm pending', '2']]
-    : [['Scheduled today', '0'], ['Unassigned', '0'], ['Re-confirm pending', '0']]
-  const windowRows = showMockChrome
+    : [
+        ['Scheduled today', String(scheduledToday)],
+        ['Unassigned', String(unassignedCount)],
+        ['Re-confirm pending', String(reconfirmCount)],
+      ]
+
+  const windowBuckets = new Map()
+  for (const order of data?.orders || []) {
+    const key = order.slot || order.windowLabel
+    if (!key) continue
+    windowBuckets.set(key, (windowBuckets.get(key) || 0) + 1)
+  }
+  const windowRows = showMockChrome && windowBuckets.size === 0
     ? [['1–3 PM', '4 orders'], ['3–5 PM', '2 orders'], ['6–8 PM', '9 orders'], ['8–10 PM', '3 orders']]
-    : []
-  const champAvailable = showMockChrome ? '12' : '0'
+    : Array.from(windowBuckets.entries()).map(([label, count]) => [
+        label,
+        `${count} order${count === 1 ? '' : 's'}`,
+      ])
+
+  const champAvailable = showMockChrome && apiRows.length === 0 ? '12' : '—'
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-3 max-[900px]:grid-cols-1">
@@ -524,7 +611,7 @@ function ScheduledDispatchBoard({ data, incidents: feedIncidents = [], view, onV
                         <span className="inline-flex items-center gap-0.5 text-[8px] text-[#a66f13]"><Clock3 size={8} />{order.timer}</span>
                       </div>
                     </td>
-                    <td className="px-1"><button className="text-[9px] font-medium text-[#16854a]">View</button></td>
+                    <td className="px-1"><button type="button" className="text-[9px] font-medium text-[#16854a]">View</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -548,7 +635,7 @@ function ScheduledDispatchBoard({ data, incidents: feedIncidents = [], view, onV
           ))}
         </DispatchSummary>
         <DispatchSummary title="Champ capacity">
-          <SummaryRow label="Available tonight" value={champAvailable} success={champAvailable !== '0'} />
+          <SummaryRow label="Available tonight" value={champAvailable} success={champAvailable !== '0' && champAvailable !== '—'} />
           <Button primary className="mt-2 h-8 w-full rounded-[8px]"><Zap size={11} /> Auto-assign all</Button>
         </DispatchSummary>
       </aside>

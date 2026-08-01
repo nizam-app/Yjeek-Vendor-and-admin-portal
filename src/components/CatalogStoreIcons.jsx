@@ -17,6 +17,7 @@ export const catalogStoreIconSrc = {
   food_drink: iconFood,
   'food-drink': iconFood,
   groceries: iconGroceries,
+  grocery: iconGroceries,
   pharmacy: iconPharmacy,
   cosmetics: iconCosmetics,
   vape: iconVape,
