@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, Info } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { mapApiRoleToPermissionFlags } from '../../../mappers/admin/mapAdminRoles'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
@@ -29,13 +30,13 @@ const FALLBACK_SCOPE_LEVELS = [
   { value: 'ZONE', label: 'Zone / City' },
 ]
 
-const FALLBACK_ACTIONS = ['view', 'create', 'edit', 'delete', 'approve']
+const FALLBACK_ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export']
 const FALLBACK_ACTION_LABELS = {
   view: 'View',
   create: 'Create',
   edit: 'Edit',
   delete: 'Delete',
-  approve: 'Approve / Export',
+  approve: 'Approve',
   export: 'Export',
 }
 
@@ -105,12 +106,25 @@ function PermissionCheckbox({ checked, onChange, label }) {
 
 export default function AdminCreateRolePage() {
   const navigate = useNavigate()
+  const { roleId: roleIdParam } = useParams()
+  const roleId = String(roleIdParam || '').trim()
+  const isEdit = Boolean(roleId)
   const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
 
   const { data: meta, error: metaError, isLoading, refetch } = useApiResource(
     () => (useRealUsers ? adminService.getAdminRolesMeta() : Promise.resolve({ data: null })),
     [useRealUsers],
   )
+
+  const {
+    data: roleDetail,
+    error: roleError,
+    isLoading: roleLoading,
+    refetch: refetchRole,
+  } = useApiResource(() => {
+    if (!useRealUsers || !isEdit) return Promise.resolve({ data: null })
+    return adminService.getAdminRoleDetail(roleId)
+  }, [useRealUsers, isEdit, roleId])
 
   const modules = useMemo(() => {
     if (meta?.modules?.length) return meta.modules
@@ -156,26 +170,50 @@ export default function AdminCreateRolePage() {
   })
   const [permissions, setPermissions] = useState(buildFallbackPermissions)
   const [metaApplied, setMetaApplied] = useState(false)
+  const [roleApplied, setRoleApplied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
   useEffect(() => {
+    setRoleApplied(false)
+  }, [roleId])
+
+  useEffect(() => {
     if (!meta || metaApplied) return
     const nextScope = meta.scopeLevels?.[0]?.value || 'COUNTRY'
-    setForm((current) => ({
-      ...current,
-      templateId: '__scratch__',
-      scopeLevel: nextScope,
-    }))
-    setPermissions(meta.emptyPermissions ? meta.emptyPermissions() : buildFallbackPermissions())
+    if (!isEdit) {
+      setForm((current) => ({
+        ...current,
+        templateId: '__scratch__',
+        scopeLevel: nextScope,
+      }))
+      setPermissions(meta.emptyPermissions ? meta.emptyPermissions() : buildFallbackPermissions())
+    }
     setMetaApplied(true)
-  }, [meta, metaApplied])
+  }, [meta, metaApplied, isEdit])
+
+  useEffect(() => {
+    if (!isEdit || !roleDetail || roleApplied) return
+    if (!metaApplied && useRealUsers) return
+
+    const moduleList = modules
+    const actions = actionKeys
+    setForm({
+      name: roleDetail.name || '',
+      templateId: roleDetail.basedOnRoleId || '__scratch__',
+      description: roleDetail.description === '—' ? '' : roleDetail.description || '',
+      scopeLevel: roleDetail.scopeLevelValue || roleDetail.raw?.scopeLevel || 'COUNTRY',
+    })
+    setPermissions(mapApiRoleToPermissionFlags(roleDetail, moduleList, actions))
+    setRoleApplied(true)
+  }, [isEdit, roleDetail, roleApplied, metaApplied, useRealUsers, modules, actionKeys])
 
   const update = (key) => (event) => {
     setForm((current) => ({ ...current, [key]: event.target.value }))
   }
 
   const onTemplateChange = (templateId) => {
+    if (isEdit) return
     const template = templates.find((item) => String(item.id) === String(templateId))
     setForm((current) => ({
       ...current,
@@ -213,18 +251,30 @@ export default function AdminCreateRolePage() {
 
     setSaving(true)
     try {
-      await adminService.createAdminRole({
-        name: form.name,
-        description: form.description,
-        scopeLevel: form.scopeLevel,
-        templateId: form.templateId,
-        basedOnRoleId: form.templateId,
-        permissionsMatrix: permissions,
-        modules,
-      })
+      if (isEdit) {
+        await adminService.updateAdminRole(roleId, {
+          name: form.name,
+          description: form.description,
+          scopeLevel: form.scopeLevel,
+          permissionsMatrix: permissions,
+          modules,
+        })
+      } else {
+        await adminService.createAdminRole({
+          name: form.name,
+          description: form.description,
+          scopeLevel: form.scopeLevel,
+          templateId: form.templateId,
+          basedOnRoleId: form.templateId,
+          permissionsMatrix: permissions,
+          modules,
+        })
+      }
       navigate('/admin/users/roles')
     } catch (err) {
-      setSubmitError(formatApiErrorMessage(err, 'Failed to create role.'))
+      setSubmitError(
+        formatApiErrorMessage(err, isEdit ? 'Failed to update role.' : 'Failed to create role.'),
+      )
     } finally {
       setSaving(false)
     }
@@ -234,12 +284,30 @@ export default function AdminCreateRolePage() {
     return <ApiState isLoading error={metaError} onRetry={refetch} />
   }
 
+  if (useRealUsers && isEdit && roleLoading && !roleDetail) {
+    return (
+      <ApiState
+        isLoading
+        error={roleError}
+        onRetry={refetchRole}
+      />
+    )
+  }
+
+  if (useRealUsers && isEdit && roleError && !roleDetail) {
+    return <ApiState error={roleError} onRetry={refetchRole} />
+  }
+
   return (
     <form onSubmit={submit} className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5">
-        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Create role</h2>
+        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+          {isEdit ? 'Edit role' : 'Create role'}
+        </h2>
         <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-          Name the role, set scope, and configure permissions
+          {isEdit
+            ? 'Update name, scope, and permissions for this role'
+            : 'Name the role, set scope, and configure permissions'}
         </p>
       </div>
 
@@ -270,6 +338,11 @@ export default function AdminCreateRolePage() {
           {metaError.message || 'Failed to load role meta.'}
         </div>
       ) : null}
+      {roleError && isEdit ? (
+        <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+          {roleError.message || 'Failed to load role.'}
+        </div>
+      ) : null}
       {submitError ? (
         <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
           {submitError}
@@ -287,33 +360,42 @@ export default function AdminCreateRolePage() {
                   placeholder="e.g. Operations Supervisor"
                   value={form.name}
                   onChange={update('name')}
+                  disabled={Boolean(roleDetail?.isSystem)}
                 />
               </Field>
-              <Field label="Based on (template)">
-                <div className="relative">
-                  <div className={cn(inputClass, 'flex items-center pr-9')}>
-                    <span className="truncate">{selectedTemplateLabel}</span>
+              {!isEdit ? (
+                <Field label="Based on (template)">
+                  <div className="relative">
+                    <div className={cn(inputClass, 'flex items-center pr-9')}>
+                      <span className="truncate">{selectedTemplateLabel}</span>
+                    </div>
+                    <ChevronDown
+                      size={15}
+                      strokeWidth={2}
+                      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]"
+                      aria-hidden
+                    />
+                    <select
+                      aria-label="Based on template"
+                      className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
+                      value={form.templateId}
+                      onChange={(event) => onTemplateChange(event.target.value)}
+                    >
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <ChevronDown
-                    size={15}
-                    strokeWidth={2}
-                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]"
-                    aria-hidden
-                  />
-                  <select
-                    aria-label="Based on template"
-                    className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
-                    value={form.templateId}
-                    onChange={(event) => onTemplateChange(event.target.value)}
-                  >
-                    {templates.map((template) => (
-                      <option key={template.id} value={template.id}>
-                        {template.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </Field>
+                </Field>
+              ) : (
+                <Field label="Type">
+                  <div className={cn(inputClass, 'flex items-center text-[#68736c]')}>
+                    {roleDetail?.type || (roleDetail?.isSystem ? 'System' : 'Active')}
+                  </div>
+                </Field>
+              )}
             </div>
 
             <Field label="Description">
@@ -336,11 +418,13 @@ export default function AdminCreateRolePage() {
                       key={value}
                       type="button"
                       onClick={() => setForm((current) => ({ ...current, scopeLevel: value }))}
+                      disabled={Boolean(roleDetail?.isSystem)}
                       className={cn(
                         'h-[32px] rounded-full border px-3.5 text-[12.5px] transition',
                         form.scopeLevel === value
                           ? 'border-[#1aa054] bg-[#e8f7ed] font-bold text-[#147940]'
                           : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
+                        roleDetail?.isSystem && 'cursor-not-allowed opacity-60',
                       )}
                     >
                       {label}
@@ -402,8 +486,10 @@ export default function AdminCreateRolePage() {
             <Info size={14} strokeWidth={2} className="mt-[1px] shrink-0 text-[#2b66a5]" aria-hidden />
             <p className="text-[12px] leading-[17px] text-[#2b66a5]">
               Scope (country / zone) is set per-user when assigning this role. Permissions here define
-              WHAT, scope defines WHERE. Prefer “Start from scratch” unless you want the API to
-              inherit unspecified modules from a template role.
+              WHAT, scope defines WHERE.
+              {!isEdit
+                ? ' Prefer “Start from scratch” unless you want the API to inherit unspecified modules from a template role.'
+                : null}
             </p>
           </div>
         </Card>
@@ -420,10 +506,16 @@ export default function AdminCreateRolePage() {
         </button>
         <button
           type="submit"
-          disabled={saving}
+          disabled={saving || Boolean(roleDetail?.isSystem)}
           className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-5 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          {saving ? 'Creating…' : 'Create role'}
+          {saving
+            ? isEdit
+              ? 'Saving…'
+              : 'Creating…'
+            : isEdit
+              ? 'Save changes'
+              : 'Create role'}
         </button>
       </div>
     </form>

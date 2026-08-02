@@ -25,6 +25,4 @@ Confirmed from Postman **"GET Get user detail"** response screenshot + provided 
 
 Empty `recentActivity: []` / empty matrix is valid — show empty states.
 
-## UI gaps still unwired
-
-- Resend invitation (`POST …/resend-invite`) — service ready, no dedicated button yet
+Same `data` shape is returned by **PATCH Update user**.

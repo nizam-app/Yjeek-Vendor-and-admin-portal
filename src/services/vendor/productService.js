@@ -8,6 +8,7 @@ import {
   mapVendorCatalogStoreTypesResponse,
   buildVendorCreateProductBody,
 } from '../../mappers/vendor/mapVendorCatalog'
+import { vendorUploadService } from './uploadService'
 
 /**
  * Vendor catalog service.
@@ -122,25 +123,127 @@ export const productService = {
   /**
    * POST /vendor-panel/catalog/products
    * Confirmed 201 response returns the created product object.
+   * Local image Files are uploaded first (when an upload route exists), then
+   * URLs are included in the JSON body. Falls back to multipart create.
    */
   async createProduct(form = {}, options = {}) {
     const { catalogCategoryId, params, ...requestOptions } = options
-    const body = buildVendorCreateProductBody(form, { catalogCategoryId })
+    const files = (Array.isArray(form.imageFiles) ? form.imageFiles : []).filter(
+      (file) => typeof File !== 'undefined' && file instanceof File,
+    )
 
-    const response = await apiClient.post(endpoints.vendor.catalog.products, body, {
-      ...requestOptions,
-      params,
-      scope: 'vendor',
-    })
+    const uploadedUrls = []
+    for (const file of files) {
+      try {
+        const uploaded = await vendorUploadService.uploadImage(file, requestOptions)
+        if (uploaded?.data?.url) uploadedUrls.push(uploaded.data.url)
+      } catch {
+        // Upload route may not exist yet — try multipart / create without URL.
+        break
+      }
+    }
 
-    const raw = response?.data?.id
+    const body = buildVendorCreateProductBody(
+      {
+        ...form,
+        imageUrl: uploadedUrls[0] || form.imageUrl || null,
+        imageUrls: uploadedUrls.length
+          ? uploadedUrls
+          : Array.isArray(form.imageUrls)
+            ? form.imageUrls
+            : [],
+      },
+      { catalogCategoryId },
+    )
+
+    const remainingFiles =
+      uploadedUrls.length > 0 ? [] : files
+
+    let response
+    if (remainingFiles.length > 0) {
+      try {
+        response = await this.createProductMultipart(body, remainingFiles, {
+          ...requestOptions,
+          params,
+        })
+      } catch {
+        // Backend may only accept JSON create — product still saves without images.
+        response = await apiClient.post(endpoints.vendor.catalog.products, body, {
+          ...requestOptions,
+          params,
+          scope: 'vendor',
+        })
+      }
+    } else {
+      response = await apiClient.post(endpoints.vendor.catalog.products, body, {
+        ...requestOptions,
+        params,
+        scope: 'vendor',
+      })
+    }
+
+    let raw = response?.data?.id
       ? response.data
       : response?.data?.item || response?.data?.product || response?.data
+
+    // After JSON create, attach leftover files to the new product id.
+    if (raw?.id && remainingFiles.length > 0 && !raw.imageUrl) {
+      const attached = []
+      for (const file of remainingFiles) {
+        try {
+          const uploaded = await vendorUploadService.uploadImage(file, {
+            ...requestOptions,
+            productId: raw.id,
+          })
+          if (uploaded?.data?.url) attached.push(uploaded.data.url)
+        } catch {
+          break
+        }
+      }
+      if (attached.length) {
+        raw = {
+          ...raw,
+          imageUrl: attached[0],
+          imageUrls: attached,
+        }
+      }
+    }
 
     return {
       data: mapVendorCatalogProduct(raw),
       meta: response?.meta ?? null,
     }
+  },
+
+  /**
+   * Multipart create fallback when a dedicated upload route is missing.
+   */
+  async createProductMultipart(body, files, options = {}) {
+    const { params, ...requestOptions } = options
+    const formData = new FormData()
+
+    Object.entries(body || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null) return
+      if (typeof value === 'object') {
+        formData.append(key, JSON.stringify(value))
+      } else {
+        formData.append(key, String(value))
+      }
+    })
+
+    files.forEach((file, index) => {
+      formData.append('images', file, file.name)
+      if (index === 0) {
+        formData.append('image', file, file.name)
+        formData.append('file', file, file.name)
+      }
+    })
+
+    return apiClient.post(endpoints.vendor.catalog.products, formData, {
+      ...requestOptions,
+      params,
+      scope: 'vendor',
+    })
   },
 
   /** @deprecated Prefer getCatalogProducts */

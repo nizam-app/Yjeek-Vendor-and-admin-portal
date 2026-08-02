@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical } from 'lucide-react'
 import { getProductImage } from '../data/productImages'
+import { resolveAdminMediaUrl } from '../mappers/admin/mapAdminUpload'
+import { formatApiErrorMessage } from '../api/errors'
+import {
+  validateVendorImageFile,
+  VENDOR_IMAGE_UPLOAD_ACCEPT,
+} from '../services/vendor/uploadService'
 import OptionGroupModal from './OptionGroupModal'
 
 const BADGE_OPTIONS = [
@@ -61,6 +67,10 @@ export const SAMPLE_PRODUCT = {
   cardTone: '#FFF4D6',
   badge: 'Options',
   badgeTone: 'options',
+  imageUrl: null,
+  imageUrls: [],
+  imageFiles: [null, null, null, null],
+  imagePreviews: [null, null, null, null],
 }
 
 export const EMPTY_PRODUCT = SAMPLE_PRODUCT
@@ -87,6 +97,10 @@ function buildForm(product) {
     addOns,
     active: product.active ?? product.status === 'Active',
     icon: product.icon ?? '🍔',
+    imageUrl: product.imageUrl || null,
+    imageUrls: Array.isArray(product.imageUrls) ? product.imageUrls.filter(Boolean) : [],
+    imageFiles: [null, null, null, null],
+    imagePreviews: [null, null, null, null],
   }
 }
 
@@ -154,6 +168,8 @@ export default function EditProductModal({
 }) {
   const [form, setForm] = useState(null)
   const [optionModal, setOptionModal] = useState({ open: false, index: null, group: null })
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRefs = useRef([])
   const isAdd = mode === 'add'
   const source = isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT
 
@@ -192,12 +208,21 @@ export default function EditProductModal({
       categories[0] ||
       null
 
-    setForm({
-      ...base,
-      catalogCategoryId: matchedCategory?.id || product?.catalogCategoryId || '',
-      categoryValue: matchedCategory?.name || base.categoryValue,
+    setForm((previous) => {
+      // Revoke any leftover blob previews from a previous open.
+      if (previous?.imagePreviews) {
+        previous.imagePreviews.forEach((url) => {
+          if (url && String(url).startsWith('blob:')) URL.revokeObjectURL(url)
+        })
+      }
+      return {
+        ...base,
+        catalogCategoryId: matchedCategory?.id || product?.catalogCategoryId || '',
+        categoryValue: matchedCategory?.name || base.categoryValue,
+      }
     })
     setOptionModal({ open: false, index: null, group: null })
+    setUploadError('')
   }, [open, product, mode, isAdd, categories])
 
   useEffect(() => {
@@ -228,10 +253,90 @@ export default function EditProductModal({
 
   if (!form) return null
 
-  const productImage = !isAdd && product?.id ? getProductImage(product) : null
+  const remoteSlots = [
+    form.imageUrl || null,
+    ...(Array.isArray(form.imageUrls) ? form.imageUrls : []),
+  ]
+  const imageSlots = [0, 1, 2, 3].map((slot) => {
+    const preview = form.imagePreviews?.[slot] || null
+    if (preview) return preview
+    return remoteSlots[slot] || null
+  })
 
   function updateField(field, value) {
     setForm((c) => ({ ...c, [field]: value }))
+  }
+
+  function clearImageAtSlot(slotIndex) {
+    setForm((current) => {
+      const nextFiles = [...(current.imageFiles || [null, null, null, null])]
+      const nextPreviews = [...(current.imagePreviews || [null, null, null, null])]
+      while (nextFiles.length < 4) nextFiles.push(null)
+      while (nextPreviews.length < 4) nextPreviews.push(null)
+
+      if (nextPreviews[slotIndex] && String(nextPreviews[slotIndex]).startsWith('blob:')) {
+        URL.revokeObjectURL(nextPreviews[slotIndex])
+      }
+      nextFiles[slotIndex] = null
+      nextPreviews[slotIndex] = null
+
+      const nextRemotes = [
+        current.imageUrl || null,
+        ...(Array.isArray(current.imageUrls) ? current.imageUrls : []),
+      ]
+      while (nextRemotes.length < 4) nextRemotes.push(null)
+      // Clearing a slot that only had a remote URL
+      if (!nextFiles[slotIndex]) nextRemotes[slotIndex] = null
+      const cleanedRemotes = nextRemotes.filter(Boolean)
+
+      return {
+        ...current,
+        imageFiles: nextFiles,
+        imagePreviews: nextPreviews,
+        imageUrl: cleanedRemotes[0] || null,
+        imageUrls: cleanedRemotes.slice(1),
+      }
+    })
+    setUploadError('')
+  }
+
+  function openImagePicker(slotIndex) {
+    if (isSaving) return
+    fileInputRefs.current[slotIndex]?.click()
+  }
+
+  function handleImageFileChange(slotIndex, event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploadError('')
+    try {
+      validateVendorImageFile(file)
+    } catch (err) {
+      setUploadError(formatApiErrorMessage(err, 'Unable to use this image.'))
+      return
+    }
+
+    const previewUrl = URL.createObjectURL(file)
+    setForm((current) => {
+      const nextFiles = [...(current.imageFiles || [null, null, null, null])]
+      const nextPreviews = [...(current.imagePreviews || [null, null, null, null])]
+      while (nextFiles.length < 4) nextFiles.push(null)
+      while (nextPreviews.length < 4) nextPreviews.push(null)
+
+      if (nextPreviews[slotIndex] && String(nextPreviews[slotIndex]).startsWith('blob:')) {
+        URL.revokeObjectURL(nextPreviews[slotIndex])
+      }
+      nextFiles[slotIndex] = file
+      nextPreviews[slotIndex] = previewUrl
+
+      return {
+        ...current,
+        imageFiles: nextFiles,
+        imagePreviews: nextPreviews,
+      }
+    })
   }
 
   function toggleBadge(badge) {
@@ -294,6 +399,11 @@ export default function EditProductModal({
       categories.find((category) => category.name === form.categoryValue) ||
       null
     const categoryName = selectedCategory?.name || form.categoryValue || 'Main course'
+    const imageUrl = form.imageUrl || null
+    const imageUrls = Array.isArray(form.imageUrls) ? form.imageUrls.filter(Boolean) : []
+    const imageFiles = (Array.isArray(form.imageFiles) ? form.imageFiles : []).filter(
+      (file) => file instanceof File,
+    )
 
     await onSave?.({
       ...SAMPLE_PRODUCT,
@@ -325,6 +435,9 @@ export default function EditProductModal({
       icon: form.icon || '🍔',
       stock: source.stock || 'Made to order',
       stockType: 'MADE_TO_ORDER',
+      imageUrl,
+      imageUrls,
+      imageFiles,
     })
   }
 
@@ -365,29 +478,94 @@ export default function EditProductModal({
             <p className="text-[12.5px] font-bold leading-[15px] text-[#1A1A1A]">Images</p>
 
             <div className="flex h-[86px] flex-row items-start gap-[10px]">
-              <div className="relative flex size-[86px] shrink-0 flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[11px] bg-[#E3F2EB]">
-                {productImage ? (
-                  <img src={productImage} alt="" className="size-11 object-contain" />
-                ) : (
-                  <span className="text-[20px] leading-9" aria-hidden="true">
-                    {form.icon || '🍔'}
-                  </span>
-                )}
-                <span className="inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 py-1">
-                  <span className="text-[11px] font-medium leading-[13px] text-[#127036]">Main</span>
-                </span>
-              </div>
-              {[0, 1, 2].map((slot) => (
-                <button
-                  key={slot}
-                  type="button"
-                  className="box-border flex size-[86px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-[11px] border-[1.5px] border-dashed border-[#C7CFC7] bg-white"
-                >
-                  <span className="text-[20px] font-bold leading-6 text-[#949C94]">＋</span>
-                  <span className="text-[10px] font-medium leading-3 text-[#949C94]">Add</span>
-                </button>
-              ))}
+              {imageSlots.map((url, slot) => {
+                const displayUrl = resolveAdminMediaUrl(url) || url
+                const isMain = slot === 0
+                return (
+                  <div key={slot} className="relative">
+                    <input
+                      ref={(node) => {
+                        fileInputRefs.current[slot] = node
+                      }}
+                      type="file"
+                      accept={VENDOR_IMAGE_UPLOAD_ACCEPT}
+                      className="hidden"
+                      onChange={(event) => handleImageFileChange(slot, event)}
+                    />
+                    {displayUrl ? (
+                      <div className="relative flex size-[86px] shrink-0 flex-col items-center justify-center overflow-hidden rounded-[11px] bg-[#E3F2EB]">
+                        <img
+                          src={displayUrl}
+                          alt=""
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                        {isMain ? (
+                          <span className="absolute bottom-1.5 z-[1] inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 py-1">
+                            <span className="text-[11px] font-medium leading-[13px] text-[#127036]">
+                              Main
+                            </span>
+                          </span>
+                        ) : null}
+                        <button
+                          type="button"
+                          aria-label="Remove image"
+                          disabled={isSaving}
+                          onClick={() => clearImageAtSlot(slot)}
+                          className="absolute top-1 right-1 z-[1] flex size-5 items-center justify-center rounded-full bg-black/55 text-[11px] text-white hover:bg-black/70 disabled:opacity-50"
+                        >
+                          ✕
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isSaving}
+                          onClick={() => openImagePicker(slot)}
+                          className="absolute inset-0 z-0"
+                          aria-label={isMain ? 'Change main image' : 'Change image'}
+                        />
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isSaving}
+                        onClick={() => openImagePicker(slot)}
+                        className={`box-border flex size-[86px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-[11px] border-[1.5px] border-dashed border-[#C7CFC7] bg-white disabled:opacity-60 ${
+                          isMain ? 'bg-[#E3F2EB]' : ''
+                        }`}
+                      >
+                        {isMain && !isAdd && product?.id && !form.imageUrl ? (
+                          <>
+                            <img
+                              src={getProductImage(product)}
+                              alt=""
+                              className="size-11 object-contain"
+                            />
+                            <span className="inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 py-1">
+                              <span className="text-[11px] font-medium leading-[13px] text-[#127036]">
+                                Main
+                              </span>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[20px] font-bold leading-6 text-[#949C94]">＋</span>
+                            <span className="text-[10px] font-medium leading-3 text-[#949C94]">
+                              {isMain ? 'Main' : 'Add'}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
+            {uploadError ? (
+              <p className="-mt-2 text-[12px] font-medium text-[#C0392B]">{uploadError}</p>
+            ) : (
+              <p className="-mt-2 text-[11px] text-[#949C94]">
+                Images are uploaded when you save the product.
+              </p>
+            )}
 
             {/* Names */}
             <div className="flex w-full flex-row items-start gap-[14px]">

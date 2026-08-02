@@ -192,8 +192,8 @@ export function mapVendorCatalogProduct(item, index = 0) {
     availableFrom: item.availableFrom || '',
     availableTo: item.availableTo || '',
     hasModifiers,
-    optionGroups: Array.isArray(item.optionGroups) ? item.optionGroups : [],
-    addOns: Array.isArray(item.addOns) ? item.addOns : [],
+    optionGroups: mapOptionGroupsFromApi(item.optionGroups),
+    addOns: mapAddonsFromApi(item.addons ?? item.addOns),
     cardTone: CARD_TONES[index % CARD_TONES.length],
     badge: hasModifiers ? 'Options' : 'Simple',
     badgeTone: hasModifiers ? 'options' : 'simple',
@@ -202,6 +202,7 @@ export function mapVendorCatalogProduct(item, index = 0) {
     catalogCategoryId: item.catalogCategory?.id || null,
     catalogCategoryName: catalogName,
     imageUrl: item.imageUrl || item.image || null,
+    imageUrls: Array.isArray(item.imageUrls) ? item.imageUrls.filter(Boolean) : [],
   }
 }
 
@@ -268,6 +269,168 @@ function toNumberOrNull(value) {
   return Number.isNaN(numeric) ? null : numeric
 }
 
+function formatAddonPriceLabel(price) {
+  const numeric = toNumberOrNull(price)
+  if (numeric == null) return '+0.000'
+  const sign = numeric >= 0 ? '+' : ''
+  return `${sign}${numeric.toFixed(3)}`
+}
+
+function mapAddonsFromApi(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => ({
+      name: item.name || '',
+      price: formatAddonPriceLabel(item.price),
+    }))
+}
+
+function mapOptionGroupsFromApi(raw) {
+  if (!Array.isArray(raw) || !raw.length) return []
+  return raw
+    .filter((group) => group && typeof group === 'object')
+    .map((group) => {
+      const name = group.name || group.title || 'Option group'
+      const options = Array.isArray(group.options)
+        ? group.options
+        : Array.isArray(group.choices)
+          ? group.choices
+          : []
+      const min = Number(group.min ?? group.minSelect ?? 0) || 0
+      const max = Number(group.max ?? group.maxSelect ?? (min > 0 ? min : 1)) || 1
+      const required = group.required === true || group.isRequired === true || min > 0
+      const selection =
+        group.selection ||
+        (max > 1 || String(group.selectionType || '').toUpperCase().includes('MULTI')
+          ? 'multiple'
+          : 'single')
+      const detail = options
+        .map((opt) => opt?.name)
+        .filter(Boolean)
+        .join(' · ')
+
+      return {
+        title: name,
+        detail: detail || group.detail || '',
+        tag: required
+          ? selection === 'single'
+            ? 'Required · pick 1'
+            : `Required · pick ${min}–${max}`
+          : 'Optional · multi',
+        tagTone: required ? 'required' : 'optional',
+        selection,
+        min: String(min),
+        max: String(max),
+        choices: options.map((opt) => ({
+          name: opt?.name || '',
+          price: formatAddonPriceLabel(opt?.price ?? opt?.priceDelta),
+          isDefault: Boolean(opt?.isDefault),
+        })),
+      }
+    })
+}
+
+function collectImageUrls(form = {}) {
+  const urls = []
+  const main = emptyToNull(form.imageUrl)
+  if (main && !main.startsWith('blob:') && !main.startsWith('data:')) {
+    urls.push(main)
+  }
+
+  const extras = Array.isArray(form.imageUrls)
+    ? form.imageUrls
+    : Array.isArray(form.images)
+      ? form.images
+      : []
+
+  for (const entry of extras) {
+    const url = emptyToNull(typeof entry === 'string' ? entry : entry?.url)
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) continue
+    if (!urls.includes(url)) urls.push(url)
+  }
+
+  return urls
+}
+
+function mapAddonForApi(addon) {
+  const name = String(addon?.name || '').trim()
+  if (!name) return null
+  return {
+    name,
+    price: toNumberOrNull(addon.price) ?? 0,
+  }
+}
+
+function choicesFromOptionGroup(group) {
+  if (Array.isArray(group?.choices) && group.choices.length) {
+    return group.choices
+  }
+  if (Array.isArray(group?.options) && group.options.length) {
+    return group.options
+  }
+  return String(group?.detail || '')
+    .split(/[·|,]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((name, index) => ({ name, price: 0, isDefault: index === 0 }))
+}
+
+function mapOptionGroupForApi(group) {
+  const name = String(group?.title || group?.name || '').trim()
+  if (!name) return null
+
+  const choices = choicesFromOptionGroup(group)
+    .map((choice) => {
+      const choiceName = String(choice?.name || '').trim()
+      if (!choiceName) return null
+      return {
+        name: choiceName,
+        price: toNumberOrNull(choice.price) ?? 0,
+        isDefault: Boolean(choice.isDefault),
+      }
+    })
+    .filter(Boolean)
+
+  if (!choices.length) return null
+
+  const selection = group.selection === 'multiple' ? 'multiple' : 'single'
+  const min =
+    toNumberOrNull(group.min) ??
+    (group.tagTone === 'required' || String(group.tag || '').toLowerCase().includes('required')
+      ? 1
+      : 0)
+  const max = toNumberOrNull(group.max) ?? (selection === 'multiple' ? Math.max(2, choices.length) : 1)
+
+  return {
+    name,
+    title: name,
+    min,
+    max,
+    required: min > 0,
+    selectionType: selection === 'multiple' ? 'MULTI' : 'SINGLE',
+    options: choices,
+  }
+}
+
+function isRealCatalogCategoryId(value) {
+  const id = String(value || '').trim()
+  if (!id) return false
+  // Fallback labels used when categories API is empty must not be posted as IDs.
+  const fallbackLabels = new Set([
+    'main course',
+    'drinks',
+    'desserts',
+    'sides',
+    'pizza',
+    'salads',
+    'select category',
+    'none',
+  ])
+  if (fallbackLabels.has(id.toLowerCase())) return false
+  return true
+}
+
 /**
  * Build POST /vendor-panel/catalog/products body from Add Product form values.
  * Field names match the confirmed create response sample.
@@ -279,6 +442,13 @@ export function buildVendorCreateProductBody(form = {}, { catalogCategoryId } = 
     .map(toApiBadge)
     .filter(Boolean)
   const slot = toApiAvailabilitySlot(form.timeSlot)
+  const imageUrls = collectImageUrls(form)
+  const addons = (Array.isArray(form.addOns) ? form.addOns : Array.isArray(form.addons) ? form.addons : [])
+    .map(mapAddonForApi)
+    .filter(Boolean)
+  const optionGroups = (Array.isArray(form.optionGroups) ? form.optionGroups : [])
+    .map(mapOptionGroupForApi)
+    .filter(Boolean)
 
   const body = {
     name: String(form.name || '').trim() || 'Untitled product',
@@ -286,25 +456,39 @@ export function buildVendorCreateProductBody(form = {}, { catalogCategoryId } = 
     description: emptyToNull(form.descriptionEn ?? form.description),
     descriptionAr: emptyToNull(form.descriptionAr),
     price: price ?? 0,
-    compareAtPrice: toNumberOrNull(form.compareAtPrice),
     prepTimeMin: prepTimeMin ?? 0,
     badges,
     availabilitySlots: slot ? [slot] : [],
     availableFrom: emptyToNull(form.availableFrom),
     availableTo: emptyToNull(form.availableTo),
     stockType: form.stockType || 'MADE_TO_ORDER',
-    stockQty: toNumberOrNull(form.stockQty),
     isActive: form.active !== false && form.status !== 'Inactive' && form.status !== 'Draft',
     isAvailable: form.isAvailable !== false,
     maxOrder: toNumberOrNull(form.maxOrder) ?? 0,
+    imageUrls,
+    optionGroups,
+    addons,
   }
 
+  // Backend Zod rejects null for optional numbers ("Expected number, received null").
+  // Only include optional numeric/string fields when they have real values.
+  const compareAtPrice = toNumberOrNull(form.compareAtPrice)
+  if (compareAtPrice != null) body.compareAtPrice = compareAtPrice
+
+  const stockQty = toNumberOrNull(form.stockQty)
+  if (stockQty != null) body.stockQty = stockQty
+
+  if (imageUrls[0]) body.imageUrl = imageUrls[0]
+
   const resolvedCategoryId = emptyToNull(catalogCategoryId || form.catalogCategoryId)
-  if (resolvedCategoryId) {
+  if (isRealCatalogCategoryId(resolvedCategoryId)) {
     body.catalogCategoryId = resolvedCategoryId
   }
 
-  return body
+  // Drop remaining nulls so optional Zod fields are omitted, not null.
+  return Object.fromEntries(
+    Object.entries(body).filter(([, value]) => value !== null && value !== undefined),
+  )
 }
 
 /**

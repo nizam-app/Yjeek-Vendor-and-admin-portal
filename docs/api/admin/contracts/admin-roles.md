@@ -95,6 +95,35 @@ Single role object (same fields as a list item). Service tolerates a mistaken li
 
 When `basedOnRoleId` is set, the API may **inherit** permissions for modules not listed in `permissions` from the base role (confirmed in create response vs request). Prefer scratch + explicit matrix for exact grants.
 
+## Update role
+
+| Field | Value |
+| --- | --- |
+| Method | `PATCH` |
+| Path | `/admin/roles/:roleId` |
+| Registry | `endpoints.admin.roles.detail(roleId)` |
+| UI | `/admin/users/roles/:roleId/edit` (row click on Roles table) |
+
+### Confirmed response sample
+
+Role object with `permissions`, `permissionsSummary`, and `permissionsMatrix[]` (`module`, `moduleLabel`, `view`/`create`/`edit`/`delete`/`approve`/`export`).
+
+### Request body (edit form)
+
+```json
+{
+  "name": "Finance",
+  "description": "Updated role description",
+  "scopeLevel": "GLOBAL",
+  "permissions": {
+    "REPORTS": ["VIEW", "APPROVE", "EXPORT"],
+    "VENDOR_MANAGEMENT": ["VIEW"]
+  }
+}
+```
+
+Load via `GET /admin/roles/:roleId`, save via `PATCH`.
+
 ## Gaps
 
-- `PATCH` / `DELETE` role — unwired
+- `DELETE` role — unwired

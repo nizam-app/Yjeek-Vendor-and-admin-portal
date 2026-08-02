@@ -12,7 +12,7 @@ Feature flag: `users`
 | Path | `/admin/users/:adminUserId` |
 | Auth | Bearer Admin access token |
 | Registry | `endpoints.admin.users.detail(userId)` |
-| UI | `/admin/users/:userId` → **Edit** |
+| UI | `/admin/users/:userId` → **Edit** → **Save changes** |
 
 ### Confirmed request sample
 
@@ -22,11 +22,33 @@ Feature flag: `users`
 }
 ```
 
-Also accepted when provided by UI: `fullName`, `phone`, `countryCode` (and optionally role/scope fields).
+Also accepted when provided by UI: `fullName`, `phone`, `countryCode`, `roleId`, `scopeLevel`, `countries[]`, `zones[]`, `permissionOverrides`.
 
-### Confirmed response
+### Edit form fields wired
 
-Same shape as **Get user detail** (`200` + full user `data`).
+- Account: fullName, phone, countryCode, jobTitle
+- Role & scope: roleId, scopeLevel, countries, zones (Status / 2FA stay read-only)
+- Permissions: toggles → `permissionOverrides` (`MODULE: ["VIEW", …]`)
+
+### Confirmed response `data` (same shape as Get user detail)
+
+Identity: `id`, `profileId`, `fullName`, `displayName`, `initials`, `email`, `phone`, `phoneDisplay`, `countryCode`, `jobTitle`
+
+Role: `role.{ id, name, shortName, slug, description }`
+
+Scope: `scopeLevel`, `scopeLabel`, `countries[]`, `zones[]`
+
+Status: `status`, `statusLabel`, `totpEnabled`, `totpLabel`, `lastActive`, `createdAt`, `createdByName`
+
+Permissions:
+
+- `permissions` — module → action[] map
+- `permissionsMatrix[]` — `{ module, moduleLabel, view, create, edit, delete, approve, export }`
+- `roleInheritedFrom`
+
+Activity: `recentActivity[]` (`timeLabel`, `action`, `module`, `targetOrIp`, `actionType`)
+
+UI applies the PATCH response immediately to Account info / Role & scope / Permissions / Recent activity.
 
 ## Reset password
 
@@ -48,6 +70,15 @@ Same shape as **Get user detail** (`200` + full user `data`).
 ```
 
 UI shows the temporary password so the admin can copy it.
+
+## Resend invitation
+
+| Field | Value |
+| --- | --- |
+| Method | `POST` |
+| Path | `/admin/users/:adminUserId/resend-invite` |
+| Registry | `endpoints.admin.users.resendInvite(userId)` |
+| UI | User detail → **Resend invite** (when `status === PENDING`) |
 
 ## Suspend user
 

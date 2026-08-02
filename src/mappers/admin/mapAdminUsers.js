@@ -200,23 +200,74 @@ export function mapAdminUsersListResponse(data) {
   }
 }
 
-function mapPermissionsMatrix(matrix) {
-  if (!Array.isArray(matrix)) return []
-  return matrix
-    .map((row) => {
-      if (!row || typeof row !== 'object') return null
-      return {
-        module: row.moduleLabel || row.module || '—',
-        moduleKey: row.module || '',
-        view: Boolean(row.view),
-        create: Boolean(row.create),
-        edit: Boolean(row.edit),
-        delete: Boolean(row.delete),
-        approve: Boolean(row.approve),
-        export: Boolean(row.export),
-      }
-    })
-    .filter(Boolean)
+function formatScopeLevelLabel(scopeLevel) {
+  const value = String(scopeLevel || '')
+    .trim()
+    .toUpperCase()
+  if (value === 'GLOBAL') return 'Global'
+  if (value === 'COUNTRY') return 'Country'
+  if (value === 'ZONE') return 'Zone'
+  return scopeLevel || '—'
+}
+
+function mapCountriesDisplay(data = {}) {
+  const level = String(data.scopeLevel || '')
+    .trim()
+    .toUpperCase()
+  if (level === 'GLOBAL') return data.scopeLabel || 'Global'
+  if (data.scopeLabel && String(data.scopeLabel).trim()) return String(data.scopeLabel).trim()
+  return joinList(data.countries)
+}
+
+function permissionsObjectToMatrixFlags(permissions = {}, moduleKey) {
+  const actions = Array.isArray(permissions?.[moduleKey]) ? permissions[moduleKey] : []
+  const upper = new Set(actions.map((action) => String(action).toUpperCase()))
+  return {
+    view: upper.has('VIEW'),
+    create: upper.has('CREATE'),
+    edit: upper.has('EDIT'),
+    delete: upper.has('DELETE'),
+    approve: upper.has('APPROVE'),
+    export: upper.has('EXPORT'),
+  }
+}
+
+/**
+ * Map API `permissionsMatrix[]` (preferred) or `permissions` map → UI checkbox rows.
+ * Confirmed PATCH/GET detail includes both.
+ */
+function mapPermissionsMatrix(matrix, permissionsMap = {}) {
+  if (Array.isArray(matrix) && matrix.length) {
+    return matrix
+      .map((row) => {
+        if (!row || typeof row !== 'object') return null
+        const moduleKey = String(row.module || row.key || '').trim()
+        const fromMap = moduleKey ? permissionsObjectToMatrixFlags(permissionsMap, moduleKey) : null
+        return {
+          module: row.moduleLabel || row.label || moduleKey || '—',
+          moduleKey,
+          view: row.view != null ? Boolean(row.view) : Boolean(fromMap?.view),
+          create: row.create != null ? Boolean(row.create) : Boolean(fromMap?.create),
+          edit: row.edit != null ? Boolean(row.edit) : Boolean(fromMap?.edit),
+          delete: row.delete != null ? Boolean(row.delete) : Boolean(fromMap?.delete),
+          approve: row.approve != null ? Boolean(row.approve) : Boolean(fromMap?.approve),
+          export: row.export != null ? Boolean(row.export) : Boolean(fromMap?.export),
+        }
+      })
+      .filter(Boolean)
+  }
+
+  const keys = Object.keys(permissionsMap || {})
+  if (!keys.length) return []
+
+  return keys.map((moduleKey) => ({
+    module: moduleKey
+      .split('_')
+      .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+      .join(' '),
+    moduleKey,
+    ...permissionsObjectToMatrixFlags(permissionsMap, moduleKey),
+  }))
 }
 
 function mapRecentActivity(activity) {
@@ -236,7 +287,8 @@ function mapRecentActivity(activity) {
 }
 
 /**
- * Map GET /admin/users/:id `data` into AdminUserDetailPage UI shape.
+ * Map GET/PATCH /admin/users/:id `data` into AdminUserDetailPage UI shape.
+ * Confirmed response includes permissionsMatrix, permissions, recentActivity, roleInheritedFrom.
  */
 export function mapAdminUserDetailResponse(data) {
   if (!data || typeof data !== 'object') {
@@ -251,30 +303,51 @@ export function mapAdminUserDetailResponse(data) {
   const role = data.role && typeof data.role === 'object' ? data.role : {}
   const roleName = role.shortName || role.name || '—'
   const listRow = mapAdminUserListItem(data)
+  const phoneParts = splitPhone(
+    data.phoneDisplay || data.phone || '',
+    data.countryCode || '+973',
+  )
+  const phoneDigits =
+    String(data.phone || '').replace(/[^\d]/g, '') || phoneParts.phone || ''
+  const countryCode =
+    String(data.countryCode || '').trim() || phoneParts.countryCode || '+973'
 
   return {
     viewTabs: VIEW_TABS,
     permissionActions: PERMISSION_ACTIONS,
     row: listRow,
     detail: {
+      id,
+      profileId: data.profileId || '',
       initials: data.initials || '?',
+      email: data.email || data.username || listRow.email,
       fullName: data.fullName || data.displayName || '—',
       fullNameValue: data.fullName || data.displayName || '',
       phone: data.phoneDisplay || data.phone || '—',
-      phoneValue: data.phone || '',
-      countryCode: data.countryCode || '+973',
+      phoneDisplay: data.phoneDisplay || '',
+      phoneValue: phoneDigits,
+      countryCode,
       jobTitle: data.jobTitle || '—',
       jobTitleValue: data.jobTitle || '',
-      created: formatDate(data.createdAt),
+      created: formatDate(data.createdAt || data.invitedAt),
       createdBy: data.createdByName || '—',
       roleFull: role.name || roleName,
-      scopeLevel: data.scopeLabel || data.scopeLevel || '—',
-      countries: joinList(data.countries, data.scopeLevel === 'GLOBAL' ? 'Global' : '—'),
+      roleId: role.id ? String(role.id) : '',
+      scopeLevel: formatScopeLevelLabel(data.scopeLevel),
+      scopeLevelValue: String(data.scopeLevel || '').toUpperCase() || '',
+      scopeLabel: data.scopeLabel || '',
+      countries: mapCountriesDisplay(data),
+      countriesValue: Array.isArray(data.countries) ? data.countries : [],
       zones: joinList(data.zones),
+      zonesValue: Array.isArray(data.zones) ? data.zones : [],
+      status: listRow.status,
+      statusValue: listRow.statusValue,
+      twoFa: listRow.twoFa,
       roleInheritedFrom:
         data.roleInheritedFrom || `Inherited from role — ${role.name || roleName}`,
-      permissions: mapPermissionsMatrix(data.permissionsMatrix),
+      permissions: mapPermissionsMatrix(data.permissionsMatrix, data.permissions),
       activity: mapRecentActivity(data.recentActivity),
+      raw: data,
     },
   }
 }
@@ -472,7 +545,7 @@ export function mapAdminCreateUserRequest(input = {}) {
 /**
  * Map Edit user form → PATCH /admin/users/:id body.
  * Confirmed Postman sample: `{ "jobTitle": "Operations Manager" }`
- * Also sends other provided account fields when present.
+ * Also sends role/scope/permissionOverrides when provided by the edit form.
  */
 export function mapAdminUpdateUserRequest(form = {}) {
   const body = {}
@@ -499,11 +572,21 @@ export function mapAdminUpdateUserRequest(form = {}) {
   }
 
   if (Array.isArray(form.countries)) {
-    body.countries = form.countries.map(normalizeCountryCode).filter(Boolean)
+    body.countries =
+      body.scopeLevel === 'GLOBAL'
+        ? []
+        : form.countries.map(normalizeCountryCode).filter(Boolean)
   }
 
   if (Array.isArray(form.zones)) {
-    body.zones = form.zones.map((z) => String(z?.id || z?.name || z || '').trim()).filter(Boolean)
+    body.zones =
+      body.scopeLevel === 'GLOBAL' || body.scopeLevel === 'COUNTRY'
+        ? []
+        : form.zones.map((z) => String(z?.id || z?.name || z || '').trim()).filter(Boolean)
+  }
+
+  if (form.permissionOverrides != null && typeof form.permissionOverrides === 'object') {
+    body.permissionOverrides = form.permissionOverrides
   }
 
   if (!Object.keys(body).length) {
@@ -511,4 +594,19 @@ export function mapAdminUpdateUserRequest(form = {}) {
   }
 
   return body
+}
+
+/**
+ * Checkbox flags → API permissionOverrides map (`MODULE: ["VIEW", …]`).
+ */
+export function mapPermissionFlagsToOverrides(flags = {}) {
+  const overrides = {}
+  for (const [moduleKey, row] of Object.entries(flags || {})) {
+    if (!moduleKey || !row || typeof row !== 'object') continue
+    const actions = PERMISSION_ACTIONS.filter((action) => Boolean(row[action])).map((action) =>
+      action.toUpperCase(),
+    )
+    if (actions.length) overrides[moduleKey] = actions
+  }
+  return overrides
 }

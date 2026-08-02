@@ -5,6 +5,7 @@ import {
   mapVendorPromotionDetailResponse,
   mapVendorPromotionsResponse,
   mapVendorPromotionsSummaryResponse,
+  mapVendorUpdatePromotionRequest,
   PROMOTION_FILTERS,
 } from '../../mappers/vendor/mapVendorPromotions'
 
@@ -15,6 +16,7 @@ import {
  *   GET /vendor-panel/promotions/summary
  *   GET /vendor-panel/promotions/:promotionId
  *   GET /vendor-panel/promotions/:promotionId/analytics
+ *   PATCH /vendor-panel/promotions/:promotionId
  *   PATCH /vendor-panel/promotions/:promotionId/pause
  */
 export const promotionService = {
@@ -107,6 +109,28 @@ export const promotionService = {
       return await this.getPromotionAnalytics(id, options)
     } catch {
       return this.getPromotion(id, options)
+    }
+  },
+
+  /**
+   * PATCH /vendor-panel/promotions/:promotionId
+   * Confirmed Postman Update (Item/category | Free delivery | Buy X Get Y).
+   */
+  async updatePromotion(promotionId, form = {}, options = {}) {
+    const id = String(promotionId || '').trim()
+    if (!id) {
+      throw new Error('Promotion id is required.')
+    }
+
+    const body = mapVendorUpdatePromotionRequest(form)
+    const response = await apiClient.patch(endpoints.vendor.promotions.update(id), body, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    return {
+      data: mapVendorPromotionDetailResponse(response?.data),
+      meta: response?.meta ?? null,
     }
   },
 

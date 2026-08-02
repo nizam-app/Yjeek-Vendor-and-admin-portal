@@ -614,7 +614,13 @@ export default function AdminUsersPage() {
                   ) : null}
                   {!isLoading
                     ? (rolesData.rows || []).map((row) => (
-                        <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
+                        <tr
+                          key={row.id}
+                          onClick={() =>
+                            navigate(`/admin/users/roles/${encodeURIComponent(row.id)}/edit`)
+                          }
+                          className="cursor-pointer border-b border-[#edf0ee] bg-white last:border-0 hover:bg-[#f6f8f6]"
+                        >
                           <td className="whitespace-nowrap px-4 py-3.5">
                             <p className="text-[13px] font-medium text-[#17231c]">{row.name}</p>
                             <p className="mt-0.5 text-[11px] text-[#8a948e]">{row.description}</p>

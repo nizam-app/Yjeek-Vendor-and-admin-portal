@@ -50,6 +50,17 @@ export const endpoints = {
       servicesCalendar: '/vendor-panel/orders/services/calendar',
       /** Confirmed: POST /vendor-panel/orders/:orderId/accept */
       accept: (orderId) => `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/accept`,
+      /** Confirmed: POST /vendor-panel/orders/:orderId/reject */
+      reject: (orderId) => `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/reject`,
+      /** Confirmed: POST /vendor-panel/orders/:orderId/start-preparing */
+      startPreparing: (orderId) =>
+        `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/start-preparing`,
+      /** Confirmed: POST /vendor-panel/orders/:orderId/mark-ready */
+      markReady: (orderId) =>
+        `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/mark-ready`,
+      /** Confirmed: POST /vendor-panel/orders/:orderId/complete */
+      complete: (orderId) =>
+        `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/complete`,
       /** Confirmed: GET /vendor-panel/orders/history?limit= */
       history: '/vendor-panel/orders/history',
       /** Confirmed: GET /vendor-panel/orders/:orderId */
@@ -84,6 +95,13 @@ export const endpoints = {
       /** @deprecated Prefer endpoints.vendor.catalog.products */
       items: '/vendor-panel/catalog/products',
     },
+    /**
+     * Vendor uploads — path not confirmed on this backend yet.
+     * Runtime tries catalog/media candidates; see vendorUploadService.
+     */
+    uploads: {
+      images: '/vendor-panel/catalog/uploads/images',
+    },
     branches: '/vendor-panel/branches',
     /** Confirmed: PATCH /vendor-panel/branches/close-all */
     branchesCloseAll: '/vendor-panel/branches/close-all',
@@ -99,7 +117,7 @@ export const endpoints = {
       list: '/vendor-panel/promotions',
       /** Confirmed: GET /vendor-panel/promotions/summary */
       summary: '/vendor-panel/promotions/summary',
-      /** Confirmed: GET /vendor-panel/promotions/:promotionId */
+      /** Confirmed: GET + PATCH /vendor-panel/promotions/:promotionId */
       detail: (promotionId) =>
         `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}`,
       /** Confirmed: GET /vendor-panel/promotions/:promotionId/analytics */
@@ -108,6 +126,9 @@ export const endpoints = {
       /** Confirmed: PATCH /vendor-panel/promotions/:promotionId/pause */
       pause: (promotionId) =>
         `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}/pause`,
+      /** Alias — same path as detail (PATCH edit) */
+      update: (promotionId) =>
+        `/vendor-panel/promotions/${encodeURIComponent(String(promotionId || '').trim())}`,
     },
     notifications: {
       /** Confirmed: GET /vendor-panel/notifications */
@@ -466,7 +487,7 @@ export const endpoints = {
       list: '/admin/roles',
       create: '/admin/roles',
       /**
-       * Confirmed: GET /admin/roles/:roleId
+       * Confirmed: GET + PATCH /admin/roles/:roleId
        * @param {string} roleId
        */
       detail: (roleId) => `/admin/roles/${encodeURIComponent(roleId)}`,
@@ -570,6 +591,95 @@ export const endpoints = {
         list: '/admin/marketing/promo-codes',
         /** Confirmed: POST /admin/marketing/promo-codes — Create promo code */
         create: '/admin/marketing/promo-codes',
+      },
+    },
+    /**
+     * Confirmed Settings — Postman folder 13.
+     */
+    settings: {
+      /** Confirmed: GET /admin/settings — all settings + tabs */
+      root: '/admin/settings',
+      /** Confirmed: GET + PATCH /admin/settings/general */
+      general: '/admin/settings/general',
+      /** Confirmed: GET + PATCH /admin/settings/localization */
+      localization: '/admin/settings/localization',
+      /** Confirmed: GET + PATCH /admin/settings/notifications */
+      notifications: '/admin/settings/notifications',
+      /** Confirmed: GET + PATCH /admin/settings/security */
+      security: '/admin/settings/security',
+      /** Confirmed: GET /admin/settings/integrations */
+      integrations: '/admin/settings/integrations',
+      /** Confirmed: GET /admin/settings/meta */
+      meta: '/admin/settings/meta',
+      /** Confirmed: POST /admin/settings/reset */
+      reset: '/admin/settings/reset',
+    },
+    /**
+     * Confirmed Admin uploads.
+     */
+    uploads: {
+      /** Confirmed: POST /admin/uploads/images (multipart field: file) → data.url */
+      images: '/admin/uploads/images',
+    },
+    /**
+     * Confirmed UI Editor — Postman folder 17.
+     */
+    uiEditor: {
+      /** Confirmed: GET /admin/ui-editor/apps */
+      apps: '/admin/ui-editor/apps',
+      /** Confirmed: GET /admin/ui-editor/screen-map?app=CUSTOMER|CHAMP */
+      screenMap: '/admin/ui-editor/screen-map',
+      /** Confirmed: GET /admin/ui-editor/placements?app=&screen= */
+      placements: '/admin/ui-editor/placements',
+      /** Confirmed: GET /admin/ui-editor/preview?app=&screen= */
+      preview: '/admin/ui-editor/preview',
+      /** Confirmed: POST /admin/ui-editor/publish */
+      publish: '/admin/ui-editor/publish',
+      /** Confirmed: GET /admin/ui-editor/catalog */
+      catalog: '/admin/ui-editor/catalog',
+      banners: {
+        /** Confirmed: GET /admin/ui-editor/banners?app=&status= */
+        list: '/admin/ui-editor/banners',
+        /** Confirmed: GET /admin/ui-editor/banners/meta?app= */
+        meta: '/admin/ui-editor/banners/meta',
+        /** Confirmed: GET /admin/ui-editor/banners/targets?tapAction= */
+        targets: '/admin/ui-editor/banners/targets',
+        /** Confirmed: POST /admin/ui-editor/banners */
+        create: '/admin/ui-editor/banners',
+        /**
+         * Confirmed: GET + PATCH + DELETE /admin/ui-editor/banners/:bannerId
+         * @param {string} bannerId
+         */
+        detail: (bannerId) =>
+          `/admin/ui-editor/banners/${encodeURIComponent(String(bannerId || '').trim())}`,
+      },
+      pages: {
+        /** Confirmed: GET /admin/ui-editor/pages?status= */
+        list: '/admin/ui-editor/pages',
+        /** Confirmed: POST /admin/ui-editor/pages/ensure */
+        ensure: '/admin/ui-editor/pages/ensure',
+        /** Confirmed: GET + PUT /admin/ui-editor/pages/help */
+        help: '/admin/ui-editor/pages/help',
+        /** Confirmed: POST /admin/ui-editor/pages/help/publish */
+        helpPublish: '/admin/ui-editor/pages/help/publish',
+        /** Confirmed: POST /admin/ui-editor/pages/help/unpublish */
+        helpUnpublish: '/admin/ui-editor/pages/help/unpublish',
+      },
+      home: {
+        /** Confirmed: GET /admin/ui-editor/home */
+        preview: '/admin/ui-editor/home',
+        /** Confirmed: GET + POST /admin/ui-editor/home/categories */
+        categories: '/admin/ui-editor/home/categories',
+        /** Confirmed: PATCH /admin/ui-editor/home/categories/reorder */
+        categoriesReorder: '/admin/ui-editor/home/categories/reorder',
+        /**
+         * Confirmed: PATCH /admin/ui-editor/home/categories/:categoryId
+         * @param {string} categoryId
+         */
+        category: (categoryId) =>
+          `/admin/ui-editor/home/categories/${encodeURIComponent(String(categoryId || '').trim())}`,
+        /** Confirmed: POST /admin/ui-editor/home/categories/publish */
+        categoriesPublish: '/admin/ui-editor/home/categories/publish',
       },
     },
     reports: {

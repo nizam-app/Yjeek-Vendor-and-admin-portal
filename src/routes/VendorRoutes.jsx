@@ -38,6 +38,7 @@ export const vendorRoutes = (
     <Route path="branches" element={<Branches />} />
     <Route path="staff" element={<Staff />} />
     <Route path="promotions/new" element={<ConfigurePromotion />} />
+    <Route path="promotions/:promoId/edit" element={<ConfigurePromotion />} />
     <Route path="promotions/:promoId" element={<PromotionDetail />} />
     <Route path="promotions" element={<Promotions />} />
     <Route path="notifications" element={<Notifications />} />

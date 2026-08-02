@@ -19,6 +19,7 @@ import {
   mapAdminRoleDetailResponse,
   mapAdminRolesListResponse,
   mapAdminRolesMetaResponse,
+  mapAdminUpdateRoleRequest,
 } from '../../mappers/admin/mapAdminRoles'
 
 function useRealUsersApi() {
@@ -411,6 +412,32 @@ export const adminUserService = {
 
     return {
       data: mapAdminRoleDetailResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update role.
+   * Confirmed: PATCH /admin/roles/:roleId → 200 + role object
+   */
+  async updateRole(roleId, form = {}, options = {}) {
+    const id = String(roleId || '').trim()
+    if (!id) {
+      throw new Error('Role id is required.')
+    }
+    if (!useRealUsersApi()) {
+      throw new Error('Real users API is required to update a role.')
+    }
+
+    const body = mapAdminUpdateRoleRequest(form)
+    const response = await apiClient.patch(endpoints.admin.roles.detail(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'users',
+    })
+
+    return {
+      data: mapAdminRoleDetailResponse(response?.data, id),
       meta: response?.meta ?? null,
     }
   },

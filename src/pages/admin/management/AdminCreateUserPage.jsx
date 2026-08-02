@@ -95,9 +95,9 @@ function ReviewField({ label, value }) {
 }
 
 function Select({ value, onChange, children, label }) {
-  const options = Array.isArray(children) ? children : []
-  const display =
-    options.find((child) => child?.props?.value === value)?.props?.children ?? value
+  const flat = (Array.isArray(children) ? children : [children]).flat().filter(Boolean)
+  const selected = flat.find((child) => String(child?.props?.value) === String(value))
+  const display = selected?.props?.children ?? (value ? String(value) : 'Select role')
 
   return (
     <div className="relative">

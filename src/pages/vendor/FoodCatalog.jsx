@@ -50,7 +50,7 @@ export default function FoodCatalog() {
     error,
     isLoading,
     refetch,
-  } = useVendorCatalogProducts({ platformCategory: 'food' })
+  } = useVendorCatalogProducts()
 
   const { data: categoriesData } = useVendorCatalogCategories()
   const categoryOptions = Array.isArray(categoriesData?.options) ? categoriesData.options : []

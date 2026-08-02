@@ -3,6 +3,7 @@ import productPizza from '../assets/product-pizza.png'
 import productSalad from '../assets/product-salad.png'
 import productDrink from '../assets/product-drink.png'
 import productCake from '../assets/product-cake.png'
+import { resolveAdminMediaUrl } from '../mappers/admin/mapAdminUpload'
 
 /** Food product photos from src/assets */
 export const productImages = {
@@ -15,6 +16,7 @@ export const productImages = {
 
 export function getProductImage(product) {
   if (!product) return productBurger
-  if (product.imageUrl) return product.imageUrl
+  const remote = product.imageUrl || (Array.isArray(product.imageUrls) ? product.imageUrls[0] : null)
+  if (remote) return resolveAdminMediaUrl(remote) || remote
   return productImages[product.id] || productBurger
 }

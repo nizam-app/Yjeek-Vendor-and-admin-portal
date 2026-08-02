@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../../../components/admin/cn'
+import { useAdminSettings } from '../../../hooks/admin/useAdminSettings'
+import { useApiMutation } from '../../../hooks/useApiMutation'
+import { adminSettingsService } from '../../../services/admin/settingsService'
 
 const TABS = [
   { id: 'general', label: 'General', title: 'General', topbar: 'Settings · General' },
@@ -488,6 +491,36 @@ export default function AdminSettingsPage() {
   const activeTab = TABS.find((item) => item.id === tabId) || TABS[0]
 
   const [state, setState] = useState(DEFAULT_STATE)
+  const [saveMessage, setSaveMessage] = useState(null)
+  const { pageData, error, isLoading, enabled, refetch } = useAdminSettings()
+  const { mutate: saveSettings, isLoading: isSaving, error: saveError, reset: resetSave } = useApiMutation(
+    ({ tabId: saveTabId, form }) => adminSettingsService.saveTab(saveTabId, form),
+  )
+
+  useEffect(() => {
+    if (!pageData) return
+    setState((prev) => ({
+      ...prev,
+      general: pageData.general ? { ...prev.general, ...pageData.general } : prev.general,
+      localization: pageData.localization
+        ? { ...prev.localization, ...pageData.localization }
+        : prev.localization,
+      notifications: pageData.notifications
+        ? { ...prev.notifications, ...pageData.notifications }
+        : prev.notifications,
+      security: pageData.security ? { ...prev.security, ...pageData.security } : prev.security,
+    }))
+  }, [pageData])
+
+  const visibleTabs = useMemo(() => {
+    const apiTabs = pageData?.tabs
+    if (!Array.isArray(apiTabs) || apiTabs.length === 0) return TABS
+    const allowed = new Set(apiTabs)
+    const filtered = TABS.filter((tab) => allowed.has(tab.id))
+    return filtered.length > 0 ? filtered : TABS
+  }, [pageData])
+
+  const canSave = activeTab.id !== 'integrations'
 
   const setTabField = (section, key, value) => {
     setState((prev) => ({
@@ -511,6 +544,33 @@ export default function AdminSettingsPage() {
         },
       }
     })
+  }
+
+  const handleSave = async () => {
+    if (!canSave) return
+    setSaveMessage(null)
+    resetSave()
+
+    const sectionKey = activeTab.id
+    const form = state[sectionKey]
+    if (!form || typeof form !== 'object') return
+
+    try {
+      const result = await saveSettings({ tabId: sectionKey, form })
+      if (result?.data && typeof result.data === 'object') {
+        setState((prev) => ({
+          ...prev,
+          [sectionKey]: {
+            ...prev[sectionKey],
+            ...result.data,
+          },
+        }))
+      }
+      setSaveMessage('Settings saved.')
+      refetch()
+    } catch {
+      // error surfaced via saveError
+    }
   }
 
   const content = useMemo(() => {
@@ -554,20 +614,28 @@ export default function AdminSettingsPage() {
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#17231c]">{activeTab.title}</h2>
-        <button
-          type="button"
-          className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
-        >
-          Save changes
-        </button>
+        {canSave ? (
+          <button
+            type="button"
+            disabled={!enabled || isSaving}
+            onClick={handleSave}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSaving ? 'Saving…' : 'Save changes'}
+          </button>
+        ) : null}
       </div>
 
       <div className="mb-4 flex flex-wrap gap-1.5">
-        {TABS.map((item) => (
+        {visibleTabs.map((item) => (
           <button
             key={item.id}
             type="button"
-            onClick={() => setSearchParams(item.id === 'general' ? {} : { tab: item.id })}
+            onClick={() => {
+              setSaveMessage(null)
+              resetSave()
+              setSearchParams(item.id === 'general' ? {} : { tab: item.id })
+            }}
             className={cn(
               'inline-flex h-[32px] items-center rounded-full border px-3.5 text-[12.5px] font-semibold transition',
               activeTab.id === item.id
@@ -579,6 +647,24 @@ export default function AdminSettingsPage() {
           </button>
         ))}
       </div>
+
+      {enabled && isLoading && !pageData ? (
+        <p className="mb-3 text-[13px] text-[#8a948e]">Loading settings…</p>
+      ) : null}
+      {enabled && error ? (
+        <p className="mb-3 text-[13px] text-[#c91a24]">
+          {error.message || 'Unable to load settings.'}{' '}
+          <button type="button" className="underline" onClick={refetch}>
+            Retry
+          </button>
+        </p>
+      ) : null}
+      {saveError ? (
+        <p className="mb-3 text-[13px] text-[#c91a24]">
+          {saveError.message || 'Unable to save settings.'}
+        </p>
+      ) : null}
+      {saveMessage ? <p className="mb-3 text-[13px] text-[#147940]">{saveMessage}</p> : null}
 
       {content}
     </div>

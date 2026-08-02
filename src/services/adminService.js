@@ -151,6 +151,9 @@ export const adminService = {
   createAdminRole(form, options = {}) {
     return adminUserService.createRole(form, options)
   },
+  updateAdminRole(roleId, form, options = {}) {
+    return adminUserService.updateRole(roleId, form, options)
+  },
   getAdminActivityMeta(options = {}) {
     return adminUserService.getActivityMeta(options)
   },

@@ -198,6 +198,60 @@ export function mapAdminRoleDetailResponse(data, roleId = '') {
 }
 
 /**
+ * Convert API permissionsMatrix[] (+ optional permissions map) → checkbox state.
+ */
+export function mapApiRoleToPermissionFlags(
+  role,
+  modules = [],
+  actionKeys = ACTION_KEYS,
+) {
+  const keys =
+    Array.isArray(modules) && modules.length
+      ? modules.map((m) => m.key || m.id).filter(Boolean)
+      : []
+
+  const flags = keys.reduce((acc, key) => {
+    acc[key] = actionKeys.reduce((row, action) => {
+      row[action] = false
+      return row
+    }, {})
+    return acc
+  }, {})
+
+  const matrix = Array.isArray(role?.permissionsMatrix) ? role.permissionsMatrix : []
+  for (const item of matrix) {
+    if (!item || typeof item !== 'object') continue
+    const key = String(item.module || item.key || '').trim()
+    if (!key) continue
+    if (!flags[key]) {
+      flags[key] = actionKeys.reduce((row, action) => {
+        row[action] = false
+        return row
+      }, {})
+    }
+    for (const action of actionKeys) {
+      if (item[action] != null) flags[key][action] = Boolean(item[action])
+    }
+  }
+
+  const permissions = role?.permissions && typeof role.permissions === 'object' ? role.permissions : {}
+  for (const key of Object.keys(permissions)) {
+    if (!flags[key]) {
+      flags[key] = actionKeys.reduce((row, action) => {
+        row[action] = false
+        return row
+      }, {})
+    }
+    flags[key] = {
+      ...flags[key],
+      ...permissionsObjectToMatrixFlags(permissions, key),
+    }
+  }
+
+  return flags
+}
+
+/**
  * Checkbox matrix → API permissions map.
  * Only modules with ≥1 granted action are included (Postman create-role shape).
  *
@@ -261,6 +315,44 @@ export function mapAdminCreateRoleRequest(input = {}) {
   }
 
   if (body.description === undefined) delete body.description
+
+  return body
+}
+
+/**
+ * Map Edit role form → PATCH /admin/roles/:roleId body.
+ * Confirmed sample includes description; UI sends full editable fields like create.
+ */
+export function mapAdminUpdateRoleRequest(input = {}) {
+  const {
+    name,
+    description = '',
+    scopeLevel = '',
+    permissionsMatrix = {},
+    modules = [],
+  } = input
+
+  const body = {}
+
+  const trimmedName = String(name || '').trim()
+  if (trimmedName) body.name = trimmedName
+
+  if (description != null) {
+    body.description = String(description).trim()
+  }
+
+  if (scopeLevel) {
+    body.scopeLevel = String(scopeLevel).trim().toUpperCase()
+  }
+
+  const permissions = mapPermissionsMatrixToApi(permissionsMatrix, modules)
+  if (Object.keys(permissions).length) {
+    body.permissions = permissions
+  }
+
+  if (!Object.keys(body).length) {
+    throw new ApiError({ message: 'Nothing to update.' })
+  }
 
   return body
 }

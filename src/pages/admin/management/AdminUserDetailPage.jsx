@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronLeft } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { mapPermissionFlagsToOverrides } from '../../../mappers/admin/mapAdminUsers'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
@@ -22,6 +24,7 @@ const statusStyle = {
   Suspended: { pill: 'bg-[#fdebea] text-[#bf3c36]', dot: 'bg-[#d6453d]', text: 'text-[#bf3c36]' },
 }
 
+const ACTIONS = ['view', 'create', 'edit', 'delete', 'approve', 'export']
 const ACTION_LABELS = {
   view: 'View',
   create: 'Create',
@@ -30,6 +33,23 @@ const ACTION_LABELS = {
   approve: 'Approve',
   export: 'Export',
 }
+
+const SCOPE_LEVELS = [
+  { value: 'GLOBAL', label: 'Global (all countries)' },
+  { value: 'COUNTRY', label: 'Country' },
+  { value: 'ZONE', label: 'Zone / City' },
+]
+
+const FALLBACK_COUNTRIES = [
+  { code: 'BH', name: 'Bahrain' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'AE', name: 'UAE' },
+  { code: 'KW', name: 'Kuwait' },
+  { code: 'QA', name: 'Qatar' },
+  { code: 'OM', name: 'Oman' },
+]
+
+const FALLBACK_ZONES = ['Manama', 'Muharraq', 'Riffa', 'Isa Town', 'Hamad Town', 'Sitra']
 
 function Card({ title, subtitle, children }) {
   return (
@@ -62,6 +82,79 @@ function Field({ label, children }) {
 const inputClass =
   'h-9 w-full rounded-[10px] border border-[#dfe4e0] bg-white px-3 text-[13px] text-[#17231c] outline-none focus:border-[#1aa054]'
 
+function Select({ value, onChange, children, label }) {
+  const flat = (Array.isArray(children) ? children : [children]).flat().filter(Boolean)
+  const selected = flat.find((child) => String(child?.props?.value) === String(value))
+  const display = selected?.props?.children ?? (value ? String(value) : 'Select role')
+
+  return (
+    <div className="relative">
+      <div className={cn(inputClass, 'flex items-center pr-9')}>
+        <span className="truncate">{display}</span>
+      </div>
+      <ChevronDown
+        size={15}
+        strokeWidth={2}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]"
+        aria-hidden
+      />
+      <select
+        aria-label={label}
+        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
+        value={value}
+        onChange={onChange}
+      >
+        {children}
+      </select>
+    </div>
+  )
+}
+
+function PillGroup({ options, value, onChange, multi = false }) {
+  const normalized = options.map((option) =>
+    typeof option === 'object'
+      ? {
+          value: option.value ?? option.code ?? option.id,
+          label: option.label ?? option.name ?? option.value,
+        }
+      : { value: option, label: option },
+  )
+  const selected = multi ? value : [value]
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {normalized.map((option) => {
+        const isActive = selected.includes(option.value)
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => {
+              if (!multi) {
+                onChange(option.value)
+                return
+              }
+              onChange(
+                isActive
+                  ? value.filter((item) => item !== option.value)
+                  : [...value, option.value],
+              )
+            }}
+            className={cn(
+              'h-[32px] rounded-full border px-3.5 text-[12.5px] transition',
+              isActive
+                ? 'border-[#1aa054] bg-[#e8f7ed] font-bold text-[#147940]'
+                : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
+            )}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function PermissionMark({ granted, label }) {
   return (
     <span
@@ -77,10 +170,42 @@ function PermissionMark({ granted, label }) {
   )
 }
 
+function PermissionCheckbox({ checked, onChange, label }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={onChange}
+      className={cn(
+        'grid h-[17px] w-[17px] place-items-center rounded-[4px] border transition',
+        checked
+          ? 'border-[#1aa054] bg-[#1aa054] text-white'
+          : 'border-[#cfd6d1] bg-white hover:border-[#9aa49d]',
+      )}
+    >
+      {checked ? <Check size={12} strokeWidth={3} /> : null}
+    </button>
+  )
+}
+
 function tabPath(item) {
   if (item === 'Roles') return '/admin/users/roles'
   if (item === 'Activity log') return '/admin/users/activity'
   return '/admin/users'
+}
+
+function permissionsRowsToFlags(rows = []) {
+  return (Array.isArray(rows) ? rows : []).reduce((acc, row) => {
+    const key = String(row?.moduleKey || row?.module || '').trim()
+    if (!key) return acc
+    acc[key] = ACTIONS.reduce((flags, action) => {
+      flags[action] = Boolean(row[action])
+      return flags
+    }, {})
+    return acc
+  }, {})
 }
 
 function blankEditForm(detail) {
@@ -89,12 +214,21 @@ function blankEditForm(detail) {
     jobTitle: detail?.jobTitleValue || '',
     phone: detail?.phoneValue || '',
     countryCode: detail?.countryCode || '+973',
+    roleId: detail?.roleId || '',
+    scopeLevel: detail?.scopeLevelValue || 'COUNTRY',
+    countries: Array.isArray(detail?.countriesValue) ? [...detail.countriesValue] : [],
+    zones: Array.isArray(detail?.zonesValue)
+      ? detail.zonesValue.map((z) => (typeof z === 'string' ? z : z?.name || z?.id || '')).filter(Boolean)
+      : [],
+    permissions: permissionsRowsToFlags(detail?.permissions),
   }
 }
 
 export default function AdminUserDetailPage() {
   const navigate = useNavigate()
   const { userId } = useParams()
+  const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
+
   const [editing, setEditing] = useState(false)
   const [editForm, setEditForm] = useState(null)
   const [actionBusy, setActionBusy] = useState('')
@@ -102,10 +236,36 @@ export default function AdminUserDetailPage() {
   const [actionSuccess, setActionSuccess] = useState('')
   const [tempPassword, setTempPassword] = useState(null)
 
-  const { data, error, isLoading, refetch } = useApiResource(
+  const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getAdminUserDetail(userId),
     [userId],
   )
+
+  const { data: meta } = useApiResource(
+    () => (useRealUsers ? adminService.getAdminUsersMeta() : Promise.resolve({ data: null })),
+    [useRealUsers],
+  )
+
+  const { data: rolesPage } = useApiResource(
+    () => (useRealUsers ? adminService.listAdminRoles() : Promise.resolve({ data: null })),
+    [useRealUsers],
+  )
+
+  const roleOptions = useMemo(() => {
+    if (meta?.roles?.length) return meta.roles
+    const rows = rolesPage?.roles?.rows || []
+    return rows.map((row) => ({ id: row.id, name: row.name, scopeLevel: row.scopeLevelValue }))
+  }, [meta, rolesPage])
+
+  const countryOptions = useMemo(() => {
+    if (meta?.countries?.length) return meta.countries
+    return FALLBACK_COUNTRIES
+  }, [meta])
+
+  const zoneOptions = useMemo(() => {
+    if (meta?.zones?.length) return meta.zones.map((z) => z.name || z.id)
+    return FALLBACK_ZONES
+  }, [meta])
 
   useEffect(() => {
     setEditing(false)
@@ -143,11 +303,15 @@ export default function AdminUserDetailPage() {
   const isPending = statusValue === 'PENDING' || status === 'Pending'
   const isSuspended = statusValue === 'SUSPENDED' || status === 'Suspended'
   const tone = statusStyle[status] || statusStyle.Active
-  const actions = data.permissionActions || ['view', 'create', 'edit', 'delete', 'approve', 'export']
+  const actions = data.permissionActions || ACTIONS
   const permissions = detail.permissions || []
   const activity = detail.activity || []
   const busy = Boolean(actionBusy)
   const form = editForm || blankEditForm(detail)
+  const selectedRole =
+    roleOptions.find((role) => String(role.id) === String(form.roleId)) || null
+  const showCountries = form.scopeLevel !== 'GLOBAL'
+  const showZones = form.scopeLevel === 'ZONE'
 
   const startEdit = () => {
     setActionError('')
@@ -162,21 +326,90 @@ export default function AdminUserDetailPage() {
     setActionError('')
   }
 
+  const patchForm = (patch) => {
+    setEditForm((current) => ({ ...(current || blankEditForm(detail)), ...patch }))
+  }
+
+  const setScopeLevel = (scopeLevel) => {
+    patchForm({
+      scopeLevel,
+      ...(scopeLevel === 'GLOBAL'
+        ? { countries: [], zones: [] }
+        : {
+            countries: form.countries.length
+              ? form.countries
+              : countryOptions[0]?.code
+                ? [countryOptions[0].code]
+                : ['BH'],
+            zones: scopeLevel === 'ZONE' ? form.zones : [],
+          }),
+    })
+  }
+
+  const onRoleChange = async (roleId) => {
+    patchForm({ roleId })
+    if (!roleId || !useRealUsers) return
+    try {
+      const result = await adminService.getAdminRoleDetail(roleId)
+      const matrix = result?.data?.permissionsMatrix || []
+      if (matrix.length) {
+        patchForm({
+          roleId,
+          permissions: permissionsRowsToFlags(
+            matrix.map((row) => ({
+              moduleKey: row.module,
+              module: row.moduleLabel || row.module,
+              view: row.view,
+              create: row.create,
+              edit: row.edit,
+              delete: row.delete,
+              approve: row.approve,
+              export: row.export,
+            })),
+          ),
+        })
+      }
+    } catch {
+      // Keep current permission toggles if role detail fails.
+    }
+  }
+
+  const togglePermission = (moduleKey, action) => {
+    setEditForm((current) => {
+      const base = current || blankEditForm(detail)
+      return {
+        ...base,
+        permissions: {
+          ...base.permissions,
+          [moduleKey]: {
+            ...base.permissions?.[moduleKey],
+            [action]: !base.permissions?.[moduleKey]?.[action],
+          },
+        },
+      }
+    })
+  }
+
   const saveEdit = async () => {
     setActionBusy('edit')
     setActionError('')
     setActionSuccess('')
     try {
-      await adminService.updateAdminUser(userId, {
+      const result = await adminService.updateAdminUser(userId, {
         fullName: form.fullName,
         jobTitle: form.jobTitle,
         phone: form.phone,
         countryCode: form.countryCode,
+        roleId: form.roleId,
+        scopeLevel: form.scopeLevel,
+        countries: form.scopeLevel === 'GLOBAL' ? [] : form.countries,
+        zones: form.scopeLevel === 'ZONE' ? form.zones : [],
+        permissionOverrides: mapPermissionFlagsToOverrides(form.permissions),
       })
+      if (result?.data) setData(result.data)
       setEditing(false)
       setEditForm(null)
       setActionSuccess('User updated.')
-      await refetch()
     } catch (err) {
       setActionError(formatApiErrorMessage(err, 'Failed to update user.'))
     } finally {
@@ -201,6 +434,21 @@ export default function AdminUserDetailPage() {
       await refetch()
     } catch (err) {
       setActionError(formatApiErrorMessage(err, 'Failed to reset password.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const handleResendInvite = async () => {
+    setActionBusy('invite')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      await adminService.resendAdminUserInvite(userId)
+      setActionSuccess('Invitation resent.')
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to resend invitation.'))
     } finally {
       setActionBusy('')
     }
@@ -235,6 +483,44 @@ export default function AdminUserDetailPage() {
       setActionBusy('')
     }
   }
+
+  const permissionRows = editing
+    ? Object.entries(form.permissions || {}).map(([moduleKey, flags]) => {
+        const fromDetail = permissions.find((row) => row.moduleKey === moduleKey)
+        return {
+          moduleKey,
+          module: fromDetail?.module || moduleKey,
+          ...ACTIONS.reduce((acc, action) => {
+            acc[action] = Boolean(flags?.[action])
+            return acc
+          }, {}),
+        }
+      })
+    : permissions
+
+  // Preserve API module order when editing.
+  const orderedPermissionRows = editing
+    ? (permissions.length
+        ? permissions.map((row) => {
+            const key = row.moduleKey || row.module
+            const flags = form.permissions?.[key] || {}
+            return {
+              moduleKey: key,
+              module: row.module,
+              ...ACTIONS.reduce((acc, action) => {
+                acc[action] = Boolean(flags[action])
+                return acc
+              }, {}),
+            }
+          })
+        : permissionRows)
+    : permissions
+
+  const roleSubtitle = editing
+    ? selectedRole
+      ? `Editing permissions for ${selectedRole.name}`
+      : 'Toggle permissions for this user'
+    : detail.roleInheritedFrom || `Inherited from role — ${detail.roleFull}`
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -299,14 +585,25 @@ export default function AdminUserDetailPage() {
             ✎
             {editing ? 'Cancel' : 'Edit'}
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handleResetPassword}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
-          >
-            {actionBusy === 'reset' ? 'Resetting…' : 'Reset password'}
-          </button>
+          {isPending ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleResendInvite}
+              className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
+            >
+              {actionBusy === 'invite' ? 'Sending…' : 'Resend invite'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleResetPassword}
+              className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
+            >
+              {actionBusy === 'reset' ? 'Resetting…' : 'Reset password'}
+            </button>
+          )}
           <button
             type="button"
             disabled={busy || isPending}
@@ -390,21 +687,23 @@ export default function AdminUserDetailPage() {
                   <input
                     className={inputClass}
                     value={form.fullName}
-                    onChange={(e) => setEditForm({ ...form, fullName: e.target.value })}
+                    onChange={(e) => patchForm({ fullName: e.target.value })}
                   />
                 </Field>
-                <InfoItem label="Email" value={row.email} />
+                <InfoItem label="Email" value={detail.email || row.email} />
                 <Field label="Phone">
                   <div className="flex gap-2">
                     <input
-                      className={cn(inputClass, 'w-[88px] shrink-0')}
+                      className={cn(inputClass, 'w-[96px] shrink-0')}
                       value={form.countryCode}
-                      onChange={(e) => setEditForm({ ...form, countryCode: e.target.value })}
+                      onChange={(e) => patchForm({ countryCode: e.target.value })}
+                      aria-label="Country code"
                     />
                     <input
                       className={inputClass}
                       value={form.phone}
-                      onChange={(e) => setEditForm({ ...form, phone: e.target.value })}
+                      onChange={(e) => patchForm({ phone: e.target.value })}
+                      aria-label="Phone number"
                     />
                   </div>
                 </Field>
@@ -412,35 +711,17 @@ export default function AdminUserDetailPage() {
                   <input
                     className={inputClass}
                     value={form.jobTitle}
-                    onChange={(e) => setEditForm({ ...form, jobTitle: e.target.value })}
+                    onChange={(e) => patchForm({ jobTitle: e.target.value })}
                   />
                 </Field>
                 <InfoItem label="Created" value={detail.created} />
                 <InfoItem label="Created by" value={detail.createdBy} />
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={saveEdit}
-                  className="inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
-                >
-                  {actionBusy === 'edit' ? 'Saving…' : 'Save changes'}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={cancelEdit}
-                  className="inline-flex h-[34px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-              </div>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
               <InfoItem label="Full name" value={detail.fullName} />
-              <InfoItem label="Email" value={row.email} />
+              <InfoItem label="Email" value={detail.email || row.email} />
               <InfoItem label="Phone" value={detail.phone} />
               <InfoItem label="Job title" value={detail.jobTitle} />
               <InfoItem label="Created" value={detail.created} />
@@ -450,20 +731,72 @@ export default function AdminUserDetailPage() {
         </Card>
 
         <Card title="Role & scope">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
-            <InfoItem label="Role" value={detail.roleFull} />
-            <InfoItem label="Scope level" value={detail.scopeLevel} />
-            <InfoItem label="Countries" value={detail.countries} />
-            <InfoItem label="Zones" value={detail.zones} />
-            <InfoItem label="Status" value={status} valueClass={cn('font-bold', tone.text)} />
-            <InfoItem label="2FA" value={row.twoFa} />
-          </div>
+          {editing ? (
+            <div className="space-y-4">
+              <Field label="Role">
+                <div className="max-w-[420px]">
+                  <Select
+                    label="Role"
+                    value={form.roleId}
+                    onChange={(event) => onRoleChange(event.target.value)}
+                  >
+                    {!roleOptions.length ? <option value="">No roles available</option> : null}
+                    {roleOptions.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </Field>
+
+              <div>
+                <p className="mb-1.5 text-[11.5px] text-[#7c8780]">Scope level</p>
+                <PillGroup options={SCOPE_LEVELS} value={form.scopeLevel} onChange={setScopeLevel} />
+              </div>
+
+              {showCountries ? (
+                <div>
+                  <p className="mb-1.5 text-[11.5px] text-[#7c8780]">Countries</p>
+                  <PillGroup
+                    multi
+                    options={countryOptions.map((c) => ({ value: c.code, label: c.name }))}
+                    value={form.countries}
+                    onChange={(countries) => patchForm({ countries })}
+                  />
+                </div>
+              ) : null}
+
+              {showZones ? (
+                <div>
+                  <p className="mb-1.5 text-[11.5px] text-[#7c8780]">Zones / Cities</p>
+                  <PillGroup
+                    multi
+                    options={zoneOptions}
+                    value={form.zones}
+                    onChange={(zones) => patchForm({ zones })}
+                  />
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
+                <InfoItem label="Status" value={status} valueClass={cn('font-bold', tone.text)} />
+                <InfoItem label="2FA" value={detail.twoFa || row.twoFa} />
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-x-6 gap-y-4 max-[700px]:grid-cols-2 max-[420px]:grid-cols-1">
+              <InfoItem label="Role" value={detail.roleFull} />
+              <InfoItem label="Scope level" value={detail.scopeLevel} />
+              <InfoItem label="Countries" value={detail.countries} />
+              <InfoItem label="Zones" value={detail.zones} />
+              <InfoItem label="Status" value={status} valueClass={cn('font-bold', tone.text)} />
+              <InfoItem label="2FA" value={detail.twoFa || row.twoFa} />
+            </div>
+          )}
         </Card>
 
-        <Card
-          title="Permissions"
-          subtitle={detail.roleInheritedFrom || `Inherited from role — ${detail.roleFull}`}
-        >
+        <Card title="Permissions" subtitle={roleSubtitle}>
           <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
             <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
               <table className="w-full min-w-[680px] border-collapse text-left">
@@ -483,7 +816,7 @@ export default function AdminUserDetailPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white">
-                  {permissions.length === 0 ? (
+                  {orderedPermissionRows.length === 0 ? (
                     <tr>
                       <td
                         colSpan={actions.length + 1}
@@ -493,20 +826,33 @@ export default function AdminUserDetailPage() {
                       </td>
                     </tr>
                   ) : null}
-                  {permissions.map((entry) => (
-                    <tr key={entry.moduleKey || entry.module} className="border-b border-[#edf0ee] bg-white last:border-0">
+                  {orderedPermissionRows.map((entry) => (
+                    <tr
+                      key={entry.moduleKey || entry.module}
+                      className="border-b border-[#edf0ee] bg-white last:border-0"
+                    >
                       <td className="whitespace-nowrap px-4 py-3 text-[13px] font-medium text-[#17231c]">
                         {entry.module}
                       </td>
                       {actions.map((action) => (
                         <td key={action} className="px-4 py-3">
                           <div className="flex justify-center">
-                            <PermissionMark
-                              granted={Boolean(entry[action])}
-                              label={`${ACTION_LABELS[action] || action} ${entry.module}: ${
-                                entry[action] ? 'allowed' : 'not allowed'
-                              }`}
-                            />
+                            {editing ? (
+                              <PermissionCheckbox
+                                checked={Boolean(entry[action])}
+                                onChange={() =>
+                                  togglePermission(entry.moduleKey || entry.module, action)
+                                }
+                                label={`${ACTION_LABELS[action] || action} ${entry.module}`}
+                              />
+                            ) : (
+                              <PermissionMark
+                                granted={Boolean(entry[action])}
+                                label={`${ACTION_LABELS[action] || action} ${entry.module}: ${
+                                  entry[action] ? 'allowed' : 'not allowed'
+                                }`}
+                              />
+                            )}
                           </div>
                         </td>
                       ))}
@@ -517,6 +863,27 @@ export default function AdminUserDetailPage() {
             </div>
           </div>
         </Card>
+
+        {editing ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={saveEdit}
+              className="inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+            >
+              {actionBusy === 'edit' ? 'Saving…' : 'Save changes'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={cancelEdit}
+              className="inline-flex h-[34px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : null}
 
         <Card title="Recent activity">
           <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">

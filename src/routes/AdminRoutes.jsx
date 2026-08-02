@@ -89,6 +89,7 @@ export const adminRoutes = (
     <Route path="ui-editor" element={<AdminUiEditorPage />} />
     <Route path="users/new" element={<AdminCreateUserPage />} />
     <Route path="users/roles/new" element={<AdminCreateRolePage />} />
+    <Route path="users/roles/:roleId/edit" element={<AdminCreateRolePage />} />
     <Route path="users/roles" element={<AdminUsersPage />} />
     <Route path="users/activity" element={<AdminUsersPage />} />
     <Route path="users/:userId" element={<AdminUserDetailPage />} />

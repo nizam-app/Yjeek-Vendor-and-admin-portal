@@ -1,6 +1,10 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { X } from 'lucide-react'
+import { formatApiErrorMessage } from '../../api/errors'
+import { useVendorPromotionDetail } from '../../hooks/vendor/useVendorPromotionDetail'
+import { mapVendorPromotionToEditForm } from '../../mappers/vendor/mapVendorPromotions'
+import { promotionService } from '../../services/vendor/promotionService'
 
 const PROMO_TYPES = ['Item / category deal', 'Free delivery', 'Buy X Get Y']
 const APPLY_OPTIONS = ['All menu', 'Selected categories', 'Selected items']
@@ -35,7 +39,7 @@ function Toggle({ checked, onChange, label }) {
   )
 }
 
-function PromoTypeTabs({ options, value, onChange }) {
+function PromoTypeTabs({ options, value, onChange, disabled = false }) {
   return (
     <div className="flex w-full rounded-[10px] bg-[#E8EBE8] p-1">
       {options.map((option) => {
@@ -44,8 +48,9 @@ function PromoTypeTabs({ options, value, onChange }) {
           <button
             key={option}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(option)}
-            className={`min-w-0 flex-1 rounded-[8px] px-3 py-[11px] text-[13px] font-medium whitespace-nowrap transition-colors ${
+            className={`min-w-0 flex-1 rounded-[8px] px-3 py-[11px] text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
               selected
                 ? 'bg-white text-[#127036] shadow-[0_1px_3px_rgba(26,28,26,0.1)]'
                 : 'text-[#6B736E] hover:text-ink'
@@ -115,7 +120,7 @@ function AddChipButton({ onClick }) {
 
 function ToggleRow({ title, hint, checked, onChange, label }) {
   return (
-    <div className="flex flex-wrap items-center  gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-ink">{title}</p>
         {hint ? <p className="mt-0.5 text-[12.5px] text-ink-muted">{hint}</p> : null}
@@ -125,8 +130,30 @@ function ToggleRow({ title, hint, checked, onChange, label }) {
   )
 }
 
+function selectionKey(item) {
+  return String(item?.id || item?.name || item || '')
+}
+
+function selectionLabel(item) {
+  return String(item?.name || item?.label || item?.id || item || '')
+}
+
+function addUniqueSelection(list, setList, extras) {
+  const existing = new Set(list.map(selectionKey))
+  const next = extras.find((item) => !existing.has(selectionKey(item)))
+  if (next) setList((current) => [...current, next])
+}
+
 export default function ConfigurePromotion() {
   const navigate = useNavigate()
+  const { promoId: promoIdParam } = useParams()
+  const promoId = String(promoIdParam || '').trim()
+  const isEdit = Boolean(promoId)
+
+  const { data: promoDetail, error: loadError, isLoading } = useVendorPromotionDetail(
+    isEdit ? promoId : null,
+  )
+
   const [promoType, setPromoType] = useState('Item / category deal')
   const [active, setActive] = useState(true)
   const [showDealBadge, setShowDealBadge] = useState(true)
@@ -139,9 +166,12 @@ export default function ConfigurePromotion() {
   const [branchScope, setBranchScope] = useState('All branches')
   const [unit, setUnit] = useState('%')
   const [reward, setReward] = useState('Free')
-  const [tags, setTags] = useState(['Main dishes', 'Starters'])
-  const [buyItems, setBuyItems] = useState(['Classic Burger'])
-  const [getItems, setGetItems] = useState(['Fries (regular)'])
+  const [tags, setTags] = useState([
+    { id: 'main-dishes', name: 'Main dishes' },
+    { id: 'starters', name: 'Starters' },
+  ])
+  const [buyItems, setBuyItems] = useState([{ id: 'classic-burger', name: 'Classic Burger' }])
+  const [getItems, setGetItems] = useState([{ id: 'fries-regular', name: 'Fries (regular)' }])
   const [form, setForm] = useState({
     name: 'Ramadan 20% Off',
     discount: '20',
@@ -154,49 +184,135 @@ export default function ConfigurePromotion() {
     usageLimit: '1000',
     perCustomer: '1',
   })
+  const [hydrated, setHydrated] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  useEffect(() => {
+    setHydrated(false)
+    setSaveError(null)
+  }, [promoId])
+
+  useEffect(() => {
+    if (!isEdit || !promoDetail || hydrated) return
+    const next = mapVendorPromotionToEditForm(promoDetail)
+    if (!next) return
+    setPromoType(next.promoType)
+    setActive(next.active)
+    setShowDealBadge(next.showDealBadge)
+    setWaiveFee(next.waiveFee)
+    setFirstOrderOnly(next.firstOrderOnly)
+    setNoEndDate(next.noEndDate)
+    setDiscountCheapest(next.discountCheapest)
+    setLimitOneReward(next.limitOneReward)
+    setAppliesTo(next.appliesTo)
+    setBranchScope(next.branchScope)
+    setUnit(next.unit)
+    setReward(next.reward)
+    setTags(next.tags)
+    setBuyItems(next.buyItems)
+    setGetItems(next.getItems)
+    setForm(next.form)
+    setHydrated(true)
+  }, [isEdit, promoDetail, hydrated])
 
   function updateField(field, value) {
-    setForm((c) => ({ ...c, [field]: value }))
+    setForm((current) => ({ ...current, [field]: value }))
   }
 
   function switchPromoType(next) {
+    if (isEdit) return
     setPromoType(next)
-    setForm((c) => {
-      const isDefaultName = Object.values(DEFAULT_NAMES).includes(c.name)
-      return isDefaultName ? { ...c, name: DEFAULT_NAMES[next] } : c
+    setForm((current) => {
+      const isDefaultName = Object.values(DEFAULT_NAMES).includes(current.name)
+      return isDefaultName ? { ...current, name: DEFAULT_NAMES[next] } : current
     })
   }
 
-  function addUnique(list, setList, extras) {
-    const next = extras.find((t) => !list.includes(t))
-    if (next) setList((c) => [...c, next])
-  }
+  async function handleSave() {
+    setSaveError(null)
 
-  function handleSave() {
-    navigate('/promotions')
+    if (!isEdit) {
+      navigate('/promotions')
+      return
+    }
+
+    setSaving(true)
+    try {
+      await promotionService.updatePromotion(promoId, {
+        promoType,
+        active,
+        showDealBadge,
+        waiveFee,
+        firstOrderOnly,
+        noEndDate,
+        discountCheapest,
+        limitOneReward,
+        appliesTo,
+        branchScope,
+        unit,
+        reward,
+        tags,
+        buyItems,
+        getItems,
+        form,
+      })
+      navigate(`/promotions/${encodeURIComponent(promoId)}`)
+    } catch (err) {
+      setSaveError(formatApiErrorMessage(err, 'Failed to update promotion.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   const isDeal = promoType === 'Item / category deal'
   const isFreeDelivery = promoType === 'Free delivery'
   const isBogo = promoType === 'Buy X Get Y'
+  const backTo = isEdit ? `/promotions/${encodeURIComponent(promoId)}` : '/promotions'
+
+  if (isEdit && isLoading && !promoDetail) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading promotion…</div>
+  }
+
+  if (isEdit && loadError && !promoDetail) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load promotion.{' '}
+        <Link to="/promotions" className="underline">
+          Back to list
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="px-[28px] pt-[18px] pb-10">
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
-          to="/promotions"
+          to={backTo}
           className="inline-flex items-center gap-1 rounded-[18px] border border-[#E0E5E0] bg-white py-1.5 pr-3.5 pl-2.5 text-[12px] font-medium text-ink-muted hover:bg-[#fafbfa]"
         >
-          ‹ Promotions
+          ‹ {isEdit ? 'Promotion' : 'Promotions'}
         </Link>
         <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink sm:text-[20px]">
-          Configure promotion
+          {isEdit ? 'Edit promotion' : 'Configure promotion'}
         </h1>
       </div>
 
       <div className="mb-4">
-        <PromoTypeTabs options={PROMO_TYPES} value={promoType} onChange={switchPromoType} />
+        <PromoTypeTabs
+          options={PROMO_TYPES}
+          value={promoType}
+          onChange={switchPromoType}
+          disabled={isEdit}
+        />
       </div>
+
+      {saveError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f3c6c3] bg-[#fdf2f1] px-4 py-3 text-[13px] text-[#bf3c36]">
+          {saveError}
+        </div>
+      ) : null}
 
       {/* Status — shared */}
       <section className={`${cardClass} mb-4 flex flex-wrap items-center gap-4`}>
@@ -305,20 +421,30 @@ export default function ConfigurePromotion() {
                   ? 'Choose which categories this promotion applies to.'
                   : 'Choose specific menu items this promotion applies to.'}
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              {tags.map((tag) => (
-                <TagChip
-                  key={tag}
-                  label={tag}
-                  onRemove={() => setTags((c) => c.filter((t) => t !== tag))}
+            {appliesTo !== 'All menu' ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {tags.map((tag) => (
+                  <TagChip
+                    key={selectionKey(tag)}
+                    label={selectionLabel(tag)}
+                    onRemove={() =>
+                      setTags((current) =>
+                        current.filter((item) => selectionKey(item) !== selectionKey(tag)),
+                      )
+                    }
+                  />
+                ))}
+                <AddChipButton
+                  onClick={() =>
+                    addUniqueSelection(tags, setTags, [
+                      { id: 'drinks', name: 'Drinks' },
+                      { id: 'desserts', name: 'Desserts' },
+                      { id: 'sides', name: 'Sides' },
+                    ])
+                  }
                 />
-              ))}
-              <AddChipButton
-                onClick={() =>
-                  addUnique(tags, setTags, ['Drinks', 'Desserts', 'Sides', 'Mixed Grill', 'Hummus'])
-                }
-              />
-            </div>
+              </div>
+            ) : null}
           </section>
         </>
       ) : null}
@@ -399,7 +525,7 @@ export default function ConfigurePromotion() {
             </div>
             <div>
               <label className={labelClass}>Reward on the &apos;get&apos; item</label>
-              <div className="flex w-fit h-[42px] items-center rounded-[9px] bg-[#eef1ee] p-[3px]">
+              <div className="flex h-[42px] w-fit items-center rounded-[9px] bg-[#eef1ee] p-[3px]">
                 {REWARD_OPTIONS.map((r) => (
                   <button
                     key={r}
@@ -424,14 +550,22 @@ export default function ConfigurePromotion() {
             <div className="flex flex-wrap items-center gap-2">
               {buyItems.map((item) => (
                 <TagChip
-                  key={item}
-                  label={item}
-                  onRemove={() => setBuyItems((c) => c.filter((t) => t !== item))}
+                  key={selectionKey(item)}
+                  label={selectionLabel(item)}
+                  onRemove={() =>
+                    setBuyItems((current) =>
+                      current.filter((row) => selectionKey(row) !== selectionKey(item)),
+                    )
+                  }
                 />
               ))}
               <AddChipButton
                 onClick={() =>
-                  addUnique(buyItems, setBuyItems, ['Classic Burger', 'Mixed Grill', 'Pizza'])
+                  addUniqueSelection(buyItems, setBuyItems, [
+                    { id: 'classic-burger', name: 'Classic Burger' },
+                    { id: 'mixed-grill', name: 'Mixed Grill' },
+                    { id: 'pizza', name: 'Pizza' },
+                  ])
                 }
               />
             </div>
@@ -445,14 +579,22 @@ export default function ConfigurePromotion() {
             <div className="flex flex-wrap items-center gap-2">
               {getItems.map((item) => (
                 <TagChip
-                  key={item}
-                  label={item}
-                  onRemove={() => setGetItems((c) => c.filter((t) => t !== item))}
+                  key={selectionKey(item)}
+                  label={selectionLabel(item)}
+                  onRemove={() =>
+                    setGetItems((current) =>
+                      current.filter((row) => selectionKey(row) !== selectionKey(item)),
+                    )
+                  }
                 />
               ))}
               <AddChipButton
                 onClick={() =>
-                  addUnique(getItems, setGetItems, ['Fries (regular)', 'Soft drink', 'Salad'])
+                  addUniqueSelection(getItems, setGetItems, [
+                    { id: 'fries-regular', name: 'Fries (regular)' },
+                    { id: 'soft-drink', name: 'Soft drink' },
+                    { id: 'salad', name: 'Salad' },
+                  ])
                 }
               />
             </div>
@@ -488,6 +630,7 @@ export default function ConfigurePromotion() {
               className={inputClass}
               value={form.startDate}
               onChange={(e) => updateField('startDate', e.target.value)}
+              placeholder="22 Mar 2026"
             />
           </div>
           <div>
@@ -497,18 +640,17 @@ export default function ConfigurePromotion() {
               value={form.endDate}
               disabled={noEndDate}
               onChange={(e) => updateField('endDate', e.target.value)}
+              placeholder="30 Mar 2026"
             />
           </div>
         </div>
-        {(isFreeDelivery || isBogo) && (
-          <ToggleRow
-            title="No end date"
-            hint="Run until I pause it"
-            checked={noEndDate}
-            onChange={() => setNoEndDate((v) => !v)}
-            label="No end date"
-          />
-        )}
+        <ToggleRow
+          title="No end date"
+          hint="Run until I pause it"
+          checked={noEndDate}
+          onChange={() => setNoEndDate((v) => !v)}
+          label="No end date"
+        />
       </section>
 
       {/* Branches & limits — shared */}
@@ -542,17 +684,18 @@ export default function ConfigurePromotion() {
 
       <div className="flex items-center justify-between gap-3 py-3">
         <Link
-          to="/promotions"
+          to={backTo}
           className="inline-flex h-[40px] items-center justify-center rounded-full border border-[#E0E6E0] bg-white px-4 text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
         >
           ‹ Back
         </Link>
         <button
           type="button"
+          disabled={saving}
           onClick={handleSave}
-          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-8 text-[13px] font-medium text-white hover:brightness-[0.96]"
+          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-8 text-[13px] font-medium text-white hover:brightness-[0.96] disabled:opacity-60"
         >
-          Save
+          {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Save'}
         </button>
       </div>
     </div>

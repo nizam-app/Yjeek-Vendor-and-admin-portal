@@ -220,7 +220,7 @@ export default function PromotionDetail() {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/promotions/new')}
+            onClick={() => navigate(`/promotions/${encodeURIComponent(view.id)}/edit`)}
             className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#D6DBD6] bg-white px-4 text-[13px] font-medium text-[#127036] hover:bg-[#f3faf5]"
           >
             <img src={editIcon} alt="" className="size-3.5 shrink-0 object-contain" />
