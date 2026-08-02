@@ -17,6 +17,10 @@ export {
   mapVendorDineInOrder,
   mapVendorLiveOrder,
   mapVendorLiveOrdersResponse,
+  moveAcceptedOrderOnLiveBoard,
+  moveOrderToPreparingOnLiveBoard,
+  moveOrderToReadyOnLiveBoard,
+  removeRejectedOrderFromLiveBoard,
 } from './mapVendorLiveOrders'
 export {
   emptyVendorScheduledOrders,

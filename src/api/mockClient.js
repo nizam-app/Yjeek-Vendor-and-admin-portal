@@ -866,6 +866,148 @@ export const mockClient = {
         })
       }
     }
+    // POST /vendor-panel/orders/:orderId/reject
+    if (!route && method.toUpperCase() === 'POST') {
+      const rejectMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/reject$/)
+      if (rejectMatch) {
+        const orderId = decodeURIComponent(rejectMatch[1])
+        route = ({ body: rejectBody }) => {
+          const reason = String(rejectBody?.reason || '').trim()
+          if (!reason) {
+            const err = new Error('Rejection reason is required.')
+            err.status = 400
+            throw err
+          }
+          const allOrders = [
+            ...(vendorMock.liveOrders?.new || []),
+            ...(vendorMock.dineInOrders?.new || []),
+          ]
+          const found =
+            allOrders.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            null
+          if (vendorMock.liveOrders?.new) {
+            vendorMock.liveOrders.new = vendorMock.liveOrders.new.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          if (vendorMock.dineInOrders?.new) {
+            vendorMock.dineInOrders.new = vendorMock.dineInOrders.new.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          return {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-MOCK-001',
+            orderType: found?.orderType || 'DELIVERY',
+            status: 'REJECTED',
+            rejectionReason: reason,
+            rejectionNote: String(rejectBody?.note || '').trim() || undefined,
+          }
+        }
+      }
+    }
+    // POST /vendor-panel/orders/:orderId/start-preparing
+    if (!route && method.toUpperCase() === 'POST') {
+      const startPrepMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/start-preparing$/)
+      if (startPrepMatch) {
+        const orderId = decodeURIComponent(startPrepMatch[1])
+        route = () => {
+          const allOrders = [
+            ...(vendorMock.liveOrders?.accepted || []),
+            ...(vendorMock.dineInOrders?.confirmed || []),
+            ...(vendorMock.liveOrders?.new || []),
+          ]
+          const found =
+            allOrders.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            allOrders[0] ||
+            null
+          return {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-MOCK-001',
+            orderType: found?.orderType || 'DELIVERY',
+            status: 'PREPARING',
+            prepStartedAt: new Date().toISOString(),
+            itemsPreview: found?.itemsPreview || found?.items || '1x Classic Burger',
+            totalAmount: found?.totalAmount ?? 4.4,
+            customer: found?.customer || { id: 'mock-customer', name: found?.customer || 'Guest' },
+          }
+        }
+      }
+    }
+    // POST /vendor-panel/orders/:orderId/mark-ready
+    if (!route && method.toUpperCase() === 'POST') {
+      const markReadyMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/mark-ready$/)
+      if (markReadyMatch) {
+        const orderId = decodeURIComponent(markReadyMatch[1])
+        route = () => {
+          const allOrders = [
+            ...(vendorMock.liveOrders?.preparing || []),
+            ...(vendorMock.dineInOrders?.preparing || []),
+            ...(vendorMock.liveOrders?.accepted || []),
+          ]
+          const found =
+            allOrders.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            allOrders[0] ||
+            null
+          return {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-MOCK-001',
+            orderType: found?.orderType || 'DELIVERY',
+            status: 'READY_FOR_PICKUP',
+            readyAt: new Date().toISOString(),
+            itemsPreview: found?.itemsPreview || found?.items || '1x Classic Burger',
+            totalAmount: found?.totalAmount ?? 4.4,
+            customer: found?.customer || { id: 'mock-customer', name: found?.customer || 'Guest' },
+            primaryAction: found?.primaryAction || {
+              key: 'HANDOVER_TO_CHAMP',
+              label: 'Handover to champ',
+              method: 'POST',
+              path: `/vendor-panel/orders/${found?.id || found?.backendId || orderId}/handover`,
+            },
+          }
+        }
+      }
+    }
+    // POST /vendor-panel/orders/:orderId/complete
+    if (!route && method.toUpperCase() === 'POST') {
+      const completeMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/complete$/)
+      if (completeMatch) {
+        const orderId = decodeURIComponent(completeMatch[1])
+        route = () => {
+          const allOrders = [
+            ...(vendorMock.dineInOrders?.ready || []),
+            ...(vendorMock.liveOrders?.ready || []),
+            ...(vendorMock.dineInOrders?.preparing || []),
+            ...(vendorMock.liveOrders?.preparing || []),
+          ]
+          const found =
+            allOrders.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            allOrders[0] ||
+            null
+          if (vendorMock.dineInOrders?.ready) {
+            vendorMock.dineInOrders.ready = vendorMock.dineInOrders.ready.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          if (vendorMock.liveOrders?.ready) {
+            vendorMock.liveOrders.ready = vendorMock.liveOrders.ready.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          return {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-MOCK-001',
+            orderType: found?.orderType || (found?.guest ? 'DINE_IN' : 'DELIVERY'),
+            status: 'COMPLETED',
+            completedAt: new Date().toISOString(),
+          }
+        }
+      }
+    }
     if (!route && method.toUpperCase() === 'PATCH') {
       const pauseMatch = String(url).match(/^\/vendor-panel\/promotions\/([^/?]+)\/pause$/)
       if (pauseMatch) {

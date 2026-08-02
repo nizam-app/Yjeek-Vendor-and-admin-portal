@@ -54,11 +54,10 @@ function formatElapsedSince(startedAt) {
   const startedMs = new Date(startedAt).getTime()
   if (Number.isNaN(startedMs)) return null
 
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - startedMs) / 60000))
-  if (elapsedMinutes < 60) return `${elapsedMinutes} min`
-  const hours = Math.floor(elapsedMinutes / 60)
-  const minutes = elapsedMinutes % 60
-  return minutes ? `${hours}h ${minutes}m` : `${hours}h`
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - startedMs) / 1000))
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = elapsedSeconds % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 }
 
 function normalizePrimaryAction(action) {
@@ -273,6 +272,7 @@ export function mapVendorDineInOrder(order) {
     formatDineInWhen(order.scheduledAt) ||
     undefined
   const itemsPreview = order.itemsPreview ?? order.itemPreview ?? null
+  const primaryAction = normalizePrimaryAction(order.primaryAction)
   const itemsList = Array.isArray(order.items)
     ? order.items.map((item) => ({
         name: item.name,
@@ -325,6 +325,10 @@ export function mapVendorDineInOrder(order) {
     when,
     tag,
     arrived,
+    vendorAcceptDeadline: order.vendorAcceptDeadline ?? null,
+    sla: formatCountdown(order.vendorAcceptDeadline) || undefined,
+    prepStartedAt: order.prepStartedAt ?? null,
+    primaryAction,
     note: awaitingPayment
       ? 'Awaiting customer payment'
       : order.kitchenNote || order.note || undefined,
@@ -478,6 +482,188 @@ export function moveAcceptedOrderOnLiveBoard(boardData, { board = 'delivery', pr
       preparing: delivery.preparing || [],
       ready: delivery.ready || [],
     },
+  }
+}
+
+/**
+ * After POST start-preparing: move Accepted/Confirmed → Preparing.
+ */
+export function moveOrderToPreparingOnLiveBoard(
+  boardData,
+  { board = 'delivery', previousOrder, preparingOrder } = {},
+) {
+  if (!boardData || typeof boardData !== 'object') return boardData
+  const moved = preparingOrder || previousOrder
+  if (!moved) return boardData
+
+  const nextMoved = {
+    ...moved,
+    prepStartedAt: moved.prepStartedAt || new Date().toISOString(),
+    prepTime: moved.prepTime || '00:00',
+    primaryAction: moved.primaryAction ?? null,
+    sla: undefined,
+  }
+
+  if (board === 'dinein') {
+    const dineIn = boardData.dineIn || { ...EMPTY_DINE_IN }
+    return {
+      ...boardData,
+      dineIn: {
+        new: dineIn.new || [],
+        confirmed: (dineIn.confirmed || []).filter(
+          (order) => !sameLiveOrder(order, previousOrder || moved),
+        ),
+        preparing: [
+          nextMoved,
+          ...(dineIn.preparing || []).filter(
+            (order) => !sameLiveOrder(order, previousOrder || moved),
+          ),
+        ],
+        ready: dineIn.ready || [],
+      },
+    }
+  }
+
+  const delivery = boardData.delivery || { ...EMPTY_DELIVERY }
+  return {
+    ...boardData,
+    delivery: {
+      new: delivery.new || [],
+      accepted: (delivery.accepted || []).filter(
+        (order) => !sameLiveOrder(order, previousOrder || moved),
+      ),
+      preparing: [
+        nextMoved,
+        ...(delivery.preparing || []).filter(
+          (order) => !sameLiveOrder(order, previousOrder || moved),
+        ),
+      ],
+      ready: delivery.ready || [],
+    },
+  }
+}
+
+/**
+ * After POST mark-ready: move Preparing → Ready.
+ */
+export function moveOrderToReadyOnLiveBoard(
+  boardData,
+  { board = 'delivery', previousOrder, readyOrder } = {},
+) {
+  if (!boardData || typeof boardData !== 'object') return boardData
+  const moved = readyOrder || previousOrder
+  if (!moved) return boardData
+
+  const nextMoved = {
+    ...moved,
+    prepTime: undefined,
+    prepDelay: false,
+    readyLabel: moved.readyLabel || undefined,
+    primaryAction: moved.primaryAction ?? null,
+  }
+
+  if (board === 'dinein') {
+    const dineIn = boardData.dineIn || { ...EMPTY_DINE_IN }
+    return {
+      ...boardData,
+      dineIn: {
+        new: dineIn.new || [],
+        confirmed: dineIn.confirmed || [],
+        preparing: (dineIn.preparing || []).filter(
+          (order) => !sameLiveOrder(order, previousOrder || moved),
+        ),
+        ready: [
+          nextMoved,
+          ...(dineIn.ready || []).filter((order) => !sameLiveOrder(order, previousOrder || moved)),
+        ],
+      },
+    }
+  }
+
+  const delivery = boardData.delivery || { ...EMPTY_DELIVERY }
+  return {
+    ...boardData,
+    delivery: {
+      new: delivery.new || [],
+      accepted: delivery.accepted || [],
+      preparing: (delivery.preparing || []).filter(
+        (order) => !sameLiveOrder(order, previousOrder || moved),
+      ),
+      ready: [
+        nextMoved,
+        ...(delivery.ready || []).filter((order) => !sameLiveOrder(order, previousOrder || moved)),
+      ],
+    },
+  }
+}
+
+/**
+ * After POST reject: remove the order from the New column (leaves the live board).
+ */
+export function removeRejectedOrderFromLiveBoard(boardData, { board = 'delivery', order } = {}) {
+  if (!boardData || typeof boardData !== 'object' || !order) return boardData
+
+  if (board === 'dinein') {
+    const dineIn = boardData.dineIn || { ...EMPTY_DINE_IN }
+    return {
+      ...boardData,
+      dineIn: {
+        ...dineIn,
+        new: (dineIn.new || []).filter((item) => !sameLiveOrder(item, order)),
+      },
+      activeCount:
+        typeof boardData.activeCount === 'number'
+          ? Math.max(0, boardData.activeCount - 1)
+          : boardData.activeCount,
+    }
+  }
+
+  const delivery = boardData.delivery || { ...EMPTY_DELIVERY }
+  return {
+    ...boardData,
+    delivery: {
+      ...delivery,
+      new: (delivery.new || []).filter((item) => !sameLiveOrder(item, order)),
+    },
+    activeCount:
+      typeof boardData.activeCount === 'number'
+        ? Math.max(0, boardData.activeCount - 1)
+        : boardData.activeCount,
+  }
+}
+
+/**
+ * After POST complete: remove the order from the Ready column (leaves the live board).
+ */
+export function removeCompletedOrderFromLiveBoard(boardData, { board = 'delivery', order } = {}) {
+  if (!boardData || typeof boardData !== 'object' || !order) return boardData
+
+  if (board === 'dinein') {
+    const dineIn = boardData.dineIn || { ...EMPTY_DINE_IN }
+    return {
+      ...boardData,
+      dineIn: {
+        ...dineIn,
+        ready: (dineIn.ready || []).filter((item) => !sameLiveOrder(item, order)),
+      },
+      activeCount:
+        typeof boardData.activeCount === 'number'
+          ? Math.max(0, boardData.activeCount - 1)
+          : boardData.activeCount,
+    }
+  }
+
+  const delivery = boardData.delivery || { ...EMPTY_DELIVERY }
+  return {
+    ...boardData,
+    delivery: {
+      ...delivery,
+      ready: (delivery.ready || []).filter((item) => !sameLiveOrder(item, order)),
+    },
+    activeCount:
+      typeof boardData.activeCount === 'number'
+        ? Math.max(0, boardData.activeCount - 1)
+        : boardData.activeCount,
   }
 }
 

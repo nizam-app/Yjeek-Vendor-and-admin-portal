@@ -8,7 +8,13 @@ import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
 import { useApiMutation } from '../../hooks/useApiMutation'
 import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
-import { moveAcceptedOrderOnLiveBoard } from '../../mappers/vendor/mapVendorLiveOrders'
+import {
+  moveAcceptedOrderOnLiveBoard,
+  moveOrderToPreparingOnLiveBoard,
+  moveOrderToReadyOnLiveBoard,
+  removeCompletedOrderFromLiveBoard,
+  removeRejectedOrderFromLiveBoard,
+} from '../../mappers/vendor/mapVendorLiveOrders'
 import { orderService } from '../../services/vendor/orderService'
 
 export default function LiveOrderColumn() {
@@ -21,12 +27,20 @@ export default function LiveOrderColumn() {
   const [rejectOrder, setRejectOrder] = useState(null)
   const [acceptingId, setAcceptingId] = useState(null)
   const [acceptError, setAcceptError] = useState(null)
+  const [rejectingId, setRejectingId] = useState(null)
+  const [rejectError, setRejectError] = useState(null)
   const [actioningId, setActioningId] = useState(null)
   const [actionError, setActionError] = useState(null)
   const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
   const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+  const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
+    orderService.rejectOrder(orderId, { reason, note }),
+  )
+  const { mutate: startPreparing } = useApiMutation((orderId) => orderService.startPreparing(orderId))
+  const { mutate: markReady } = useApiMutation((orderId) => orderService.markReady(orderId))
+  const { mutate: completeOrder } = useApiMutation((orderId) => orderService.completeOrder(orderId))
   const { mutate: performPrimaryAction } = useApiMutation((action) =>
     orderService.performPrimaryAction(action),
   )
@@ -62,11 +76,54 @@ export default function LiveOrderColumn() {
     [acceptOrder, refetch, setData, tab],
   )
 
+  const handleReject = useCallback(
+    async ({ reason, note }) => {
+      if (rejectOrder?.intent === 'no-show') {
+        setRejectError(new Error('No-show is not available yet.'))
+        return
+      }
+
+      const order = rejectOrder?.order
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setRejectError(new Error('Order id is missing.'))
+        return
+      }
+
+      setRejectError(null)
+      setRejectingId(String(orderId))
+      try {
+        await rejectOrderMutation({ orderId, reason, note })
+        setData((current) =>
+          removeRejectedOrderFromLiveBoard(current, {
+            board: tab,
+            order,
+          }),
+        )
+        setRejectOrder(null)
+        refetch()
+      } catch (err) {
+        setRejectError(err)
+      } finally {
+        setRejectingId(null)
+      }
+    },
+    [rejectOrder, rejectOrderMutation, refetch, setData, tab],
+  )
+
   const handlePrimaryAction = useCallback(
-    async ({ order }) => {
+    async ({ order, mode }) => {
       const action = order?.primaryAction
       const orderId = order?.backendId || order?.id
-      if (!action || !orderId) {
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      const canStartPreparing = mode === 'accepted' || mode === 'confirmed'
+      const canMarkReady = mode === 'preparing'
+      const canComplete = mode === 'ready'
+      if (!action && !canStartPreparing && !canMarkReady && !canComplete) {
         setActionError(new Error('This order action is not available.'))
         return
       }
@@ -74,7 +131,46 @@ export default function LiveOrderColumn() {
       setActionError(null)
       setActioningId(String(orderId))
       try {
-        await performPrimaryAction(action)
+        if (
+          canComplete &&
+          (tab === 'dinein' || !action || String(action.path || '').includes('/complete'))
+        ) {
+          await completeOrder(orderId)
+          setData((current) =>
+            removeCompletedOrderFromLiveBoard(current, {
+              board: tab,
+              order,
+            }),
+          )
+        } else if (action) {
+          await performPrimaryAction(action)
+          if (canComplete) {
+            setData((current) =>
+              removeCompletedOrderFromLiveBoard(current, {
+                board: tab,
+                order,
+              }),
+            )
+          }
+        } else if (canMarkReady) {
+          const result = await markReady(orderId)
+          setData((current) =>
+            moveOrderToReadyOnLiveBoard(current, {
+              board: tab,
+              previousOrder: order,
+              readyOrder: result?.data || order,
+            }),
+          )
+        } else {
+          const result = await startPreparing(orderId)
+          setData((current) =>
+            moveOrderToPreparingOnLiveBoard(current, {
+              board: tab,
+              previousOrder: order,
+              preparingOrder: result?.data || order,
+            }),
+          )
+        }
         setHandoverOrder(null)
         await refetch()
       } catch (err) {
@@ -83,7 +179,7 @@ export default function LiveOrderColumn() {
         setActioningId(null)
       }
     },
-    [performPrimaryAction, refetch],
+    [completeOrder, markReady, performPrimaryAction, refetch, setData, startPreparing, tab],
   )
 
   const column = getColumns(tab, orders).find((col) => col.key === key)
@@ -145,6 +241,11 @@ export default function LiveOrderColumn() {
           {acceptError.message || 'Failed to accept order.'}
         </p>
       ) : null}
+      {rejectError && !rejectOrder ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {rejectError.message || 'Failed to reject order.'}
+        </p>
+      ) : null}
       {actionError && !handoverOrder ? (
         <p className="mb-3 text-[12px] text-danger">
           {actionError.message || 'Failed to update order.'}
@@ -164,8 +265,14 @@ export default function LiveOrderColumn() {
                 dense
                 onSelect={setSelectedOrder}
                 onAccept={handleAccept}
-                onReject={setRejectOrder}
+                onPrimaryAction={handlePrimaryAction}
+                onReject={(payload) => {
+                  setRejectError(null)
+                  setRejectOrder(payload)
+                }}
                 accepting={acceptingId === String(order.backendId || order.id)}
+                rejecting={rejectingId === String(order.backendId || order.id)}
+                actioning={actioningId === String(order.backendId || order.id)}
               />
             ) : (
               <OrderCard
@@ -177,8 +284,12 @@ export default function LiveOrderColumn() {
                 onAccept={handleAccept}
                 onPrimaryAction={handlePrimaryAction}
                 onHandoverChamp={setHandoverOrder}
-                onReject={setRejectOrder}
+                onReject={(payload) => {
+                  setRejectError(null)
+                  setRejectOrder(payload)
+                }}
                 accepting={acceptingId === String(order.backendId || order.id)}
+                rejecting={rejectingId === String(order.backendId || order.id)}
                 actioning={actioningId === String(order.backendId || order.id)}
               />
             ),
@@ -218,10 +329,20 @@ export default function LiveOrderColumn() {
 
       <RejectOrderModal
         open={Boolean(rejectOrder?.order)}
-        onClose={() => setRejectOrder(null)}
+        onClose={() => {
+          if (rejectingId) return
+          setRejectOrder(null)
+          setRejectError(null)
+        }}
+        onConfirm={handleReject}
         order={rejectOrder?.order}
         tab={tab}
         intent={rejectOrder?.intent}
+        isSubmitting={
+          rejectingId ===
+          String(rejectOrder?.order?.backendId || rejectOrder?.order?.id || '')
+        }
+        error={rejectError}
       />
     </div>
   )

@@ -18,8 +18,7 @@ const LIVE_TAB_BY_BOARD = {
 
 /**
  * Vendor orders service.
- * Confirmed: live boards, scheduled, services board, services calendar, history, order detail, receipt, accept order.
- * Reject / prepare / handover actions remain unconfirmed.
+ * Confirmed: live boards, scheduled, services board, services calendar, history, order detail, receipt, accept, reject, start-preparing, mark-ready, complete.
  */
 export const orderService = {
   /**
@@ -135,6 +134,155 @@ export const orderService = {
     const orderType = String(raw?.orderType || '').toUpperCase()
     const data =
       orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/reject
+   * Confirmed from Postman "POST Reject". Body: { reason, note? }.
+   * Only valid while the order is still in New (not PREPARING / later).
+   */
+  async rejectOrder(orderId, form = {}, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const reason = String(form.reason || '').trim()
+    if (!reason) {
+      throw new Error('Rejection reason is required.')
+    }
+
+    const body = { reason }
+    const note = String(form.note || '').trim()
+    if (note) body.note = note
+
+    const response = await apiClient.post(endpoints.vendor.orders.reject(id), body, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+    let data = null
+    if (raw && typeof raw === 'object') {
+      try {
+        const orderType = String(raw.orderType || '').toUpperCase()
+        data =
+          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+      } catch {
+        data = null
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/start-preparing
+   * Confirmed from Postman "POST Start preparing". Empty body.
+   * Only valid from Accepted / Confirmed (not already PREPARING).
+   */
+  async startPreparing(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.startPreparing(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+    let data = null
+    if (raw && typeof raw === 'object') {
+      try {
+        const orderType = String(raw.orderType || '').toUpperCase()
+        data =
+          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+      } catch {
+        data = null
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/mark-ready
+   * Confirmed from Postman "POST Mark ready". Empty body.
+   * Only valid from PREPARING. Success status: READY_FOR_PICKUP.
+   */
+  async markReady(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.markReady(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+    let data = null
+    if (raw && typeof raw === 'object') {
+      try {
+        const orderType = String(raw.orderType || '').toUpperCase()
+        data =
+          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+      } catch {
+        data = null
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/complete
+   * Confirmed from Postman "POST Complete". Empty body.
+   * Used for dine-in Ready → Verify & complete (and delivery handover-to-customer when advertised).
+   */
+  async completeOrder(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.complete(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+    let data = null
+    if (raw && typeof raw === 'object') {
+      try {
+        const orderType = String(raw.orderType || '').toUpperCase()
+        data =
+          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+      } catch {
+        data = null
+      }
+    }
 
     return {
       data,
