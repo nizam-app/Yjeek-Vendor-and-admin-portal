@@ -99,7 +99,7 @@ export function mapAdminVendorStaffListItem(user) {
     lastActive: formatLastActive(user.lastActive),
     status: mapAdminStaffStatusFromApi(user.status),
     statusRaw: user.status ?? null,
-    permissions: user.permissions && typeof user.permissions === 'object' ? user.permissions : {},
+    permissions: mapAdminStaffPermissionsFromApi(user.permissions),
   }
 }
 
@@ -120,10 +120,61 @@ export function mapAdminVendorStaffResponse(data) {
   }
 }
 
+const STATUS_TO_API = {
+  Active: 'ACTIVE',
+  Inactive: 'INACTIVE',
+  Invited: 'INVITED',
+  Suspended: 'SUSPENDED',
+}
+
+/**
+ * UI permission toggles → API staffPermissionsSchema keys.
+ */
+export function mapAdminStaffPermissionsToApi(permissions) {
+  if (!permissions || typeof permissions !== 'object') return undefined
+  const mapped = {
+    orders: Boolean(permissions.orders),
+    catalog: Boolean(permissions.catalog),
+    workingHours: Boolean(permissions.hours ?? permissions.workingHours),
+    staff: Boolean(permissions.staff),
+    deliverySettings: Boolean(permissions.delivery ?? permissions.deliverySettings),
+    promotions: Boolean(permissions.promotions),
+  }
+  return mapped
+}
+
+/**
+ * API permissions → UI toggle ids.
+ */
+export function mapAdminStaffPermissionsFromApi(permissions) {
+  if (!permissions || typeof permissions !== 'object') {
+    return { orders: false, catalog: false, hours: false, staff: false, delivery: false, promotions: false }
+  }
+  if (permissions.all === true) {
+    return { orders: true, catalog: true, hours: true, staff: true, delivery: true, promotions: true }
+  }
+  return {
+    orders: Boolean(permissions.orders),
+    catalog: Boolean(permissions.catalog),
+    hours: Boolean(permissions.hours ?? permissions.workingHours),
+    staff: Boolean(permissions.staff),
+    delivery: Boolean(permissions.delivery ?? permissions.deliverySettings),
+    promotions: Boolean(permissions.promotions),
+  }
+}
+
+function resolveBranchId(form = {}, branchOptions = []) {
+  return (
+    form.branchId ||
+    branchOptions.find((b) => b.id && (b.name === form.branch || b.label === form.branch))?.id ||
+    null
+  )
+}
+
 /**
  * Map create-user form → POST create staff body.
- * Confirmed: displayName, email, phone, countryCode, password, role, vendorLocationId?
- * Skips Status + Permissions UI (not in create API).
+ * Confirmed: displayName, email, phone, countryCode, password, role, vendorLocationId?,
+ * status?, permissions?
  */
 export function mapAdminCreateStaffRequest(form = {}, branchOptions = []) {
   const displayName = String(form.fullName || form.displayName || '').trim()
@@ -161,10 +212,7 @@ export function mapAdminCreateStaffRequest(form = {}, branchOptions = []) {
   }
 
   const needsBranch = role === 'BRANCH_MANAGER' || role === 'STAFF'
-  const branchId =
-    form.branchId ||
-    branchOptions.find((b) => b.id && (b.name === form.branch || b.label === form.branch))?.id ||
-    null
+  const branchId = resolveBranchId(form, branchOptions)
 
   if (needsBranch) {
     if (!branchId) {
@@ -173,6 +221,61 @@ export function mapAdminCreateStaffRequest(form = {}, branchOptions = []) {
     body.vendorLocationId = branchId
   } else if (branchId) {
     body.vendorLocationId = branchId
+  }
+
+  const status = STATUS_TO_API[form.status] || String(form.status || '').toUpperCase()
+  if (status === 'ACTIVE' || status === 'INACTIVE' || status === 'INVITED' || status === 'SUSPENDED') {
+    body.status = status
+  }
+
+  const permissions = mapAdminStaffPermissionsToApi(form.permissions)
+  if (permissions) body.permissions = permissions
+
+  return body
+}
+
+/**
+ * Map edit-user form → PATCH staff body (password optional).
+ */
+export function mapAdminUpdateStaffRequest(form = {}, branchOptions = []) {
+  const body = {}
+
+  const displayName = String(form.fullName || form.displayName || '').trim()
+  if (displayName) body.displayName = displayName
+
+  const email = String(form.email || '').trim()
+  if (email) body.email = email
+
+  if (form.phone != null && String(form.phone).trim()) {
+    const { countryCode, phone } = mapAdminStaffPhoneParts(form.phone)
+    if (phone) {
+      body.phone = phone
+      body.countryCode = countryCode
+    }
+  }
+
+  const password = String(form.password || '')
+  if (password) body.password = password
+
+  const role = mapAdminStaffRoleToApi(form.role)
+  if (role) body.role = role
+
+  const branchId = resolveBranchId(form, branchOptions)
+  if (branchId) body.vendorLocationId = branchId
+  else if (form.branchId === '' || form.branchId === null) body.vendorLocationId = null
+
+  const status = STATUS_TO_API[form.status] || String(form.status || '').toUpperCase()
+  if (status === 'ACTIVE' || status === 'INACTIVE' || status === 'INVITED' || status === 'SUSPENDED') {
+    body.status = status
+  }
+
+  if (form.permissions) {
+    const permissions = mapAdminStaffPermissionsToApi(form.permissions)
+    if (permissions) body.permissions = permissions
+  }
+
+  if (Object.keys(body).length === 0) {
+    throw new ApiError({ message: 'No staff fields to update.' })
   }
 
   return body

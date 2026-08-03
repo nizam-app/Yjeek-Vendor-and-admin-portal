@@ -1,16 +1,19 @@
-import { useAdminDineInBoard } from '../../../hooks/admin/useAdminDineInBoard'
+import { useCallback } from 'react'
 import { AdminIncidentBoard } from '../../../components/admin/operations/AdminIncidentBoard'
+import { adminDashboardService } from '../../../services/admin/dashboardService'
+import { ADMIN_BOARD_PREVIEW_LIMIT } from '../../../lib/adminBoardLimits'
 
 export default function AdminDineInPage() {
-  const { data, error, isLoading, refetch } = useAdminDineInBoard({ limit: 50 })
+  const fetchBoard = useCallback(
+    (options) => adminDashboardService.getDineInBoard(options),
+    [],
+  )
 
   return (
     <AdminIncidentBoard
-      key="dine-in"
-      data={data}
-      error={error}
-      isLoading={isLoading}
-      onRetry={refetch}
+      boardTitle="Dine-in"
+      fetchBoard={fetchBoard}
+      previewLimit={ADMIN_BOARD_PREVIEW_LIMIT}
     />
   )
 }

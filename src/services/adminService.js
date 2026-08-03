@@ -214,6 +214,9 @@ export const adminService = {
   createVendorStaff(vendorId, form, branchOptions = [], options = {}) {
     return adminVendorService.createStaff(vendorId, form, branchOptions, options)
   },
+  updateVendorStaff(vendorId, staffId, form, branchOptions = [], options = {}) {
+    return adminVendorService.updateStaff(vendorId, staffId, form, branchOptions, options)
+  },
   getVendorDeliveryZones(vendorId, options = {}) {
     return adminVendorService.getDeliveryZones(vendorId, options)
   },

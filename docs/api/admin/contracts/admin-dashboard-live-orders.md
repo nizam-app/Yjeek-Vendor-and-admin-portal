@@ -76,7 +76,9 @@ At Risk / On Track full views use the same path with `bucket=at_risk` / `bucket=
 }
 ```
 
-`champ` may be `null`. `tags` may include `"Incident"`, `"Champ"`, `"Customer"`.
+`champ` may be `null`.  
+`tags` may include `"Incident"`, and `"Champ"` / `"Customer"` **only when that peer has messaged** on the order conversation (not merely because a champ is assigned).  
+When a Champ/Customer tag is present, `conversationId` is non-null and the UI opens `GET /admin/chats/:conversationId` in `AdminChatPanel`.
 
 ## Frontend mapping
 
@@ -90,14 +92,15 @@ At Risk / On Track full views use the same path with `bucket=at_risk` / `bucket=
 | `timeLeft` | `timeLeftLabel` |
 | `state` | `statusLabel` |
 | `hasIncident` | `hasIncident` |
-| `contactType` | first of Champ/Customer/Vendor in `tags` |
+| `contactType` / `contactTypes` | Champ/Customer/Vendor from `tags` (message activity only) |
+| `conversationId` | Opens chat modal via `AdminChatPanel` → `GET /admin/chats/:id` |
 | `rider.name` | `champ.name` or `Unassigned` |
 | `schedule` | `"Scheduled"` when `fulfillmentType === "SCHEDULED"` |
 | Column counts | `counts.critical` / `at_risk` / `on_track` |
 | Active count | `counts.all` |
 
-Board uses `bucket=all` and groups by `item.bucket`.  
-Critical full view refetches with `bucket=critical` (no duplicated client-side list).
+Board uses `bucket=all` with preview limit **5** per column. Column ↗ / “View all” opens full view (limit **100**).  
+Critical full view refetches with `bucket=critical`.
 
 ## Not in this response
 

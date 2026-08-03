@@ -13,10 +13,25 @@ function str(value) {
 
 function readReadyTargetPct(config = {}) {
   return (
+    num(config.readyOnTimeTargetPct) ??
     num(config.readyOnlineTargetPct) ??
     num(config.readyOnlineMarginPct) ??
     num(config.readyTimeBufferPct)
   )
+}
+
+function readVpiWeights(config = {}, data = {}) {
+  const raw =
+    (config.vpiWeights && typeof config.vpiWeights === 'object' && config.vpiWeights) ||
+    (config.kpiWeights && typeof config.kpiWeights === 'object' && config.kpiWeights) ||
+    (data.vpiWeights && typeof data.vpiWeights === 'object' && data.vpiWeights) ||
+    {}
+  return {
+    accuracy: num(raw.accuracy),
+    packing: num(raw.packing),
+    prepTime: num(raw.prepTime),
+    reliability: num(raw.reliability),
+  }
 }
 
 function formatMin(value, { op = '≤' } = {}) {
@@ -105,13 +120,13 @@ export function mapAdminVendorSlaResponse(data) {
     data.config && typeof data.config === 'object' && !Array.isArray(data.config)
       ? data.config
       : {}
-  const weights =
-    config.kpiWeights && typeof config.kpiWeights === 'object' ? config.kpiWeights : {}
+  const weights = readVpiWeights(config, data)
   const serviceModes = mapServiceModes(data)
   const readyPct = readReadyTargetPct(config)
   const acceptance = num(config.acceptanceCutoffMin)
   const prep = num(config.prepTimeHotFoodMin)
   const handover = num(config.handoverToChampMin)
+  const kitchenCloses = str(config.kitchenCloses || config.kitchenClose)
 
   const modelName =
     str(data.modelName) ||
@@ -160,14 +175,14 @@ export function mapAdminVendorSlaResponse(data) {
     ['Ready on-time target', formatPctTarget(readyPct)],
     ['Handover to champ', formatMin(handover)],
     ['Daily order cut-off', str(config.dailyOrderCutoff) || '—'],
-    ['Kitchen closes', str(config.kitchenClose) || '—'],
+    ['Kitchen closes', kitchenCloses || '—'],
   ]
 
   const vpiWeights = [
-    { label: 'Accuracy', value: num(weights.accuracy) ?? 0 },
-    { label: 'Packing', value: num(weights.packing) ?? 0 },
-    { label: 'Prep time', value: num(weights.prepTime) ?? 0 },
-    { label: 'Reliability', value: num(weights.reliability) ?? 0 },
+    { label: 'Accuracy', value: weights.accuracy ?? 0 },
+    { label: 'Packing', value: weights.packing ?? 0 },
+    { label: 'Prep time', value: weights.prepTime ?? 0 },
+    { label: 'Reliability', value: weights.reliability ?? 0 },
   ]
 
   const compliance = mapCompliance(
@@ -183,20 +198,31 @@ export function mapAdminVendorSlaResponse(data) {
     vpiWeights,
     compliance,
     serviceModes,
-    slaModelId: data.slaModelId ? String(data.slaModelId) : null,
+    slaModelId: data.slaModelId ? String(data.slaModelId) : data.modelId ? String(data.modelId) : null,
+    modelId: data.modelId ? String(data.modelId) : data.slaModelId ? String(data.slaModelId) : null,
     config: {
       acceptanceCutoffMin: acceptance,
       prepTimeHotFoodMin: prep,
+      readyOnTimeTargetPct: readyPct,
       readyOnlineTargetPct: readyPct,
       handoverToChampMin: handover,
       dailyOrderCutoff: str(config.dailyOrderCutoff),
-      kitchenClose: str(config.kitchenClose),
+      kitchenClose: kitchenCloses,
+      kitchenCloses: kitchenCloses,
       kpiWeights: {
-        accuracy: num(weights.accuracy),
-        packing: num(weights.packing),
-        prepTime: num(weights.prepTime),
-        reliability: num(weights.reliability),
+        accuracy: weights.accuracy,
+        packing: weights.packing,
+        prepTime: weights.prepTime,
+        reliability: weights.reliability,
       },
+      vpiWeights: {
+        accuracy: weights.accuracy,
+        packing: weights.packing,
+        prepTime: weights.prepTime,
+        reliability: weights.reliability,
+      },
+      modeConfigs:
+        config.modeConfigs && typeof config.modeConfigs === 'object' ? config.modeConfigs : null,
     },
     raw: data,
   }
@@ -213,21 +239,56 @@ export function mapAdminUpdateVendorSlaRequest(form = {}) {
   if (slaModelId) body.slaModelId = slaModelId
 
   const modes = form.serviceModes
-  if (modes && typeof modes === 'object') {
+  if (modes && typeof modes === 'object' && !Array.isArray(modes)) {
     const serviceModes = {}
     for (const key of ['hotFoodOnDemand', 'pickup', 'scheduledDelivery', 'dineIn', 'services']) {
       if (typeof modes[key] === 'boolean') serviceModes[key] = modes[key]
     }
     if (Object.keys(serviceModes).length) body.serviceModes = serviceModes
+  } else if (Array.isArray(form.selectedModes) || Array.isArray(form.serviceModeLabels)) {
+    const labels = form.selectedModes || form.serviceModeLabels
+    body.serviceModes = {
+      hotFoodOnDemand: labels.includes('Hot food · on demand'),
+      dineIn: labels.includes('Dine-in'),
+      pickup: labels.includes('Pickup'),
+      scheduledDelivery: labels.includes('Scheduled delivery'),
+      services: labels.includes('Services'),
+    }
   }
 
-  const cfg = form.config || form
-  const config = {}
-  const acceptance = num(cfg.acceptanceCutoffMin)
-  const prep = num(cfg.prepTimeHotFoodMin)
+  const cfg = form.config || {}
+  const config = { ...cfg }
+
+  const acceptance = num(cfg.acceptanceCutoffMin ?? form.acceptSla)
+  const prep = num(cfg.prepTimeHotFoodMin ?? form.prepSla)
   if (acceptance != null) config.acceptanceCutoffMin = acceptance
   if (prep != null) config.prepTimeHotFoodMin = prep
+
+  if (form.slaConfigs && typeof form.slaConfigs === 'object') {
+    config.modeConfigs = form.slaConfigs
+    const hotFood = form.slaConfigs['Hot food · on demand']
+    if (hotFood?.customized && hotFood.fields?.acceptance) {
+      const h = num(hotFood.fields.acceptance.h) || 0
+      const m = num(hotFood.fields.acceptance.m) || 0
+      const s = num(hotFood.fields.acceptance.s) || 0
+      config.acceptanceCutoffMin = Math.round(h * 60 + m + s / 60)
+    }
+  }
+
   if (Object.keys(config).length) body.config = config
 
   return body
+}
+
+/**
+ * Convert API serviceModes booleans → wizard mode label list.
+ */
+export function mapAdminServiceModesToLabels(serviceModes = {}) {
+  const labels = []
+  if (serviceModes.hotFoodOnDemand) labels.push('Hot food · on demand')
+  if (serviceModes.dineIn) labels.push('Dine-in')
+  if (serviceModes.pickup) labels.push('Pickup')
+  if (serviceModes.scheduledDelivery) labels.push('Scheduled delivery')
+  if (serviceModes.services) labels.push('Services')
+  return labels
 }

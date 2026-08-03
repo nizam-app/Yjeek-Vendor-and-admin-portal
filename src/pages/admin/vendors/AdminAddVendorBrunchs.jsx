@@ -7,6 +7,7 @@ import AdminBranchLocationPicker from '../../../components/admin/AdminBranchLoca
 import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { isPlottableLatLng } from '../../../lib/googleMaps'
+import { mapOpeningHoursToWizardHours } from '../../../mappers/admin/mapAdminVendorBranches'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -271,6 +272,8 @@ export default function AdminAddVendorBrunchs() {
     maxDistanceKm: '8',
     extraContributionPerKm: '0.100',
     maxContribution: '0.800',
+    // Vendor-level customer delivery radius (delivery-zones.deliveryRadiusKm)
+    customerRadiusKm: '5',
     hours: defaultHours(),
   }))
   const [branchOnline, setBranchOnline] = useState(true)
@@ -336,6 +339,7 @@ export default function AdminAddVendorBrunchs() {
             maxDistanceKm: zones.maxDistanceKm || prev.maxDistanceKm,
             extraContributionPerKm: zones.extraContributionPerKm || prev.extraContributionPerKm,
             maxContribution: zones.maxContribution || prev.maxContribution,
+            customerRadiusKm: zones.radiusKm || prev.customerRadiusKm,
           }))
         }
       })
@@ -353,11 +357,13 @@ export default function AdminAddVendorBrunchs() {
 
   useEffect(() => {
     if (isNewBranch || !branch) return
+    const hydratedHours = mapOpeningHoursToWizardHours(branch.openingHours, defaultHours())
     setForm((prev) => ({
       ...prev,
       name: branch.name || '',
       areaCity: branch.areaCity || branch.area || prev.areaCity,
       address: branch.address ?? prev.address,
+      phone: branch.phone ?? prev.phone,
       latitude: isPlottableLatLng(branch.latitude, branch.longitude)
         ? String(branch.latitude)
         : prev.latitude,
@@ -371,7 +377,13 @@ export default function AdminAddVendorBrunchs() {
       pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
         ? `${branch.latitude}° N, ${branch.longitude}° E`
         : prev.pinnedLocation,
+      hours: hydratedHours || prev.hours,
     }))
+    if (branch.operationalStatus) {
+      setBranchOnline(String(branch.operationalStatus).toUpperCase() !== 'CLOSED')
+    } else if (branch.status) {
+      setBranchOnline(!/closed|suspended/i.test(String(branch.status)))
+    }
   }, [branch, isNewBranch])
 
   function updateField(field, value) {
@@ -507,6 +519,14 @@ export default function AdminAddVendorBrunchs() {
           radiusKm,
           minOrderAmount: minOrder,
           etaMin,
+          hours: form.hours,
+          branchOnline,
+          operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
+          customerRadiusKm: form.customerRadiusKm,
+          deliveryContribution: form.deliveryContribution,
+          maxDistanceKm: form.maxDistanceKm,
+          extraContributionPerKm: form.extraContributionPerKm,
+          maxContribution: form.maxContribution,
           isPrimary: Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
           detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
         }
@@ -525,24 +545,31 @@ export default function AdminAddVendorBrunchs() {
     setSaveError(null)
     setSaving(true)
     try {
+      const payload = {
+        ...form,
+        branchOnline,
+        operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
+      }
       if (isNewBranch) {
-        await adminService.createVendorBranch(vendorId, form)
+        await adminService.createVendorBranch(vendorId, payload)
       } else {
-        await adminService.updateVendorBranch(vendorId, branchId, form)
+        await adminService.updateVendorBranch(vendorId, branchId, payload)
       }
 
-      if (applyVendorDeliveryToAll) {
-        await adminService.updateVendorDeliveryZones(vendorId, {
-          radiusKm: form.radiusKm,
-          etaMin: form.etaMin,
-          minOrder: form.minOrderValue,
-          deliveryContribution: form.deliveryContribution,
-          freeDeliveryOver: form.freeDeliveryOver,
-          freeDeliveryEnabled,
-          maxDistanceKm: form.maxDistanceKm,
-          extraContributionPerKm: form.extraContributionPerKm,
-          maxContribution: form.maxContribution,
-        })
+      // Always persist vendor-level delivery / customer fee settings.
+      await adminService.updateVendorDeliveryZones(vendorId, {
+        radiusKm: form.customerRadiusKm || form.radiusKm,
+        etaMin: form.etaMin,
+        minOrder: form.minOrderValue,
+        deliveryContribution: form.deliveryContribution,
+        freeDeliveryOver: form.freeDeliveryOver,
+        freeDeliveryEnabled,
+        maxDistanceKm: form.maxDistanceKm,
+        extraContributionPerKm: form.extraContributionPerKm,
+        maxContribution: form.maxContribution,
+      })
+
+      if (applyVendorDeliveryToAll || applyCustomerDeliveryToAll) {
         await adminService.applyVendorDeliveryZonesToAll(vendorId)
       }
 
@@ -847,21 +874,41 @@ export default function AdminAddVendorBrunchs() {
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[900px]:grid-cols-1">
               <Field label="Delivery radius (km)">
-                <input className={inputClass} value="5" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.customerRadiusKm}
+                  onChange={(e) => updateField('customerRadiusKm', e.target.value)}
+                />
               </Field>
               <Field label="Max distance (km)">
-                <input className={inputClass} value="4" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.maxDistanceKm}
+                  onChange={(e) => updateField('maxDistanceKm', e.target.value)}
+                />
               </Field>
 
               <Field label="Customer contribution (BHD) / per order" className="col-span-2 max-[900px]:col-span-1">
-                <input className={inputClass} value="0.300" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.deliveryContribution}
+                  onChange={(e) => updateField('deliveryContribution', e.target.value)}
+                />
               </Field>
 
               <Field label="Extra contribution per km (BHD)">
-                <input className={inputClass} value="0.100" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.extraContributionPerKm}
+                  onChange={(e) => updateField('extraContributionPerKm', e.target.value)}
+                />
               </Field>
               <Field label="Max contribution (BHD)">
-                <input className={inputClass} value="0.800" readOnly />
+                <input
+                  className={inputClass}
+                  value={form.maxContribution}
+                  onChange={(e) => updateField('maxContribution', e.target.value)}
+                />
               </Field>
             </div>
 

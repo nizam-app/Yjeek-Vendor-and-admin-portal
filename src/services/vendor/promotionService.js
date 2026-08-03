@@ -5,6 +5,7 @@ import {
   mapVendorPromotionDetailResponse,
   mapVendorPromotionsResponse,
   mapVendorPromotionsSummaryResponse,
+  mapVendorCreatePromotionRequest,
   mapVendorUpdatePromotionRequest,
   PROMOTION_FILTERS,
 } from '../../mappers/vendor/mapVendorPromotions'
@@ -13,6 +14,7 @@ import {
  * Vendor promotions service.
  * Confirmed:
  *   GET /vendor-panel/promotions
+ *   POST /vendor-panel/promotions
  *   GET /vendor-panel/promotions/summary
  *   GET /vendor-panel/promotions/:promotionId
  *   GET /vendor-panel/promotions/:promotionId/analytics
@@ -109,6 +111,23 @@ export const promotionService = {
       return await this.getPromotionAnalytics(id, options)
     } catch {
       return this.getPromotion(id, options)
+    }
+  },
+
+  /**
+   * POST /vendor-panel/promotions
+   * Confirmed Postman Create (minimal `{ name }` or full type body).
+   */
+  async createPromotion(form = {}, options = {}) {
+    const body = mapVendorCreatePromotionRequest(form)
+    const response = await apiClient.post(endpoints.vendor.promotions.create, body, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    return {
+      data: mapVendorPromotionDetailResponse(response?.data),
+      meta: response?.meta ?? null,
     }
   },
 

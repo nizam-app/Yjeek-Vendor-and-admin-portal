@@ -92,10 +92,12 @@ function applyMockBranchMenuPatch(body = {}) {
 }
 
 function findMockPromotion(promotionId) {
+  const id = String(promotionId || '').trim()
+  if (!id || id === 'new' || id === 'summary') return null
   return (
     (vendorMock.promotions || []).find(
-      (p) => p.id === promotionId || p.title === promotionId,
-    ) || (vendorMock.promotions || [])[0] || null
+      (p) => p.id === id || p.title === id,
+    ) || null
   )
 }
 
@@ -555,6 +557,55 @@ const mockRoutes = {
     topSellers: vendorMock.topSellers,
     recentOrders: vendorMock.recentOrders,
   }),
+  'POST /vendor-panel/auth/login': () => ({
+    user: {
+      id: 'mock-vendor-user',
+      email: 'vendor@greenkitchen.bh',
+      phone: '38866628',
+      countryCode: '+973',
+      role: 'VENDOR',
+      status: 'ACTIVE',
+      authProvider: 'PHONE',
+      displayName: 'Green Kitchen Admin',
+      staffRole: 'GROUP_ADMIN',
+      vendorId: 'cmreb3tha000ev9b8rv65ldi6',
+      vendorName: 'Green Kitchen',
+      vendorLocationId: null,
+      isGroupAdmin: true,
+      serviceModes: {
+        hotFoodOnDemand: true,
+        pickup: true,
+        dineIn: false,
+        scheduledDelivery: true,
+        services: false,
+      },
+    },
+    accessToken: 'mock-vendor-access-token',
+    refreshToken: 'mock-vendor-refresh-token',
+  }),
+  'GET /vendor-panel/auth/me': () => ({
+    id: 'mock-vendor-user',
+    email: 'vendor@greenkitchen.bh',
+    phone: '38866628',
+    countryCode: '+973',
+    role: 'VENDOR',
+    status: 'ACTIVE',
+    authProvider: 'PHONE',
+    displayName: 'Green Kitchen Admin',
+    staffRole: 'GROUP_ADMIN',
+    vendorId: 'cmreb3tha000ev9b8rv65ldi6',
+    vendorName: 'Green Kitchen',
+    vendorLocationId: null,
+    isGroupAdmin: true,
+    serviceModes: {
+      hotFoodOnDemand: true,
+      pickup: true,
+      dineIn: false,
+      scheduledDelivery: true,
+      services: false,
+    },
+  }),
+  'POST /vendor-panel/auth/logout': () => ({ success: true }),
   'GET /vendor/profile': () => ({ vendor: vendorMock.vendor, branches: vendorMock.branches }),
   'GET /vendor-panel/account': () => ({
     profile: {
@@ -672,6 +723,7 @@ const mockRoutes = {
   }),
   'GET /catalog/store-types': () => vendorMock.catalogStoreTypes,
   'GET /vendor-panel/catalog/store-types': () => ({
+    selectedStoreTypeId: 'store-type-food',
     items: (vendorMock.catalogStoreTypes || [])
       .filter((type) => type.id !== 'all')
       .map((type, index) => ({
@@ -683,6 +735,7 @@ const mockRoutes = {
         iconUrl: null,
         sortOrder: index + 1,
         isFeatured: true,
+        productCount: type.id === 'food' ? (vendorMock.catalogItems || []).length : 0,
         orderModes: [],
         fulfillment: {
           onDemandDelivery: type.id === 'food',
@@ -693,6 +746,15 @@ const mockRoutes = {
         },
         description: type.description,
       })),
+  }),
+  'GET /vendor-panel/catalog/store-types/store-type-food/badges': () => ({
+    source: 'store_type_badges',
+    items: [
+      { id: 'badge-new', label: 'New', code: 'NEW', color: null },
+      { id: 'badge-halal', label: 'Halal', code: 'HALAL', color: null },
+      { id: 'badge-bestseller', label: 'Bestseller', code: 'BESTSELLER', color: null },
+      { id: 'badge-gf', label: 'Gluten-free', code: 'GLUTEN_FREE', color: null },
+    ],
   }),
   'GET /catalog/items': () => vendorMock.catalogItems,
   'GET /vendor-panel/catalog/categories': () => ({
@@ -750,9 +812,10 @@ const mockRoutes = {
       },
     ],
   }),
-  'GET /vendor-panel/catalog/products': () => ({
-    count: (vendorMock.catalogItems || []).length,
-    items: (vendorMock.catalogItems || []).map((item) => {
+  'GET /vendor-panel/catalog/products': ({ params } = {}) => {
+    const platformCategoryId =
+      params?.platformCategoryId || params?.storeTypeId || params?.categoryId || null
+    const allItems = (vendorMock.catalogItems || []).map((item) => {
       const categoryLeaf = item.category?.includes('·')
         ? item.category.split('·').pop().trim()
         : item.categoryValue || 'Main course'
@@ -789,13 +852,29 @@ const mockRoutes = {
           parent: null,
         },
         platformCategory: {
-          id: 'platform-food',
+          id: 'store-type-food',
           name: 'Food',
         },
         storeTypeMenuCategory: null,
+        optionGroups: item.optionGroups || [],
+        addons: item.addOns || item.addons || [],
       }
-    }),
-  }),
+    })
+
+    const items = platformCategoryId
+      ? allItems.filter(
+          (item) =>
+            item.platformCategory?.id === platformCategoryId ||
+            platformCategoryId === 'store-type-food' ||
+            platformCategoryId === 'platform-food',
+        )
+      : allItems
+
+    return {
+      count: items.length,
+      items,
+    }
+  },
   'POST /vendor-panel/catalog/products': ({ body } = {}) => {
     const payload = body && typeof body === 'object' ? body : {}
     const id = `mock-product-${Date.now().toString(36)}`
@@ -833,7 +912,10 @@ const mockRoutes = {
       catalogCategory: payload.catalogCategoryId
         ? { id: payload.catalogCategoryId, name: 'Main course', parent: null }
         : null,
-      platformCategory: { id: 'platform-food', name: 'Food' },
+      platformCategory: {
+        id: payload.platformCategoryId || payload.storeTypeId || 'store-type-food',
+        name: 'Food',
+      },
       storeTypeMenuCategory: null,
       optionGroups: Array.isArray(payload.optionGroups) ? payload.optionGroups : [],
       addons: Array.isArray(payload.addons) ? payload.addons : [],
@@ -956,6 +1038,53 @@ const mockRoutes = {
     ),
     discountGiven30d: 0,
   }),
+  'POST /vendor-panel/promotions': ({ body } = {}) => {
+    const payload = body && typeof body === 'object' ? body : {}
+    const id = `promo-${Date.now().toString(36)}`
+    const typeApi = String(payload.type || 'FREE_DELIVERY').toUpperCase()
+    const typeUi =
+      typeApi === 'BUY_X_GET_Y'
+        ? 'Buy X Get Y'
+        : typeApi === 'FREE_DELIVERY'
+          ? 'Free delivery'
+          : 'Item / category deal'
+    const startsAt = payload.startsAt || new Date().toISOString()
+    const endsAt =
+      payload.noEndDate || !payload.endsAt
+        ? null
+        : payload.endsAt
+    const listRow = {
+      id,
+      title: payload.name || 'New promotion',
+      subtitle: typeUi,
+      type: typeUi,
+      scope: payload.applyToAllBranches === false ? 'Selected branches' : 'All branches',
+      status: payload.isPaused ? 'Paused' : 'Active',
+      period: '—',
+      used: 0,
+    }
+    if (!Array.isArray(vendorMock.promotions)) vendorMock.promotions = []
+    vendorMock.promotions.unshift(listRow)
+    return {
+      id,
+      name: listRow.title,
+      type: typeApi,
+      status: payload.isPaused ? 'PAUSED' : 'ACTIVE',
+      isPaused: Boolean(payload.isPaused),
+      scope: listRow.scope,
+      appliesTo: payload.appliesTo || 'ALL_MENU',
+      applyToAllBranches: payload.applyToAllBranches !== false,
+      startsAt,
+      endsAt,
+      noEndDate: Boolean(payload.noEndDate) || !endsAt,
+      categories: [],
+      products: [],
+      rewardProducts: [],
+      branches: [],
+      createdAt: new Date().toISOString(),
+      ...payload,
+    }
+  },
   'GET /notifications': () => vendorMock.notifications,
   'GET /vendor-panel/notifications': () => ({
     items: vendorMock.notifications,
@@ -1083,6 +1212,24 @@ export const mockClient = {
         })
       }
 
+      // GET /vendor-panel/catalog/store-types/:id/badges
+      if (!route) {
+        const badgesMatch = String(url).match(
+          /^\/vendor-panel\/catalog\/store-types\/([^/?]+)\/badges$/,
+        )
+        if (badgesMatch) {
+          route = () => ({
+            source: 'store_type_badges',
+            items: [
+              { id: 'badge-new', label: 'New', code: 'NEW', color: null },
+              { id: 'badge-halal', label: 'Halal', code: 'HALAL', color: null },
+              { id: 'badge-bestseller', label: 'Bestseller', code: 'BESTSELLER', color: null },
+              { id: 'badge-gf', label: 'Gluten-free', code: 'GLUTEN_FREE', color: null },
+            ],
+          })
+        }
+      }
+
       // GET /vendor-panel/catalog/products/:productId
       if (!route) {
         const productMatch = String(url).match(/^\/vendor-panel\/catalog\/products\/([^/?]+)$/)
@@ -1105,8 +1252,8 @@ export const mockClient = {
               price: Number(found.priceValue) || 0,
               compareAtPrice: Number(found.priceValue) || 0,
               hasModifiers: Boolean(found.optionGroups?.length || found.badgeTone === 'options'),
-              imageUrl: null,
-              imageUrls: [],
+              imageUrl: found.imageUrl || null,
+              imageUrls: Array.isArray(found.imageUrls) ? found.imageUrls.filter(Boolean) : [],
               prepTimeMin: Number(found.prepTime) || 20,
               badges: (found.badges || []).map((b) =>
                 String(b)
@@ -1130,8 +1277,10 @@ export const mockClient = {
                 name: categoryLeaf,
                 parent: null,
               },
-              platformCategory: { id: 'platform-food', name: 'Food' },
+              platformCategory: { id: 'store-type-food', name: 'Food' },
               storeTypeMenuCategory: null,
+              optionGroups: found.optionGroups || [],
+              addons: found.addOns || found.addons || [],
             }
           }
         }
@@ -1450,6 +1599,49 @@ export const mockClient = {
             orderType: found?.orderType || (found?.guest ? 'DINE_IN' : 'DELIVERY'),
             status: 'COMPLETED',
             completedAt: new Date().toISOString(),
+          }
+        }
+      }
+    }
+    if (!route && method.toUpperCase() === 'PATCH') {
+      const productPatchMatch = String(url).match(/^\/vendor-panel\/catalog\/products\/([^/?]+)$/)
+      if (productPatchMatch) {
+        const productId = decodeURIComponent(productPatchMatch[1])
+        route = ({ body: patchBody }) => {
+          const payload = patchBody && typeof patchBody === 'object' ? patchBody : {}
+          const imageUrls = Array.isArray(payload.imageUrls)
+            ? payload.imageUrls.filter(Boolean)
+            : payload.imageUrl
+              ? [payload.imageUrl]
+              : []
+          return {
+            id: productId,
+            name: payload.name || 'Updated product',
+            nameAr: payload.nameAr ?? null,
+            description: payload.description ?? null,
+            descriptionAr: payload.descriptionAr ?? null,
+            price: Number(payload.price) || 0,
+            prepTimeMin: Number(payload.prepTimeMin) || 0,
+            badges: Array.isArray(payload.badges) ? payload.badges : [],
+            availabilitySlots: Array.isArray(payload.availabilitySlots)
+              ? payload.availabilitySlots
+              : [],
+            availableFrom: payload.availableFrom ?? null,
+            availableTo: payload.availableTo ?? null,
+            stockType: payload.stockType || 'MADE_TO_ORDER',
+            isActive: payload.isActive !== false,
+            isAvailable: payload.isAvailable !== false,
+            imageUrl: payload.imageUrl || imageUrls[0] || null,
+            imageUrls,
+            catalogCategory: payload.catalogCategoryId
+              ? { id: payload.catalogCategoryId, name: 'Main course', parent: null }
+              : null,
+            platformCategory: {
+              id: payload.platformCategoryId || 'store-type-food',
+              name: 'Food',
+            },
+            optionGroups: Array.isArray(payload.optionGroups) ? payload.optionGroups : [],
+            addons: Array.isArray(payload.addons) ? payload.addons : [],
           }
         }
       }

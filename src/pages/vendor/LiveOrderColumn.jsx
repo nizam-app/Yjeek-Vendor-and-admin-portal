@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { OrderCard, DineInCard, getColumns } from '../../components/OrderCards'
@@ -6,8 +6,10 @@ import OrderDetailModal from '../../components/OrderDetailModal'
 import AcceptOrderModal from '../../components/AcceptOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
+import { useAuth } from '../../context/AuthContext'
 import { useApiMutation } from '../../hooks/useApiMutation'
 import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
+import { getVendorServiceModes } from '../../mappers/vendor/authMapper'
 import {
   moveAcceptedOrderOnLiveBoard,
   moveOrderToPreparingOnLiveBoard,
@@ -18,8 +20,10 @@ import {
 import { orderService } from '../../services/vendor/orderService'
 
 export default function LiveOrderColumn() {
+  const { user } = useAuth()
+  const canDineIn = getVendorServiceModes(user).dineIn
   const { key } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [acceptedOrder, setAcceptedOrder] = useState(null)
@@ -31,9 +35,18 @@ export default function LiveOrderColumn() {
   const [rejectError, setRejectError] = useState(null)
   const [actioningId, setActioningId] = useState(null)
   const [actionError, setActionError] = useState(null)
-  const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
+  const requestedDineIn = searchParams.get('tab') === 'dinein'
+  const tab = canDineIn && requestedDineIn ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
   const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+
+  useEffect(() => {
+    if (!canDineIn && requestedDineIn) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('tab')
+      setSearchParams(next, { replace: true })
+    }
+  }, [canDineIn, requestedDineIn, searchParams, setSearchParams])
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
   const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
     orderService.rejectOrder(orderId, { reason, note }),

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Check, LayoutGrid, List, Search } from 'lucide-react'
 import { ApiError, getFirstFieldErrorMessage } from '../../api/errors'
 import { getProductImage } from '../../data/productImages'
 import EditProductModal from '../../components/EditProductModal'
 import { useApiMutation } from '../../hooks/useApiMutation'
 import {
+  useVendorCatalogBadges,
   useVendorCatalogCategories,
   useVendorCatalogProducts,
+  useVendorCatalogStoreTypes,
 } from '../../hooks/vendor/useVendorCatalog'
 import { productService } from '../../services/vendor/productService'
 
@@ -32,8 +34,13 @@ function getSaveErrorMessage(error) {
   return 'Unable to save product.'
 }
 
+/**
+ * Catalog products page — scoped by /catalog/:catalogId (platformCategoryId).
+ * Legacy /catalog/food resolves to the Food store-type id when possible.
+ */
 export default function FoodCatalog() {
   const navigate = useNavigate()
+  const { catalogId: catalogIdParam } = useParams()
   const [view, setView] = useState('list')
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -45,26 +52,73 @@ export default function FoodCatalog() {
   const [saveError, setSaveError] = useState('')
   const categoryRef = useRef(null)
 
+  const { data: storeTypesData } = useVendorCatalogStoreTypes()
+  const storeTypeItems = Array.isArray(storeTypesData?.items)
+    ? storeTypesData.items
+    : Array.isArray(storeTypesData)
+      ? storeTypesData
+      : []
+
+  const resolvedCatalogId = useMemo(() => {
+    const raw = String(catalogIdParam || '').trim()
+    if (!raw || raw === 'food') {
+      const food =
+        storeTypeItems.find((item) => item.slug === 'food' || /food/i.test(item.title || '')) ||
+        storeTypeItems[0] ||
+        null
+      return food?.id || null
+    }
+    return raw
+  }, [catalogIdParam, storeTypeItems])
+
+  const activeCatalog = useMemo(
+    () => storeTypeItems.find((item) => item.id === resolvedCatalogId) || null,
+    [storeTypeItems, resolvedCatalogId],
+  )
+  const catalogName = activeCatalog?.title || activeCatalog?.name || 'Catalog'
+
   const {
     data: products,
     error,
     isLoading,
     refetch,
-  } = useVendorCatalogProducts()
+  } = useVendorCatalogProducts({ platformCategoryId: resolvedCatalogId })
 
-  const { data: categoriesData } = useVendorCatalogCategories()
+  const { data: categoriesData } = useVendorCatalogCategories({
+    platformCategoryId: resolvedCatalogId,
+  })
+  const categoryTree = Array.isArray(categoriesData?.items) ? categoriesData.items : []
   const categoryOptions = Array.isArray(categoriesData?.options) ? categoriesData.options : []
+
+  const { data: badgeOptions } = useVendorCatalogBadges(resolvedCatalogId)
+
   const { mutate: createProduct, isLoading: isCreating } = useApiMutation((form) =>
-    productService.createProduct(form, { catalogCategoryId: form.catalogCategoryId }),
+    productService.createProduct(form, {
+      platformCategoryId: resolvedCatalogId,
+      catalogCategoryId: form.catalogCategoryId,
+    }),
+  )
+  const { mutate: updateProduct, isLoading: isUpdating } = useApiMutation(({ id, form }) =>
+    productService.updateProduct(id, form, {
+      platformCategoryId: resolvedCatalogId,
+      catalogCategoryId: form.catalogCategoryId,
+    }),
   )
   const { mutate: fetchProduct, isLoading: isLoadingProduct } = useApiMutation((productId) =>
     productService.getProduct(productId),
   )
   const [detailError, setDetailError] = useState('')
+  const isSaving = isCreating || isUpdating
 
   useEffect(() => {
     if (Array.isArray(products)) setItems(products)
   }, [products])
+
+  useEffect(() => {
+    setCategoryFilter('all')
+    setQuery('')
+    setItems([])
+  }, [resolvedCatalogId])
 
   useEffect(() => {
     if (!categoryOpen) return undefined
@@ -104,6 +158,21 @@ export default function FoodCatalog() {
 
   const categoryButtonLabel = selectedCategory?.name || 'Category'
 
+  if (!resolvedCatalogId && storeTypeItems.length === 0) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading catalog…</div>
+  }
+
+  if (!resolvedCatalogId) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Catalog not found.{' '}
+        <button type="button" onClick={() => navigate('/catalog')} className="underline">
+          Back to catalogs
+        </button>
+      </div>
+    )
+  }
+
   if (isLoading && items.length === 0) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading products…</div>
   }
@@ -141,7 +210,6 @@ export default function FoodCatalog() {
         setSelectedProduct({
           ...product,
           ...result.data,
-          // Keep list-row helpers if detail omits them
           cardTone: result.data.cardTone || product.cardTone,
           badge: result.data.badge || product.badge,
           badgeTone: result.data.badgeTone || product.badgeTone,
@@ -153,7 +221,7 @@ export default function FoodCatalog() {
   }
 
   function handleCloseModal() {
-    if (isCreating || isLoadingProduct) return
+    if (isSaving || isLoadingProduct) return
     setModalOpen(false)
     setSelectedProduct(null)
     setSaveError('')
@@ -162,15 +230,17 @@ export default function FoodCatalog() {
 
   async function handleSaveProduct(savedProduct) {
     setSaveError('')
+    const payload = {
+      ...savedProduct,
+      platformCategoryId: resolvedCatalogId,
+    }
 
     if (modalMode === 'add') {
       try {
-        const result = await createProduct(savedProduct)
+        const result = await createProduct(payload)
         const created = result?.data
         if (created) {
           setItems((currentItems) => [created, ...currentItems])
-        } else {
-          setItems((currentItems) => [savedProduct, ...currentItems])
         }
         setModalOpen(false)
         setSelectedProduct(null)
@@ -181,15 +251,23 @@ export default function FoodCatalog() {
       return
     }
 
-    setItems((currentItems) =>
-      currentItems.map((item) =>
-        (item.id && item.id === selectedProduct?.id) || item.name === selectedProduct?.name
-          ? savedProduct
-          : item,
-      ),
-    )
-    setModalOpen(false)
-    setSelectedProduct(null)
+    try {
+      const productId = selectedProduct?.id || savedProduct?.id
+      const result = await updateProduct({ id: productId, form: payload })
+      const updated = result?.data || savedProduct
+      setItems((currentItems) =>
+        currentItems.map((item) =>
+          (item.id && item.id === productId) || item.name === selectedProduct?.name
+            ? updated
+            : item,
+        ),
+      )
+      setModalOpen(false)
+      setSelectedProduct(null)
+      refetch()
+    } catch (err) {
+      setSaveError(getSaveErrorMessage(err))
+    }
   }
 
   return (
@@ -197,7 +275,9 @@ export default function FoodCatalog() {
       <div className="px-[28px] pt-[18px] pb-8">
         <div className="mb-4 flex items-start gap-3.5">
           <div className="min-w-0 flex-1">
-            <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink">Food catalog</h1>
+            <h1 className="text-[20px] font-bold tracking-[-0.02em] text-ink">
+              {catalogName} catalog
+            </h1>
             <p className="mt-0.5 text-[13px] text-ink-muted">
               {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
               {view === 'grid' ? ' · grid view' : ''}
@@ -220,7 +300,7 @@ export default function FoodCatalog() {
             className="whitespace-nowrap rounded-[9px] bg-green-active-bg px-3 py-[9px] text-[12.5px] font-medium text-green-active-text hover:brightness-[0.98]"
             title="Change store type"
           >
-            Store type: Food &amp; drink
+            Store type: {catalogName}
           </button>
 
           <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-[9px] border border-border bg-white px-3 py-[9px] text-[12.5px]">
@@ -228,7 +308,7 @@ export default function FoodCatalog() {
             <input
               type="search"
               className="w-full border-none bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-faint"
-              placeholder="Search food…"
+              placeholder={`Search ${catalogName.toLowerCase()}…`}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -404,7 +484,11 @@ export default function FoodCatalog() {
                 </div>
               ))
             ) : (
-              <EmptyState query={query} categoryLabel={selectedCategory?.name} />
+              <EmptyState
+                query={query}
+                categoryLabel={selectedCategory?.name}
+                catalogName={catalogName}
+              />
             )}
           </div>
         ) : (
@@ -461,7 +545,11 @@ export default function FoodCatalog() {
               ))
             ) : (
               <div className="col-span-full">
-                <EmptyState query={query} categoryLabel={selectedCategory?.name} />
+                <EmptyState
+                  query={query}
+                  categoryLabel={selectedCategory?.name}
+                  catalogName={catalogName}
+                />
               </div>
             )}
           </div>
@@ -472,8 +560,12 @@ export default function FoodCatalog() {
         open={modalOpen}
         product={selectedProduct}
         mode={modalMode}
+        catalogId={resolvedCatalogId}
+        catalogSlug={activeCatalog?.slug || ''}
+        categoryTree={categoryTree}
         categories={categoryOptions}
-        isSaving={isCreating}
+        badgeOptions={Array.isArray(badgeOptions) ? badgeOptions : []}
+        isSaving={isSaving}
         isLoadingDetail={modalMode === 'edit' && isLoadingProduct}
         saveError={saveError || detailError}
         onClose={handleCloseModal}
@@ -483,7 +575,7 @@ export default function FoodCatalog() {
   )
 }
 
-function EmptyState({ query, categoryLabel }) {
+function EmptyState({ query, categoryLabel, catalogName = 'catalog' }) {
   return (
     <div className="flex min-h-[240px] flex-col items-center justify-center px-5 py-10 text-center">
       <div className="flex size-12 items-center justify-center rounded-full bg-[#f2f7f2]">
@@ -495,7 +587,7 @@ function EmptyState({ query, categoryLabel }) {
           ? `No products match “${query}”. Try another keyword.`
           : categoryLabel
             ? `No products in “${categoryLabel}”.`
-            : 'There are currently no products in the food catalog.'}
+            : `There are currently no products in the ${catalogName} catalog.`}
       </p>
     </div>
   )

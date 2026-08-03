@@ -68,10 +68,28 @@ function formatAvailabilitySlot(slot) {
 }
 
 function buildCategoryLabel(item) {
-  const platform = item?.platformCategory?.name || 'Food'
+  const platform = item?.platformCategory?.name || null
   const catalog = item?.catalogCategory?.name
-  if (catalog) return `${platform} · ${catalog}`
-  return platform
+  if (platform && catalog) return `${platform} · ${catalog}`
+  if (catalog) return catalog
+  if (platform) return platform
+  return '—'
+}
+
+/** Walk catalogCategory.parent chain → [root, …, leaf]. */
+export function catalogCategoryChain(node) {
+  const chain = []
+  let current = node && typeof node === 'object' ? node : null
+  const seen = new Set()
+  while (current && current.id && !seen.has(String(current.id))) {
+    seen.add(String(current.id))
+    chain.unshift({
+      id: String(current.id),
+      name: current.name || 'Untitled',
+    })
+    current = current.parent && typeof current.parent === 'object' ? current.parent : null
+  }
+  return chain
 }
 
 /**
@@ -161,8 +179,11 @@ export function mapVendorCatalogProduct(item, index = 0) {
     }
   }
 
-  const catalogName = item.catalogCategory?.name || '—'
+  const catalogName = item.catalogCategory?.name || null
   const platformName = item.platformCategory?.name || null
+  const categoryChain = catalogCategoryChain(item.catalogCategory)
+  const rootCategory = categoryChain[0] || null
+  const leafCategory = categoryChain[categoryChain.length - 1] || null
   const isActive = item.isActive !== false
   const badges = Array.isArray(item.badges) ? item.badges.map(titleCaseBadge).filter(Boolean) : []
   const hasModifiers = Boolean(item.hasModifiers)
@@ -174,9 +195,15 @@ export function mapVendorCatalogProduct(item, index = 0) {
     descriptionEn: item.description || '',
     descriptionAr: item.descriptionAr || '',
     category: buildCategoryLabel(item),
-    categoryValue: catalogName,
-    subcategory: item.catalogCategory?.parent?.name || 'None',
-    subSubcategory: 'None',
+    categoryValue: catalogName || '—',
+    subcategory:
+      categoryChain.length >= 2
+        ? categoryChain[categoryChain.length >= 3 ? 1 : 0]?.name || 'None'
+        : 'None',
+    subSubcategory: categoryChain.length >= 3 ? leafCategory?.name || 'None' : 'None',
+    categoryRootId: rootCategory?.id || '',
+    subcategoryId: categoryChain.length >= 3 ? categoryChain[1]?.id || '' : '',
+    subSubcategoryId: categoryChain.length >= 3 ? leafCategory?.id || '' : '',
     price: formatPrice(item.price, { hasModifiers }),
     priceValue: formatPriceValue(item.price),
     compareAtPrice: item.compareAtPrice ?? null,
@@ -199,10 +226,26 @@ export function mapVendorCatalogProduct(item, index = 0) {
     badgeTone: hasModifiers ? 'options' : 'simple',
     platformCategoryId: item.platformCategory?.id || null,
     platformCategoryName: platformName,
-    catalogCategoryId: item.catalogCategory?.id || null,
+    catalogCategoryId: leafCategory?.id || item.catalogCategory?.id || null,
     catalogCategoryName: catalogName,
-    imageUrl: item.imageUrl || item.image || null,
-    imageUrls: Array.isArray(item.imageUrls) ? item.imageUrls.filter(Boolean) : [],
+    categoryChain,
+    ...(() => {
+      const seen = new Set()
+      const urls = []
+      const push = (value) => {
+        const url = String(value || '').trim()
+        if (!url) return
+        if (seen.has(url)) return
+        seen.add(url)
+        urls.push(url)
+      }
+      push(item.imageUrl || item.image || null)
+      if (Array.isArray(item.imageUrls)) item.imageUrls.forEach(push)
+      return {
+        imageUrl: urls[0] || null,
+        imageUrls: urls,
+      }
+    })(),
   }
 }
 
@@ -281,6 +324,7 @@ function mapAddonsFromApi(raw) {
   return raw
     .filter((item) => item && typeof item === 'object')
     .map((item) => ({
+      id: item.id || null,
       name: item.name || '',
       price: formatAddonPriceLabel(item.price),
     }))
@@ -292,25 +336,25 @@ function mapOptionGroupsFromApi(raw) {
     .filter((group) => group && typeof group === 'object')
     .map((group) => {
       const name = group.name || group.title || 'Option group'
-      const options = Array.isArray(group.options)
-        ? group.options
-        : Array.isArray(group.choices)
-          ? group.choices
+      const options = Array.isArray(group.choices)
+        ? group.choices
+        : Array.isArray(group.options)
+          ? group.options
           : []
       const min = Number(group.min ?? group.minSelect ?? 0) || 0
       const max = Number(group.max ?? group.maxSelect ?? (min > 0 ? min : 1)) || 1
       const required = group.required === true || group.isRequired === true || min > 0
+      const selectionTypeRaw = String(group.selectionType || '').toUpperCase()
       const selection =
         group.selection ||
-        (max > 1 || String(group.selectionType || '').toUpperCase().includes('MULTI')
-          ? 'multiple'
-          : 'single')
+        (max > 1 || selectionTypeRaw.includes('MULTI') ? 'multiple' : 'single')
       const detail = options
         .map((opt) => opt?.name)
         .filter(Boolean)
         .join(' · ')
 
       return {
+        id: group.id || null,
         title: name,
         detail: detail || group.detail || '',
         tag: required
@@ -323,8 +367,9 @@ function mapOptionGroupsFromApi(raw) {
         min: String(min),
         max: String(max),
         choices: options.map((opt) => ({
+          id: opt?.id || null,
           name: opt?.name || '',
-          price: formatAddonPriceLabel(opt?.price ?? opt?.priceDelta),
+          price: formatAddonPriceLabel(opt?.priceDelta ?? opt?.price),
           isDefault: Boolean(opt?.isDefault),
         })),
       }
@@ -356,10 +401,12 @@ function collectImageUrls(form = {}) {
 function mapAddonForApi(addon) {
   const name = String(addon?.name || '').trim()
   if (!name) return null
-  return {
+  const row = {
     name,
     price: toNumberOrNull(addon.price) ?? 0,
   }
+  if (addon?.id) row.id = addon.id
+  return row
 }
 
 function choicesFromOptionGroup(group) {
@@ -384,11 +431,13 @@ function mapOptionGroupForApi(group) {
     .map((choice) => {
       const choiceName = String(choice?.name || '').trim()
       if (!choiceName) return null
-      return {
+      const row = {
         name: choiceName,
-        price: toNumberOrNull(choice.price) ?? 0,
+        priceDelta: toNumberOrNull(choice.priceDelta ?? choice.price) ?? 0,
         isDefault: Boolean(choice.isDefault),
       }
+      if (choice?.id) row.id = choice.id
+      return row
     })
     .filter(Boolean)
 
@@ -402,15 +451,15 @@ function mapOptionGroupForApi(group) {
       : 0)
   const max = toNumberOrNull(group.max) ?? (selection === 'multiple' ? Math.max(2, choices.length) : 1)
 
-  return {
+  const row = {
     name,
-    title: name,
     min,
     max,
-    required: min > 0,
-    selectionType: selection === 'multiple' ? 'MULTI' : 'SINGLE',
-    options: choices,
+    selectionType: selection === 'multiple' ? 'MULTIPLE' : 'SINGLE',
+    choices,
   }
+  if (group?.id) row.id = group.id
+  return row
 }
 
 function isRealCatalogCategoryId(value) {
@@ -432,14 +481,21 @@ function isRealCatalogCategoryId(value) {
 }
 
 /**
- * Build POST /vendor-panel/catalog/products body from Add Product form values.
- * Field names match the confirmed create response sample.
+ * Build POST/PATCH /vendor-panel/catalog/products body from Add/Edit Product form.
+ * Confirmed: platformCategoryId required on create; catalogCategoryId = menu leaf;
+ * optionGroups[].choices + priceDelta; addons[].price.
  */
-export function buildVendorCreateProductBody(form = {}, { catalogCategoryId } = {}) {
+export function buildVendorCreateProductBody(
+  form = {},
+  { catalogCategoryId, platformCategoryId } = {},
+) {
   const price = toNumberOrNull(form.priceValue ?? form.price)
   const prepTimeMin = toNumberOrNull(form.prepTime)
   const badges = (Array.isArray(form.badges) ? form.badges : [])
-    .map(toApiBadge)
+    .map((badge) => {
+      if (badge && typeof badge === 'object' && badge.code) return String(badge.code).toUpperCase()
+      return toApiBadge(badge)
+    })
     .filter(Boolean)
   const slot = toApiAvailabilitySlot(form.timeSlot)
   const imageUrls = collectImageUrls(form)
@@ -470,8 +526,6 @@ export function buildVendorCreateProductBody(form = {}, { catalogCategoryId } = 
     addons,
   }
 
-  // Backend Zod rejects null for optional numbers ("Expected number, received null").
-  // Only include optional numeric/string fields when they have real values.
   const compareAtPrice = toNumberOrNull(form.compareAtPrice)
   if (compareAtPrice != null) body.compareAtPrice = compareAtPrice
 
@@ -480,15 +534,58 @@ export function buildVendorCreateProductBody(form = {}, { catalogCategoryId } = 
 
   if (imageUrls[0]) body.imageUrl = imageUrls[0]
 
-  const resolvedCategoryId = emptyToNull(catalogCategoryId || form.catalogCategoryId)
+  const resolvedPlatformId = emptyToNull(
+    platformCategoryId || form.platformCategoryId || form.storeTypeId,
+  )
+  if (resolvedPlatformId) {
+    body.platformCategoryId = resolvedPlatformId
+  }
+
+  const resolvedCategoryId = emptyToNull(
+    catalogCategoryId || form.catalogCategoryId || form.subSubcategoryId || form.subcategoryId || form.categoryRootId,
+  )
   if (isRealCatalogCategoryId(resolvedCategoryId)) {
     body.catalogCategoryId = resolvedCategoryId
   }
 
-  // Drop remaining nulls so optional Zod fields are omitted, not null.
   return Object.fromEntries(
     Object.entries(body).filter(([, value]) => value !== null && value !== undefined),
   )
+}
+
+/** Alias — same mapper for PATCH update bodies. */
+export function buildVendorUpdateProductBody(form = {}, options = {}) {
+  return buildVendorCreateProductBody(form, options)
+}
+
+/**
+ * Map GET /vendor-panel/catalog/store-types/:id/badges.
+ */
+export function mapVendorCatalogBadgesResponse(data) {
+  const rawItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.badges)
+        ? data.badges
+        : []
+
+  return rawItems
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const label = String(item.label || item.name || '').trim()
+      const code = String(item.code || toApiBadge(label) || '')
+        .trim()
+        .toUpperCase()
+      if (!label && !code) return null
+      return {
+        id: item.id || code || label,
+        label: label || titleCaseBadge(code),
+        code: code || toApiBadge(label),
+        color: item.color || null,
+      }
+    })
+    .filter(Boolean)
 }
 
 /**
@@ -597,6 +694,7 @@ function mapVendorCatalogStoreType(item) {
     iconUrl: item.iconUrl || null,
     sortOrder: Number.isFinite(Number(item.sortOrder)) ? Number(item.sortOrder) : 0,
     isFeatured: Boolean(item.isFeatured),
+    productCount: Number.isFinite(Number(item.productCount)) ? Number(item.productCount) : null,
     orderModes: Array.isArray(item.orderModes) ? item.orderModes : [],
     fulfillment: item.fulfillment && typeof item.fulfillment === 'object' ? item.fulfillment : null,
   }
@@ -604,7 +702,7 @@ function mapVendorCatalogStoreType(item) {
 
 /**
  * Map GET /vendor-panel/catalog/store-types into Catalog picker cards.
- * Prepends "All categories" when the API does not include it.
+ * Vendor-scoped: do not invent an "All categories" card.
  */
 export function mapVendorCatalogStoreTypesResponse(data) {
   const rawItems = Array.isArray(data)
@@ -620,26 +718,8 @@ export function mapVendorCatalogStoreTypesResponse(data) {
     .filter(Boolean)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))
 
-  const hasAll = mapped.some(
-    (item) => item.slug === 'all' || item.iconKey === 'all' || /all categor/i.test(item.title),
-  )
-
-  if (!hasAll) {
-    mapped.unshift({
-      id: 'all',
-      backendId: null,
-      slug: 'all',
-      title: 'All categories',
-      description: STORE_TYPE_DESCRIPTIONS.all,
-      iconKey: 'all',
-      iconEmoji: null,
-      iconUrl: null,
-      sortOrder: 0,
-      isFeatured: true,
-      orderModes: [],
-      fulfillment: null,
-    })
+  return {
+    selectedStoreTypeId: data?.selectedStoreTypeId || mapped[0]?.id || null,
+    items: mapped,
   }
-
-  return mapped
 }

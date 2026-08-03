@@ -1,63 +1,184 @@
-import { useState } from 'react'
-import { ArrowUpRight, Clock3, RefreshCw, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ArrowUpRight, RefreshCw, Search, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
+import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import {
+  ADMIN_BOARD_FULL_LIMIT,
+  ADMIN_BOARD_PREVIEW_LIMIT,
+} from '../../../lib/adminBoardLimits'
 import { ApiState } from '../ApiState'
 import { Button } from '../Button'
 import { cn } from '../cn'
 import { AdminChatPanel } from './AdminChatPanel'
 import { AdminOpenChats } from './AdminOpenChats'
+import { AdminOpsOrderCard } from './AdminOpsOrderCard'
+import { OpsIncidentsSidebar } from './OpsIncidentsSidebar'
+import {
+  AdminOrderDetailModal,
+  IncidentOrderModal,
+} from '../../../pages/admin/operations/AdminLiveOrdersPage'
 
-function AdminIncidentCard({ order }) {
+function ModeBoardFullView({
+  column,
+  boardTitle,
+  fetchBoard,
+  chats,
+  chatsActive,
+  onBack,
+  onChatClick,
+  onIncidentClick,
+  onContactClick,
+  onOrderClick,
+}) {
+  const { data, error, isLoading, refetch } = useApiResource(
+    () => fetchBoard({ limit: ADMIN_BOARD_FULL_LIMIT }),
+    [fetchBoard, column?.id],
+  )
+
+  const bucketColumn =
+    data?.columns?.find((item) => item.id === column.id) ||
+    data?.columns?.find((item) => item.tone === column.tone)
+
+  const orders = bucketColumn?.orders || []
+  const count = bucketColumn?.count ?? orders.length
+
   return (
-    <article className="rounded-[12px] border border-[#e4e8e4] bg-white p-3.5 shadow-[0_1px_2px_rgba(20,40,28,.04)]">
-      <div className="flex items-start justify-between gap-2">
-        <strong className="truncate text-[12px] font-bold text-[#17231c]">{order.id}</strong>
-        <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-[#d13f45]">
-          <Clock3 size={12} /> {order.timeLeft}
-        </span>
+    <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          className="h-[27px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#536158]"
+        >
+          ‹ {boardTitle}
+        </button>
+        <div>
+          <h2 className="flex items-center gap-1.5 text-[18px] font-bold text-[#17231c]">
+            <span>{column.tone === 'red' ? '⚠' : '🛡'}</span>
+            {column.title} — full view
+          </h2>
+          <p className="mt-0.5 text-[10px] text-[#7a847e]">
+            {isLoading && !data ? 'Loading…' : `${count} orders in this status`}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isLoading}
+          className="ml-auto h-[27px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#536158] disabled:opacity-60"
+        >
+          Refresh
+        </button>
       </div>
-      <p className="mt-2 truncate text-[13px] font-bold text-[#17231c]">{order.vendor}</p>
-      <p className="mt-1 truncate text-[11px] text-[#7a847e]">{order.detail}</p>
-      {order.hasIncident ? (
-        <span className="mt-2.5 inline-flex rounded-full bg-[#fdebec] px-2.5 py-0.5 text-[10px] font-medium text-[#d64044]">Incident</span>
+
+      <div className="mt-8 flex flex-wrap items-center gap-2">
+        <label className="flex h-[31px] w-[225px] items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3">
+          <Search size={12} className="text-[#7b867f]" />
+          <input
+            className="min-w-0 flex-1 border-0 bg-transparent text-[10px] outline-none"
+            placeholder="Search order, vendor, champ..."
+          />
+        </label>
+        <button
+          type="button"
+          className="ml-auto h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]"
+        >
+          Sort · <b>Time left</b>▾
+        </button>
+      </div>
+
+      {error && !orders.length ? (
+        <div className="mt-8 rounded-lg border border-[#f0d5d5] bg-[#fff7f7] px-4 py-6 text-center text-[12px] text-[#a15b58]">
+          <p>Unable to load {column.title.toLowerCase()} orders.</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-2 rounded-md border border-[#e0e5e1] bg-white px-2.5 py-1 text-[11px] text-[#536158]"
+          >
+            Try again
+          </button>
+        </div>
       ) : null}
-    </article>
+
+      {isLoading && !orders.length && !error ? (
+        <p className="mt-8 text-[12px] font-medium text-[#7a857e]">Loading {column.title.toLowerCase()} orders…</p>
+      ) : null}
+
+      {!isLoading && !error && !orders.length ? (
+        <p className="mt-8 text-[12px] font-medium text-[#8a938c]">No {column.title.toLowerCase()} orders.</p>
+      ) : null}
+
+      <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
+        {orders.map((order) => (
+          <AdminOpsOrderCard
+            key={order.orderId || order.id}
+            order={order}
+            tone={column.tone}
+            onIncidentClick={onIncidentClick}
+            onContactClick={onContactClick}
+            onOrderClick={onOrderClick}
+          />
+        ))}
+      </div>
+
+      <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={onChatClick} />
+    </div>
   )
 }
 
 /**
- * Shared Incident / On Track board used by Pickup, Dine-in, Services.
- * Pass either `fetchData` or controlled `{ data, error, isLoading, onRetry }`.
+ * Shared Incident / On Track board for Pickup, Dine-in, Services.
+ * Live Orders parity: max 10 preview, ↗ full view, Incident / Champ / Customer / detail.
  */
-export function AdminIncidentBoard({ fetchData, data: controlledData, error: controlledError, isLoading: controlledLoading, onRetry }) {
+export function AdminIncidentBoard({
+  boardTitle = 'Board',
+  fetchBoard,
+  data: controlledData,
+  error: controlledError,
+  isLoading: controlledLoading,
+  onRetry,
+  previewLimit = ADMIN_BOARD_PREVIEW_LIMIT,
+}) {
   const [filter, setFilter] = useState('All orders')
   const [activeChat, setActiveChat] = useState(null)
-  const fetched = useApiResource(fetchData || (() => Promise.resolve({ data: null })), [Boolean(fetchData)])
+  const [fullView, setFullView] = useState(null)
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [incidentOrder, setIncidentOrder] = useState(null)
+
+  const useFetchBoard = typeof fetchBoard === 'function'
+  const fetched = useApiResource(
+    () => (useFetchBoard ? fetchBoard({ limit: previewLimit }) : Promise.resolve({ data: null })),
+    [useFetchBoard, fetchBoard, previewLimit],
+  )
+
   const { data: incidentsData } = useAdminIncidents()
   const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats()
 
-  const data = controlledData !== undefined ? controlledData : fetched.data
-  const error = controlledData !== undefined ? controlledError : fetched.error
-  const isLoading = controlledData !== undefined ? controlledLoading : fetched.isLoading
-  const refetch = onRetry || fetched.refetch
+  const data = useFetchBoard ? fetched.data : controlledData
+  const error = useFetchBoard ? fetched.error : controlledError
+  const isLoading = useFetchBoard ? fetched.isLoading : controlledLoading
+  const refetch = useFetchBoard ? fetched.refetch : onRetry
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  useEffect(() => {
+    setFullView(null)
+    setSelectedOrder(null)
+    setIncidentOrder(null)
+    setActiveChat(null)
+  }, [boardTitle])
 
-  const filters = Array.isArray(data.filters) ? data.filters : []
   const feedIncidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
   const incidents = feedIncidents.length > 0
     ? feedIncidents
-    : (Array.isArray(data.incidents) ? data.incidents : [])
+    : (Array.isArray(data?.incidents) ? data.incidents : [])
   const feedChats = Array.isArray(chatsData?.items) ? chatsData.items : []
   const chats = feedChats.length > 0
     ? feedChats
-    : (Array.isArray(data.chats) ? data.chats : [])
+    : (Array.isArray(data?.chats) ? data.chats : [])
   const chatsActive = feedChats.length > 0
     ? (chatsData?.active ?? feedChats.length)
     : chats.length
-  const columns = Array.isArray(data.columns) ? data.columns : []
 
   function handleChatMarkedRead(conversationId) {
     setChatsData((current) => {
@@ -73,6 +194,77 @@ export function AdminIncidentBoard({ fetchData, data: controlledData, error: con
     })
     refetchChats()
   }
+
+  function openOrderChat(order, preferredRole) {
+    const conversationId = order?.conversationId
+    if (!conversationId) return
+
+    const role = preferredRole || order.contactType || 'Customer'
+    const name =
+      role === 'Champ'
+        ? order.rider?.name || order.champ?.name || 'Champ'
+        : 'Customer'
+
+    const matchingChat = chats.find((chat) => chat.conversationId === conversationId)
+
+    setActiveChat({
+      ...(matchingChat || {}),
+      id: conversationId,
+      conversationId,
+      orderId: order.orderId || matchingChat?.orderId || null,
+      orderNumber: order.id || matchingChat?.orderNumber || null,
+      role,
+      name: matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
+      initials: initialsFromPeerName(
+        matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
+      ),
+      peerRole: role === 'Champ' ? 'CHAMP' : 'CUSTOMER',
+    })
+  }
+
+  const modals = (
+    <>
+      {selectedOrder ? (
+        <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      ) : null}
+      {incidentOrder ? (
+        <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} />
+      ) : null}
+      {activeChat ? (
+        <AdminChatPanel
+          key={`${activeChat.id}-${activeChat.orderId || ''}`}
+          chat={activeChat}
+          onClose={() => setActiveChat(null)}
+          onMarkedRead={handleChatMarkedRead}
+        />
+      ) : null}
+    </>
+  )
+
+  if (fullView && useFetchBoard) {
+    return (
+      <>
+        <ModeBoardFullView
+          column={fullView}
+          boardTitle={boardTitle}
+          fetchBoard={fetchBoard}
+          chats={chats}
+          chatsActive={chatsActive}
+          onBack={() => setFullView(null)}
+          onChatClick={setActiveChat}
+          onIncidentClick={setIncidentOrder}
+          onContactClick={openOrderChat}
+          onOrderClick={setSelectedOrder}
+        />
+        {modals}
+      </>
+    )
+  }
+
+  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+
+  const filters = Array.isArray(data.filters) ? data.filters : []
+  const columns = Array.isArray(data.columns) ? data.columns : []
 
   return (
     <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
@@ -119,73 +311,66 @@ export function AdminIncidentBoard({ fetchData, data: controlledData, error: con
           )}
 
           <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
-            {columns.map((column) => (
-              <section key={column.id} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
-                <div className="mb-2 flex h-[22px] items-center gap-2">
-                  <span className={cn(
-                    'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
-                    column.tone === 'red' ? 'bg-[#fff0ed] text-[#d33f44]' : 'bg-[#e7f5eb] text-[#247c4b]',
-                  )}>
-                    {column.tone === 'red' ? <TriangleAlert size={12} /> : <ShieldCheck size={12} />}
-                    {column.title}
-                  </span>
-                  <strong className={cn('text-[12px]', column.tone === 'red' ? 'text-[#d33f44]' : 'text-[#247c4b]')}>{column.count}</strong>
-                  <button
-                    type="button"
-                    className="ml-auto grid h-[22px] w-[22px] place-items-center rounded-md border border-[#dfe4e0] bg-white text-[#748078]"
-                    aria-label={`Open ${column.title}`}
-                  >
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-                <div className="space-y-2.5">
-                  {(column.orders || []).length === 0 ? (
-                    <div className="rounded-[12px] border border-dashed border-[#dfe4e0] bg-white px-3 py-8 text-center text-[11px] text-[#78837c]">
-                      No orders
-                    </div>
-                  ) : (column.orders || []).map((order) => (
-                    <AdminIncidentCard key={order.id} order={order} />
-                  ))}
-                </div>
-              </section>
-            ))}
+            {columns.map((column) => {
+              const previewOrders = (column.orders || []).slice(0, previewLimit)
+              return (
+                <section key={column.id} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
+                  <div className="mb-2 flex h-[22px] items-center gap-2">
+                    <span className={cn(
+                      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
+                      column.tone === 'red' ? 'bg-[#fff0ed] text-[#d33f44]' : 'bg-[#e7f5eb] text-[#247c4b]',
+                    )}>
+                      {column.tone === 'red' ? <TriangleAlert size={12} /> : <ShieldCheck size={12} />}
+                      {column.title}
+                    </span>
+                    <strong className={cn('text-[12px]', column.tone === 'red' ? 'text-[#d33f44]' : 'text-[#247c4b]')}>{column.count}</strong>
+                    <button
+                      type="button"
+                      onClick={() => useFetchBoard && setFullView(column)}
+                      className="ml-auto grid h-[22px] w-[22px] place-items-center rounded-md border border-[#dfe4e0] bg-white text-[#748078] hover:text-[#118446]"
+                      aria-label={`Open ${column.title} full view`}
+                    >
+                      <ArrowUpRight size={12} />
+                    </button>
+                  </div>
+                  <div className="space-y-2.5">
+                    {previewOrders.length === 0 ? (
+                      <div className="rounded-[12px] border border-dashed border-[#dfe4e0] bg-white px-3 py-8 text-center text-[11px] text-[#78837c]">
+                        No orders
+                      </div>
+                    ) : (
+                      previewOrders.map((order) => (
+                        <AdminOpsOrderCard
+                          key={order.orderId || order.id}
+                          order={order}
+                          tone={column.tone}
+                          onIncidentClick={setIncidentOrder}
+                          onContactClick={openOrderChat}
+                          onOrderClick={setSelectedOrder}
+                        />
+                      ))
+                    )}
+                    {column.count > previewLimit && useFetchBoard ? (
+                      <button
+                        type="button"
+                        onClick={() => setFullView(column)}
+                        className="w-full rounded-[9px] border border-dashed border-[#cfd7d1] bg-white px-2 py-2 text-[10px] font-medium text-[#3d7a55] hover:border-[#1a9b53] hover:text-[#14763f]"
+                      >
+                        View all {column.count} {column.title.toLowerCase()} orders ↗
+                      </button>
+                    ) : null}
+                  </div>
+                </section>
+              )
+            })}
           </div>
         </div>
 
-        <aside className="h-[441px] overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px]">
-          <div className="flex h-[43px] items-center gap-1.5">
-            <ShieldAlert size={14} className="text-[#d46763]" />
-            <h3 className="text-[14px] font-bold text-[#17231c]">Incidents Log</h3>
-          </div>
-          {incidents.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
-          ) : incidents.map(({ id, priority, title, detail, tone }) => (
-            <div key={id || `${priority}-${title}`} className="flex h-[59px] items-center border-b border-[#e2e6e3]">
-              <span className={cn(
-                'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[9px] font-medium',
-                tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
-                tone === 'yellow' && 'bg-[#fff4d9] text-[#c78a18]',
-                tone === 'blue' && 'bg-[#eaf2fb] text-[#3974ad]',
-                tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
-              )}>{priority}</span>
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-bold text-[#17231c]">{title}</p>
-                <p className="truncate text-[9px] text-[#818b84]">{detail}</p>
-              </div>
-            </div>
-          ))}
-        </aside>
+        <OpsIncidentsSidebar incidents={incidents} />
       </div>
 
       <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={setActiveChat} />
-      {activeChat ? (
-        <AdminChatPanel
-          key={activeChat.id}
-          chat={activeChat}
-          onClose={() => setActiveChat(null)}
-          onMarkedRead={handleChatMarkedRead}
-        />
-      ) : null}
+      {modals}
     </div>
   )
 }

@@ -3,6 +3,8 @@ import {
   COMMISSION_UI_TO_MODEL,
   mapWizardCustomFeesToApi,
 } from './mapAdminVendorCommission'
+import { mapWizardHoursToOpeningHours } from './mapAdminVendorBranches'
+import { mapAdminStaffPermissionsToApi } from './mapAdminVendorStaff'
 
 const SERVICE_MODE_UI_TO_API = {
   'Hot food · on demand': 'hotFoodOnDemand',
@@ -64,6 +66,7 @@ function mapCreateBranches(branches = []) {
       const deliveryRadiusKm = num(branch.deliveryRadiusKm ?? branch.radiusKm ?? branch.radius)
       const minOrderAmount = num(branch.minOrderAmount ?? branch.minOrderValue ?? branch.minOrder)
       const etaMin = num(branch.etaMin ?? branch.eta)
+      const deliveryFee = num(branch.deliveryFee)
 
       const item = {
         name,
@@ -80,6 +83,19 @@ function mapCreateBranches(branches = []) {
       if (deliveryRadiusKm != null) item.deliveryRadiusKm = deliveryRadiusKm
       if (minOrderAmount != null) item.minOrderAmount = minOrderAmount
       if (etaMin != null) item.etaMin = etaMin
+      if (deliveryFee != null) item.deliveryFee = deliveryFee
+
+      const openingHours =
+        branch.openingHours ||
+        mapWizardHoursToOpeningHours(branch.hours)
+      if (openingHours) item.openingHours = openingHours
+
+      const statusRaw = trim(branch.operationalStatus || '').toUpperCase()
+      if (statusRaw === 'OPEN' || statusRaw === 'CLOSED' || statusRaw === 'BUSY') {
+        item.operationalStatus = statusRaw
+      } else if (typeof branch.branchOnline === 'boolean') {
+        item.operationalStatus = branch.branchOnline ? 'OPEN' : 'CLOSED'
+      }
 
       return item
     })
@@ -100,13 +116,10 @@ function mapAdditionalUsers(users = [], branches = []) {
         })
       }
 
+      // Create-vendor wizardUserSchema only allows BRANCH_MANAGER | STAFF
+      // (owner is the vendor admin). Map "Vendor admin" → BRANCH_MANAGER.
       const roleRaw = trim(user.role || 'BRANCH_MANAGER').toUpperCase().replace(/\s+/g, '_')
-      const role =
-        roleRaw.includes('ADMIN') || roleRaw.includes('OWNER')
-          ? 'VENDOR_ADMIN'
-          : roleRaw.includes('STAFF')
-            ? 'STAFF'
-            : 'BRANCH_MANAGER'
+      const role = roleRaw.includes('STAFF') || roleRaw.includes('OPERATOR') ? 'STAFF' : 'BRANCH_MANAGER'
 
       let branchIndex = 0
       if (user.branchIndex != null && !Number.isNaN(Number(user.branchIndex))) {
@@ -122,7 +135,8 @@ function mapAdditionalUsers(users = [], branches = []) {
       }
 
       // Postman create body uses local digits only (e.g. "38001122"), not "+973 …"
-      const phoneDigits = splitOwnerPhone(user.phone).phone
+      const phoneParts = splitOwnerPhone(user.phone)
+      const phoneDigits = phoneParts.phone
 
       const item = {
         displayName,
@@ -130,11 +144,34 @@ function mapAdditionalUsers(users = [], branches = []) {
         password,
         role,
         branchIndex,
+        countryCode: phoneParts.countryCode || '+973',
       }
       if (phoneDigits) item.phone = phoneDigits
+
+      const permissions = mapAdminStaffPermissionsToApi(user.permissions)
+      if (permissions) item.permissions = permissions
+
       return item
     })
     .filter(Boolean)
+}
+
+function mapGatewayFees(form = {}) {
+  const source = form.gatewayFees || form
+  const mapped = {}
+  for (const key of [
+    'fixedPct',
+    'debitPct',
+    'creditPct',
+    'applePayPct',
+    'googleWalletPct',
+    'otherChargesPct',
+    'fixedCharge',
+  ]) {
+    const value = num(source[key])
+    if (value != null) mapped[key] = value
+  }
+  return Object.keys(mapped).length ? mapped : undefined
 }
 
 function mapCommission(form = {}, { customFees = [], commissionTiers = [] } = {}) {
@@ -164,15 +201,18 @@ function mapCommission(form = {}, { customFees = [], commissionTiers = [] } = {}
     commission.commissionTiers = tiers.length
       ? tiers
       : [{ fromAmount: 0, ratePct: num(stripPercent(form.commissionRate)) || 15 }]
-    // Confirmed on TIERED create body — always send array (may be empty)
-    commission.customFees = mapWizardCustomFeesToApi(customFees)
   }
+
+  commission.customFees = mapWizardCustomFeesToApi(customFees)
 
   const platform = num(form.serviceFee)
   if (platform != null) commission.platformServiceFee = platform
 
   const vat = num(stripPercent(form.vatOnCommission))
   if (vat != null) commission.vatOnCommissionPct = vat
+
+  const gatewayFees = mapGatewayFees(form)
+  if (gatewayFees) commission.gatewayFees = gatewayFees
 
   return commission
 }
@@ -200,7 +240,15 @@ function mapServiceModes(selectedModes = []) {
   return serviceModes
 }
 
-function mapSla(form = {}, selectedModes = []) {
+function durationFieldToMinutes(field) {
+  if (!field || typeof field !== 'object') return null
+  const h = num(field.h) || 0
+  const m = num(field.m) || 0
+  const s = num(field.s) || 0
+  return h * 60 + m + s / 60
+}
+
+function mapSla(form = {}, selectedModes = [], slaConfigs = {}) {
   const sla = {
     serviceModes: mapServiceModes(selectedModes),
     config: {},
@@ -213,6 +261,17 @@ function mapSla(form = {}, selectedModes = []) {
   const prep = num(stripPercent(form.prepSla).replace(/min/gi, ''))
   if (acceptance != null) sla.config.acceptanceCutoffMin = acceptance
   if (prep != null) sla.config.prepTimeHotFoodMin = prep
+
+  // Prefer customized Hot food acceptance when present
+  const hotFood = slaConfigs?.['Hot food · on demand']
+  if (hotFood?.customized && hotFood.fields?.acceptance) {
+    const mins = durationFieldToMinutes(hotFood.fields.acceptance)
+    if (mins != null) sla.config.acceptanceCutoffMin = Math.round(mins)
+  }
+
+  if (slaConfigs && typeof slaConfigs === 'object' && Object.keys(slaConfigs).length) {
+    sla.config.modeConfigs = slaConfigs
+  }
 
   if (!Object.keys(sla.config).length) {
     sla.config = {
@@ -235,6 +294,7 @@ function mapSla(form = {}, selectedModes = []) {
  * @param {array} [input.customFees]
  * @param {array} [input.commissionTiers]
  * @param {array} [input.serviceModes]
+ * @param {object} [input.slaConfigs]
  * @param {boolean} [input.activate]
  */
 export function mapAdminCreateVendorRequest(input = {}) {
@@ -245,6 +305,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     customFees = [],
     commissionTiers = [],
     serviceModes = [],
+    slaConfigs = {},
     activate = false,
   } = input
 
@@ -271,19 +332,29 @@ export function mapAdminCreateVendorRequest(input = {}) {
   }
 
   const { countryCode, phone } = splitOwnerPhone(form.ownerPhone, form.ownerCountryCode)
+  const primaryBranch = mappedBranches[0]
+  // categoryLabel / city / area are no longer on the Store profile form —
+  // derive from store type + primary branch when the API still accepts them.
+  const categoryLabel = trim(form.storeType || form.categoryLabel) || undefined
+  const city = trim(primaryBranch?.city || form.city) || undefined
+  const area = trim(primaryBranch?.area || form.area) || undefined
+  const subcategoryId = trim(form.subcategoryId)
+  const crNumber = trim(form.crNumber)
+  const vatNumber = trim(form.vatNumber)
 
   const body = {
     name,
     legalName: trim(form.legalName) || name,
     storeTypeId,
-    categoryLabel: trim(form.categoryLabel || form.storeType) || undefined,
+    subcategoryId: subcategoryId || undefined,
+    categoryLabel,
     description: trim(form.description) || undefined,
     logoUrl: trim(form.logoUrl) || undefined,
     coverUrl: trim(form.coverUrl) || undefined,
-    city: trim(form.city) || undefined,
-    area: trim(form.area) || undefined,
-    crNumber: trim(form.crNumber) || undefined,
-    vatNumber: trim(form.vatNumber) || undefined,
+    city,
+    area,
+    crNumber: crNumber || undefined,
+    vatNumber: vatNumber || undefined,
     branches: mappedBranches,
     owner: {
       fullName: ownerName,
@@ -294,7 +365,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     },
     additionalUsers: mapAdditionalUsers(users, branches),
     commission: mapCommission(form, { customFees, commissionTiers }),
-    sla: mapSla(form, serviceModes),
+    sla: mapSla(form, serviceModes, slaConfigs),
     activate: Boolean(activate),
   }
 

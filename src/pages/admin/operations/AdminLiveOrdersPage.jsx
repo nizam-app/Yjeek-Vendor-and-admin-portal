@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, Clock3, RefreshCw, Search, ShieldAlert } from 'lucide-react'
+import { ArrowUpRight, Clock3, RefreshCw, Search } from 'lucide-react'
 import motoBike from '../../../assets/moto_bike.png'
 import { useAdminLiveOrders } from '../../../hooks/admin/useAdminLiveOrders'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
@@ -15,6 +15,7 @@ import { Button } from '../../../components/admin/Button'
 import { cn } from '../../../components/admin/cn'
 import { AdminChatPanel } from '../../../components/admin/operations/AdminChatPanel'
 import { AdminOpenChats } from '../../../components/admin/operations/AdminOpenChats'
+import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
 import { AdminOrderTakeActionPanel } from '../../../components/admin/operations/AdminOrderTakeActionPanel'
 import AdminReassignChampModal from '../../../components/admin/AdminReassignChampModal'
 import AdminRedispatchOrderModal from '../../../components/admin/AdminRedispatchOrderModal'
@@ -24,10 +25,22 @@ import AdminOrderSuspendChampModal from '../../../components/admin/AdminOrderSus
 import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal'
 import { adminOrderService } from '../../../services/admin/orderService'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import {
+  ADMIN_BOARD_FULL_LIMIT,
+  ADMIN_BOARD_PREVIEW_LIMIT,
+} from '../../../lib/adminBoardLimits'
 
 const DEFAULT_RESOLVE_OUTCOME = 'Resolved with refund'
 
 function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOrderClick }) {
+  const contactTypes =
+    Array.isArray(order.contactTypes) && order.contactTypes.length > 0
+      ? order.contactTypes
+      : order.contactType
+        ? [order.contactType]
+        : []
+
   return (
     <article
       role="button"
@@ -79,21 +92,25 @@ function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOr
             Incident
           </button>
         ) : null}
-        {order.contactType ? (
+        {contactTypes.map((contactType) => (
           <button
+            key={contactType}
             type="button"
+            disabled={!order.conversationId}
+            title={order.conversationId ? `Open ${contactType} chat` : 'No conversation yet'}
             onClick={(event) => {
               event.stopPropagation()
-              onContactClick?.(order)
+              if (!order.conversationId) return
+              onContactClick?.(order, contactType)
             }}
             className={cn(
-              'rounded-[9px] px-2 py-1 text-[9px] font-medium transition hover:brightness-95',
-              order.contactType === 'Champ' ? 'bg-[#e5efff] text-[#3470ae]' : 'bg-[#eee8ff] text-[#7454ad]',
+              'rounded-[9px] px-2 py-1 text-[9px] font-medium transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50',
+              contactType === 'Champ' ? 'bg-[#e5efff] text-[#3470ae]' : 'bg-[#eee8ff] text-[#7454ad]',
             )}
           >
-            💬 {order.contactType}
+            💬 {contactType}
           </button>
-        ) : null}
+        ))}
       </div>
       <p className="mt-1 flex items-center gap-1 truncate text-[9px] font-medium text-[#2f3933]">
         <img src={motoBike} alt="" className="h-3 w-3 shrink-0 object-contain" />
@@ -103,7 +120,7 @@ function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOr
   )
 }
 
-function AdminOrderDetailModal({ order, onClose }) {
+export function AdminOrderDetailModal({ order, onClose }) {
   const orderId = order?.orderId || null
   const { data: detail, error, isLoading, refetch } = useAdminOrderDetail(orderId)
   const {
@@ -248,7 +265,7 @@ function AdminOrderDetailModal({ order, onClose }) {
   )
 }
 
-function IncidentOrderModal({ order, onClose }) {
+export function IncidentOrderModal({ order, onClose }) {
   const [openActionMenu, setOpenActionMenu] = useState(null)
   const [activeAction, setActiveAction] = useState(null)
   const [resolving, setResolving] = useState(false)
@@ -627,7 +644,7 @@ function AdminLiveOrdersFullView({ column, chats, chatsActive, onBack, onInciden
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket,
     sort: 'time_left',
-    limit: 50,
+    limit: ADMIN_BOARD_FULL_LIMIT,
   })
 
   const bucketColumn =
@@ -719,7 +736,7 @@ export default function AdminLiveOrdersPage() {
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket: 'all',
     sort: 'time_left',
-    limit: 50,
+    limit: ADMIN_BOARD_PREVIEW_LIMIT,
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
@@ -744,10 +761,32 @@ export default function AdminLiveOrdersPage() {
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
-  const openOrderChat = (order) => {
-    const matchingChat = chats.find((chat) => chat.role === order.contactType) || chats[0]
-    if (!matchingChat) return
-    setActiveChat({ ...matchingChat, orderNumber: matchingChat.orderNumber || order.id })
+  const openOrderChat = (order, preferredRole) => {
+    const conversationId = order?.conversationId
+    if (!conversationId) return
+
+    const role = preferredRole || order.contactType || 'Customer'
+    const name =
+      role === 'Champ'
+        ? order.rider?.name || 'Champ'
+        : 'Customer'
+
+    // Prefer this order's conversation — never open a random open-chats strip item.
+    const matchingChat = chats.find((chat) => chat.conversationId === conversationId)
+
+    setActiveChat({
+      ...(matchingChat || {}),
+      id: conversationId,
+      conversationId,
+      orderId: order.orderId || matchingChat?.orderId || null,
+      orderNumber: order.id || matchingChat?.orderNumber || null,
+      role,
+      name: matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
+      initials: initialsFromPeerName(
+        matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
+      ),
+      peerRole: role === 'Champ' ? 'CHAMP' : 'CUSTOMER',
+    })
   }
 
   if (fullView) {
@@ -836,7 +875,7 @@ export default function AdminLiveOrdersPage() {
                   </button>
                 </div>
                 <div className="mt-2 space-y-2.5">
-                  {column.orders.map((order, index) => (
+                  {column.orders.slice(0, ADMIN_BOARD_PREVIEW_LIMIT).map((order, index) => (
                     <AdminLiveOrderCard
                       key={`${column.title}-${order.id}-${index}`}
                       order={order}
@@ -846,35 +885,22 @@ export default function AdminLiveOrdersPage() {
                       onOrderClick={setSelectedOrder}
                     />
                   ))}
+                  {column.count > ADMIN_BOARD_PREVIEW_LIMIT ? (
+                    <button
+                      type="button"
+                      onClick={() => setFullView(column)}
+                      className="w-full rounded-[9px] border border-dashed border-[#cfd7d1] bg-white px-2 py-2 text-[10px] font-medium text-[#3d7a55] hover:border-[#1a9b53] hover:text-[#14763f]"
+                    >
+                      View all {column.count} {column.title.toLowerCase()} orders ↗
+                    </button>
+                  ) : null}
                 </div>
               </section>
             ))}
           </div>
         </div>
 
-        <aside className="h-[441px] overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px]">
-          <div className="flex h-[43px] items-center gap-1.5">
-            <ShieldAlert size={14} className="text-[#d46763]" />
-            <h2 className="text-[14px] font-bold">Incidents Log</h2>
-          </div>
-          {incidents.length === 0 ? (
-            <div className="py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
-          ) : incidents.map(({ id, priority, title, detail, tone }) => (
-            <div key={id} className="flex h-[59px] items-center border-b border-[#e2e6e3]">
-              <span className={cn(
-                'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[9px] font-medium',
-                tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
-                tone === 'yellow' && 'bg-[#fff4d9] text-[#c78a18]',
-                tone === 'blue' && 'bg-[#eaf2fb] text-[#3974ad]',
-                tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
-              )}>{priority}</span>
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-bold">{title}</p>
-                <p className="truncate text-[9px] text-[#818b84]">{detail}</p>
-              </div>
-            </div>
-          ))}
-        </aside>
+        <OpsIncidentsSidebar incidents={incidents} />
       </div>
 
       <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={setActiveChat} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useMatch, useNavigate, useParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { formatApiErrorMessage } from '../../api/errors'
 import { useVendorPromotionDetail } from '../../hooks/vendor/useVendorPromotionDetail'
@@ -147,8 +147,9 @@ function addUniqueSelection(list, setList, extras) {
 export default function ConfigurePromotion() {
   const navigate = useNavigate()
   const { promoId: promoIdParam } = useParams()
-  const promoId = String(promoIdParam || '').trim()
-  const isEdit = Boolean(promoId)
+  const isNewRoute = Boolean(useMatch({ path: '/promotions/new', end: true }))
+  const promoId = isNewRoute ? '' : String(promoIdParam || '').trim()
+  const isEdit = Boolean(promoId) && promoId !== 'new'
 
   const { data: promoDetail, error: loadError, isLoading } = useVendorPromotionDetail(
     isEdit ? promoId : null,
@@ -231,35 +232,45 @@ export default function ConfigurePromotion() {
 
   async function handleSave() {
     setSaveError(null)
+    setSaving(true)
 
-    if (!isEdit) {
-      navigate('/promotions')
-      return
+    const payload = {
+      promoType,
+      active,
+      showDealBadge,
+      waiveFee,
+      firstOrderOnly,
+      noEndDate,
+      discountCheapest,
+      limitOneReward,
+      appliesTo,
+      branchScope,
+      unit,
+      reward,
+      tags,
+      buyItems,
+      getItems,
+      form,
     }
 
-    setSaving(true)
     try {
-      await promotionService.updatePromotion(promoId, {
-        promoType,
-        active,
-        showDealBadge,
-        waiveFee,
-        firstOrderOnly,
-        noEndDate,
-        discountCheapest,
-        limitOneReward,
-        appliesTo,
-        branchScope,
-        unit,
-        reward,
-        tags,
-        buyItems,
-        getItems,
-        form,
-      })
+      if (!isEdit) {
+        const created = await promotionService.createPromotion(payload)
+        const createdId = created?.data?.id
+        if (createdId) {
+          navigate(`/promotions/${encodeURIComponent(createdId)}`)
+        } else {
+          navigate('/promotions')
+        }
+        return
+      }
+
+      await promotionService.updatePromotion(promoId, payload)
       navigate(`/promotions/${encodeURIComponent(promoId)}`)
     } catch (err) {
-      setSaveError(formatApiErrorMessage(err, 'Failed to update promotion.'))
+      setSaveError(
+        formatApiErrorMessage(err, isEdit ? 'Failed to update promotion.' : 'Failed to create promotion.'),
+      )
     } finally {
       setSaving(false)
     }

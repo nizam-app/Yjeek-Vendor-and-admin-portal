@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical } from 'lucide-react'
-import { getProductImage } from '../data/productImages'
 import { resolveAdminMediaUrl } from '../mappers/admin/mapAdminUpload'
 import { formatApiErrorMessage } from '../api/errors'
 import {
@@ -75,17 +74,45 @@ export const SAMPLE_PRODUCT = {
 
 export const EMPTY_PRODUCT = SAMPLE_PRODUCT
 
+/** Dedupe imageUrl + imageUrls into main + extras (extras-only list). */
+function normalizeRemoteImages(product = {}) {
+  const seen = new Set()
+  const urls = []
+  const push = (value) => {
+    const url = String(value || '').trim()
+    if (!url || url.startsWith('blob:') || url.startsWith('data:')) return
+    if (seen.has(url)) return
+    seen.add(url)
+    urls.push(url)
+  }
+  push(product.imageUrl)
+  if (Array.isArray(product.imageUrls)) {
+    product.imageUrls.forEach(push)
+  }
+  return {
+    imageUrl: urls[0] || null,
+    imageUrls: urls.slice(1),
+  }
+}
+
 function buildForm(product) {
   const addOns = product.addOns?.length ? product.addOns.map((item) => ({ ...item })) : []
   while (addOns.length < 3) addOns.push({ name: '', price: '+0.000' })
+
+  const remotes = normalizeRemoteImages(product)
 
   return {
     name: product.name ?? '',
     nameAr: product.nameAr ?? '',
     priceValue: product.priceValue ?? String(product.price || '').replace(/[^\d.]/g, ''),
-    categoryValue: product.categoryValue ?? 'Main course',
+    categoryValue: product.categoryValue ?? '',
+    categoryRootId: product.categoryRootId ?? '',
+    subcategoryId: product.subcategoryId ?? '',
+    subSubcategoryId: product.subSubcategoryId ?? '',
     subcategory: product.subcategory ?? 'None',
     subSubcategory: product.subSubcategory ?? 'None',
+    catalogCategoryId: product.catalogCategoryId ?? '',
+    platformCategoryId: product.platformCategoryId ?? null,
     prepTime: product.prepTime ?? '20',
     descriptionEn: product.descriptionEn ?? '',
     descriptionAr: product.descriptionAr ?? '',
@@ -93,12 +120,12 @@ function buildForm(product) {
     timeSlot: product.timeSlot ?? 'All day',
     availableFrom: product.availableFrom ?? '11:00',
     availableTo: product.availableTo ?? '23:00',
-    optionGroups: product.optionGroups?.length ? product.optionGroups : DEFAULT_OPTION_GROUPS,
+    optionGroups: product.optionGroups?.length ? product.optionGroups : [],
     addOns,
     active: product.active ?? product.status === 'Active',
     icon: product.icon ?? '🍔',
-    imageUrl: product.imageUrl || null,
-    imageUrls: Array.isArray(product.imageUrls) ? product.imageUrls.filter(Boolean) : [],
+    imageUrl: remotes.imageUrl,
+    imageUrls: remotes.imageUrls,
     imageFiles: [null, null, null, null],
     imagePreviews: [null, null, null, null],
   }
@@ -162,6 +189,10 @@ export default function EditProductModal({
   onClose,
   onSave,
   categories = [],
+  categoryTree = [],
+  badgeOptions = [],
+  catalogId = null,
+  catalogSlug = '',
   isSaving = false,
   isLoadingDetail = false,
   saveError = '',
@@ -173,43 +204,110 @@ export default function EditProductModal({
   const isAdd = mode === 'add'
   const source = isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT
 
+  const tree = useMemo(
+    () => (Array.isArray(categoryTree) && categoryTree.length ? categoryTree : []),
+    [categoryTree],
+  )
+
+  const resolvedBadgeOptions = useMemo(() => {
+    if (Array.isArray(badgeOptions) && badgeOptions.length > 0) {
+      return badgeOptions.map((badge) =>
+        typeof badge === 'string'
+          ? { label: badge, code: badge.toUpperCase().replace(/\s+/g, '_') }
+          : {
+              label: badge.label || badge.name || badge.code,
+              code: badge.code || String(badge.label || '').toUpperCase().replace(/\s+/g, '_'),
+            },
+      )
+    }
+    if (String(catalogSlug).toLowerCase().includes('food')) {
+      return BADGE_OPTIONS.map((label) => ({
+        label,
+        code: label.toUpperCase().replace(/[-\s]+/g, '_'),
+      }))
+    }
+    return BADGE_OPTIONS.map((label) => ({
+      label,
+      code: label.toUpperCase().replace(/[-\s]+/g, '_'),
+    }))
+  }, [badgeOptions, catalogSlug])
+
   const categoryOptions = useMemo(() => {
+    if (tree.length > 0) {
+      return [
+        { value: '', label: 'Select category' },
+        ...tree.map((node) => ({ value: node.id, label: node.name })),
+      ]
+    }
     if (Array.isArray(categories) && categories.length > 0) {
       return [
         { value: '', label: 'Select category' },
-        ...categories.map((category) => ({
-          value: category.id,
-          label:
-            category.depth > 0
-              ? `${'— '.repeat(category.depth)}${category.name}`
-              : category.name,
-        })),
+        ...categories
+          .filter((category) => !category.parentId && (category.depth === 0 || category.depth == null))
+          .map((category) => ({
+            value: category.id,
+            label: category.name,
+          })),
       ]
     }
+    return [{ value: '', label: 'Select category' }]
+  }, [tree, categories])
+
+  const subcategoryNodes = useMemo(() => {
+    if (!form?.categoryRootId) return []
+    const root = tree.find((node) => node.id === form.categoryRootId)
+    return Array.isArray(root?.children) ? root.children : []
+  }, [tree, form?.categoryRootId])
+
+  const subcategoryOptions = useMemo(() => {
+    if (!subcategoryNodes.length) return [{ value: '', label: 'None' }]
     return [
-      { value: '', label: 'Select category' },
-      ...['Main course', 'Drinks', 'Desserts', 'Sides', 'Pizza', 'Salads'].map((name) => ({
-        value: name,
-        label: name,
-      })),
+      { value: '', label: 'None' },
+      ...subcategoryNodes.map((node) => ({ value: node.id, label: node.name })),
     ]
-  }, [categories])
+  }, [subcategoryNodes])
+
+  const subSubcategoryNodes = useMemo(() => {
+    if (!form?.subcategoryId) return []
+    const node = subcategoryNodes.find((item) => item.id === form.subcategoryId)
+    return Array.isArray(node?.children) ? node.children : []
+  }, [subcategoryNodes, form?.subcategoryId])
+
+  const subSubcategoryOptions = useMemo(() => {
+    if (!subSubcategoryNodes.length) return [{ value: '', label: 'None' }]
+    return [
+      { value: '', label: 'None' },
+      ...subSubcategoryNodes.map((node) => ({ value: node.id, label: node.name })),
+    ]
+  }, [subSubcategoryNodes])
 
   useEffect(() => {
     if (!open) return
     const base = buildForm(isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT)
-    const matchedCategory =
-      categories.find((category) => category.id === product?.catalogCategoryId) ||
-      categories.find(
-        (category) =>
-          category.name === (product?.catalogCategoryName || product?.categoryValue || base.categoryValue),
-      ) ||
-      categories.find((category) => category.name === 'Main course') ||
-      categories[0] ||
-      null
+    const chain = Array.isArray(product?.categoryChain) ? product.categoryChain : []
+    let categoryRootId = product?.categoryRootId || ''
+    let subcategoryId = product?.subcategoryId || ''
+    let subSubcategoryId = product?.subSubcategoryId || ''
+
+    if (chain.length >= 1 && !categoryRootId) categoryRootId = chain[0].id
+    if (chain.length === 2 && !subcategoryId) {
+      // root + leaf: treat leaf as category (single level under root stored as catalogCategoryId)
+      categoryRootId = chain[0].id
+    }
+    if (chain.length >= 3) {
+      categoryRootId = chain[0].id
+      subcategoryId = chain[1].id
+      subSubcategoryId = chain[2].id
+    }
+
+    const leafId =
+      subSubcategoryId ||
+      subcategoryId ||
+      categoryRootId ||
+      product?.catalogCategoryId ||
+      ''
 
     setForm((previous) => {
-      // Revoke any leftover blob previews from a previous open.
       if (previous?.imagePreviews) {
         previous.imagePreviews.forEach((url) => {
           if (url && String(url).startsWith('blob:')) URL.revokeObjectURL(url)
@@ -217,13 +315,26 @@ export default function EditProductModal({
       }
       return {
         ...base,
-        catalogCategoryId: matchedCategory?.id || product?.catalogCategoryId || '',
-        categoryValue: matchedCategory?.name || base.categoryValue,
+        categoryRootId,
+        subcategoryId,
+        subSubcategoryId,
+        catalogCategoryId: leafId,
+        categoryValue: product?.catalogCategoryName || base.categoryValue,
+        platformCategoryId: catalogId || product?.platformCategoryId || null,
+        optionGroups: isAdd ? [] : base.optionGroups,
+        addOns: isAdd
+          ? [
+              { name: '', price: '+0.000' },
+              { name: '', price: '+0.000' },
+              { name: '', price: '+0.000' },
+            ]
+          : base.addOns,
+        badges: isAdd ? [] : base.badges,
       }
     })
     setOptionModal({ open: false, index: null, group: null })
     setUploadError('')
-  }, [open, product, mode, isAdd, categories])
+  }, [open, product, mode, isAdd, catalogId])
 
   useEffect(() => {
     if (!open) return undefined
@@ -339,11 +450,36 @@ export default function EditProductModal({
     })
   }
 
-  function toggleBadge(badge) {
+  function toggleBadge(badgeLabel) {
     setForm((c) => ({
       ...c,
-      badges: c.badges.includes(badge) ? c.badges.filter((b) => b !== badge) : [...c.badges, badge],
+      badges: c.badges.includes(badgeLabel)
+        ? c.badges.filter((b) => b !== badgeLabel)
+        : [...c.badges, badgeLabel],
     }))
+  }
+
+  function resolveLeafCategoryId(nextForm = form) {
+    return (
+      nextForm.subSubcategoryId ||
+      nextForm.subcategoryId ||
+      nextForm.categoryRootId ||
+      nextForm.catalogCategoryId ||
+      null
+    )
+  }
+
+  function findCategoryName(id) {
+    if (!id) return ''
+    const walk = (nodes) => {
+      for (const node of nodes || []) {
+        if (node.id === id) return node.name
+        const nested = walk(node.children)
+        if (nested) return nested
+      }
+      return ''
+    }
+    return walk(tree) || categories.find((c) => c.id === id)?.name || ''
   }
 
   function updateAddOn(index, field, value) {
@@ -394,51 +530,59 @@ export default function EditProductModal({
     const name = form.name.trim() || 'Untitled product'
     const filledAddOns = form.addOns.filter((item) => item.name.trim())
     const hasOptions = Boolean(form.optionGroups?.length || filledAddOns.length)
-    const selectedCategory =
-      categories.find((category) => category.id === form.catalogCategoryId) ||
-      categories.find((category) => category.name === form.categoryValue) ||
-      null
-    const categoryName = selectedCategory?.name || form.categoryValue || 'Main course'
-    const imageUrl = form.imageUrl || null
-    const imageUrls = Array.isArray(form.imageUrls) ? form.imageUrls.filter(Boolean) : []
-    const imageFiles = (Array.isArray(form.imageFiles) ? form.imageFiles : []).filter(
-      (file) => file instanceof File,
-    )
+    const leafCategoryId = resolveLeafCategoryId(form)
+    const categoryName = findCategoryName(leafCategoryId) || form.categoryValue || '—'
+    const remotes = normalizeRemoteImages(form)
+    const imageUrl = remotes.imageUrl
+    const imageUrls = remotes.imageUrls
+    // Keep slot alignment (including nulls) so uploads merge with remotes correctly.
+    const imageFiles = Array.isArray(form.imageFiles)
+      ? [...form.imageFiles]
+      : [null, null, null, null]
+    while (imageFiles.length < 4) imageFiles.push(null)
 
-    await onSave?.({
-      ...SAMPLE_PRODUCT,
-      ...source,
-      id: isAdd ? null : source.id,
-      name,
-      nameAr: form.nameAr,
-      priceValue,
-      price: `${priceValue} BHD${hasOptions ? ' +' : ''}`,
-      category: `Food · ${categoryName === 'Main course' ? 'Mains' : categoryName}`,
-      categoryValue: categoryName,
-      catalogCategoryId: form.catalogCategoryId || selectedCategory?.id || null,
-      catalogCategoryName: categoryName,
-      subcategory: form.subcategory,
-      subSubcategory: form.subSubcategory,
-      prepTime: form.prepTime,
-      descriptionEn: form.descriptionEn,
-      descriptionAr: form.descriptionAr,
-      badges: form.badges,
-      timeSlot: form.timeSlot,
-      availableFrom: form.availableFrom,
-      availableTo: form.availableTo,
-      optionGroups: form.optionGroups,
-      addOns: filledAddOns,
-      active: form.active,
-      status: form.active ? 'Active' : 'Draft',
-      badge: hasOptions ? 'Options' : 'Simple',
-      badgeTone: hasOptions ? 'options' : 'simple',
-      icon: form.icon || '🍔',
-      stock: source.stock || 'Made to order',
-      stockType: 'MADE_TO_ORDER',
-      imageUrl,
-      imageUrls,
-      imageFiles,
-    })
+    try {
+      await onSave?.({
+        ...SAMPLE_PRODUCT,
+        ...source,
+        id: isAdd ? null : source.id,
+        name,
+        nameAr: form.nameAr,
+        priceValue,
+        price: `${priceValue} BHD${hasOptions ? ' +' : ''}`,
+        category: categoryName,
+        categoryValue: categoryName,
+        platformCategoryId: catalogId || form.platformCategoryId || null,
+        catalogCategoryId: leafCategoryId,
+        catalogCategoryName: categoryName,
+        categoryRootId: form.categoryRootId || '',
+        subcategoryId: form.subcategoryId || '',
+        subSubcategoryId: form.subSubcategoryId || '',
+        subcategory: findCategoryName(form.subcategoryId) || 'None',
+        subSubcategory: findCategoryName(form.subSubcategoryId) || 'None',
+        prepTime: form.prepTime,
+        descriptionEn: form.descriptionEn,
+        descriptionAr: form.descriptionAr,
+        badges: form.badges,
+        timeSlot: form.timeSlot,
+        availableFrom: form.availableFrom,
+        availableTo: form.availableTo,
+        optionGroups: form.optionGroups,
+        addOns: filledAddOns,
+        active: form.active,
+        status: form.active ? 'Active' : 'Draft',
+        badge: hasOptions ? 'Options' : 'Simple',
+        badgeTone: hasOptions ? 'options' : 'simple',
+        icon: form.icon || '🍔',
+        stock: source.stock || 'Made to order',
+        stockType: 'MADE_TO_ORDER',
+        imageUrl,
+        imageUrls,
+        imageFiles,
+      })
+    } catch (err) {
+      setUploadError(formatApiErrorMessage(err, 'Unable to save product images.'))
+    }
   }
 
   return (
@@ -532,27 +676,10 @@ export default function EditProductModal({
                           isMain ? 'bg-[#E3F2EB]' : ''
                         }`}
                       >
-                        {isMain && !isAdd && product?.id && !form.imageUrl ? (
-                          <>
-                            <img
-                              src={getProductImage(product)}
-                              alt=""
-                              className="size-11 object-contain"
-                            />
-                            <span className="inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 py-1">
-                              <span className="text-[11px] font-medium leading-[13px] text-[#127036]">
-                                Main
-                              </span>
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[20px] font-bold leading-6 text-[#949C94]">＋</span>
-                            <span className="text-[10px] font-medium leading-3 text-[#949C94]">
-                              {isMain ? 'Main' : 'Add'}
-                            </span>
-                          </>
-                        )}
+                        <span className="text-[20px] font-bold leading-6 text-[#949C94]">＋</span>
+                        <span className="text-[10px] font-medium leading-3 text-[#949C94]">
+                          {isMain ? 'Main' : 'Add'}
+                        </span>
                       </button>
                     )}
                   </div>
@@ -602,34 +729,61 @@ export default function EditProductModal({
               <FieldSelect
                 className="w-[148px] shrink-0"
                 label="CATEGORY"
-                value={form.catalogCategoryId || form.categoryValue}
+                value={form.categoryRootId || ''}
                 onChange={(e) => {
-                  const nextValue = e.target.value
-                  const selected = categories.find((category) => category.id === nextValue)
+                  const nextRoot = e.target.value
+                  const selected = tree.find((node) => node.id === nextRoot)
                   setForm((current) => ({
                     ...current,
-                    catalogCategoryId: nextValue,
-                    categoryValue: selected?.name || nextValue,
+                    categoryRootId: nextRoot,
+                    subcategoryId: '',
+                    subSubcategoryId: '',
+                    catalogCategoryId: nextRoot || '',
+                    categoryValue: selected?.name || '',
                   }))
                 }}
                 options={categoryOptions}
               />
 
-              <FieldSelect
-                className="min-w-0 flex-1"
-                label="SUBCATEGORY"
-                value={form.subcategory}
-                onChange={(e) => updateField('subcategory', e.target.value)}
-                options={['None', 'Mains', 'Burgers', 'Cold drinks', 'Hot drinks']}
-              />
+              {subcategoryNodes.length > 0 ? (
+                <FieldSelect
+                  className="min-w-0 flex-1"
+                  label="SUBCATEGORY"
+                  value={form.subcategoryId || ''}
+                  onChange={(e) => {
+                    const nextSub = e.target.value
+                    const selected = subcategoryNodes.find((node) => node.id === nextSub)
+                    setForm((current) => ({
+                      ...current,
+                      subcategoryId: nextSub,
+                      subSubcategoryId: '',
+                      catalogCategoryId: nextSub || current.categoryRootId || '',
+                      subcategory: selected?.name || 'None',
+                    }))
+                  }}
+                  options={subcategoryOptions}
+                />
+              ) : null}
 
-              <FieldSelect
-                className="min-w-0 flex-1"
-                label="SUB-SUBCATEGORY"
-                value={form.subSubcategory}
-                onChange={(e) => updateField('subSubcategory', e.target.value)}
-                options={['None', 'Beef', 'Chicken', 'Veg']}
-              />
+              {subSubcategoryNodes.length > 0 ? (
+                <FieldSelect
+                  className="min-w-0 flex-1"
+                  label="SUB-SUBCATEGORY"
+                  value={form.subSubcategoryId || ''}
+                  onChange={(e) => {
+                    const nextLeaf = e.target.value
+                    const selected = subSubcategoryNodes.find((node) => node.id === nextLeaf)
+                    setForm((current) => ({
+                      ...current,
+                      subSubcategoryId: nextLeaf,
+                      catalogCategoryId:
+                        nextLeaf || current.subcategoryId || current.categoryRootId || '',
+                      subSubcategory: selected?.name || 'None',
+                    }))
+                  }}
+                  options={subSubcategoryOptions}
+                />
+              ) : null}
 
               <div className="flex w-[110px] shrink-0 flex-col items-start gap-1.5">
                 <label className={labelClass}>PREP TIME (MINS)</label>
@@ -665,9 +819,13 @@ export default function EditProductModal({
             {/* Badges */}
             <p className="text-[12.5px] font-bold leading-[15px] text-[#1A1A1A]">Badges</p>
             <div className="-mt-1 flex w-full flex-row flex-wrap content-start items-start gap-2">
-              {BADGE_OPTIONS.map((badge) => (
-                <Chip key={badge} selected={form.badges.includes(badge)} onClick={() => toggleBadge(badge)}>
-                  {badge}
+              {resolvedBadgeOptions.map((badge) => (
+                <Chip
+                  key={badge.code || badge.label}
+                  selected={form.badges.includes(badge.label)}
+                  onClick={() => toggleBadge(badge.label)}
+                >
+                  {badge.label}
                 </Chip>
               ))}
             </div>

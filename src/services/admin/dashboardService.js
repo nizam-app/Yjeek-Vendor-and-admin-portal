@@ -5,11 +5,88 @@ import { mapAdminDashboardOverviewResponse, attachOverviewBucketOrderPreviews } 
 import { mapAdminDashboardMapResponse } from '../../mappers/admin/mapAdminDashboardMap'
 import { mapAdminLiveOrdersResponse } from '../../mappers/admin/mapAdminLiveOrders'
 import { mapAdminScheduledBoardResponse } from '../../mappers/admin/mapAdminScheduledBoard'
+import { mapAdminScheduledCalendarResponse } from '../../mappers/admin/mapAdminScheduledCalendar'
 import { mapAdminPickupBoardResponse } from '../../mappers/admin/mapAdminPickupBoard'
 import { mapAdminDineInBoardResponse } from '../../mappers/admin/mapAdminDineInBoard'
 import { mapAdminServicesBoardResponse } from '../../mappers/admin/mapAdminServicesBoard'
 import { mapAdminChatsResponse } from '../../mappers/admin/mapAdminChats'
 import { adminIncidentService } from './incidentService'
+
+/**
+ * Mode boards (pickup / dine_in / services): fetch each risk bucket so
+ * On Track is not starved when Critical fills a single limit.
+ */
+async function fetchModeBoardByBuckets(path, mapResponse, options = {}) {
+  const {
+    limit = 5,
+    region,
+    params,
+    ...requestOptions
+  } = options
+
+  const sharedParams = {
+    limit,
+    ...(region ? { region } : {}),
+    ...(params || {}),
+  }
+
+  // If caller already pinned a bucket (full-view filter), do one request.
+  if (sharedParams.bucket && sharedParams.bucket !== 'all') {
+    const response = await apiClient.get(path, {
+      ...requestOptions,
+      params: sharedParams,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return {
+      data: mapResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  }
+
+  const [criticalRes, atRiskRes, onTrackRes] = await Promise.all([
+    apiClient.get(path, {
+      ...requestOptions,
+      params: { ...sharedParams, bucket: 'critical' },
+      scope: 'admin',
+      feature: 'dashboard',
+    }),
+    apiClient.get(path, {
+      ...requestOptions,
+      params: { ...sharedParams, bucket: 'at_risk' },
+      scope: 'admin',
+      feature: 'dashboard',
+    }),
+    apiClient.get(path, {
+      ...requestOptions,
+      params: { ...sharedParams, bucket: 'on_track' },
+      scope: 'admin',
+      feature: 'dashboard',
+    }),
+  ])
+
+  const counts =
+    criticalRes?.data?.counts ||
+    atRiskRes?.data?.counts ||
+    onTrackRes?.data?.counts ||
+    {}
+
+  const items = [
+    ...(Array.isArray(criticalRes?.data?.items) ? criticalRes.data.items : []),
+    ...(Array.isArray(atRiskRes?.data?.items) ? atRiskRes.data.items : []),
+    ...(Array.isArray(onTrackRes?.data?.items) ? onTrackRes.data.items : []),
+  ]
+
+  return {
+    data: mapResponse({
+      ...(criticalRes?.data && typeof criticalRes.data === 'object' ? criticalRes.data : {}),
+      counts,
+      bucket: 'all',
+      items,
+    }),
+    meta: criticalRes?.meta ?? atRiskRes?.meta ?? onTrackRes?.meta ?? null,
+  }
+}
 
 /**
  * Admin dashboard service.
@@ -119,6 +196,8 @@ export const adminDashboardService = {
 
   /**
    * GET /admin/dashboard/orders?bucket=&sort=&limit=
+   * Board (`bucket=all`) fetches each risk column separately so Critical cannot
+   * fill `limit` and leave At Risk / On Track empty while counts still show.
    * @param {{ bucket?: string, sort?: string, limit?: number, region?: string, params?: object, signal?: AbortSignal }} [options]
    */
   async getLiveOrders(options = {}) {
@@ -132,14 +211,63 @@ export const adminDashboardService = {
     } = options
 
     if (isAdminRealApiFeature('dashboard')) {
+      const sharedParams = {
+        sort,
+        limit,
+        ...(region ? { region } : {}),
+        ...(params || {}),
+      }
+
+      if (bucket === 'all') {
+        const [criticalRes, atRiskRes, onTrackRes] = await Promise.all([
+          apiClient.get(endpoints.admin.dashboard.orders, {
+            ...requestOptions,
+            params: { ...sharedParams, bucket: 'critical' },
+            scope: 'admin',
+            feature: 'dashboard',
+          }),
+          apiClient.get(endpoints.admin.dashboard.orders, {
+            ...requestOptions,
+            params: { ...sharedParams, bucket: 'at_risk' },
+            scope: 'admin',
+            feature: 'dashboard',
+          }),
+          apiClient.get(endpoints.admin.dashboard.orders, {
+            ...requestOptions,
+            params: { ...sharedParams, bucket: 'on_track' },
+            scope: 'admin',
+            feature: 'dashboard',
+          }),
+        ])
+
+        const counts =
+          criticalRes?.data?.counts ||
+          atRiskRes?.data?.counts ||
+          onTrackRes?.data?.counts ||
+          {}
+
+        const items = [
+          ...(Array.isArray(criticalRes?.data?.items) ? criticalRes.data.items : []),
+          ...(Array.isArray(atRiskRes?.data?.items) ? atRiskRes.data.items : []),
+          ...(Array.isArray(onTrackRes?.data?.items) ? onTrackRes.data.items : []),
+        ]
+
+        return {
+          data: mapAdminLiveOrdersResponse({
+            counts,
+            bucket: 'all',
+            sort,
+            items,
+          }),
+          meta: criticalRes?.meta ?? atRiskRes?.meta ?? onTrackRes?.meta ?? null,
+        }
+      }
+
       const response = await apiClient.get(endpoints.admin.dashboard.orders, {
         ...requestOptions,
         params: {
+          ...sharedParams,
           bucket,
-          sort,
-          limit,
-          ...(region ? { region } : {}),
-          ...(params || {}),
         },
         scope: 'admin',
         feature: 'dashboard',
@@ -156,6 +284,83 @@ export const adminDashboardService = {
       params,
       scope: 'admin',
     })
+  },
+
+  /**
+   * GET /admin/dashboard/boards/scheduled/calendar?weekStart=&governorate=&city=&block=&type=&q=&sort=&limit=
+   * Location cascade is applied client-side; pass filters when narrowing a single value.
+   * @param {{
+   *   weekStart?: string,
+   *   governorate?: string,
+   *   city?: string,
+   *   block?: string,
+   *   type?: string,
+   *   vendorId?: string,
+   *   driverId?: string,
+   *   q?: string,
+   *   sort?: string,
+   *   limit?: number,
+   *   region?: string,
+   *   params?: object,
+   *   signal?: AbortSignal,
+   * }} [options]
+   */
+  async getScheduledCalendar(options = {}) {
+    const {
+      weekStart,
+      governorate = 'all',
+      city,
+      block,
+      type = 'all',
+      vendorId,
+      driverId,
+      q,
+      sort = 'window_asc',
+      limit = 100,
+      region,
+      params,
+      ...requestOptions
+    } = options
+
+    if (isAdminRealApiFeature('dashboard')) {
+      const response = await apiClient.get(endpoints.admin.dashboard.boards.scheduledCalendar, {
+        ...requestOptions,
+        params: {
+          weekStart,
+          governorate,
+          city,
+          block,
+          type,
+          vendorId,
+          driverId,
+          q,
+          sort,
+          limit,
+          ...(region ? { region } : {}),
+          ...(params || {}),
+        },
+        scope: 'admin',
+        feature: 'dashboard',
+      })
+
+      return {
+        data: mapAdminScheduledCalendarResponse(response?.data),
+        meta: response?.meta ?? null,
+      }
+    }
+
+    return {
+      data: mapAdminScheduledCalendarResponse({
+        view: 'calendar',
+        title: 'Orders × available delivery days',
+        days: [],
+        governorateCounts: [],
+        filters: {},
+        counts: { orders: 0, allMatched: 0, scheduledToday: 0 },
+        items: [],
+      }),
+      meta: null,
+    }
   },
 
   /**
@@ -202,33 +407,18 @@ export const adminDashboardService = {
    * @param {{ limit?: number, region?: string, params?: object, signal?: AbortSignal }} [options]
    */
   async getPickupBoard(options = {}) {
-    const {
-      limit = 50,
-      region,
-      params,
-      ...requestOptions
-    } = options
+    const { params, ...rest } = options
 
     if (isAdminRealApiFeature('dashboard')) {
-      const response = await apiClient.get(endpoints.admin.dashboard.boards.pickup, {
-        ...requestOptions,
-        params: {
-          limit,
-          ...(region ? { region } : {}),
-          ...(params || {}),
-        },
-        scope: 'admin',
-        feature: 'dashboard',
-      })
-
-      return {
-        data: mapAdminPickupBoardResponse(response?.data),
-        meta: response?.meta ?? null,
-      }
+      return fetchModeBoardByBuckets(
+        endpoints.admin.dashboard.boards.pickup,
+        mapAdminPickupBoardResponse,
+        { ...rest, params },
+      )
     }
 
     return apiClient.get('/admin/pickup', {
-      ...requestOptions,
+      ...rest,
       params,
       scope: 'admin',
     })
@@ -239,33 +429,18 @@ export const adminDashboardService = {
    * @param {{ limit?: number, region?: string, params?: object, signal?: AbortSignal }} [options]
    */
   async getDineInBoard(options = {}) {
-    const {
-      limit = 50,
-      region,
-      params,
-      ...requestOptions
-    } = options
+    const { params, ...rest } = options
 
     if (isAdminRealApiFeature('dashboard')) {
-      const response = await apiClient.get(endpoints.admin.dashboard.boards.dineIn, {
-        ...requestOptions,
-        params: {
-          limit,
-          ...(region ? { region } : {}),
-          ...(params || {}),
-        },
-        scope: 'admin',
-        feature: 'dashboard',
-      })
-
-      return {
-        data: mapAdminDineInBoardResponse(response?.data),
-        meta: response?.meta ?? null,
-      }
+      return fetchModeBoardByBuckets(
+        endpoints.admin.dashboard.boards.dineIn,
+        mapAdminDineInBoardResponse,
+        { ...rest, params },
+      )
     }
 
     return apiClient.get('/admin/dine-in', {
-      ...requestOptions,
+      ...rest,
       params,
       scope: 'admin',
     })
@@ -276,33 +451,18 @@ export const adminDashboardService = {
    * @param {{ limit?: number, region?: string, params?: object, signal?: AbortSignal }} [options]
    */
   async getServicesBoard(options = {}) {
-    const {
-      limit = 50,
-      region,
-      params,
-      ...requestOptions
-    } = options
+    const { params, ...rest } = options
 
     if (isAdminRealApiFeature('dashboard')) {
-      const response = await apiClient.get(endpoints.admin.dashboard.boards.services, {
-        ...requestOptions,
-        params: {
-          limit,
-          ...(region ? { region } : {}),
-          ...(params || {}),
-        },
-        scope: 'admin',
-        feature: 'dashboard',
-      })
-
-      return {
-        data: mapAdminServicesBoardResponse(response?.data),
-        meta: response?.meta ?? null,
-      }
+      return fetchModeBoardByBuckets(
+        endpoints.admin.dashboard.boards.services,
+        mapAdminServicesBoardResponse,
+        { ...rest, params },
+      )
     }
 
     return apiClient.get('/admin/services', {
-      ...requestOptions,
+      ...rest,
       params,
       scope: 'admin',
     })

@@ -1,27 +1,86 @@
 import { apiClient } from '../../api/client'
 import { endpoints } from '../../api/endpoints'
+import { ApiError } from '../../api/errors'
 import {
   flattenVendorCatalogCategories,
+  mapVendorCatalogBadgesResponse,
   mapVendorCatalogCategoriesResponse,
   mapVendorCatalogProduct,
   mapVendorCatalogProductsResponse,
   mapVendorCatalogStoreTypesResponse,
   buildVendorCreateProductBody,
+  buildVendorUpdateProductBody,
 } from '../../mappers/vendor/mapVendorCatalog'
 import { vendorUploadService } from './uploadService'
 
+function isPersistedImageUrl(value) {
+  const url = String(value || '').trim()
+  if (!url) return false
+  if (url.startsWith('blob:') || url.startsWith('data:')) return false
+  return true
+}
+
 /**
- * Vendor catalog service.
+ * Merge per-slot File uploads with existing remote URLs.
+ * Throws if the user selected files and any upload fails — never soft-skip.
+ */
+async function resolveProductImageFields(form = {}, requestOptions = {}) {
+  const slotFiles = Array.isArray(form.imageFiles) ? form.imageFiles : []
+  const remoteSlots = [
+    form.imageUrl || null,
+    ...(Array.isArray(form.imageUrls) ? form.imageUrls : []),
+  ]
+
+  const slotCount = Math.max(4, slotFiles.length, remoteSlots.length)
+  const urls = []
+
+  for (let i = 0; i < slotCount; i++) {
+    const file = slotFiles[i]
+    if (typeof File !== 'undefined' && file instanceof File) {
+      const uploaded = await vendorUploadService.uploadImage(file, requestOptions)
+      const url = uploaded?.data?.url
+      if (!url) {
+        throw new ApiError({
+          message: 'Image upload failed. Product was not saved.',
+        })
+      }
+      urls.push(String(url))
+      continue
+    }
+
+    const remote = remoteSlots[i]
+    if (isPersistedImageUrl(remote)) {
+      urls.push(String(remote).trim())
+    }
+  }
+
+  const unique = []
+  for (const url of urls) {
+    if (!unique.includes(url)) unique.push(url)
+  }
+
+  return {
+    imageUrl: unique[0] || null,
+    imageUrls: unique,
+  }
+}
+
+/**
+ * Vendor catalog service (catalog-scoped).
  * Confirmed:
  *   GET /vendor-panel/catalog/store-types
- *   GET /vendor-panel/catalog/categories
- *   GET /vendor-panel/catalog/products
+ *   GET /vendor-panel/catalog/store-types/:id/badges
+ *   GET /vendor-panel/catalog/categories?platformCategoryId=
+ *   GET /vendor-panel/catalog/products?platformCategoryId=
  *   GET /vendor-panel/catalog/products/:productId
  *   POST /vendor-panel/catalog/products
+ *   PATCH /vendor-panel/catalog/products/:productId
+ *   POST /vendor-panel/catalog/uploads/images (multipart file → data.url)
  */
 export const productService = {
   /**
    * GET /vendor-panel/catalog/store-types
+   * @returns {{ data: { selectedStoreTypeId: string|null, items: object[] }, meta }}
    */
   async getCatalogStoreTypes(options = {}) {
     const response = await apiClient.get(endpoints.vendor.catalog.storeTypes, {
@@ -36,11 +95,37 @@ export const productService = {
   },
 
   /**
-   * GET /vendor-panel/catalog/categories
+   * GET /vendor-panel/catalog/store-types/:id/badges
+   */
+  async getCatalogBadges(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) {
+      return { data: [], meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.vendor.catalog.storeTypeBadges(id), {
+      ...options,
+      scope: 'vendor',
+    })
+
+    return {
+      data: mapVendorCatalogBadgesResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * GET /vendor-panel/catalog/categories?platformCategoryId=
    */
   async getCatalogCategories(options = {}) {
+    const { platformCategoryId, storeTypeId, params, ...requestOptions } = options
+    const query = { ...(params || {}) }
+    const catalogId = platformCategoryId || storeTypeId
+    if (catalogId) query.platformCategoryId = String(catalogId)
+
     const response = await apiClient.get(endpoints.vendor.catalog.categories, {
-      ...options,
+      ...requestOptions,
+      params: query,
       scope: 'vendor',
     })
 
@@ -50,17 +135,28 @@ export const productService = {
       data: {
         items: tree,
         options: flattenVendorCatalogCategories(tree),
+        source: response?.data?.source || null,
       },
       meta: response?.meta ?? null,
     }
   },
 
   /**
-   * GET /vendor-panel/catalog/products
+   * GET /vendor-panel/catalog/products?platformCategoryId=
+   * When platformCategoryId is set, do not fall back to unfiltered list.
    */
   async getCatalogProducts(options = {}) {
-    const { platformCategory, categoryId, params, ...requestOptions } = options
+    const {
+      platformCategoryId,
+      storeTypeId,
+      platformCategory,
+      categoryId,
+      params,
+      ...requestOptions
+    } = options
     const query = { ...(params || {}) }
+    const catalogId = platformCategoryId || storeTypeId || null
+    if (catalogId) query.platformCategoryId = String(catalogId)
     if (categoryId) query.categoryId = String(categoryId)
 
     const response = await apiClient.get(endpoints.vendor.catalog.products, {
@@ -71,24 +167,23 @@ export const productService = {
 
     let items = mapVendorCatalogProductsResponse(response?.data)
 
-    if (platformCategory && items.length > 0) {
+    // Client-side name filter only when API filter wasn't used (legacy).
+    if (!catalogId && platformCategory && items.length > 0) {
       const needle = String(platformCategory).trim().toLowerCase()
-      const filtered = items.filter((item) => {
+      items = items.filter((item) => {
         const name = String(item.platformCategoryName || '').toLowerCase()
-        if (!name) return true
+        if (!name) return false
         return name === needle || name.includes(needle)
       })
-      if (filtered.length > 0) items = filtered
     }
 
     if (categoryId && items.length > 0) {
       const id = String(categoryId)
-      const filtered = items.filter(
+      items = items.filter(
         (item) =>
           item.catalogCategoryId === id ||
           String(item.catalogCategoryName || '').toLowerCase() === id.toLowerCase(),
       )
-      if (filtered.length > 0) items = filtered
     }
 
     return {
@@ -102,7 +197,6 @@ export const productService = {
 
   /**
    * GET /vendor-panel/catalog/products/:productId
-   * Confirmed detail fields for Edit product modal.
    */
   async getProduct(productId, options = {}) {
     const response = await apiClient.get(endpoints.vendor.catalog.product(productId), {
@@ -122,92 +216,40 @@ export const productService = {
 
   /**
    * POST /vendor-panel/catalog/products
-   * Confirmed 201 response returns the created product object.
-   * Local image Files are uploaded first (when an upload route exists), then
-   * URLs are included in the JSON body. Falls back to multipart create.
+   * Uploads selected imageFiles first, then sends imageUrl + imageUrls.
+   * Requires platformCategoryId (or storeTypeId alias).
    */
   async createProduct(form = {}, options = {}) {
-    const { catalogCategoryId, params, ...requestOptions } = options
-    const files = (Array.isArray(form.imageFiles) ? form.imageFiles : []).filter(
-      (file) => typeof File !== 'undefined' && file instanceof File,
-    )
+    const { catalogCategoryId, platformCategoryId, storeTypeId, params, ...requestOptions } =
+      options
 
-    const uploadedUrls = []
-    for (const file of files) {
-      try {
-        const uploaded = await vendorUploadService.uploadImage(file, requestOptions)
-        if (uploaded?.data?.url) uploadedUrls.push(uploaded.data.url)
-      } catch {
-        // Upload route may not exist yet — try multipart / create without URL.
-        break
-      }
-    }
+    const images = await resolveProductImageFields(form, requestOptions)
 
     const body = buildVendorCreateProductBody(
       {
         ...form,
-        imageUrl: uploadedUrls[0] || form.imageUrl || null,
-        imageUrls: uploadedUrls.length
-          ? uploadedUrls
-          : Array.isArray(form.imageUrls)
-            ? form.imageUrls
-            : [],
+        imageUrl: images.imageUrl,
+        imageUrls: images.imageUrls,
       },
-      { catalogCategoryId },
+      {
+        catalogCategoryId,
+        platformCategoryId: platformCategoryId || storeTypeId || form.platformCategoryId,
+      },
     )
 
-    const remainingFiles =
-      uploadedUrls.length > 0 ? [] : files
-
-    let response
-    if (remainingFiles.length > 0) {
-      try {
-        response = await this.createProductMultipart(body, remainingFiles, {
-          ...requestOptions,
-          params,
-        })
-      } catch {
-        // Backend may only accept JSON create — product still saves without images.
-        response = await apiClient.post(endpoints.vendor.catalog.products, body, {
-          ...requestOptions,
-          params,
-          scope: 'vendor',
-        })
-      }
-    } else {
-      response = await apiClient.post(endpoints.vendor.catalog.products, body, {
-        ...requestOptions,
-        params,
-        scope: 'vendor',
-      })
+    if (!body.platformCategoryId) {
+      throw new Error('platformCategoryId is required to create a product.')
     }
 
-    let raw = response?.data?.id
+    const response = await apiClient.post(endpoints.vendor.catalog.products, body, {
+      ...requestOptions,
+      params,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data?.id
       ? response.data
       : response?.data?.item || response?.data?.product || response?.data
-
-    // After JSON create, attach leftover files to the new product id.
-    if (raw?.id && remainingFiles.length > 0 && !raw.imageUrl) {
-      const attached = []
-      for (const file of remainingFiles) {
-        try {
-          const uploaded = await vendorUploadService.uploadImage(file, {
-            ...requestOptions,
-            productId: raw.id,
-          })
-          if (uploaded?.data?.url) attached.push(uploaded.data.url)
-        } catch {
-          break
-        }
-      }
-      if (attached.length) {
-        raw = {
-          ...raw,
-          imageUrl: attached[0],
-          imageUrls: attached,
-        }
-      }
-    }
 
     return {
       data: mapVendorCatalogProduct(raw),
@@ -216,34 +258,52 @@ export const productService = {
   },
 
   /**
-   * Multipart create fallback when a dedicated upload route is missing.
+   * PATCH /vendor-panel/catalog/products/:productId
+   * Uploads new imageFiles; keeps existing imageUrl/imageUrls when no new file in a slot.
    */
-  async createProductMultipart(body, files, options = {}) {
-    const { params, ...requestOptions } = options
-    const formData = new FormData()
+  async updateProduct(productId, form = {}, options = {}) {
+    const id = String(productId || '').trim()
+    if (!id) throw new Error('Product id is required.')
 
-    Object.entries(body || {}).forEach(([key, value]) => {
-      if (value === undefined || value === null) return
-      if (typeof value === 'object') {
-        formData.append(key, JSON.stringify(value))
-      } else {
-        formData.append(key, String(value))
-      }
-    })
+    const { catalogCategoryId, platformCategoryId, storeTypeId, params, ...requestOptions } =
+      options
 
-    files.forEach((file, index) => {
-      formData.append('images', file, file.name)
-      if (index === 0) {
-        formData.append('image', file, file.name)
-        formData.append('file', file, file.name)
-      }
-    })
+    const images = await resolveProductImageFields(form, requestOptions)
 
-    return apiClient.post(endpoints.vendor.catalog.products, formData, {
+    const body = buildVendorUpdateProductBody(
+      {
+        ...form,
+        imageUrl: images.imageUrl,
+        imageUrls: images.imageUrls,
+      },
+      {
+        catalogCategoryId,
+        platformCategoryId: platformCategoryId || storeTypeId || form.platformCategoryId,
+      },
+    )
+
+    // Always send image fields on update so cleared/replaced images persist.
+    body.imageUrls = images.imageUrls
+    if (images.imageUrl) {
+      body.imageUrl = images.imageUrl
+    } else {
+      body.imageUrl = null
+    }
+
+    const response = await apiClient.patch(endpoints.vendor.catalog.product(id), body, {
       ...requestOptions,
       params,
       scope: 'vendor',
     })
+
+    const raw = response?.data?.id
+      ? response.data
+      : response?.data?.item || response?.data?.product || response?.data
+
+    return {
+      data: mapVendorCatalogProduct(raw),
+      meta: response?.meta ?? null,
+    }
   },
 
   /** @deprecated Prefer getCatalogProducts */

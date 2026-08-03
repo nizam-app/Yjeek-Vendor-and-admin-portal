@@ -120,17 +120,28 @@ export default function AdminAddVendorUser() {
   const isVendorDetailFlow = Boolean(vendorId) && vendorId !== 'new'
   const isNewUser = !userId || userId === 'new'
   const useRealStaffApi = isVendorDetailFlow && isAdminRealApiFeature('vendors')
-  const returnPath = isVendorDetailFlow
-    ? `/admin/vendors/${encodeURIComponent(vendorId)}`
-    : '/admin/vendors/new'
-  const returnState = isVendorDetailFlow
-    ? { tab: 'Users & staff' }
-    : {
-        mode: state?.mode || 'create',
-        step: 3,
-        wizardDraft: state?.wizardDraft || null,
+  const returnToWizard = state?.returnTo === 'wizard'
+  const returnPath = returnToWizard
+    ? '/admin/vendors/new'
+    : isVendorDetailFlow
+      ? `/admin/vendors/${encodeURIComponent(vendorId)}`
+      : '/admin/vendors/new'
+  const returnState = returnToWizard
+    ? {
+        mode: state?.mode || (isVendorDetailFlow ? 'edit' : 'create'),
+        vendorId: state?.vendorId || (isVendorDetailFlow ? vendorId : undefined),
         storeName: state?.storeName,
+        step: state?.step || 3,
+        wizardDraft: state?.wizardDraft || null,
       }
+    : isVendorDetailFlow
+      ? { tab: 'Users & staff' }
+      : {
+          mode: state?.mode || 'create',
+          step: 3,
+          wizardDraft: state?.wizardDraft || null,
+          storeName: state?.storeName,
+        }
   const isLocalWizardCreate = !useRealStaffApi && Boolean(state?.wizardDraft || state?.mode === 'create')
 
   const user = useMemo(() => {
@@ -161,12 +172,23 @@ export default function AdminAddVendorUser() {
     }
   })
 
-  const [permissions, setPermissions] = useState(() => defaultPermissions(form.role))
+  const [permissions, setPermissions] = useState(() =>
+    user?.permissions && typeof user.permissions === 'object'
+      ? {
+          orders: Boolean(user.permissions.orders),
+          catalog: Boolean(user.permissions.catalog),
+          hours: Boolean(user.permissions.hours),
+          staff: Boolean(user.permissions.staff),
+          delivery: Boolean(user.permissions.delivery),
+          promotions: Boolean(user.permissions.promotions),
+        }
+      : defaultPermissions(form.role),
+  )
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
   useEffect(() => {
-    if (!useRealStaffApi || !isNewUser) return undefined
+    if (!useRealStaffApi) return undefined
 
     const fromState = Array.isArray(state?.branches) ? state.branches : []
     if (fromState.some((b) => b?.id)) {
@@ -192,7 +214,7 @@ export default function AdminAddVendorUser() {
     return () => {
       cancelled = true
     }
-  }, [useRealStaffApi, isNewUser, vendorId, state?.branches])
+  }, [useRealStaffApi, vendorId, state?.branches])
 
   const resolvedBranchOptions = useMemo(() => {
     if (!useRealStaffApi) {
@@ -236,7 +258,18 @@ export default function AdminAddVendorUser() {
       branchId: user?.branchId || user?.branch || '',
       status: user?.status || 'Active',
     })
-    setPermissions(defaultPermissions(user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager')))
+    setPermissions(
+      user?.permissions && typeof user.permissions === 'object'
+        ? {
+            orders: Boolean(user.permissions.orders),
+            catalog: Boolean(user.permissions.catalog),
+            hours: Boolean(user.permissions.hours),
+            staff: Boolean(user.permissions.staff),
+            delivery: Boolean(user.permissions.delivery),
+            promotions: Boolean(user.permissions.promotions),
+          }
+        : defaultPermissions(user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager')),
+    )
   }, [user, isNewUser])
 
   const updateField = (key) => (event) => {
@@ -267,12 +300,12 @@ export default function AdminAddVendorUser() {
   const goBack = () => navigate(returnPath, { state: returnState })
 
   async function handleSave() {
-    if (!isNewUser || !useRealStaffApi) {
-      if (isLocalWizardCreate || (!useRealStaffApi && returnPath === '/admin/vendors/new')) {
+    if (!useRealStaffApi) {
+      if (isLocalWizardCreate || returnToWizard || returnPath === '/admin/vendors/new') {
         const branch =
           branchList.find((b) => String(b.id) === String(form.branchId)) || branchList[0]
         const savedUser = {
-          id: `local-user-${Date.now()}`,
+          id: state?.user?.id || `local-user-${Date.now()}`,
           name: form.fullName.trim() || 'New user',
           displayName: form.fullName.trim(),
           email: form.email.trim(),
@@ -286,6 +319,7 @@ export default function AdminAddVendorUser() {
             branchList.findIndex((b) => String(b.id) === String(branch?.id || form.branchId)),
           ),
           status: form.status || 'Active',
+          permissions: { ...permissions },
         }
         navigate(returnPath, {
           state: {
@@ -302,10 +336,15 @@ export default function AdminAddVendorUser() {
     setSaveError(null)
     setSaving(true)
     try {
-      await adminService.createVendorStaff(vendorId, form, branchList)
+      const payload = { ...form, permissions }
+      if (isNewUser) {
+        await adminService.createVendorStaff(vendorId, payload, branchList)
+      } else {
+        await adminService.updateVendorStaff(vendorId, userId, payload, branchList)
+      }
       navigate(returnPath, { state: returnState })
     } catch (err) {
-      setSaveError(err?.message || 'Failed to create user.')
+      setSaveError(err?.message || (isNewUser ? 'Failed to create user.' : 'Failed to update user.'))
     } finally {
       setSaving(false)
     }
@@ -338,7 +377,7 @@ export default function AdminAddVendorUser() {
           disabled={saving}
           className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          {saving ? 'Creating…' : isNewUser ? 'Create user' : 'Save changes'}
+          {saving ? 'Saving…' : isNewUser ? 'Create user' : 'Save changes'}
         </button>
       </div>
 
@@ -455,7 +494,7 @@ export default function AdminAddVendorUser() {
             disabled={saving}
             className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {saving ? 'Creating…' : isNewUser ? 'Create user' : 'Save changes'}
+            {saving ? 'Saving…' : isNewUser ? 'Create user' : 'Save changes'}
           </button>
         </div>
       </div>

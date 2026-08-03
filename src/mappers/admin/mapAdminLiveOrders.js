@@ -12,14 +12,13 @@ export function adminLiveOrdersBucketForColumnId(columnId) {
   return match?.apiKey || 'all'
 }
 
-function mapContactType(tags, champ) {
-  if (Array.isArray(tags)) {
-    if (tags.includes('Champ')) return 'Champ'
-    if (tags.includes('Customer')) return 'Customer'
-    if (tags.includes('Vendor')) return 'Vendor'
-  }
-  if (champ && typeof champ === 'object') return 'Champ'
-  return null
+function mapContactTypes(tags) {
+  if (!Array.isArray(tags)) return []
+  const types = []
+  if (tags.includes('Champ')) types.push('Champ')
+  if (tags.includes('Customer')) types.push('Customer')
+  if (tags.includes('Vendor')) types.push('Vendor')
+  return types
 }
 
 /**
@@ -32,6 +31,7 @@ export function mapAdminLiveOrderItem(item) {
   const vendor = item.vendor && typeof item.vendor === 'object' ? item.vendor : null
   const champ = item.champ && typeof item.champ === 'object' ? item.champ : null
   const tags = Array.isArray(item.tags) ? item.tags : []
+  const contactTypes = mapContactTypes(tags)
   const displayId = item.orderNumber || item.id
   if (!displayId) return null
 
@@ -54,7 +54,9 @@ export function mapAdminLiveOrderItem(item) {
     incidentCount: Number(item.incidentCount) || 0,
     conversationId: item.conversationId ?? null,
     tags,
-    contactType: mapContactType(tags, champ),
+    contactTypes,
+    // Badge only when API tags say Champ/Customer (peer messaged) — never from champ assigned alone.
+    contactType: contactTypes[0] || null,
     schedule: item.fulfillmentType === 'SCHEDULED' ? 'Scheduled' : null,
     rider: {
       id: champ?.id ?? null,

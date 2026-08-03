@@ -7,8 +7,10 @@ import OrderDetailModal from '../../components/OrderDetailModal'
 import AcceptOrderModal from '../../components/AcceptOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
+import { useAuth } from '../../context/AuthContext'
 import { useApiMutation } from '../../hooks/useApiMutation'
 import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
+import { getVendorServiceModes } from '../../mappers/vendor/authMapper'
 import {
   moveAcceptedOrderOnLiveBoard,
   moveOrderToPreparingOnLiveBoard,
@@ -21,8 +23,12 @@ import { orderService } from '../../services/vendor/orderService'
 const AUTO_REFRESH_MS = 8000
 
 export default function LiveOrders() {
-  const [searchParams] = useSearchParams()
-  const [tab, setTab] = useState(searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery')
+  const { user, refreshVendorSession } = useAuth()
+  const canDineIn = getVendorServiceModes(user).dineIn
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() =>
+    canDineIn && searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery',
+  )
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [acceptedOrder, setAcceptedOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
@@ -34,8 +40,9 @@ export default function LiveOrders() {
   const [rejectError, setRejectError] = useState(null)
   const [actioningId, setActioningId] = useState(null)
   const [actionError, setActionError] = useState(null)
-  const isDineIn = tab === 'dinein'
-  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+  const isDineIn = canDineIn && tab === 'dinein'
+  const board = isDineIn ? 'dinein' : 'delivery'
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(board)
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
   const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
     orderService.rejectOrder(orderId, { reason, note }),
@@ -54,6 +61,37 @@ export default function LiveOrders() {
     return () => window.clearInterval(timer)
   }, [refetch])
 
+  // Refresh serviceModes from /me so Dine-in appears after SLA/supports changes
+  // without requiring a full sign-out (and when admin+vendor tokens coexist).
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        await refreshVendorSession?.()
+      } catch {
+        // Keep existing session; tab visibility stays based on cached user.
+      }
+      if (cancelled) return
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [refreshVendorSession])
+
+  useEffect(() => {
+    if (!canDineIn && tab === 'dinein') {
+      setTab('delivery')
+    }
+  }, [canDineIn, tab])
+
+  useEffect(() => {
+    if (!canDineIn && searchParams.get('tab') === 'dinein') {
+      const next = new URLSearchParams(searchParams)
+      next.delete('tab')
+      setSearchParams(next, { replace: true })
+    }
+  }, [canDineIn, searchParams, setSearchParams])
+
   const handleAccept = useCallback(
     async ({ order, mode }) => {
       const orderId = order?.backendId || order?.id
@@ -70,7 +108,7 @@ export default function LiveOrders() {
         setAcceptedOrder({ order: mapped, mode })
         setData((current) =>
           moveAcceptedOrderOnLiveBoard(current, {
-            board: tab,
+            board: board,
             previousOrder: order,
             acceptedOrder: mapped,
           }),
@@ -82,7 +120,7 @@ export default function LiveOrders() {
         setAcceptingId(null)
       }
     },
-    [acceptOrder, refetch, setData, tab],
+    [acceptOrder, board, refetch, setData],
   )
 
   const handleReject = useCallback(
@@ -105,7 +143,7 @@ export default function LiveOrders() {
         await rejectOrderMutation({ orderId, reason, note })
         setData((current) =>
           removeRejectedOrderFromLiveBoard(current, {
-            board: tab,
+            board: board,
             order,
           }),
         )
@@ -117,7 +155,7 @@ export default function LiveOrders() {
         setRejectingId(null)
       }
     },
-    [rejectOrder, rejectOrderMutation, refetch, setData, tab],
+    [rejectOrder, rejectOrderMutation, board, refetch, setData],
   )
 
   const handlePrimaryAction = useCallback(
@@ -142,12 +180,12 @@ export default function LiveOrders() {
       try {
         if (
           canComplete &&
-          (tab === 'dinein' || !action || String(action.path || '').includes('/complete'))
+          (board === 'dinein' || !action || String(action.path || '').includes('/complete'))
         ) {
           await completeOrder(orderId)
           setData((current) =>
             removeCompletedOrderFromLiveBoard(current, {
-              board: tab,
+              board: board,
               order,
             }),
           )
@@ -156,7 +194,7 @@ export default function LiveOrders() {
           if (canComplete) {
             setData((current) =>
               removeCompletedOrderFromLiveBoard(current, {
-                board: tab,
+                board: board,
                 order,
               }),
             )
@@ -165,7 +203,7 @@ export default function LiveOrders() {
           const result = await markReady(orderId)
           setData((current) =>
             moveOrderToReadyOnLiveBoard(current, {
-              board: tab,
+              board: board,
               previousOrder: order,
               readyOrder: result?.data || order,
             }),
@@ -174,7 +212,7 @@ export default function LiveOrders() {
           const result = await startPreparing(orderId)
           setData((current) =>
             moveOrderToPreparingOnLiveBoard(current, {
-              board: tab,
+              board: board,
               previousOrder: order,
               preparingOrder: result?.data || order,
             }),
@@ -188,10 +226,10 @@ export default function LiveOrders() {
         setActioningId(null)
       }
     },
-    [completeOrder, markReady, performPrimaryAction, refetch, setData, startPreparing, tab],
+    [completeOrder, markReady, performPrimaryAction, board, refetch, setData, startPreparing],
   )
 
-  const columns = getColumns(tab, orders).map((col) => ({
+  const columns = getColumns(board, orders).map((col) => ({
     ...col,
     items: col.items.filter((order) => {
       if (!searchQuery.trim()) return true
@@ -206,7 +244,7 @@ export default function LiveOrders() {
   const totalActive =
     typeof orders?.activeCount === 'number'
       ? orders.activeCount
-      : getColumns(tab, orders).reduce((sum, col) => sum + col.items.length, 0)
+      : getColumns(board, orders).reduce((sum, col) => sum + col.items.length, 0)
 
   if (isLoading && !orders) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
@@ -240,15 +278,17 @@ export default function LiveOrders() {
           >
             Delivery & Pickup
           </button>
-          <button
-            type="button"
-            className={`py-2 px-4 rounded-[10px] text-[13px] font-medium ${
-              isDineIn ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
-            }`}
-            onClick={() => setTab('dinein')}
-          >
-            Dine-in
-          </button>
+          {canDineIn ? (
+            <button
+              type="button"
+              className={`py-2 px-4 rounded-[10px] text-[13px] font-medium ${
+                isDineIn ? 'bg-white text-ink shadow-card' : 'text-ink-muted'
+              }`}
+              onClick={() => setTab('dinein')}
+            >
+              Dine-in
+            </button>
+          ) : null}
         </div>
         <input
           className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white min-w-[220px]"
@@ -301,7 +341,7 @@ export default function LiveOrders() {
                   {col.items.length}
                 </span>
                 <Link
-                  to={`/live-orders/${col.key}?tab=${tab}`}
+                  to={`/live-orders/${col.key}?tab=${board}`}
                   className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-[6px] text-ink-muted bg-white hover:text-green-primary hover:bg-green-active-bg"
                   aria-label={`Open ${col.title} in full page`}
                   title={`Open ${col.title} in full page`}

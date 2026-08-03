@@ -464,6 +464,24 @@ export function mapAdminStoreTypeDetail(data) {
 }
 
 /**
+ * Flatten nested menu categories (id/name + children) into select options.
+ * Sub-category may be a nested child id — top-level-only lists leave the edit select blank.
+ */
+export function flattenAdminMenuCategoryOptions(categories = [], { prefix = '' } = {}) {
+  if (!Array.isArray(categories)) return []
+  const out = []
+  for (const cat of categories) {
+    if (!cat?.id || !cat?.name) continue
+    const name = prefix ? `${prefix} › ${cat.name}` : String(cat.name)
+    out.push({ id: String(cat.id), name })
+    if (Array.isArray(cat.children) && cat.children.length) {
+      out.push(...flattenAdminMenuCategoryOptions(cat.children, { prefix: name }))
+    }
+  }
+  return out
+}
+
+/**
  * Best-match store type id from vendor category label (e.g. "Food & Beverage" → "Food").
  */
 export function matchAdminStoreTypeId(storeTypes = [], categoryLabel = '') {

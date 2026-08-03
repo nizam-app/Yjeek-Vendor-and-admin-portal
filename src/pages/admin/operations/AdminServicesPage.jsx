@@ -1,16 +1,19 @@
-import { useAdminServicesBoard } from '../../../hooks/admin/useAdminServicesBoard'
+import { useCallback } from 'react'
 import { AdminIncidentBoard } from '../../../components/admin/operations/AdminIncidentBoard'
+import { adminDashboardService } from '../../../services/admin/dashboardService'
+import { ADMIN_BOARD_PREVIEW_LIMIT } from '../../../lib/adminBoardLimits'
 
 export default function AdminServicesPage() {
-  const { data, error, isLoading, refetch } = useAdminServicesBoard({ limit: 50 })
+  const fetchBoard = useCallback(
+    (options) => adminDashboardService.getServicesBoard(options),
+    [],
+  )
 
   return (
     <AdminIncidentBoard
-      key="services"
-      data={data}
-      error={error}
-      isLoading={isLoading}
-      onRetry={refetch}
+      boardTitle="Services"
+      fetchBoard={fetchBoard}
+      previewLimit={ADMIN_BOARD_PREVIEW_LIMIT}
     />
   )
 }

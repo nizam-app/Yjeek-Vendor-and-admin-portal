@@ -16,7 +16,12 @@ export const productImages = {
 
 export function getProductImage(product) {
   if (!product) return productBurger
-  const remote = product.imageUrl || (Array.isArray(product.imageUrls) ? product.imageUrls[0] : null)
+  const remote =
+    product.imageUrl ||
+    (Array.isArray(product.imageUrls) ? product.imageUrls.find(Boolean) : null) ||
+    product.image ||
+    null
   if (remote) return resolveAdminMediaUrl(remote) || remote
+  // Local demo asset ids only; real API products without a URL use the default placeholder.
   return productImages[product.id] || productBurger
 }

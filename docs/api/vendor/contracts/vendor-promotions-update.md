@@ -83,4 +83,5 @@ Confirmed from Postman **"9. Promotions → Update (Item / category deal | Free 
 
 - Edit form loads via analytics/detail, then Save PATCHes the type-specific body.
 - Promo type tabs are locked while editing (type comes from the existing promotion).
-- Create (`/promotions/new`) still has no confirmed POST create wiring.
+- List row **Edit** opens `/promotions/:promoId/edit` (not create).
+- Create uses `POST /vendor-panel/promotions` — see [vendor-promotions-create.md](./vendor-promotions-create.md).

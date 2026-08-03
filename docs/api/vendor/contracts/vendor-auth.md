@@ -37,7 +37,14 @@ Confirmed from Postman screenshots. Real credentials, tokens, emails, phones, an
       "vendorId": "<redacted>",
       "vendorName": "<redacted>",
       "vendorLocationId": null,
-      "isGroupAdmin": true
+      "isGroupAdmin": true,
+      "serviceModes": {
+        "hotFoodOnDemand": true,
+        "pickup": true,
+        "dineIn": false,
+        "scheduledDelivery": true,
+        "services": false
+      }
     },
     "accessToken": "<redacted>",
     "refreshToken": "<redacted>"
@@ -91,7 +98,14 @@ Login UI message order: first field message → `error.message` → generic fall
     "vendorId": "<redacted>",
     "vendorName": "<redacted>",
     "vendorLocationId": null,
-    "isGroupAdmin": true
+    "isGroupAdmin": true,
+    "serviceModes": {
+      "hotFoodOnDemand": true,
+      "pickup": true,
+      "dineIn": false,
+      "scheduledDelivery": true,
+      "services": false
+    }
   }
 }
 ```
@@ -116,8 +130,9 @@ Used by both Login and Get Me (`src/mappers/vendor/authMapper.js`):
 | `vendorName` | backend `vendorName` |
 | `vendorLocationId` | backend `vendorLocationId` |
 | `isGroupAdmin` | backend `isGroupAdmin` |
+| `serviceModes` | backend `serviceModes` (5 booleans; missing → `false`) |
 
-Login does not return `countryCode`, `status`, or `authProvider` — those are stored as `null` until Get Me refreshes them.
+Login may omit some Get Me–only fields — those are stored as `null` until Get Me refreshes them. `serviceModes` defaults to all `false` if omitted.
 
 ## Token storage
 

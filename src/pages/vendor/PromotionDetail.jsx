@@ -83,7 +83,18 @@ function RedemptionChart({ values }) {
 export default function PromotionDetail() {
   const { promoId } = useParams()
   const navigate = useNavigate()
-  const { data: promo, error, isLoading, refetch } = useVendorPromotionDetail(promoId)
+  const id = String(promoId || '').trim()
+
+  // `/promotions/new` must open ConfigurePromotion, never this detail loader.
+  useEffect(() => {
+    if (id === 'new') {
+      navigate('/promotions/new', { replace: true })
+    }
+  }, [id, navigate])
+
+  const { data: promo, error, isLoading, refetch } = useVendorPromotionDetail(
+    id === 'new' ? null : id,
+  )
   const [localPromo, setLocalPromo] = useState(null)
   const [pausing, setPausing] = useState(false)
   const [pauseError, setPauseError] = useState(null)
@@ -94,6 +105,10 @@ export default function PromotionDetail() {
   }, [promoId])
 
   const view = localPromo || promo
+
+  if (id === 'new') {
+    return <div className="p-7 text-[13px] text-ink-muted">Opening new promotion…</div>
+  }
 
   if (isLoading && !view) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading promotion…</div>

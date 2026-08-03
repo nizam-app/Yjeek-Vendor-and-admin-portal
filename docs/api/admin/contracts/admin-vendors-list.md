@@ -22,6 +22,8 @@ Confirmed from Postman "List vendors (KPIs + filters)". Real IDs and names may b
 | `status` | `all` | `all` · `active` · `pending` · `suspended` |
 | `category` | `""` | Category filter |
 | `limit` | `20` | Page size |
+| `page` | `1` | 1-based page index |
+| `sort` | `newest` | Newest vendors first (`createdAt` desc) |
 
 ### Success (HTTP 200)
 
@@ -98,6 +100,6 @@ AdminVendorsPage
 
 ## Unconfirmed
 
-- Vendor detail GET by id
-- Create / update / delete vendor mutations
+- Exact backend enum for `sort` if it differs from `newest` (frontend sends `sort=newest`)
+- Create / update / delete vendor mutations (covered in other contracts)
 - Exact `status=pending` enum alias if backend differs

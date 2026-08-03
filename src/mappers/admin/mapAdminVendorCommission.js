@@ -96,6 +96,7 @@ export function mapAdminCustomFeesToWizard(customFees) {
 
 /**
  * Wizard custom fee rows → API customFees[].
+ * Backend expects type: 'BHD' | 'PERCENT' (not '%').
  */
 export function mapWizardCustomFeesToApi(customFees) {
   if (!Array.isArray(customFees)) return []
@@ -105,11 +106,11 @@ export function mapWizardCustomFeesToApi(customFees) {
       const name = String(fee.name || '').trim()
       if (!name) return null
       let amount = parseOptionalNumber(fee.amount)
-      let type = fee.type === '%' ? '%' : 'BHD'
+      let type = fee.type === '%' || fee.type === 'PERCENT' ? 'PERCENT' : 'BHD'
       if (amount == null && fee.value) {
         const raw = String(fee.value)
         if (/%/.test(raw)) {
-          type = '%'
+          type = 'PERCENT'
           amount = parseOptionalNumber(stripPercent(raw))
         } else {
           type = 'BHD'
@@ -117,7 +118,7 @@ export function mapWizardCustomFeesToApi(customFees) {
         }
       }
       if (amount == null) return null
-      return { name, amount, type: type === '%' ? '%' : 'BHD' }
+      return { name, amount, type }
     })
     .filter(Boolean)
 }
@@ -314,7 +315,7 @@ export function mapAdminUpdateVendorCommissionRequest(form = {}) {
               const amount = parseOptionalNumber(fee.amount)
               if (!name || amount == null) return null
               const typeRaw = String(fee.type || 'BHD').toUpperCase()
-              const type = typeRaw === '%' || typeRaw === 'PERCENT' ? '%' : 'BHD'
+              const type = typeRaw === '%' || typeRaw === 'PERCENT' ? 'PERCENT' : 'BHD'
               return { name, amount, type }
             })
             .filter(Boolean)
@@ -345,9 +346,11 @@ export function mapAdminWizardCommissionRequest(form = {}, options = {}) {
   if (model === 'PERCENT_OF_ORDER') {
     const rate = parseOptionalNumber(stripPercent(form.commissionRate))
     if (rate != null) body.commissionRate = rate
+    body.customFees = mapWizardCustomFeesToApi(customFees)
   } else if (model === 'FLAT_PER_ORDER') {
     const flat = parseOptionalNumber(stripPercent(form.commissionRate) || form.commissionRate)
     if (flat != null) body.flatFeePerOrder = flat
+    body.customFees = mapWizardCustomFeesToApi(customFees)
   } else if (model === 'TIERED') {
     let tiers = mapCommissionTiers(commissionTiers)
     // No tier editor on wizard — if API returned none, seed one tier from the rate field
@@ -357,6 +360,8 @@ export function mapAdminWizardCommissionRequest(form = {}, options = {}) {
       if (rate != null) tiers = [{ fromAmount: 0, ratePct: rate }]
     }
     body.commissionTiers = tiers
+    body.customFees = mapWizardCustomFeesToApi(customFees)
+  } else {
     body.customFees = mapWizardCustomFeesToApi(customFees)
   }
 

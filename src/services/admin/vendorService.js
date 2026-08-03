@@ -17,6 +17,7 @@ import {
 } from '../../mappers/admin/mapAdminVendorBranches'
 import {
   mapAdminCreateStaffRequest,
+  mapAdminUpdateStaffRequest,
   mapAdminVendorStaffResponse,
 } from '../../mappers/admin/mapAdminVendorStaff'
 import {
@@ -44,7 +45,7 @@ import {
  * Admin vendors service.
  *
  * Confirmed:
- *   GET /admin/vendors?search=&status=all&category=&limit=
+ *   GET /admin/vendors?search=&status=all&category=&limit=&page=&sort=newest
  *   POST /admin/vendors
  *   POST /admin/vendors/:vendorId/activate
  *   GET /admin/vendors/:vendorId
@@ -76,6 +77,7 @@ export const adminVendorService = {
    *   category?: string,
    *   limit?: number,
    *   page?: number,
+   *   sort?: string,
    *   params?: object,
    *   signal?: AbortSignal,
    * }} [options]
@@ -86,7 +88,8 @@ export const adminVendorService = {
       status = 'All',
       category = '',
       limit = 20,
-      page,
+      page = 1,
+      sort = 'newest',
       params,
       ...requestOptions
     } = options
@@ -104,7 +107,8 @@ export const adminVendorService = {
       status: mapAdminVendorsStatusQuery(status),
       category: String(category || '').trim(),
       limit,
-      ...(page != null ? { page } : {}),
+      page: page != null ? Number(page) || 1 : 1,
+      sort: String(sort || 'newest').trim() || 'newest',
       ...(params || {}),
     }
 
@@ -681,6 +685,41 @@ export const adminVendorService = {
 
     return {
       data: mapAdminVendorStaffResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update staff member.
+   * Confirmed: PATCH /admin/vendors/:vendorId/staff/:staffId
+   */
+  async updateStaff(vendorId, staffId, form = {}, branchOptions = [], options = {}) {
+    const id = String(vendorId || '').trim()
+    const memberId = String(staffId || '').trim()
+    if (!id) throw new Error('Vendor id is required.')
+    if (!memberId) throw new Error('Staff id is required.')
+
+    const body = mapAdminUpdateStaffRequest(form, branchOptions)
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update staff.')
+    }
+
+    const response = await apiClient.patch(endpoints.admin.vendors.staffMember(id, memberId), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    if (response?.data?.users || response?.data?.count != null) {
+      return {
+        data: mapAdminVendorStaffResponse(response.data),
+        meta: response?.meta ?? null,
+      }
+    }
+
+    return {
+      data: response?.data ?? null,
       meta: response?.meta ?? null,
     }
   },

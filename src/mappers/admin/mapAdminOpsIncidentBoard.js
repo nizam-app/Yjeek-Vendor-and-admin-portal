@@ -11,8 +11,17 @@ const COLUMN_META = [
   { id: 'on-track', title: 'On Track', tone: 'green' },
 ]
 
+function mapContactTypes(tags) {
+  if (!Array.isArray(tags)) return []
+  const types = []
+  if (tags.includes('Champ')) types.push('Champ')
+  if (tags.includes('Customer')) types.push('Customer')
+  if (tags.includes('Vendor')) types.push('Vendor')
+  return types
+}
+
 /**
- * Map one ops-board item into AdminIncidentCard shape.
+ * Map one ops-board item into AdminOpsOrderCard shape (Live Orders parity).
  * @param {Record<string, unknown>} item
  */
 export function mapAdminOpsIncidentBoardItem(item) {
@@ -20,6 +29,8 @@ export function mapAdminOpsIncidentBoardItem(item) {
 
   const vendor = item.vendor && typeof item.vendor === 'object' ? item.vendor : null
   const champ = item.champ && typeof item.champ === 'object' ? item.champ : null
+  const tags = Array.isArray(item.tags) ? item.tags : []
+  const contactTypes = mapContactTypes(tags)
   const displayId = item.orderNumber || item.id
   if (!displayId) return null
 
@@ -33,23 +44,32 @@ export function mapAdminOpsIncidentBoardItem(item) {
     vendor: vendor?.name || '—',
     vendorArea: vendor?.area ?? null,
     vendorId: vendor?.id ?? null,
+    temperature: item.category || '—',
+    category: item.category ?? null,
     timeLeft: item.timeLeftLabel || (item.elapsedMin != null ? `${item.elapsedMin}m` : '—'),
     elapsedMin: item.elapsedMin ?? null,
     detail: `${statusLabel} · ${champName}`,
+    state: String(statusLabel),
     status: item.status ?? null,
     statusLabel: String(statusLabel),
-    category: item.category ?? null,
     priorityLabel: item.priorityLabel ?? null,
     orderType: item.orderType ?? null,
     fulfillmentType: item.fulfillmentType ?? null,
+    schedule: item.fulfillmentType === 'SCHEDULED' ? 'Scheduled' : null,
     slaBreached: Boolean(item.slaBreached),
     hasIncident: Boolean(item.hasIncident),
     incidentCount: Number(item.incidentCount) || 0,
     conversationId: item.conversationId ?? null,
-    tags: Array.isArray(item.tags) ? item.tags : [],
+    tags,
+    contactTypes,
+    contactType: contactTypes[0] || null,
     champ: champ
       ? { id: champ.id ?? null, name: champ.name ? String(champ.name) : null }
       : null,
+    rider: {
+      id: champ?.id ?? null,
+      name: champName,
+    },
   }
 }
 

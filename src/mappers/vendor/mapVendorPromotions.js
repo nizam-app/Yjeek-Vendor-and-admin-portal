@@ -17,6 +17,8 @@
  *     data: updated promotion (status PAUSED, isPaused true)
  *   PATCH /vendor-panel/promotions/:promotionId
  *     Update (Item/category deal | Free delivery | Buy X Get Y) — type-specific body
+ *   POST /vendor-panel/promotions
+ *     Create — same body shape as Update (Postman Create also accepts `{ name }`)
  */
 
 import { ApiError } from '../../api/errors'
@@ -768,6 +770,15 @@ export function mapVendorPromotionToEditForm(promo) {
       perCustomer: promo.usesPerCustomer != null ? String(promo.usesPerCustomer) : '',
     },
   }
+}
+
+/**
+ * Map ConfigurePromotion form → POST /vendor-panel/promotions create body.
+ * Same shape as update; confirmed Postman Create accepts at least `{ name }`
+ * and full type bodies matching Update samples.
+ */
+export function mapVendorCreatePromotionRequest(input = {}) {
+  return mapVendorUpdatePromotionRequest(input)
 }
 
 /**

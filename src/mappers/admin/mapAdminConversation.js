@@ -97,12 +97,23 @@ export function mapAdminChatReadResponse(data) {
 
 /** Header peer helpers when opening from strip vs conversation payload. */
 export function conversationPeerFromChat(chat, conversation) {
-  const name =
-    chat?.name ||
-    conversation?.customer?.name ||
-    conversation?.champ?.name ||
-    '—'
-  const role = chat?.role || (conversation?.customer ? 'Customer' : conversation?.champ ? 'Champ' : '—')
+  const role =
+    chat?.role ||
+    (chat?.peerRole === 'CHAMP'
+      ? 'Champ'
+      : chat?.peerRole === 'CUSTOMER'
+        ? 'Customer'
+        : null) ||
+    (conversation?.champ && chat?.contactType === 'Champ' ? 'Champ' : null) ||
+    (conversation?.customer ? 'Customer' : conversation?.champ ? 'Champ' : '—')
+
+  const nameFromConversation =
+    role === 'Champ'
+      ? conversation?.champ?.name || conversation?.customer?.name
+      : conversation?.customer?.name || conversation?.champ?.name
+
+  const name = chat?.name || nameFromConversation || '—'
+
   return {
     name,
     role,

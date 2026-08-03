@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Check,
@@ -14,12 +14,23 @@ import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddV
 import { AdminVendorSlaConfigs, SERVICE_MODE_OPTIONS } from '../../../components/admin/AdminVendorSlaConfigs'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
-import { adminService } from '../../../services/adminService'
-import { matchAdminStoreTypeId } from '../../../mappers/admin/mapAdminStoreTypes'
+import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
+import {
+  flattenAdminMenuCategoryOptions,
+  matchAdminStoreTypeId,
+} from '../../../mappers/admin/mapAdminStoreTypes'
 import {
   mapAdminCommissionToWizardForm,
   mapAdminCustomFeesToWizard,
 } from '../../../mappers/admin/mapAdminVendorCommission'
+import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
+import { adminService } from '../../../services/adminService'
+import {
+  ADMIN_IMAGE_UPLOAD_ACCEPT,
+  ADMIN_IMAGE_UPLOAD_MAX_BYTES,
+  adminUploadService,
+  validateAdminImageFile,
+} from '../../../services/admin/uploadService'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -97,25 +108,124 @@ function VendorSelect({ children, className = '', ...props }) {
 }
 
 function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
+  const inputRef = useRef(null)
+  const localPreviewRef = useRef(null)
+  const [localPreviewUrl, setLocalPreviewUrl] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
+
+  const revokeLocalPreview = () => {
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current)
+      localPreviewRef.current = null
+    }
+    setLocalPreviewUrl('')
+  }
+
+  useEffect(() => () => {
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current)
+      localPreviewRef.current = null
+    }
+  }, [])
+
+  // Remote URL replaced the blob — drop temporary preview.
+  useEffect(() => {
+    if (imageUrl && !String(imageUrl).startsWith('blob:') && localPreviewRef.current) {
+      revokeLocalPreview()
+    }
+  }, [imageUrl])
+
+  const handlePick = () => {
+    if (isUploading) return
+    inputRef.current?.click()
+  }
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploadError(null)
+
+    try {
+      validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
+    } catch (err) {
+      setUploadError(err)
+      return
+    }
+
+    revokeLocalPreview()
+    const objectUrl = URL.createObjectURL(file)
+    localPreviewRef.current = objectUrl
+    setLocalPreviewUrl(objectUrl)
+
+    setIsUploading(true)
+    try {
+      const result = await adminUploadService.uploadImage(file, { feature: 'vendors' })
+      const url = result?.data?.url
+      if (!url) {
+        throw new Error('Upload succeeded but no image URL was returned.')
+      }
+      onUrlChange?.(url)
+    } catch (err) {
+      setUploadError(err)
+      // Keep local preview so the user can see what they chose and retry.
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const displayUrl = localPreviewUrl || resolveAdminMediaUrl(imageUrl) || imageUrl || ''
+  const hasImage = Boolean(displayUrl)
+
   return (
     <VendorField label={label}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+        className="hidden"
+        onChange={handleFileChange}
+      />
       <button
         type="button"
-        onClick={() => {
-          const next = window.prompt(`${label} image URL`, imageUrl || '')
-          if (next == null) return
-          onUrlChange?.(next.trim())
-        }}
-        className="relative flex h-[120px] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-[#f3f5f3] text-[#7c8780] transition hover:border-[#1aa054] hover:bg-[#eef7f1]"
+        onClick={handlePick}
+        disabled={isUploading}
+        className={cn(
+          'relative flex h-[120px] w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-[#f3f5f3] text-[#7c8780] transition hover:border-[#1aa054] hover:bg-[#eef7f1]',
+          isUploading && 'cursor-wait opacity-80',
+        )}
       >
-        {imageUrl ? (
-          <img src={imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {hasImage ? (
+          <img
+            src={displayUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            onLoad={() => {
+              if (imageUrl && localPreviewRef.current && !String(imageUrl).startsWith('blob:')) {
+                revokeLocalPreview()
+              }
+            }}
+          />
         ) : null}
-        <span className={cn('relative z-[1] flex flex-col items-center gap-2', imageUrl && 'rounded-md bg-white/90 px-3 py-2')}>
+        <span
+          className={cn(
+            'relative z-[1] flex flex-col items-center gap-2',
+            hasImage && 'rounded-md bg-white/90 px-3 py-2',
+          )}
+        >
           <Upload size={18} strokeWidth={1.8} />
-          <span className="text-[12px] font-medium">{imageUrl ? 'Change image URL' : 'Upload image'}</span>
+          <span className="text-[12px] font-medium">
+            {isUploading ? 'Uploading…' : hasImage ? 'Change image' : 'Upload image'}
+          </span>
         </span>
       </button>
+      {uploadError ? (
+        <p className="mt-1.5 text-[11px] text-[#c0392b]">
+          {formatApiErrorMessage(uploadError) || 'Upload failed. Try again.'}
+        </p>
+      ) : null}
     </VendorField>
   )
 }
@@ -154,6 +264,7 @@ export default function AdminAddVendorPage({ onBack }) {
     storeTypeId: '',
     categoryLabel: 'Food & Beverage',
     subCategory: 'None',
+    subcategoryId: '',
     description: '',
     logoUrl: '',
     coverUrl: '',
@@ -167,7 +278,8 @@ export default function AdminAddVendorPage({ onBack }) {
     ownerPassword: '',
     crNumber: '',
     vatNumber: '',
-    commissionModel: 'Tiered',
+    // Prefer neutral defaults when real API is on — edit load / create APIs overwrite these.
+    commissionModel: isAdminRealApiFeature('vendors') ? '% of order' : 'Tiered',
     commissionRate: '15',
     serviceFee: '0.300',
     vatOnCommission: '10',
@@ -187,7 +299,14 @@ export default function AdminAddVendorPage({ onBack }) {
   })
   const useRealCreateApi = !isEdit && isAdminRealApiFeature('vendors')
   const [storeTypes, setStoreTypes] = useState([])
+  const [subCategories, setSubCategories] = useState([])
   const [slaModels, setSlaModels] = useState([])
+  const [slaConfigs, setSlaConfigs] = useState({})
+  const [slaLoading, setSlaLoading] = useState(false)
+  const [slaSaving, setSlaSaving] = useState(false)
+  const [slaError, setSlaError] = useState(null)
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [usersError, setUsersError] = useState(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState(null)
@@ -201,15 +320,7 @@ export default function AdminAddVendorPage({ onBack }) {
       { id: 'f2', name: 'Priority handling', value: '2.5 %', amount: 2.5, type: '%' },
     ],
   )
-  const [commissionTiers, setCommissionTiers] = useState(() => (
-    isAdminRealApiFeature('vendors')
-      ? [
-          { fromAmount: 0, ratePct: 18 },
-          { fromAmount: 5000, ratePct: 15 },
-          { fromAmount: 15000, ratePct: 12 },
-        ]
-      : []
-  ))
+  const [commissionTiers, setCommissionTiers] = useState([])
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [commissionSaving, setCommissionSaving] = useState(false)
   const [commissionError, setCommissionError] = useState(null)
@@ -223,8 +334,12 @@ export default function AdminAddVendorPage({ onBack }) {
   const current = ADD_VENDOR_STEPS[step - 1]
   const update = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }))
   const useRealStoreApi = isEdit && Boolean(editVendorId) && isAdminRealApiFeature('vendors')
-  const stepBusy = profileSaving || commissionSaving || createSaving
-  const stepLoading = (step === 1 && profileLoading) || (step === 4 && commissionLoading)
+  const stepBusy = profileSaving || commissionSaving || createSaving || slaSaving
+  const stepLoading =
+    (step === 1 && profileLoading) ||
+    (step === 3 && usersLoading) ||
+    (step === 4 && commissionLoading) ||
+    (step === 5 && slaLoading)
 
   function buildWizardDraft(overrides = {}) {
     return {
@@ -234,6 +349,7 @@ export default function AdminAddVendorPage({ onBack }) {
       customFees,
       commissionTiers,
       serviceModes,
+      slaConfigs,
       ...overrides,
     }
   }
@@ -243,8 +359,6 @@ export default function AdminAddVendorPage({ onBack }) {
   }, [location.key, location.state?.step])
 
   useEffect(() => {
-    if (isEdit) return
-
     const st = location.state
     if (!st) return
 
@@ -253,11 +367,15 @@ export default function AdminAddVendorPage({ onBack }) {
       if (draft.form && typeof draft.form === 'object') {
         setForm((prev) => ({ ...prev, ...draft.form }))
       }
-      if (Array.isArray(draft.branches)) setBranches(draft.branches)
-      if (Array.isArray(draft.users)) setUsers(draft.users)
+      // Edit mode re-fetches branches/users from API; still restore wizard-only state.
+      if (!isEdit) {
+        if (Array.isArray(draft.branches)) setBranches(draft.branches)
+        if (Array.isArray(draft.users)) setUsers(draft.users)
+      }
       if (Array.isArray(draft.customFees)) setCustomFees(draft.customFees)
       if (Array.isArray(draft.commissionTiers)) setCommissionTiers(draft.commissionTiers)
       if (Array.isArray(draft.serviceModes)) setServiceModes(draft.serviceModes)
+      if (draft.slaConfigs && typeof draft.slaConfigs === 'object') setSlaConfigs(draft.slaConfigs)
     }
 
     if (st.savedBranch) {
@@ -369,11 +487,14 @@ export default function AdminAddVendorPage({ onBack }) {
           storeType: vendor.categoryLabel || vendor.storeType || prev.storeType,
           storeTypeId: matchedTypeId || '',
           subCategory: vendor.subCategory || 'None',
+          subcategoryId: vendor.subcategoryId || '',
           description: vendor.description || '',
           logoUrl: vendor.logoUrl || '',
           coverUrl: vendor.coverUrl || '',
           area: vendor.area || '',
           cuisineTags: vendor.cuisineTags || [],
+          crNumber: vendor.crNumber || '',
+          vatNumber: vendor.vatNumber || '',
         }))
       })
       .catch((err) => {
@@ -452,6 +573,123 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }, [useRealStoreApi, editVendorId, location.key])
 
+  useEffect(() => {
+    const storeTypeId = form.storeTypeId
+    if (!storeTypeId || !isAdminRealApiFeature('vendors')) {
+      setSubCategories([])
+      return undefined
+    }
+
+    let cancelled = false
+    adminService
+      .getAdminStoreType(storeTypeId)
+      .then((response) => {
+        if (cancelled) return
+        const cats = Array.isArray(response?.data?.categories) ? response.data.categories : []
+        setSubCategories(flattenAdminMenuCategoryOptions(cats))
+      })
+      .catch(() => {
+        if (!cancelled) setSubCategories([])
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [form.storeTypeId])
+
+  useEffect(() => {
+    if (!useRealStoreApi) return undefined
+
+    let cancelled = false
+    setUsersLoading(true)
+    setUsersError(null)
+
+    adminService
+      .listVendorStaff(editVendorId)
+      .then((response) => {
+        if (cancelled) return
+        const all = response?.data?.users || []
+        const owner = all.find((u) => u && u.isOwner)
+        const list = all.filter((u) => u && !u.isOwner)
+        setUsers(list)
+        if (owner) {
+          setForm((prev) => ({
+            ...prev,
+            ownerName: owner.name && owner.name !== 'Untitled' ? owner.name : prev.ownerName,
+            ownerEmail: owner.email && owner.email !== '—' ? owner.email : prev.ownerEmail,
+            ownerPhone: owner.phone || prev.ownerPhone,
+            // Password is never returned by API — keep blank on edit
+            ownerPassword: '',
+          }))
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setUsers([])
+        setUsersError(err?.message || 'Failed to load users.')
+      })
+      .finally(() => {
+        if (!cancelled) setUsersLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStoreApi, editVendorId, location.key])
+
+  useEffect(() => {
+    if (!useRealStoreApi) return undefined
+
+    let cancelled = false
+    setSlaLoading(true)
+    setSlaError(null)
+
+    Promise.all([
+      adminService.getVendorSla(editVendorId),
+      adminService.listSlaModels({ limit: 50 }),
+    ])
+      .then(([slaRes, modelsRes]) => {
+        if (cancelled) return
+        const models = modelsRes?.data?.slaModels || []
+        setSlaModels(models)
+        const sla = slaRes?.data
+        if (!sla) return
+        const labels = mapAdminServiceModesToLabels(sla.serviceModes || {})
+        if (labels.length) setServiceModes(labels)
+        setForm((prev) => ({
+          ...prev,
+          slaModelId: sla.slaModelId || sla.modelId || prev.slaModelId,
+          acceptSla:
+            sla.config?.acceptanceCutoffMin != null
+              ? `${sla.config.acceptanceCutoffMin} min`
+              : prev.acceptSla,
+          prepSla:
+            sla.config?.prepTimeHotFoodMin != null
+              ? `${sla.config.prepTimeHotFoodMin} min`
+              : prev.prepSla,
+          readySla:
+            sla.config?.readyOnTimeTargetPct != null
+              ? `${sla.config.readyOnTimeTargetPct}%`
+              : sla.config?.readyOnlineTargetPct != null
+                ? `${sla.config.readyOnlineTargetPct}%`
+                : prev.readySla,
+        }))
+        if (sla.config?.modeConfigs && typeof sla.config.modeConfigs === 'object') {
+          setSlaConfigs(sla.config.modeConfigs)
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setSlaError(err?.message || 'Failed to load SLA.')
+      })
+      .finally(() => {
+        if (!cancelled) setSlaLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStoreApi, editVendorId])
+
   async function saveStoreProfile() {
     if (!useRealStoreApi) return true
     setProfileError(null)
@@ -473,6 +711,14 @@ export default function AdminAddVendorPage({ onBack }) {
           area: vendor.area || prev.area,
           cuisineTags: vendor.cuisineTags || prev.cuisineTags,
           storeType: vendor.categoryLabel || prev.storeType,
+          storeTypeId: vendor.storeTypeId || prev.storeTypeId,
+          subcategoryId:
+            vendor.subcategoryId !== undefined && vendor.subcategoryId !== null
+              ? vendor.subcategoryId
+              : prev.subcategoryId,
+          subCategory: vendor.subCategory || prev.subCategory,
+          crNumber: vendor.crNumber ?? prev.crNumber,
+          vatNumber: vendor.vatNumber ?? prev.vatNumber,
         }))
       }
       return true
@@ -489,6 +735,13 @@ export default function AdminAddVendorPage({ onBack }) {
     setCommissionError(null)
     setCommissionSaving(true)
     try {
+      // CR / VAT live on store profile — persist with this step's Documents card.
+      const crNumber = String(form.crNumber || '').trim()
+      const vatNumber = String(form.vatNumber || '').trim()
+      if (crNumber || vatNumber) {
+        await adminService.updateVendor(editVendorId, { crNumber, vatNumber })
+      }
+
       const response = await adminService.updateVendorCommission(editVendorId, form, {
         wizard: true,
         customFees,
@@ -512,6 +765,31 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }
 
+  async function saveSla() {
+    if (!useRealStoreApi) return true
+    setSlaError(null)
+    setSlaSaving(true)
+    try {
+      await adminService.updateVendorSla(editVendorId, {
+        slaModelId: form.slaModelId,
+        selectedModes: serviceModes,
+        acceptSla: Number(String(form.acceptSla).replace(/[^\d.]/g, '')) || undefined,
+        prepSla: Number(String(form.prepSla).replace(/[^\d.]/g, '')) || undefined,
+        slaConfigs,
+        config: {
+          acceptanceCutoffMin: Number(String(form.acceptSla).replace(/[^\d.]/g, '')) || undefined,
+          prepTimeHotFoodMin: Number(String(form.prepSla).replace(/[^\d.]/g, '')) || undefined,
+        },
+      })
+      return true
+    } catch (err) {
+      setSlaError(err?.message || 'Failed to update SLA.')
+      return false
+    } finally {
+      setSlaSaving(false)
+    }
+  }
+
   async function submitCreateVendor({ activate }) {
     if (!useRealCreateApi) {
       handleBack()
@@ -528,6 +806,7 @@ export default function AdminAddVendorPage({ onBack }) {
         customFees,
         commissionTiers,
         serviceModes,
+        slaConfigs,
         activate: Boolean(activate),
       })
       const id = response?.data?.id
@@ -553,6 +832,10 @@ export default function AdminAddVendorPage({ onBack }) {
       const ok = await saveCommission()
       if (!ok) return
     }
+    if (step === 5 && useRealStoreApi) {
+      const ok = await saveSla()
+      if (!ok) return
+    }
     if (step < ADD_VENDOR_STEPS.length) setStep(step + 1)
     else handleBack()
   }
@@ -569,6 +852,9 @@ export default function AdminAddVendorPage({ onBack }) {
     }
     if (step === 4 && useRealStoreApi) {
       await saveCommission()
+    }
+    if (step === 5 && useRealStoreApi) {
+      await saveSla()
     }
   }
 
@@ -636,8 +922,53 @@ export default function AdminAddVendorPage({ onBack }) {
   }
 
   const addUser = () => {
+    if (useRealStoreApi) {
+      navigate(`/admin/vendors/${encodeURIComponent(editVendorId)}/users/new`, {
+        state: {
+          storeName: form.storeName,
+          vendorId: editVendorId,
+          mode: 'edit',
+          returnTo: 'wizard',
+          step: 3,
+          branches,
+          wizardDraft: buildWizardDraft(),
+        },
+      })
+      return
+    }
     navigate('/admin/vendors/new/users/new', {
       state: {
+        storeName: form.storeName,
+        mode: 'create',
+        step: 3,
+        branches,
+        wizardDraft: buildWizardDraft(),
+      },
+    })
+  }
+
+  const editUser = (user) => {
+    if (useRealStoreApi) {
+      navigate(
+        `/admin/vendors/${encodeURIComponent(editVendorId)}/users/${encodeURIComponent(user.id)}`,
+        {
+          state: {
+            user,
+            storeName: form.storeName,
+            vendorId: editVendorId,
+            mode: 'edit',
+            returnTo: 'wizard',
+            step: 3,
+            branches,
+            wizardDraft: buildWizardDraft(),
+          },
+        },
+      )
+      return
+    }
+    navigate(`/admin/vendors/new/users/${encodeURIComponent(user.id)}`, {
+      state: {
+        user,
         storeName: form.storeName,
         mode: 'create',
         step: 3,
@@ -771,8 +1102,9 @@ export default function AdminAddVendorPage({ onBack }) {
                       ...prev,
                       storeTypeId: matched ? matched.id : '',
                       storeType: matched ? matched.name : value,
-                      // Keep categoryLabel independent (Postman: "Food & Beverage")
-                      categoryLabel: prev.categoryLabel || (matched ? matched.name : value),
+                      categoryLabel: matched ? matched.name : value,
+                      subcategoryId: '',
+                      subCategory: 'None',
                     }))
                   }}
                 >
@@ -796,33 +1128,37 @@ export default function AdminAddVendorPage({ onBack }) {
                   )}
                 </VendorSelect>
               </VendorField>
-              <VendorField label="Category label">
-                <VendorInput
-                  value={form.categoryLabel || ''}
-                  onChange={update('categoryLabel')}
-                  placeholder="Food & Beverage"
-                />
-              </VendorField>
               <VendorField label="Sub-category">
-                <VendorSelect value={form.subCategory} onChange={update('subCategory')}>
-                  {['None', 'Healthy food', 'Fast food', 'Cafe', 'Hot food', form.subCategory]
-                    .filter(Boolean)
-                    .filter((item, index, all) => all.indexOf(item) === index)
-                    .map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
+                <VendorSelect
+                  value={form.subcategoryId || ''}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    const matched = subCategories.find((c) => c.id === value)
+                    setForm((prev) => ({
+                      ...prev,
+                      subcategoryId: value,
+                      subCategory: matched?.name || (value ? prev.subCategory : 'None'),
+                    }))
+                  }}
+                >
+                  <option value="">None</option>
+                  {form.subcategoryId &&
+                  !subCategories.some((c) => String(c.id) === String(form.subcategoryId)) ? (
+                    <option value={form.subcategoryId}>
+                      {form.subCategory && form.subCategory !== 'None'
+                        ? form.subCategory
+                        : form.subcategoryId}
+                    </option>
+                  ) : null}
+                  {subCategories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
                 </VendorSelect>
               </VendorField>
               <VendorField label="Short description" className="col-span-2 max-[700px]:col-span-1">
                 <VendorInput value={form.description} onChange={update('description')} />
-              </VendorField>
-              <VendorField label="City">
-                <VendorInput value={form.city} onChange={update('city')} />
-              </VendorField>
-              <VendorField label="Area">
-                <VendorInput value={form.area} onChange={update('area')} />
               </VendorField>
               <VendorUploadBox
                 label="Logo"
@@ -892,21 +1228,53 @@ export default function AdminAddVendorPage({ onBack }) {
             <VendorCard title="Vendor admin (owner login)" subtitle="Primary account used to manage this vendor">
               <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
                 <VendorField label="Full name">
-                  <VendorInput value={form.ownerName} onChange={update('ownerName')} />
+                  <VendorInput
+                    value={form.ownerName}
+                    onChange={update('ownerName')}
+                    disabled={isEdit}
+                  />
                 </VendorField>
                 <VendorField label="Email">
-                  <VendorInput value={form.ownerEmail} onChange={update('ownerEmail')} />
+                  <VendorInput
+                    value={form.ownerEmail}
+                    onChange={update('ownerEmail')}
+                    disabled={isEdit}
+                  />
                 </VendorField>
                 <VendorField label="Phone">
-                  <VendorInput value={form.ownerPhone} onChange={update('ownerPhone')} />
+                  <VendorInput
+                    value={form.ownerPhone}
+                    onChange={update('ownerPhone')}
+                    disabled={isEdit}
+                  />
                 </VendorField>
                 <VendorField label="Password">
-                  <VendorInput type="text" value={form.ownerPassword} onChange={update('ownerPassword')} />
+                  <VendorInput
+                    type="text"
+                    value={form.ownerPassword}
+                    onChange={update('ownerPassword')}
+                    placeholder={isEdit ? 'Leave blank to keep current password' : ''}
+                    disabled={isEdit}
+                  />
                 </VendorField>
               </div>
+              {useRealStoreApi ? (
+                <p className="mt-3 text-[11px] text-[#8a948e]">
+                  Owner login is prefilled from this vendor (read-only on edit). Additional users
+                  below can still be added or edited.
+                </p>
+              ) : null}
             </VendorCard>
 
             <VendorCard title="Additional users" subtitle="Staff accounts with branch-level access">
+              {usersLoading ? (
+                <p className="mb-3 text-[13px] text-[#7c8780]">Loading users…</p>
+              ) : null}
+              {usersError ? (
+                <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                  {usersError}
+                </div>
+              ) : null}
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] border-collapse text-left">
                   <thead>
@@ -919,6 +1287,13 @@ export default function AdminAddVendorPage({ onBack }) {
                     </tr>
                   </thead>
                   <tbody>
+                    {!usersLoading && users.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-3 text-[13px] text-[#7c8780]">
+                          No additional users yet.
+                        </td>
+                      </tr>
+                    ) : null}
                     {users.map((user) => (
                       <tr key={user.id} className="border-b border-[#f0f2f0] last:border-0">
                         <td className="whitespace-nowrap py-3 pr-3 text-[13px] font-bold text-[#17231c]">{user.name}</td>
@@ -930,18 +1305,7 @@ export default function AdminAddVendorPage({ onBack }) {
                         <td className="py-3 text-right">
                           <button
                             type="button"
-                            onClick={() =>
-                              navigate(`/admin/vendors/new/users/${encodeURIComponent(user.id)}`, {
-                                state: {
-                                  user,
-                                  storeName: form.storeName,
-                                  mode: 'create',
-                                  step: 3,
-                                  branches,
-                                  wizardDraft: buildWizardDraft(),
-                                },
-                              })
-                            }
+                            onClick={() => editUser(user)}
                             className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3]"
                             aria-label={`Edit ${user.name}`}
                           >
@@ -986,7 +1350,7 @@ export default function AdminAddVendorPage({ onBack }) {
               </div>
               {useRealStoreApi ? (
                 <p className="mt-3 text-[11px] text-[#8a948e]">
-                  CR / VAT are not part of the commission API — not saved with this step yet.
+                  CR / VAT are saved with Continue on this step (store profile PATCH).
                 </p>
               ) : null}
             </VendorCard>
@@ -1163,7 +1527,7 @@ export default function AdminAddVendorPage({ onBack }) {
               </div>
               {useRealStoreApi && form.commissionModel !== 'Tiered' ? (
                 <p className="mt-3 text-[11px] text-[#8a948e]">
-                  Custom fees are included in the confirmed Tiered PATCH body. They are kept locally for other models.
+                  Custom fees are saved with this step for every commission model.
                 </p>
               ) : null}
             </VendorCard>
@@ -1173,7 +1537,7 @@ export default function AdminAddVendorPage({ onBack }) {
         {step === 5 ? (
           <>
             <VendorCard title="Service modes & SLA">
-              {useRealCreateApi ? (
+              {isAdminRealApiFeature('vendors') ? (
                 <div className="mb-4 max-w-md">
                   <VendorField label="SLA model">
                     <VendorSelect value={form.slaModelId} onChange={update('slaModelId')}>
@@ -1226,7 +1590,16 @@ export default function AdminAddVendorPage({ onBack }) {
               </button>
             </VendorCard>
 
-            <AdminVendorSlaConfigs selectedModes={serviceModes} />
+            <AdminVendorSlaConfigs
+              selectedModes={serviceModes}
+              value={slaConfigs}
+              onChange={setSlaConfigs}
+            />
+            {slaError ? (
+              <div className="mt-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                {slaError}
+              </div>
+            ) : null}
           </>
         ) : null}
 

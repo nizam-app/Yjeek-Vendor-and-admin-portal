@@ -1,4 +1,5 @@
 import { Route } from 'react-router-dom'
+import RequireVendorServiceMode from '../components/RequireVendorServiceMode'
 import VendorLayout from '../layout/VendorLayout'
 import Dashboard from '../pages/vendor/Dashboard'
 import LiveOrders from '../pages/vendor/LiveOrders'
@@ -26,13 +27,18 @@ export const vendorRoutes = (
     <Route path="dashboard" element={<Dashboard />} />
     <Route path="live-orders" element={<LiveOrders />} />
     <Route path="live-orders/:key" element={<LiveOrderColumn />} />
-    <Route path="scheduled" element={<Scheduled />} />
-    <Route path="scheduled/:key" element={<ScheduledOrderColumn />} />
-    <Route path="services" element={<Services />} />
+    <Route element={<RequireVendorServiceMode mode="scheduledDelivery" />}>
+      <Route path="scheduled" element={<Scheduled />} />
+      <Route path="scheduled/:key" element={<ScheduledOrderColumn />} />
+    </Route>
+    <Route element={<RequireVendorServiceMode mode="services" />}>
+      <Route path="services" element={<Services />} />
+    </Route>
     <Route path="orders-history" element={<OrdersHistory />} />
     <Route path="orders-history/:orderId" element={<OrderHistoryDetail />} />
     <Route path="catalog" element={<Catalog />} />
     <Route path="catalog/food" element={<FoodCatalog />} />
+    <Route path="catalog/:catalogId" element={<FoodCatalog />} />
     <Route path="branches/:branchId/edit" element={<EditBranch />} />
     <Route path="branches/:branchId/menu" element={<BranchMenu />} />
     <Route path="branches" element={<Branches />} />

@@ -1,44 +1,92 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Copy, MoreVertical, Plus, Search } from 'lucide-react'
+import { isAdminRealApiFeature } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminVendorService } from '../../../services/admin/vendorService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
+const PAGE_SIZE = 20
+
+function pageNumbers(current, total) {
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 3) return [1, 2, 3, '…', total]
+  if (current >= total - 2) return [1, '…', total - 2, total - 1, total]
+  return [1, '…', current, '…', total]
+}
+
+function matchesLocalFilters(row, { tab, category, query }) {
+  const status = String(row.status || '')
+  const matchesTab =
+    tab === 'All' ||
+    (tab === 'Pending'
+      ? /pending|draft/i.test(status)
+      : status.toLowerCase() === tab.toLowerCase())
+  const matchesCategory = !category || row.category === category
+  const haystack = `${row.name} ${row.displayCode || ''} ${row.id} ${row.category} ${status}`.toLowerCase()
+  const matchesQuery = !query || haystack.includes(query.toLowerCase())
+  return matchesTab && matchesCategory && matchesQuery
+}
+
 export default function AdminVendorsPage() {
   const navigate = useNavigate()
+  const useRealApi = isAdminRealApiFeature('vendors')
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('')
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    setPage(1)
+  }, [tab, debouncedQuery, category])
+
   const { data, error, isLoading, refetch } = useApiResource(
     () =>
       adminVendorService.listVendors({
-        search: query,
+        search: debouncedQuery,
         status: tab,
         category,
-        limit: 20,
+        limit: PAGE_SIZE,
+        page,
+        sort: 'newest',
       }),
-    [tab, query, category],
+    [tab, debouncedQuery, category, page],
   )
 
   const rows = useMemo(() => {
     if (!data?.rows) return []
-    // Real API already filters; this also covers mock management fallback.
-    return data.rows.filter((row) => {
-      const status = String(row.status || '')
-      const matchesTab =
-        tab === 'All' ||
-        (tab === 'Pending'
-          ? /pending|draft/i.test(status)
-          : status.toLowerCase() === tab.toLowerCase())
-      const matchesCategory = !category || row.category === category
-      const haystack = `${row.name} ${row.displayCode || ''} ${row.id} ${row.category} ${status}`.toLowerCase()
-      const matchesQuery = !query.trim() || haystack.includes(query.trim().toLowerCase())
-      return matchesTab && matchesCategory && matchesQuery
-    })
-  }, [data, tab, query, category])
+
+    if (useRealApi) {
+      // Server already filters + paginates.
+      return data.rows
+    }
+
+    const filtered = data.rows.filter((row) =>
+      matchesLocalFilters(row, { tab, category, query: debouncedQuery }),
+    )
+    const start = (page - 1) * PAGE_SIZE
+    return filtered.slice(start, start + PAGE_SIZE)
+  }, [data, useRealApi, tab, debouncedQuery, category, page])
+
+  const total = useMemo(() => {
+    if (useRealApi && data?.total != null) return Number(data.total) || 0
+    if (!data?.rows) return 0
+    return data.rows.filter((row) =>
+      matchesLocalFilters(row, { tab, category, query: debouncedQuery }),
+    ).length
+  }, [data, useRealApi, tab, debouncedQuery, category])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1)
+  const shownFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const shownTo = Math.min(page * PAGE_SIZE, total)
 
   const categories = useMemo(() => {
     const set = new Set()
@@ -66,6 +114,7 @@ export default function AdminVendorsPage() {
     if (normalized === 'active') return 'green'
     if (normalized === 'suspended') return 'red'
     if (normalized === 'pending' || normalized.includes('pending')) return 'yellow'
+    if (normalized.includes('force')) return 'orange'
     return 'gray'
   }
 
@@ -163,7 +212,7 @@ export default function AdminVendorsPage() {
                     colSpan={data.columns.length + 1}
                     className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                   >
-                    No vendors found.
+                    {isLoading ? 'Loading vendors…' : 'No vendors found.'}
                   </td>
                 </tr>
               ) : (
@@ -236,6 +285,52 @@ export default function AdminVendorsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0ee] px-4 py-3">
+          <p className="text-[11.5px] text-[#8a948e]">
+            Showing {shownFrom}–{shownTo} of {total.toLocaleString()}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e4e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#455249] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              ‹ Prev
+            </button>
+            {pageNumbers(page, totalPages).map((item, index) =>
+              item === '…' ? (
+                <span key={`ellipsis-${index}`} className="px-1 text-[12px] text-[#8a948e]">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setPage(item)}
+                  className={cn(
+                    'inline-flex h-[30px] min-w-[30px] items-center justify-center rounded-[8px] text-[12px] font-semibold transition',
+                    page === item
+                      ? 'bg-[#1aa054] text-white'
+                      : 'border border-[#e4e8e4] bg-white text-[#455249] hover:bg-[#f8faf8]',
+                  )}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e4e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#455249] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              Next ›
+            </button>
+          </div>
         </div>
       </section>
     </div>

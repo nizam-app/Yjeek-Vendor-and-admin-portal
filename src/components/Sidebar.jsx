@@ -15,12 +15,13 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { getVendorServiceModes } from '../mappers/vendor/authMapper'
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/live-orders', label: 'Live orders', icon: Zap },
-  { to: '/scheduled', label: 'Scheduled', icon: Zap },
-  { to: '/services', label: 'Services', icon: Calendar },
+  { to: '/scheduled', label: 'Scheduled', icon: Zap, requires: 'scheduledDelivery' },
+  { to: '/services', label: 'Services', icon: Calendar, requires: 'services' },
   { to: '/orders-history', label: 'Orders history', icon: ClipboardList },
   { to: '/catalog', label: 'Catalog', icon: Menu },
   { to: '/branches', label: 'Branches', icon: Home },
@@ -31,8 +32,10 @@ const links = [
 ]
 
 export default function Sidebar() {
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const modes = getVendorServiceModes(user)
+  const visibleLinks = links.filter((link) => !link.requires || modes[link.requires])
 
   async function handleSignOut() {
     if (isSigningOut) return
@@ -58,7 +61,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-[3px] flex-1">
-        {links.map(({ to, label, icon: Icon }) => (
+        {visibleLinks.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

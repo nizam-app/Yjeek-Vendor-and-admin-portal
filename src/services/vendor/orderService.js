@@ -10,6 +10,7 @@ import { mapVendorOrderDetailResponse, mapVendorOrderHistoryResponse } from '../
 import { mapVendorOrderReceiptResponse } from '../../mappers/vendor/mapVendorOrderReceipt'
 import { mapVendorServiceCalendarResponse } from '../../mappers/vendor/mapVendorServiceCalendar'
 import { mapVendorServiceOrdersResponse } from '../../mappers/vendor/mapVendorServiceOrders'
+import { mapVendorRejectionReason } from '../../mappers/vendor/mapVendorRejectionReason'
 
 const LIVE_TAB_BY_BOARD = {
   delivery: 'delivery_pickup',
@@ -153,7 +154,7 @@ export const orderService = {
       throw new Error('Order id is required.')
     }
 
-    const reason = String(form.reason || '').trim()
+    const reason = mapVendorRejectionReason(form.reason)
     if (!reason) {
       throw new Error('Rejection reason is required.')
     }

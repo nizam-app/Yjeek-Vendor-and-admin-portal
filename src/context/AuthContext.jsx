@@ -79,8 +79,15 @@ function shouldRestoreVendorSession(storedUser) {
   if (apiConfig.vendorUseMockApi) return false
   if (!getAccessToken('vendor')) return false
   if (storedUser?.role === 'admin') return false
-  // Prefer Admin restore when both tokens somehow exist.
-  if (isAdminRealApiFeature('auth') && getAccessToken('admin')) return false
+  // Only prefer Admin when there is no active Vendor session to restore.
+  // Otherwise Live Orders keeps a stale serviceModes (e.g. dineIn: false).
+  if (
+    !storedUser &&
+    isAdminRealApiFeature('auth') &&
+    getAccessToken('admin')
+  ) {
+    return false
+  }
   return true
 }
 
@@ -240,6 +247,17 @@ export function AuthProvider({ children }) {
     return nextUser
   }, [])
 
+  const refreshVendorSession = useCallback(async () => {
+    if (apiConfig.vendorUseMockApi || !getAccessToken('vendor')) {
+      return null
+    }
+    const nextUser = await authService.getCurrentUser()
+    persistUser(nextUser)
+    setUser(nextUser)
+    setAuthError(null)
+    return nextUser
+  }, [])
+
   const value = useMemo(
     () => ({
       user,
@@ -247,6 +265,7 @@ export function AuthProvider({ children }) {
       isAuthInitializing,
       authError,
       refreshAdminSession,
+      refreshVendorSession,
       async login(email, password) {
         const trimmedEmail = String(email ?? '').trim()
         const normalizedEmail = trimmedEmail.toLowerCase()
@@ -390,7 +409,7 @@ export function AuthProvider({ children }) {
         setUser(null)
       },
     }),
-    [authError, isAuthInitializing, pendingAdmin, refreshAdminSession, user],
+    [authError, isAuthInitializing, pendingAdmin, refreshAdminSession, refreshVendorSession, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

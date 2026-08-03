@@ -202,7 +202,7 @@ export default function Promotions() {
                                 className="flex w-full flex-col px-3.5 py-2.5 text-left hover:bg-[#f7f9f7]"
                                 onClick={() => {
                                   setMenuId(null)
-                                  navigate('/promotions/new')
+                                  navigate(`/promotions/${encodeURIComponent(promo.id)}/edit`)
                                 }}
                               >
                                 <span className="text-[13px] font-medium text-ink">Edit</span>

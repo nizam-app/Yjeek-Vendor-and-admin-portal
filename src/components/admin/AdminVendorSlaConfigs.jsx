@@ -373,19 +373,34 @@ function SlaModeCard({ mode, state, onChange }) {
   )
 }
 
-export function AdminVendorSlaConfigs({ selectedModes = [] }) {
-  const [configs, setConfigs] = useState({})
+export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
+  const [internalConfigs, setInternalConfigs] = useState({})
+  const isControlled = typeof onChange === 'function'
+  const configs = isControlled ? value || {} : internalConfigs
+  const setConfigs = isControlled
+    ? (updater) => {
+        const next = typeof updater === 'function' ? updater(configs) : updater
+        onChange(next)
+      }
+    : setInternalConfigs
 
   useEffect(() => {
     setConfigs((prev) => {
-      const next = { ...prev }
+      const next = { ...(prev || {}) }
+      let changed = false
       selectedModes.forEach((mode) => {
-        if (!next[mode]) next[mode] = buildInitialState(mode)
+        if (!next[mode]) {
+          next[mode] = buildInitialState(mode)
+          changed = true
+        }
       })
       Object.keys(next).forEach((mode) => {
-        if (!selectedModes.includes(mode)) delete next[mode]
+        if (!selectedModes.includes(mode)) {
+          delete next[mode]
+          changed = true
+        }
       })
-      return next
+      return changed ? next : prev
     })
   }, [selectedModes])
 

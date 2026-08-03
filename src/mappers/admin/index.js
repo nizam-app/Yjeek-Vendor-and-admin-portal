@@ -28,6 +28,14 @@ export {
   resolveAdminScheduledColumn,
 } from './mapAdminScheduledBoard'
 export {
+  BAHRAIN_CITY_GOVERNORATE,
+  BAHRAIN_GOVERNORATES,
+  emptyAdminScheduledCalendar,
+  mapAdminScheduledCalendarDay,
+  mapAdminScheduledCalendarItem,
+  mapAdminScheduledCalendarResponse,
+} from './mapAdminScheduledCalendar'
+export {
   mapAdminPickupBoardItem,
   mapAdminPickupBoardResponse,
 } from './mapAdminPickupBoard'
@@ -82,15 +90,21 @@ export {
 export {
   mapAdminStoreTypesResponse,
   matchAdminStoreTypeId,
+  flattenAdminMenuCategoryOptions,
 } from './mapAdminStoreTypes'
 export {
   mapAdminCreateBranchRequest,
   mapAdminUpdateBranchRequest,
   mapAdminVendorBranchListItem,
   mapAdminVendorBranchesResponse,
+  mapOpeningHoursToWizardHours,
+  mapWizardHoursToOpeningHours,
 } from './mapAdminVendorBranches'
 export {
   mapAdminCreateStaffRequest,
+  mapAdminUpdateStaffRequest,
+  mapAdminStaffPermissionsFromApi,
+  mapAdminStaffPermissionsToApi,
   mapAdminStaffPhoneParts,
   mapAdminStaffRoleFromApi,
   mapAdminStaffRoleToApi,

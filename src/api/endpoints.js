@@ -75,17 +75,18 @@ export const endpoints = {
       calendar: '/vendor-panel/orders/services/calendar',
     },
     catalog: {
-      /** Confirmed: GET /vendor-panel/catalog/products */
+      /** Confirmed: GET /vendor-panel/catalog/products · POST create · ?platformCategoryId= */
       products: '/vendor-panel/catalog/products',
-      /** Confirmed: GET /vendor-panel/catalog/products/:productId */
+      /** Confirmed: GET + PATCH /vendor-panel/catalog/products/:productId */
       product: (productId) =>
         `/vendor-panel/catalog/products/${encodeURIComponent(String(productId || '').trim())}`,
-      /** Confirmed: POST /vendor-panel/catalog/products */
-      // create uses same path via apiClient.post(endpoints.vendor.catalog.products)
-      /** Confirmed: GET /vendor-panel/catalog/categories */
+      /** Confirmed: GET /vendor-panel/catalog/categories?platformCategoryId= */
       categories: '/vendor-panel/catalog/categories',
-      /** Confirmed: GET /vendor-panel/catalog/store-types */
+      /** Confirmed: GET /vendor-panel/catalog/store-types (vendor-assigned only) */
       storeTypes: '/vendor-panel/catalog/store-types',
+      /** Confirmed: GET /vendor-panel/catalog/store-types/:id/badges */
+      storeTypeBadges: (storeTypeId) =>
+        `/vendor-panel/catalog/store-types/${encodeURIComponent(String(storeTypeId || '').trim())}/badges`,
       /**
        * Confirmed: GET + PATCH /vendor-panel/catalog/branches/:branchId/menu
        * Postman: "GET Branch menu" / "PATCH Edit Branch menu"
@@ -96,8 +97,8 @@ export const endpoints = {
       items: '/vendor-panel/catalog/products',
     },
     /**
-     * Vendor uploads — path not confirmed on this backend yet.
-     * Runtime tries catalog/media candidates; see vendorUploadService.
+     * Confirmed: POST /vendor-panel/catalog/uploads/images
+     * multipart field `file` → data.url
      */
     uploads: {
       images: '/vendor-panel/catalog/uploads/images',
@@ -113,8 +114,10 @@ export const endpoints = {
     /** Confirmed: GET /vendor-panel/staff */
     staff: '/vendor-panel/staff',
     promotions: {
-      /** Confirmed: GET /vendor-panel/promotions */
+      /** Confirmed: GET /vendor-panel/promotions · POST create */
       list: '/vendor-panel/promotions',
+      /** Confirmed: POST /vendor-panel/promotions — Create (same path as list) */
+      create: '/vendor-panel/promotions',
       /** Confirmed: GET /vendor-panel/promotions/summary */
       summary: '/vendor-panel/promotions/summary',
       /** Confirmed: GET + PATCH /vendor-panel/promotions/:promotionId */
@@ -171,6 +174,8 @@ export const endpoints = {
       boards: {
         /** Confirmed: GET /admin/dashboard/boards/scheduled?sort=&limit= */
         scheduled: '/admin/dashboard/boards/scheduled',
+        /** Confirmed: GET /admin/dashboard/boards/scheduled/calendar?weekStart=&governorate=&city=&block= */
+        scheduledCalendar: '/admin/dashboard/boards/scheduled/calendar',
         /** Confirmed: GET /admin/dashboard/boards/pickup?limit= */
         pickup: '/admin/dashboard/boards/pickup',
         /** Confirmed: GET /admin/dashboard/boards/dine_in?limit= */
@@ -237,7 +242,7 @@ export const endpoints = {
     },
     vendors: {
       /**
-       * Confirmed: GET /admin/vendors?search=&status=all&category=&limit=
+       * Confirmed: GET /admin/vendors?search=&status=all&category=&limit=&page=&sort=newest
        * Postman: "List vendors (KPIs + filters)"
        */
       list: '/admin/vendors',

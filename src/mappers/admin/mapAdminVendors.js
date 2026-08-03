@@ -67,6 +67,7 @@ export function mapAdminVendorListItem(vendor) {
     area: vendor.area ?? null,
     city: vendor.city ?? null,
     logoUrl: vendor.logoUrl ?? null,
+    createdAt: vendor.createdAt || vendor.created_at || null,
   }
 }
 
@@ -83,13 +84,25 @@ export function mapAdminVendorsListResponse(data) {
 
   const kpis = data.kpis && typeof data.kpis === 'object' ? data.kpis : {}
   const vendors = Array.isArray(data.vendors) ? data.vendors : []
+  const rows = vendors
+    .map(mapAdminVendorListItem)
+    .filter(Boolean)
+    // Prefer newest first when API returns createdAt (and when sort=newest is ignored).
+    .sort((a, b) => {
+      const aTime = a.createdAt ? Date.parse(a.createdAt) : NaN
+      const bTime = b.createdAt ? Date.parse(b.createdAt) : NaN
+      if (!Number.isNaN(aTime) && !Number.isNaN(bTime) && aTime !== bTime) {
+        return bTime - aTime
+      }
+      return 0
+    })
 
   return {
     title: 'Vendor Management',
     action: 'Add vendor',
     page: Number(data.page) || 1,
-    limit: Number(data.limit) || vendors.length,
-    total: Number(data.total) || vendors.length,
+    limit: Number(data.limit) || rows.length || 20,
+    total: Number(data.total) || rows.length,
     stats: [
       { label: 'Total vendors', value: formatCount(kpis.totalVendors ?? data.total), tone: 'ink' },
       { label: 'Active', value: formatCount(kpis.active), tone: 'green' },
@@ -98,7 +111,7 @@ export function mapAdminVendorsListResponse(data) {
     ],
     tabs: VENDOR_TABS,
     columns: VENDOR_COLUMNS,
-    rows: vendors.map(mapAdminVendorListItem).filter(Boolean),
+    rows,
   }
 }
 
@@ -213,8 +226,11 @@ export function mapAdminVendorDetailResponse(data) {
     city: data.city ?? null,
     cuisineTags: Array.isArray(data.cuisineTags) ? data.cuisineTags.filter(Boolean).map(String) : [],
     storeTypeId: data.storeTypeId ?? null,
+    subcategoryId: data.subcategoryId ?? null,
     categoryLabel: data.category ?? null,
-    subCategory: storeProfile.category ?? null,
+    subCategory: data.subcategoryName || null,
+    crNumber: data.crNumber ?? '',
+    vatNumber: data.vatNumber ?? '',
     storeOnline: Boolean(isOnline),
     storeOnlineHint: visibleAndAccepting
       ? 'Visible & accepting orders'
@@ -257,8 +273,9 @@ export function mapAdminVendorDetailResponse(data) {
 
 /**
  * Map Store profile form → PATCH /admin/vendors/:vendorId body.
- * Confirmed sample: area, logoUrl, coverUrl, cuisineTags, storeTypeId.
+ * Confirmed sample: logoUrl, coverUrl, cuisineTags, storeTypeId.
  * Also accepts name, legalName, description (live API).
+ * City / area / categoryLabel are set via branches / store type — not this form.
  */
 export function mapAdminUpdateVendorStoreRequest(form = {}) {
   const body = {}
@@ -272,9 +289,6 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
   const description = String(form.description || '').trim()
   if (description) body.description = description
 
-  const area = String(form.area || '').trim()
-  if (area) body.area = area
-
   const logoUrl = String(form.logoUrl || '').trim()
   if (logoUrl) body.logoUrl = logoUrl
 
@@ -283,6 +297,17 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
 
   const storeTypeId = String(form.storeTypeId || '').trim()
   if (storeTypeId) body.storeTypeId = storeTypeId
+
+  if (form.subcategoryId !== undefined) {
+    const subcategoryId = String(form.subcategoryId || '').trim()
+    body.subcategoryId = subcategoryId || null
+  }
+
+  const crNumber = String(form.crNumber || '').trim()
+  if (crNumber) body.crNumber = crNumber
+
+  const vatNumber = String(form.vatNumber || '').trim()
+  if (vatNumber) body.vatNumber = vatNumber
 
   if (Array.isArray(form.cuisineTags)) {
     const tags = form.cuisineTags.map((t) => String(t || '').trim()).filter(Boolean)
