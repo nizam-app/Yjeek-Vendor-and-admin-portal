@@ -26,16 +26,25 @@ import AdminCustomersPage from '../pages/admin/management/AdminCustomersPage'
 import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDetailPage'
 import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
+import AdminCreatePromoCodePage from '../pages/admin/management/AdminCreatePromoCodePage'
+import AdminSendCustomerNotificationPage from '../pages/admin/management/AdminSendCustomerNotificationPage'
+import AdminSendVendorNotificationPage from '../pages/admin/management/AdminSendVendorNotificationPage'
+import AdminNotificationDetailPage from '../pages/admin/management/AdminNotificationDetailPage'
 import AdminSlaModelsPage from '../pages/admin/management/AdminSlaModelsPage'
 import AdminUsersPage from '../pages/admin/management/AdminUsersPage'
+import AdminCreateRolePage from '../pages/admin/management/AdminCreateRolePage'
+import AdminCreateUserPage from '../pages/admin/management/AdminCreateUserPage'
+import AdminUserDetailPage from '../pages/admin/management/AdminUserDetailPage'
 import AdminReportsPage from '../pages/admin/management/AdminReportsPage'
 import AdminUiEditorPage from '../pages/admin/ui-editor/AdminUiEditorPage'
 import AdminSettingsPage from '../pages/admin/settings/AdminSettingsPage'
+import AdminAccountPage from '../pages/admin/AdminAccountPage'
 
 /** Nested under RequireRole(admin). Relative children under /admin. */
 export const adminRoutes = (
   <Route path="/admin" element={<AdminLayout />}>
     <Route index element={<Navigate to="/admin/dashboard" replace />} />
+    <Route path="account" element={<AdminAccountPage />} />
     <Route path="dashboard" element={<AdminDashboardPage />} />
     <Route path="live-orders" element={<AdminLiveOrdersPage />} />
     <Route path="scheduled" element={<AdminScheduledOrdersPage />} />
@@ -57,8 +66,10 @@ export const adminRoutes = (
     <Route path="stores/:storeTypeId" element={<AdminCreateStoreTypePage />} />
     <Route path="stores" element={<AdminStoresPage />} />
     <Route path="fleet/new" element={<AdminAddChampPage />} />
+    <Route path="fleet/:champId/edit" element={<AdminAddChampPage />} />
     <Route path="fleet/notify" element={<AdminNotifyChampsPage />} />
     <Route path="fleet/suppliers/new" element={<AdminAddSupplierPage />} />
+    <Route path="fleet/suppliers/:supplierId/edit" element={<AdminAddSupplierPage />} />
     <Route path="fleet/suppliers/:supplierId" element={<AdminSupplierDetailPage />} />
     <Route path="fleet/suppliers" element={<AdminFleetSuppliersPage />} />
     <Route path="fleet/:champId" element={<AdminChampDetailPage />} />
@@ -66,9 +77,23 @@ export const adminRoutes = (
     <Route path="customers/new" element={<AdminCreateSegmentPage />} />
     <Route path="customers/:customerId" element={<AdminCustomerDetailPage />} />
     <Route path="customers" element={<AdminCustomersPage />} />
+    <Route path="marketing/notifications/customers" element={<AdminSendCustomerNotificationPage />} />
+    <Route path="marketing/notifications/vendors" element={<AdminSendVendorNotificationPage />} />
+    <Route path="marketing/notifications/:notificationId" element={<AdminNotificationDetailPage />} />
+    <Route path="marketing/promo-codes/new" element={<AdminCreatePromoCodePage />} />
+    <Route path="marketing/promo-codes" element={<AdminMarketingPage />} />
     <Route path="marketing" element={<AdminMarketingPage />} />
+    <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
+    <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />
     <Route path="sla-models" element={<AdminSlaModelsPage />} />
+
     <Route path="ui-editor" element={<AdminUiEditorPage />} />
+    <Route path="users/new" element={<AdminCreateUserPage />} />
+    <Route path="users/roles/new" element={<AdminCreateRolePage />} />
+    <Route path="users/roles/:roleId/edit" element={<AdminCreateRolePage />} />
+    <Route path="users/roles" element={<AdminUsersPage />} />
+    <Route path="users/activity" element={<AdminUsersPage />} />
+    <Route path="users/:userId" element={<AdminUserDetailPage />} />
     <Route path="users" element={<AdminUsersPage />} />
     <Route path="reports" element={<AdminReportsPage />} />
     <Route path="settings" element={<AdminSettingsPage />} />

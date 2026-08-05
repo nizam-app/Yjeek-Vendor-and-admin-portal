@@ -1,4 +1,5 @@
 import { StatusPill } from './ui'
+import { useOrderTimers } from '../hooks/useOrderTimers'
 
 const btnBase = 'rounded-[8px] px-3 py-2 text-xs font-medium'
 const btnPrimaryAction = `flex-1 text-center bg-green-primary text-white ${btnBase} hover:brightness-[0.96]`
@@ -15,7 +16,7 @@ function SlaRow({ label, value }) {
   return (
     <p className="flex items-center justify-between text-warn">
       <span className="text-[11px] font-medium">⏱️ {label}</span>
-      <strong className="text-[13px] font-bold">{value}</strong>
+      <strong className="text-[13px] font-bold tabular-nums">{value}</strong>
     </p>
   )
 }
@@ -33,8 +34,72 @@ function openDetailsOnClick(mode) {
   return mode === 'new'
 }
 
-export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverChamp, onReject }) {
+function readyColumnAction(order) {
+  const existing = order?.primaryAction
+  if (existing?.key && existing?.label && existing?.path) return existing
+
+  const id = String(order?.backendId || '').trim()
+  if (!id || order?.handedOverAt) return null
+
+  const type = String(order?.orderType || '').toUpperCase()
+  const status = String(order?.backendStatus || '').toUpperCase()
+  if (['PICKED_UP', 'ON_THE_WAY', 'IN_TRANSIT', 'DELIVERED', 'COLLECTED'].includes(status)) {
+    return null
+  }
+
+  if (type === 'PICKUP') {
+    return {
+      key: 'HANDOVER_TO_CUSTOMER',
+      label: 'Handover to customer',
+      method: 'POST',
+      path: `/vendor-panel/orders/${id}/complete`,
+    }
+  }
+
+  const hasChamp = Boolean(order?.driver?.id || order?.champName)
+  if (hasChamp && ['DRIVER_ASSIGNED', 'ARRIVED_AT_PICKUP', 'READY_FOR_PICKUP', 'READY'].includes(status)) {
+    return {
+      key: 'HANDOVER_TO_CHAMP',
+      label: 'Handover to champ',
+      method: 'POST',
+      path: `/vendor-panel/orders/${id}/handover`,
+    }
+  }
+
+  return {
+    key: 'FIND_CHAMP',
+    label:
+      status === 'SEARCHING_DRIVER' || status === 'AWAITING_DRIVER_CONFIRM'
+        ? 'Retry find champ'
+        : 'Find champ',
+    method: 'POST',
+    path: `/vendor-panel/orders/${id}/request-champ`,
+  }
+}
+
+export function OrderCard({
+  order,
+  mode,
+  dense,
+  onSelect,
+  onAccept,
+  onPrimaryAction,
+  onHandoverChamp,
+  onReject,
+  accepting,
+  rejecting,
+  actioning,
+}) {
+  const isAccepting = Boolean(accepting)
+  const isRejecting = Boolean(rejecting)
+  const isBusy = isAccepting || isRejecting
+  const isActioning = Boolean(actioning)
   const canOpenDetails = openDetailsOnClick(mode)
+  const readyAction = mode === 'ready' ? readyColumnAction(order) : null
+  const { acceptCountdown, prepElapsed, prepDelay } = useOrderTimers(order, {
+    trackAccept: mode === 'new' && order.status !== 'rejected' && order.status !== 'no-show-cancelled',
+    trackPrep: mode === 'preparing',
+  })
 
   if (order.status === 'rejected') {
     return (
@@ -105,22 +170,22 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
       <p className="text-ink text-[13px] font-medium">{order.items}</p>
       <p className="text-ink-faint text-[12px]">{order.customer}</p>
 
-      {order.sla ? <SlaRow label="Accept within (SLA 60s)" value={order.sla} /> : null}
+      {acceptCountdown ? <SlaRow label="Accept within (SLA 60s)" value={acceptCountdown} /> : null}
 
       {order.readyLabel ? (
         <span className="inline-flex w-fit items-center text-[10px] font-medium py-[3px] px-[9px] rounded-full bg-green-active-bg text-green-active-text  border-green-active-text">
           {order.readyLabel}
         </span>
       ) : null}
-      {order.prepDelay ? (
+      {prepDelay ? (
         <div className="bg-warn-soft text-warn text-[10px] font-medium py-[5px] px-[8px] rounded-[7px]">
           ⚠ Prep delay — SLA risk
         </div>
       ) : null}
-      {order.prepTime ? (
-        <p className={`flex items-center justify-between ${order.prepDelay ? 'text-warn' : 'text-ink'}`}>
+      {prepElapsed ? (
+        <p className={`flex items-center justify-between ${prepDelay ? 'text-warn' : 'text-ink'}`}>
           <span className="text-[11px] font-medium">Prep time</span>
-          <strong className="text-[13px] font-bold">{order.prepTime}</strong>
+          <strong className="text-[13px] font-bold tabular-nums">{prepElapsed}</strong>
         </p>
       ) : null}
 
@@ -129,46 +194,70 @@ export function OrderCard({ order, mode, dense, onSelect, onAccept, onHandoverCh
           <button
             type="button"
             className={btnPrimaryAction}
+            disabled={isBusy}
             onClick={(e) => {
               stopCardAction(e)
               onAccept?.({ order, mode })
             }}
           >
-            Accept
+            {isAccepting ? 'Accepting…' : 'Accept'}
           </button>
           <button
             type="button"
             className={btnDangerOutline}
+            disabled={isBusy}
             onClick={(e) => triggerReject(e, onReject, order, mode)}
           >
-            Reject
+            {isRejecting ? 'Rejecting…' : 'Reject'}
           </button>
         </div>
       ) : null}
       {mode === 'accepted' ? (
-        <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-          Start preparing
+        <button
+          type="button"
+          className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isActioning}
+          onClick={(e) => {
+            stopCardAction(e)
+            onPrimaryAction?.({ order, mode })
+          }}
+        >
+          {isActioning ? 'Updating…' : order.primaryAction?.label || 'Start preparing'}
         </button>
       ) : null}
       {mode === 'preparing' ? (
-        <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-          Mark ready
+        <button
+          type="button"
+          className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isActioning}
+          onClick={(e) => {
+            stopCardAction(e)
+            onPrimaryAction?.({ order, mode })
+          }}
+        >
+          {isActioning ? 'Updating…' : order.primaryAction?.label || 'Mark ready'}
         </button>
       ) : null}
       {mode === 'ready' ? (
         <>
-          <button
-            type="button"
-            className={btnPrimaryFull}
-            onClick={(e) => {
-              stopCardAction(e)
-              if (order.handoverType === 'champ' || order.handoverLabel === 'Handover to champ') {
-                onHandoverChamp?.({ order, mode })
-              }
-            }}
-          >
-            {order.handoverLabel || 'Handover'}
-          </button>
+          {readyAction ? (
+            <button
+              type="button"
+              className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+              disabled={isActioning}
+              onClick={(e) => {
+                stopCardAction(e)
+                const nextOrder = { ...order, primaryAction: readyAction }
+                if (readyAction.key === 'HANDOVER_TO_CHAMP') {
+                  onHandoverChamp?.({ order: nextOrder, mode })
+                } else {
+                  onPrimaryAction?.({ order: nextOrder, mode })
+                }
+              }}
+            >
+              {isActioning ? 'Updating…' : readyAction.label}
+            </button>
+          ) : null}
           {order.noShow ? (
             <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>
               No Show
@@ -195,10 +284,29 @@ function DineInTag({ tag }) {
   )
 }
 
-export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject }) {
+export function DineInCard({
+  order,
+  mode,
+  dense,
+  onSelect,
+  onAccept,
+  onPrimaryAction,
+  onReject,
+  accepting,
+  rejecting,
+  actioning,
+}) {
+  const isAccepting = Boolean(accepting)
+  const isRejecting = Boolean(rejecting)
+  const isBusy = isAccepting || isRejecting
+  const isActioning = Boolean(actioning)
   const canOpenDetails = openDetailsOnClick(mode)
   const separateRows = mode === 'ready' || (mode === 'confirmed' && order.arrived === false)
   const showTogether = !separateRows && order.when && order.tag
+  const { acceptCountdown } = useOrderTimers(order, {
+    trackAccept: mode === 'new',
+    trackPrep: false,
+  })
 
   return (
     <div
@@ -219,7 +327,8 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
     >
       <p className="text-[12px] font-bold text-ink">{order.id}</p>
       <p className="text-[13px] font-medium text-ink">
-        {order.guest} · {order.guests} guests
+        {order.guest}
+        {order.guests != null && order.guests !== '' ? ` · ${order.guests} guests` : ''}
       </p>
 
       {showTogether ? (
@@ -240,26 +349,28 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
       {!separateRows && !order.when && order.tag ? <DineInTag tag={order.tag} /> : null}
 
       {mode === 'new' ? (
-        order.sla ? (
+        acceptCountdown || order.sla ? (
           <>
-            <SlaRow label="Accept within (SLA 60 sec)" value={order.sla} />
+            <SlaRow label="Accept within (SLA 60 sec)" value={acceptCountdown || order.sla} />
             <div className="flex gap-2">
               <button
                 type="button"
                 className={btnPrimaryAction}
+                disabled={isBusy}
                 onClick={(e) => {
                   stopCardAction(e)
                   onAccept?.({ order, mode })
                 }}
               >
-                Accept
+                {isAccepting ? 'Accepting…' : 'Accept'}
               </button>
               <button
                 type="button"
                 className={btnDangerOutline}
+                disabled={isBusy}
                 onClick={(e) => triggerReject(e, onReject, order, mode)}
               >
-                Reject
+                {isRejecting ? 'Rejecting…' : 'Reject'}
               </button>
             </div>
           </>
@@ -272,8 +383,16 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
 
       {mode === 'confirmed' ? (
         order.arrived ? (
-          <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-            Start preparing
+          <button
+            type="button"
+            className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+            disabled={isActioning}
+            onClick={(e) => {
+              stopCardAction(e)
+              onPrimaryAction?.({ order, mode })
+            }}
+          >
+            {isActioning ? 'Updating…' : order.primaryAction?.label || 'Start preparing'}
           </button>
         ) : (
           <>
@@ -288,15 +407,31 @@ export function DineInCard({ order, mode, dense, onSelect, onAccept, onReject })
       ) : null}
 
       {mode === 'preparing' ? (
-        <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-          Mark ready
+        <button
+          type="button"
+          className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+          disabled={isActioning}
+          onClick={(e) => {
+            stopCardAction(e)
+            onPrimaryAction?.({ order, mode })
+          }}
+        >
+          {isActioning ? 'Updating…' : order.primaryAction?.label || 'Mark ready'}
         </button>
       ) : null}
 
       {mode === 'ready' ? (
         <>
-          <button type="button" className={btnPrimaryFull} onClick={stopCardAction}>
-            Verify &amp; complete
+          <button
+            type="button"
+            className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
+            disabled={isActioning}
+            onClick={(e) => {
+              stopCardAction(e)
+              onPrimaryAction?.({ order, mode })
+            }}
+          >
+            {isActioning ? 'Updating…' : order.primaryAction?.label || 'Verify & complete'}
           </button>
           {order.noShow ? (
             <button type="button" className={btnDangerOutlineFull} onClick={(e) => triggerReject(e, onReject, order, mode, 'no-show')}>

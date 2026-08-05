@@ -11,3 +11,9 @@ export { staffService } from './staffService'
 export { promotionService } from './promotionService'
 export { notificationService } from './notificationService'
 export { vendorProfileService } from './vendorProfileService'
+export {
+  vendorUploadService,
+  validateVendorImageFile,
+  VENDOR_IMAGE_UPLOAD_ACCEPT,
+  VENDOR_IMAGE_UPLOAD_MAX_BYTES,
+} from './uploadService'

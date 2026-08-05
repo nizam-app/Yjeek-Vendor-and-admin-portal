@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { StatusPill } from '../../components/ui'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useVendorPromotions } from '../../hooks/vendor/useVendorPromotions'
 
 const thClass =
   'border-b border-[#E0E6E0] px-5 py-3.5 text-left text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase'
@@ -19,13 +18,26 @@ const typeTone = {
 export default function Promotions() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('All')
+  const [query, setQuery] = useState('')
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
-  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getPromotions(), [])
-  const promotionFilters = data?.filters || []
+  const { data, error, isLoading, refetch } = useVendorPromotions()
+  const promotionFilters = data?.filters || ['All', 'Active', 'Scheduled', 'Paused', 'Ended']
   const promotionKpis = data?.kpis || []
   const promotions = data?.promotions || []
-  const filtered = filter === 'All' ? promotions : promotions.filter((p) => p.status === filter)
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase()
+    return promotions.filter((p) => {
+      const matchesFilter = filter === 'All' || p.status === filter
+      if (!matchesFilter) return false
+      if (!needle) return true
+      return [p.title, p.subtitle, p.type, p.scope, p.status, p.period]
+        .join(' ')
+        .toLowerCase()
+        .includes(needle)
+    })
+  }, [promotions, filter, query])
 
   useEffect(() => {
     if (!menuId) return undefined
@@ -36,8 +48,19 @@ export default function Promotions() {
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [menuId])
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading promotions…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load promotions. <button onClick={refetch} className="underline">Try again</button></div>
+  if (isLoading && promotions.length === 0) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading promotions…</div>
+  }
+  if (error && promotions.length === 0) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load promotions.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   function openDetail(promo) {
     navigate(`/promotions/${encodeURIComponent(promo.id)}`)
@@ -97,9 +120,15 @@ export default function Promotions() {
             <span className="font-medium text-ink">All types</span>
             <span className="text-[10px] text-ink-muted">▾</span>
           </div>
-          <div className="flex items-center gap-2 rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-[9px] text-[12.5px] text-ink-faint">
-            <Search size={15} strokeWidth={2.2} />
-            <span>Search promotions</span>
+          <div className="flex min-w-[200px] items-center gap-2 rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-[9px] text-[12.5px]">
+            <Search size={15} strokeWidth={2.2} className="shrink-0 text-ink-faint" />
+            <input
+              type="search"
+              className="w-full border-none bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-faint"
+              placeholder="Search promotions"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -119,88 +148,98 @@ export default function Promotions() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((promo) => {
-                const menuOpen = menuId === promo.id
-                return (
-                  <tr
-                    key={promo.id}
-                    className="cursor-pointer border-t border-[#EEF1EE] bg-white hover:bg-[#FAFBFA]"
-                    onClick={() => openDetail(promo)}
-                  >
-                    <td className={tdClass}>
-                      <p className="font-bold text-ink">{promo.title}</p>
-                      <p className="mt-0.5 text-[11px] text-ink-muted">{promo.subtitle}</p>
-                    </td>
-                    <td className={tdClass}>
-                      <span
-                        className={`inline-flex items-center rounded-full  px-[10px] py-[4px] text-[11px] font-medium whitespace-nowrap ${
-                          typeTone[promo.type] || typeTone['Item / category deal']
-                        }`}
-                      >
-                        {promo.type}
-                      </span>
-                    </td>
-                    <td className={`${tdClass} text-ink`}>{promo.scope}</td>
-                    <td className={tdClass}>
-                      <StatusPill status={promo.status} />
-                    </td>
-                    <td className={`${tdClass} text-ink`}>{promo.period}</td>
-                    <td className={tdClass}>{promo.used}</td>
-                    <td
-                      className={`${tdClass} relative text-right`}
-                      onClick={(e) => e.stopPropagation()}
+              {filtered.length > 0 ? (
+                filtered.map((promo) => {
+                  const menuOpen = menuId === promo.id
+                  return (
+                    <tr
+                      key={promo.id}
+                      className="cursor-pointer border-t border-[#EEF1EE] bg-white hover:bg-[#FAFBFA]"
+                      onClick={() => openDetail(promo)}
                     >
-                      <div className="inline-block" ref={menuOpen ? menuRef : null}>
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded-[8px] text-lg font-bold text-ink-muted hover:bg-[#f5f7f5]"
-                          aria-haspopup="menu"
-                          aria-expanded={menuOpen}
-                          aria-label={`Actions for ${promo.title}`}
-                          onClick={() => setMenuId(menuOpen ? null : promo.id)}
+                      <td className={tdClass}>
+                        <p className="font-bold text-ink">{promo.title}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-muted">{promo.subtitle}</p>
+                      </td>
+                      <td className={tdClass}>
+                        <span
+                          className={`inline-flex items-center rounded-full  px-[10px] py-[4px] text-[11px] font-medium whitespace-nowrap ${
+                            typeTone[promo.type] || typeTone['Item / category deal']
+                          }`}
                         >
-                          ⋮
-                        </button>
-                        {menuOpen ? (
-                          <div
-                            className="absolute top-[calc(100%-8px)] right-5 z-30 w-[178px] overflow-hidden rounded-[12px] border border-[#E0E6E0] bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
-                            role="menu"
+                          {promo.type}
+                        </span>
+                      </td>
+                      <td className={`${tdClass} text-ink`}>{promo.scope}</td>
+                      <td className={tdClass}>
+                        <StatusPill status={promo.status} />
+                      </td>
+                      <td className={`${tdClass} text-ink`}>{promo.period}</td>
+                      <td className={tdClass}>{promo.used}</td>
+                      <td
+                        className={`${tdClass} relative text-right`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="inline-block" ref={menuOpen ? menuRef : null}>
+                          <button
+                            type="button"
+                            className="h-7 w-7 rounded-[8px] text-lg font-bold text-ink-muted hover:bg-[#f5f7f5]"
+                            aria-haspopup="menu"
+                            aria-expanded={menuOpen}
+                            aria-label={`Actions for ${promo.title}`}
+                            onClick={() => setMenuId(menuOpen ? null : promo.id)}
                           >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full flex-col px-3.5 py-2.5 text-left hover:bg-[#f7f9f7]"
-                              onClick={() => {
-                                setMenuId(null)
-                                navigate('/promotions/new')
-                              }}
+                            ⋮
+                          </button>
+                          {menuOpen ? (
+                            <div
+                              className="absolute top-[calc(100%-8px)] right-5 z-30 w-[178px] overflow-hidden rounded-[12px] border border-[#E0E6E0] bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
+                              role="menu"
                             >
-                              <span className="text-[13px] font-medium text-ink">Edit</span>
-                              <span className="text-[11px] text-ink-muted">
-                                Change rules &amp; settings
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full flex-col border-t border-[#EEF1EE] px-3.5 py-2.5 text-left hover:bg-[#f7f9f7]"
-                              onClick={() => {
-                                setMenuId(null)
-                                openDetail(promo)
-                              }}
-                            >
-                              <span className="text-[13px] font-medium text-ink">View</span>
-                              <span className="text-[11px] text-ink-muted">
-                                Details &amp; performance
-                              </span>
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full flex-col px-3.5 py-2.5 text-left hover:bg-[#f7f9f7]"
+                                onClick={() => {
+                                  setMenuId(null)
+                                  navigate(`/promotions/${encodeURIComponent(promo.id)}/edit`)
+                                }}
+                              >
+                                <span className="text-[13px] font-medium text-ink">Edit</span>
+                                <span className="text-[11px] text-ink-muted">
+                                  Change rules &amp; settings
+                                </span>
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full flex-col border-t border-[#EEF1EE] px-3.5 py-2.5 text-left hover:bg-[#f7f9f7]"
+                                onClick={() => {
+                                  setMenuId(null)
+                                  openDetail(promo)
+                                }}
+                              >
+                                <span className="text-[13px] font-medium text-ink">View</span>
+                                <span className="text-[11px] text-ink-muted">
+                                  Details &amp; performance
+                                </span>
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-ink-muted">
+                    {query || filter !== 'All'
+                      ? 'No promotions match your filters.'
+                      : 'No promotions yet.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

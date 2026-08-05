@@ -6,7 +6,11 @@ import { adminRoutes } from './AdminRoutes'
 import { vendorRoutes } from './VendorRoutes'
 
 export function RequireRole({ role }) {
-  const { user } = useAuth()
+  const { user, isAuthInitializing } = useAuth()
+
+  // Wait for Vendor Get Me restoration so protected routes do not flash /login.
+  if (isAuthInitializing) return null
+
   if (!user) return <Navigate to="/login" replace />
   if (user.role !== role) {
     return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
@@ -15,7 +19,9 @@ export function RequireRole({ role }) {
 }
 
 function RoleHome() {
-  const { user } = useAuth()
+  const { user, isAuthInitializing } = useAuth()
+
+  if (isAuthInitializing) return null
   if (!user) return <Navigate to="/login" replace />
   return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
 }

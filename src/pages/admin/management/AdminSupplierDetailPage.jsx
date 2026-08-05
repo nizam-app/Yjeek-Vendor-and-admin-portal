@@ -1,11 +1,17 @@
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Calendar, Car, ChevronLeft, Star } from 'lucide-react'
+import { ChevronLeft, Star } from 'lucide-react'
 import editIcon from '../../../assets/icon-edit.png'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
-const SUPPLIER_DETAILS = {
+const MOCK_SUPPLIER_DETAILS = {
   'sup-speedx': {
     id: 'SUP-3PL-02',
     slug: 'sup-speedx',
@@ -157,7 +163,7 @@ function VehicleLabel({ type }) {
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      <Car size={13} strokeWidth={1.8} className="text-[#59655e]" />
+      <img src={carIcon} alt="" className="h-3.5 w-3.5 object-contain" />
       Car
     </span>
   )
@@ -174,7 +180,7 @@ function InfoItem({ label, children, valueClassName }) {
 
 function PeriodField({ label, value }) {
   return (
-    <label className="inline-flex items-center h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3">
+    <label className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3">
       <span className="text-[12px] font-medium text-[#7c8780]">📅</span>
       <span className="text-[12px] font-medium text-[#7c8780]">{label}</span>
       <input
@@ -203,14 +209,45 @@ function PerfCard({ value, label, tone }) {
   )
 }
 
+function defaultPeriodFilters() {
+  const now = new Date()
+  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
+  const to = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
+  ).toISOString()
+  return { from, to }
+}
+
 export default function AdminSupplierDetailPage() {
   const { supplierId } = useParams()
   const navigate = useNavigate()
-  const data = SUPPLIER_DETAILS[supplierId] || SUPPLIER_DETAILS['sup-speedx']
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
+  const [period] = useState(defaultPeriodFilters)
+
+  const { data: apiData, error, isLoading, refetch } = useApiResource(
+    () => {
+      if (!useRealFleet) {
+        return Promise.resolve({
+          data: MOCK_SUPPLIER_DETAILS[supplierId] || MOCK_SUPPLIER_DETAILS['sup-speedx'],
+        })
+      }
+      return adminService.getAdminFleetSupplier(supplierId, period)
+    },
+    [supplierId, useRealFleet, period.from, period.to],
+  )
+
+  const data = useMemo(() => {
+    if (apiData) return apiData
+    if (!useRealFleet) return MOCK_SUPPLIER_DETAILS[supplierId] || MOCK_SUPPLIER_DETAILS['sup-speedx']
+    return null
+  }, [apiData, supplierId, useRealFleet])
+
+  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+
+  const statusActive = String(data.status || '').toLowerCase() === 'active'
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
-      {/* Header — sits on page background, not inside a card */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -234,13 +271,25 @@ export default function AdminSupplierDetailPage() {
               <Badge tone={typeTone(data.type)} className="px-2.5 py-[3px] text-[11px] font-bold">
                 {data.type}
               </Badge>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e8f7ed] px-2.5 py-[3px] text-[11px] font-bold text-[#147940]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#1aa054]" />
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11px] font-bold',
+                  statusActive
+                    ? 'bg-[#e8f7ed] text-[#147940]'
+                    : 'bg-[#f3f5f3] text-[#69756d]',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    statusActive ? 'bg-[#1aa054]' : 'bg-[#9aa49d]',
+                  )}
+                />
                 {data.status}
               </span>
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-[#7c8780]">
-              <span>{data.id}</span>
+              <span>{data.displayCode || data.id}</span>
               <span>·</span>
               <span>{data.zone}</span>
               <span>·</span>
@@ -257,6 +306,9 @@ export default function AdminSupplierDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() =>
+              navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}/edit`)
+            }
             className="inline-flex h-[36px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#127338] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
             <img src={editIcon} alt="" className="h-3.5 w-3.5 object-contain" />
@@ -266,14 +318,13 @@ export default function AdminSupplierDetailPage() {
             type="button"
             className="inline-flex h-[36px] items-center rounded-full border border-[#f3c8ca] bg-[#fdebec] px-3.5 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
           >
-            Deactivate
+            {statusActive ? 'Deactivate' : 'Activate'}
           </button>
         </div>
       </div>
 
-      {/* KPI metrics — 4 equal cards */}
       <div className="mb-4 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[480px]:grid-cols-1">
-        {data.metrics.map(({ label, value, tone }) => (
+        {(data.metrics || []).map(({ label, value, tone }) => (
           <div
             key={label}
             className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
@@ -286,17 +337,19 @@ export default function AdminSupplierDetailPage() {
             >
               {value}
             </p>
-              <p className="text-[12px] text-[#7c8780]">{label}</p>
+            <p className="text-[12px] text-[#7c8780]">{label}</p>
           </div>
         ))}
       </div>
 
-      {/* Supplier info — own card */}
       <section className="mb-4 rounded-[14px] border border-[#eceeec] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:px-4">
         <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Supplier info</h3>
         <div className="grid grid-cols-3 gap-x-8 gap-y-4 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1">
           <InfoItem label="Type">{data.typeLabel}</InfoItem>
-          <InfoItem label="Status" valueClassName="font-medium text-green-800">
+          <InfoItem
+            label="Status"
+            valueClassName={statusActive ? 'font-medium text-green-800' : 'font-medium text-[#69756d]'}
+          >
             {data.status}
           </InfoItem>
           <div className="max-[800px]:hidden" />
@@ -307,7 +360,6 @@ export default function AdminSupplierDetailPage() {
         </div>
       </section>
 
-      {/* Champs — card with nested bordered table */}
       <section className="mb-4 rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-[15px] font-bold text-[#17231c]">Champs ({data.champsCount})</h3>
@@ -336,8 +388,24 @@ export default function AdminSupplierDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.champs.map((row) => (
-                  <tr key={row.name} className="border-b border-[#edf0ee] bg-white last:border-0">
+                {(data.champs || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-8 text-center text-[13px] text-[#7c8780]">
+                      No champs for this supplier.
+                    </td>
+                  </tr>
+                ) : null}
+                {(data.champs || []).map((row) => (
+                  <tr
+                    key={row.id || row.name}
+                    className={cn(
+                      'border-b border-[#edf0ee] bg-white last:border-0',
+                      row.id ? 'cursor-pointer hover:bg-[#f6f8f6]' : '',
+                    )}
+                    onClick={() => {
+                      if (row.id) navigate(`/admin/fleet/${encodeURIComponent(row.id)}`)
+                    }}
+                  >
                     <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-[#17231c]">
                       {row.name}
                     </td>
@@ -358,7 +426,6 @@ export default function AdminSupplierDetailPage() {
         </div>
       </section>
 
-      {/* Performance — own card; Period below title; bottom cards = same 1/3 width */}
       <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:px-4">
         <h3 className="text-[15px] font-bold text-[#17231c]">Performance</h3>
 
@@ -369,12 +436,12 @@ export default function AdminSupplierDetailPage() {
         </div>
 
         <div className="grid grid-cols-3 gap-3 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1">
-          {data.performance.slice(0, 3).map((item) => (
+          {(data.performance || []).slice(0, 3).map((item) => (
             <PerfCard key={item.label} {...item} />
           ))}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-3 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1">
-          {data.performance.slice(3).map((item) => (
+          {(data.performance || []).slice(3).map((item) => (
             <PerfCard key={item.label} {...item} />
           ))}
         </div>

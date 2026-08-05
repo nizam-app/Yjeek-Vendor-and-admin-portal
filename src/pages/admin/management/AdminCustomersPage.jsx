@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
@@ -20,28 +21,52 @@ function customerStatusTone(status) {
   return 'gray'
 }
 
+function useRealCustomers() {
+  return isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi
+}
+
 export default function AdminCustomersPage() {
   const navigate = useNavigate()
+  const useReal = useRealCustomers()
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+
   const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('customers'),
-    [],
+    () => {
+      if (useReal) {
+        return adminService.listAdminCustomers({
+          search,
+          statusTab: tab,
+          limit: 20,
+        })
+      }
+      return adminService.getManagement('customers')
+    },
+    [useReal, search, tab],
   )
 
   const rows = useMemo(() => {
     if (!data?.rows) return []
+    if (useReal) return data.rows
     return data.rows.filter((row) => {
       const matchesTab = tab === 'All' || row.status === tab
       const haystack = `${row.name} ${row.contact} ${row.email} ${row.status}`.toLowerCase()
       return matchesTab && haystack.includes(query.toLowerCase())
     })
-  }, [data, tab, query])
+  }, [data, tab, query, useReal])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const openCustomer = (customerId) => {
     navigate(`/admin/customers/${encodeURIComponent(customerId)}`)
+  }
+
+  const onSearchKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      if (useReal) setSearch(query.trim())
+    }
   }
 
   return (
@@ -96,24 +121,24 @@ export default function AdminCustomersPage() {
           ))}
         </div>
         <div>
-          <p className='text-[10px] pb-1.5 font-semibold text-[#6B736E]'>AGE</p>
+          <p className="pb-1.5 text-[10px] font-semibold text-[#6B736E]">AGE</p>
 
-        <button
-          type="button"
-          className="inline-flex h-[32px] items-center gap-1 rounded-sm border w-24 border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-        >
-          All <ChevronDown size={13} className="text-[#69756d]" />
-        </button>
+          <button
+            type="button"
+            className="inline-flex h-[32px] w-24 items-center gap-1 rounded-sm border border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
+          >
+            All ▾
+          </button>
         </div>
         <div>
-          <p className='text-[10px] pb-1.5 font-semibold text-[#6B736E]'>GENDER</p>
+          <p className="pb-1.5 text-[10px] font-semibold text-[#6B736E]">GENDER</p>
 
-        <button
-          type="button"
-          className="inline-flex h-[32px] items-center gap-1 rounded-sm border w-24 border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-        >
-          All <ChevronDown size={13} className="text-[#69756d]" />
-        </button>
+          <button
+            type="button"
+            className="inline-flex h-[32px] w-24 items-center gap-1 rounded-sm border border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
+          >
+            All ▾
+          </button>
         </div>
 
         <span className="flex-1" />
@@ -122,7 +147,14 @@ export default function AdminCustomersPage() {
           <Search size={14} className="text-[#9aa49d]" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              if (!useReal) return
+            }}
+            onBlur={() => {
+              if (useReal) setSearch(query.trim())
+            }}
+            onKeyDown={onSearchKeyDown}
             className="min-w-0 flex-1 border-0 bg-transparent text-[12px] text-[#17231c] outline-none placeholder:text-[#9aa49d]"
             placeholder="Search name / phone / email"
           />
@@ -185,6 +217,16 @@ export default function AdminCustomersPage() {
                   </td>
                 </tr>
               ))}
+              {!rows.length ? (
+                <tr>
+                  <td
+                    colSpan={data.columns.length}
+                    className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
+                  >
+                    No customers found.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

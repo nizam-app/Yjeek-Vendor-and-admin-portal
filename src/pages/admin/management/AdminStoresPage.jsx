@@ -18,6 +18,8 @@ const statTone = {
 export default function AdminStoresPage() {
   const navigate = useNavigate()
   const [menuId, setMenuId] = useState(null)
+  const [visibilityBusyId, setVisibilityBusyId] = useState(null)
+  const [actionError, setActionError] = useState(null)
   const menuRef = useRef(null)
   const { data, error, isLoading, refetch } = useApiResource(
     () => adminService.getManagement('stores'),
@@ -47,6 +49,25 @@ export default function AdminStoresPage() {
     }
   }, [menuId])
 
+  const handleToggleVisibility = async (row) => {
+    if (!row?.id || visibilityBusyId) return
+    setMenuId(null)
+    setActionError(null)
+    setVisibilityBusyId(row.id)
+    try {
+      if (row.visible) {
+        await adminService.draftAdminStoreType(row.id)
+      } else {
+        await adminService.publishAdminStoreType(row.id)
+      }
+      await refetch()
+    } catch (err) {
+      setActionError(err?.message || (row.visible ? 'Failed to hide store type.' : 'Failed to show store type.'))
+    } finally {
+      setVisibilityBusyId(null)
+    }
+  }
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   return (
@@ -67,6 +88,12 @@ export default function AdminStoresPage() {
           {data.action}
         </button>
       </div>
+
+      {actionError ? (
+        <p className="mb-3 rounded-[10px] border border-[#f5d0d0] bg-[#fdebec] px-3 py-2 text-[12.5px] text-[#d64044]">
+          {actionError}
+        </p>
+      ) : null}
 
       <div className="mb-4 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
         {data.stats.map(({ label, value, tone }) => (
@@ -113,7 +140,12 @@ export default function AdminStoresPage() {
                           style={{ background: row.iconBg || '#eef2ef' }}
                           aria-hidden
                         >
-                          <CatalogStoreIcon id={row.id} className="size-5" />
+                          <CatalogStoreIcon
+                            id={row.slug || row.id}
+                            emoji={row.iconEmoji || row.icon}
+                            iconUrl={row.iconUrl}
+                            className="size-5"
+                          />
                         </span>
                         <div className="min-w-0">
                           <p className="text-[13px] font-bold text-[#17231c]">{row.name}</p>
@@ -166,10 +198,15 @@ export default function AdminStoresPage() {
                             <button
                               type="button"
                               role="menuitem"
-                              className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
-                              onClick={() => setMenuId(null)}
+                              disabled={visibilityBusyId === row.id}
+                              className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:opacity-60"
+                              onClick={() => handleToggleVisibility(row)}
                             >
-                              {row.visible ? 'Hide' : 'Show'}
+                              {visibilityBusyId === row.id
+                                ? 'Updating…'
+                                : row.visible
+                                  ? 'Hide'
+                                  : 'Show'}
                             </button>
                           </div>
                         ) : null}

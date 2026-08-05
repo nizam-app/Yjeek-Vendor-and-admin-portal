@@ -6,6 +6,7 @@ import ScheduledOrderModal from '../../components/ScheduledOrderModal'
 import ScheduledReceiptModal from '../../components/ScheduledReceiptModal'
 import ScheduledRejectOrderModal from '../../components/ScheduledRejectOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
+import { useVendorScheduledOrders } from '../../hooks/vendor/useVendorScheduledOrders'
 
 export default function ScheduledOrderColumn() {
   const { key } = useParams()
@@ -14,17 +15,32 @@ export default function ScheduledOrderColumn() {
   const [receiptOrder, setReceiptOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
+  const { data, error, isLoading, refetch } = useVendorScheduledOrders({ date: 'today' })
 
-  const column = getScheduledColumns().find((col) => col.key === key)
+  const column = getScheduledColumns(data).find((col) => col.key === key)
   const items = column
     ? column.items.filter((order) =>
-        [order.id, order.customer, order.customerName, ...(order.itemsList?.map((item) => item.name) || [])]
+        [order.id, order.customer, order.customerName, order.itemsPreview]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
           .includes(query.toLowerCase()),
       )
     : []
+
+  if (isLoading && !data) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading scheduled orders…</div>
+  }
+  if (error && !data) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load scheduled orders.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
@@ -58,9 +74,10 @@ export default function ScheduledOrderColumn() {
         />
         <button
           type="button"
+          onClick={() => refetch()}
           className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white font-medium text-ink shrink-0"
         >
-          Sort: Window
+          ↻ Refresh
         </button>
       </div>
 
@@ -70,7 +87,7 @@ export default function ScheduledOrderColumn() {
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-[14px]">
           {items.map((order, idx) => (
             <ScheduleCard
-              key={`${order.id}-${idx}`}
+              key={`${order.backendId || order.id}-${idx}`}
               order={order}
               columnKey={key}
               dense

@@ -1,11 +1,27 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { mapAdminSupplierDetailToForm } from '../../../mappers/admin/mapAdminFleet'
+import { adminService } from '../../../services/adminService'
+import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
+
+const EMPTY_FORM = {
+  name: '',
+  type: '3PL',
+  contactPerson: '',
+  phone: '',
+  email: '',
+  city: 'Manama',
+  commissionPct: '12',
+}
 
 function Field({ label, children, className }) {
   return (
@@ -27,18 +43,89 @@ function Card({ title, children }) {
 
 export default function AdminAddSupplierPage() {
   const navigate = useNavigate()
-  const goBack = () => navigate('/admin/fleet/suppliers')
+  const { supplierId } = useParams()
+  const isEdit = Boolean(supplierId)
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
 
-  const [form, setForm] = useState({
-    name: '',
-    type: '3PL',
-    contactPerson: '',
-    phone: '',
-    email: '',
-  })
+  const goBack = () => {
+    if (isEdit) {
+      navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`)
+      return
+    }
+    navigate('/admin/fleet/suppliers')
+  }
+
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [bootstrapped, setBootstrapped] = useState(!isEdit)
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const { data: detail, error: loadError, isLoading: loadLoading, refetch } = useApiResource(
+    () => {
+      if (!isEdit) return Promise.resolve({ data: null })
+      if (!useRealFleet) {
+        return Promise.resolve({
+          data: {
+            name: 'SpeedX Logistics',
+            type: '3PL',
+            zone: 'Manama',
+            contactPerson: 'Ahmed Ali',
+            phone: '+973 3300 1122',
+            email: 'ops@speedx.com',
+            commissionPct: 12,
+          },
+        })
+      }
+      return adminService.getAdminFleetSupplier(supplierId)
+    },
+    [isEdit, supplierId, useRealFleet],
+  )
+
+  useEffect(() => {
+    if (!isEdit) {
+      setForm(EMPTY_FORM)
+      setBootstrapped(true)
+      return
+    }
+    if (!detail) return
+    setForm(mapAdminSupplierDetailToForm(detail))
+    setBootstrapped(true)
+  }, [isEdit, detail])
 
   const update = (key) => (event) => {
     setForm((prev) => ({ ...prev, [key]: event.target.value }))
+  }
+
+  async function handleSubmit() {
+    setSubmitError('')
+
+    if (!useRealFleet) {
+      goBack()
+      return
+    }
+
+    setSaving(true)
+    try {
+      if (isEdit) {
+        await adminService.updateAdminFleetSupplier(supplierId, form)
+        navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`)
+        return
+      }
+
+      const result = await adminService.createAdminFleetSupplier(form)
+      const id = result?.data?.id
+      navigate(id ? `/admin/fleet/suppliers/${encodeURIComponent(id)}` : '/admin/fleet/suppliers')
+    } catch (err) {
+      setSubmitError(
+        formatApiErrorMessage(err, isEdit ? 'Failed to update supplier.' : 'Failed to create supplier.'),
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (isEdit && !bootstrapped) {
+    return <ApiState isLoading={loadLoading} error={loadError} onRetry={refetch} />
   }
 
   return (
@@ -53,16 +140,25 @@ export default function AdminAddSupplierPage() {
             <ChevronLeft size={15} strokeWidth={2.2} />
             Suppliers
           </button>
-          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Add supplier</h2>
+          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+            {isEdit ? 'Edit supplier' : 'Add supplier'}
+          </h2>
         </div>
         <button
           type="button"
-          onClick={goBack}
-          className="inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+          disabled={saving}
+          onClick={handleSubmit}
+          className="inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:opacity-60"
         >
-          Create supplier
+          {saving ? (isEdit ? 'Saving…' : 'Creating…') : isEdit ? 'Save changes' : 'Create supplier'}
         </button>
       </div>
+
+      {submitError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {submitError}
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <Card title="Supplier info">
@@ -94,6 +190,25 @@ export default function AdminAddSupplierPage() {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+              <Field label="City">
+                <input
+                  className={inputClass}
+                  value={form.city}
+                  onChange={update('city')}
+                  placeholder="e.g. Manama"
+                />
+              </Field>
+              <Field label="Commission %">
+                <input
+                  className={inputClass}
+                  value={form.commissionPct}
+                  onChange={update('commissionPct')}
+                  placeholder="e.g. 12"
+                  inputMode="decimal"
+                />
+              </Field>
             </div>
           </div>
         </Card>

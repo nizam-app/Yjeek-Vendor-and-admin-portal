@@ -1,10 +1,13 @@
 export function AdminChampEarnings({ earnings }) {
   if (!earnings) return null
 
+  const rows = Array.isArray(earnings.rows) ? earnings.rows : []
+  const summary = Array.isArray(earnings.summary) ? earnings.summary : []
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">
-        {earnings.summary.map(({ label, value }) => (
+        {summary.map(({ label, value }) => (
           <div
             key={label}
             className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
@@ -36,8 +39,18 @@ export function AdminChampEarnings({ earnings }) {
                 </tr>
               </thead>
               <tbody>
-                {earnings.rows.map((row) => (
-                  <tr key={row.date} className="border-b border-[#edf0ee] last:border-0 bg-white">
+                {rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-8 text-center text-[13px] text-[#7c8780]"
+                    >
+                      No earnings in this period.
+                    </td>
+                  </tr>
+                ) : null}
+                {rows.map((row) => (
+                  <tr key={row.key || row.date} className="border-b border-[#edf0ee] last:border-0 bg-white">
                     <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-[#17231c]">
                       {row.date}
                     </td>

@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { StatusPill } from '../../components/ui'
 import OrderHistoryReceiptModal from '../../components/OrderHistoryReceiptModal'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useVendorOrderHistory } from '../../hooks/vendor/useVendorOrderHistory'
 
 const TYPE_OPTIONS = ['All types', 'Delivery', 'Pickup', 'Dine-in', 'Services']
 
@@ -24,7 +23,7 @@ export default function OrdersHistory() {
   const [receiptOrder, setReceiptOrder] = useState(null)
   const typeRef = useRef(null)
   const menuRef = useRef(null)
-  const { data: orderHistory, error, isLoading, refetch } = useApiResource(() => vendorService.getOrderHistory(), [])
+  const { data: orderHistory, error, isLoading, refetch } = useVendorOrderHistory({ limit: 20 })
 
   useEffect(() => {
     if (!typeOpen && !menuOrderId) return undefined
@@ -43,25 +42,50 @@ export default function OrdersHistory() {
   }, [typeOpen, menuOrderId])
 
   const filtered = (orderHistory || []).filter((o) => {
-    const matchesQuery =
-      o.id.toLowerCase().includes(query.toLowerCase()) ||
-      o.branch.toLowerCase().includes(query.toLowerCase()) ||
-      o.status.toLowerCase().includes(query.toLowerCase()) ||
-      o.customer.toLowerCase().includes(query.toLowerCase())
+    const haystack = [o.id, o.branch, o.status, o.customer, o.orderNumber]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    const matchesQuery = !query.trim() || haystack.includes(query.trim().toLowerCase())
     const matchesType = typeFilter === 'All types' || o.type === typeFilter
     return matchesQuery && matchesType
   })
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading order history…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load order history. <button onClick={refetch} className="underline">Try again</button></div>
+  if (isLoading && !orderHistory) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading order history…</div>
+  }
+  if (error && !orderHistory) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load order history.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
       <div className="flex items-start justify-between mb-[22px]">
         <h1 className="text-[20px] font-bold text-ink">Orders</h1>
-        <button type="button" className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-medium bg-white">
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {error ? (
+            <p className="text-[12px] text-danger">
+              Refresh failed.{' '}
+              <button type="button" onClick={refetch} className="underline">
+                Retry
+              </button>
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-medium bg-white"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       <div className="bg-white border border-border rounded-[14px] py-[18px] px-5 flex gap-4 mb-[22px] flex-wrap">
@@ -158,71 +182,88 @@ export default function OrdersHistory() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((order, idx) => {
-                const menuOpen = menuOrderId === order.id
-                return (
-                  <tr key={order.id} className={`${idx % 2 === 1 ? 'bg-[#fbfcfb]' : ''} border-t border-border`}>
-                    <td className="py-[15px] px-5 text-[12px] font-medium text-green-light-text">{order.id}</td>
-                    <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.type}</td>
-                    <td className="py-[15px] px-5">
-                      <StatusPill status={order.status} />
-                    </td>
-                    <td className={`${tdClass} py-[15px] px-5`}>{order.branch}</td>
-                    <td className={`${tdClass} py-[15px] px-5`}>{order.customer}</td>
-                    <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.when}</td>
-                    <td className={`${tdClass} py-[15px] px-5 font-bold`}>{order.total}</td>
-                    <td className="relative py-[15px] px-5 text-right">
-                      <div className="inline-block" ref={menuOpen ? menuRef : null}>
-                        <button
-                          type="button"
-                          className="h-7 w-7 rounded-[8px] text-lg font-bold text-ink-muted hover:bg-[#f5f7f5]"
-                          aria-haspopup="menu"
-                          aria-expanded={menuOpen}
-                          aria-label={`Actions for ${order.id}`}
-                          onClick={() => setMenuOrderId(menuOpen ? null : order.id)}
-                        >
-                          ⋮
-                        </button>
-                        {menuOpen ? (
-                          <div
-                            className="absolute right-5 top-[calc(100%-8px)] z-30 w-[148px] overflow-hidden rounded-[10px] border border-border bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
-                            role="menu"
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 px-5 text-center text-[13px] text-ink-muted">
+                    No orders found
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((order, idx) => {
+                  const menuOpen = menuOrderId === order.id
+                  return (
+                    <tr
+                      key={`${order.backendId || order.id}-${idx}`}
+                      className={`${idx % 2 === 1 ? 'bg-[#fbfcfb]' : ''} border-t border-border`}
+                    >
+                      <td className="py-[15px] px-5 text-[12px] font-medium text-green-light-text">{order.id}</td>
+                      <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.type}</td>
+                      <td className="py-[15px] px-5">
+                        <StatusPill status={order.status} />
+                      </td>
+                      <td className={`${tdClass} py-[15px] px-5`}>{order.branch}</td>
+                      <td className={`${tdClass} py-[15px] px-5`}>{order.customer}</td>
+                      <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.when}</td>
+                      <td className={`${tdClass} py-[15px] px-5 font-bold`}>{order.total}</td>
+                      <td className="relative py-[15px] px-5 text-right">
+                        <div className="inline-block" ref={menuOpen ? menuRef : null}>
+                          <button
+                            type="button"
+                            className="h-7 w-7 rounded-[8px] text-lg font-bold text-ink-muted hover:bg-[#f5f7f5]"
+                            aria-haspopup="menu"
+                            aria-expanded={menuOpen}
+                            aria-label={`Actions for ${order.id}`}
+                            onClick={() => setMenuOrderId(menuOpen ? null : order.id)}
                           >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
-                              onClick={() => {
-                                setMenuOrderId(null)
-                                navigate(`/orders-history/${encodeURIComponent(order.id)}`)
-                              }}
+                            ⋮
+                          </button>
+                          {menuOpen ? (
+                            <div
+                              className="absolute right-5 top-[calc(100%-8px)] z-30 w-[148px] overflow-hidden rounded-[10px] border border-border bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
+                              role="menu"
                             >
-                              Order details
-                            </button>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full border-t border-border px-3.5 py-2.5 text-left text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
-                              onClick={() => {
-                                setMenuOrderId(null)
-                                setReceiptOrder(order)
-                              }}
-                            >
-                              Receipt
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
+                                onClick={() => {
+                                  setMenuOrderId(null)
+                                  const detailId = order.backendId || order.id
+                                  navigate(`/orders-history/${encodeURIComponent(detailId)}`)
+                                }}
+                              >
+                                Order details
+                              </button>
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full border-t border-border px-3.5 py-2.5 text-left text-[13px] font-medium text-ink hover:bg-[#f7f9f7]"
+                                onClick={() => {
+                                  setMenuOrderId(null)
+                                  setReceiptOrder(order)
+                                }}
+                              >
+                                Receipt
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <OrderHistoryReceiptModal open={Boolean(receiptOrder)} onClose={() => setReceiptOrder(null)} order={receiptOrder} />
+      <OrderHistoryReceiptModal
+        open={Boolean(receiptOrder)}
+        onClose={() => setReceiptOrder(null)}
+        orderId={receiptOrder?.backendId || null}
+        order={receiptOrder}
+      />
     </div>
   )
 }

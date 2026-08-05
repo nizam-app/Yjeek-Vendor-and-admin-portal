@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
+import { useOrderTimers } from '../hooks/useOrderTimers'
 
 const statusTones = {
   NEW: 'bg-warn-soft text-warn border-warn',
@@ -46,7 +47,7 @@ function StatusBadge({ status, variant = 'header' }) {
   )
 }
 
-function buildDeliveryDetails(order, mode) {
+function buildDeliveryDetails(order, mode, timers = {}) {
   const customerParts = String(order.customer || '').split(' · ')
   const customerName = order.customerName || customerParts[0] || 'Customer'
   const customerPhone = order.customerPhone || '+973 3300 0000'
@@ -56,6 +57,8 @@ function buildDeliveryDetails(order, mode) {
       : order.status === 'no-show-cancelled'
         ? 'NO-SHOW'
         : modeStatus[mode] || 'NEW'
+  const acceptCountdown = timers.acceptCountdown
+  const prepElapsed = timers.prepElapsed
 
   const itemsList =
     order.itemsList ||
@@ -76,15 +79,26 @@ function buildDeliveryDetails(order, mode) {
     customerLine: `${customerName} · ${customerPhone}`,
     address: order.address || (order.type === 'Pickup' ? 'Pickup at branch counter' : 'Home • Adliya, Bldg 23, Road 3825, Flat 82'),
     orderType: order.orderType || (order.type ? `${order.type} - On demand` : 'Delivery - On demand'),
-    prepTime: order.prepTimeRequired ? `Required: ${order.prepTimeRequired}` : order.prepTime ? `Elapsed: ${order.prepTime}` : null,
+    prepTime: order.prepTimeRequired
+      ? `Required: ${order.prepTimeRequired}`
+      : prepElapsed
+        ? `Elapsed: ${prepElapsed}`
+        : order.prepTime
+          ? `Elapsed: ${order.prepTime}`
+          : null,
     note: order.customerNote || order.note || order.reason || null,
     slaLabel:
-      order.sla && status === 'NEW'
+      (acceptCountdown || order.sla) && status === 'NEW'
         ? 'Accept within (SLA 60 sec)'
-        : order.prepTime && status === 'PREPARING'
+        : (prepElapsed || order.prepTime) && status === 'PREPARING'
           ? 'Prep time'
           : null,
-    slaValue: order.sla || order.prepTime || null,
+    slaValue:
+      status === 'NEW'
+        ? acceptCountdown || order.sla || null
+        : status === 'PREPARING'
+          ? prepElapsed || order.prepTime || null
+          : null,
     itemsList,
     total: order.total || '—',
     isDineIn: false,
@@ -105,13 +119,14 @@ function DineInPrepTag({ tag }) {
   )
 }
 
-function buildDineInDetails(order, mode) {
+function buildDineInDetails(order, mode, timers = {}) {
   const status = modeStatus[mode] || 'NEW'
   const defaultItems = [
     { qty: 1, name: 'Mixed Grill Platter', price: '12.000 BHD' },
     { qty: 2, name: 'Hummus & Bread', price: '4.000 BHD' },
     { qty: 2, name: 'Fresh Juice', price: '4.500 BHD' },
   ]
+  const acceptCountdown = timers.acceptCountdown
 
   return {
     title: `Dine-in order ${order.id}`,
@@ -123,8 +138,8 @@ function buildDineInDetails(order, mode) {
     venue: order.branch || 'Green Kitchen — Manama',
     payment: order.payment || 'Paid online · BenefitPay',
     note: order.customerNote || order.note || (mode === 'confirmed' ? 'No high chair needed · celebrating a birthday 🎂' : null),
-    slaLabel: order.sla && status === 'NEW' ? 'Accept within (SLA 60 sec)' : null,
-    slaValue: order.sla || null,
+    slaLabel: (acceptCountdown || order.sla) && status === 'NEW' ? 'Accept within (SLA 60 sec)' : null,
+    slaValue: acceptCountdown || order.sla || null,
     itemsList: order.itemsList?.length > 0 ? order.itemsList : defaultItems,
     total: order.total || '20.500 BHD',
     isDineIn: true,
@@ -132,6 +147,11 @@ function buildDineInDetails(order, mode) {
 }
 
 export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
+  const { acceptCountdown, prepElapsed } = useOrderTimers(order, {
+    trackAccept: Boolean(open) && mode === 'new',
+    trackPrep: Boolean(open) && mode === 'preparing',
+  })
+
   useEffect(() => {
     if (!open) return
     function onKeyDown(e) {
@@ -147,7 +167,10 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
 
   if (!open || !order) return null
 
-  const details = tab === 'dinein' ? buildDineInDetails(order, mode) : buildDeliveryDetails(order, mode)
+  const details =
+    tab === 'dinein'
+      ? buildDineInDetails(order, mode, { acceptCountdown, prepElapsed })
+      : buildDeliveryDetails(order, mode, { acceptCountdown, prepElapsed })
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-6" role="dialog" aria-modal="true">
@@ -303,7 +326,7 @@ export default function OrderDetailModal({ open, onClose, order, mode, tab }) {
         {details.slaLabel && details.slaValue ? (
           <div className="border-t border-border px-6 py-4">
             <p className="text-[12px] font-medium text-warn">{details.slaLabel}</p>
-            <p className="text-[20px] font-bold leading-none text-warn mt-1">{details.slaValue}</p>
+            <p className="text-[20px] font-bold leading-none text-warn mt-1 tabular-nums">{details.slaValue}</p>
           </div>
         ) : null}
       </div>

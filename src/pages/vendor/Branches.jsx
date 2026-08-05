@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import branchIcon from '../../assets/icon-stadium.png'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { ApiError, getFirstFieldErrorMessage } from '../../api/errors'
+import { useApiMutation } from '../../hooks/useApiMutation'
+import { useVendorBranches } from '../../hooks/vendor/useVendorBranches'
+import {
+  branchService,
+  notifyVendorBranchesUpdated,
+} from '../../services/vendor/branchService'
 
 const statusPillTones = {
   Open: 'bg-green-active-bg border-green-active-text text-green-active-text',
@@ -14,37 +19,87 @@ const statusPillTones = {
 const kvLabel = 'text-[10px] font-bold text-ink-faint uppercase'
 const kvValue = 'text-[13px] font-medium text-ink'
 
+function getStatusErrorMessage(error) {
+  if (!error) return 'Unable to update branch status.'
+  if (error instanceof ApiError) {
+    const fieldMessage = getFirstFieldErrorMessage(error.fieldErrors)
+    if (fieldMessage) return fieldMessage
+    if (error.message) return error.message
+  }
+  if (typeof error?.message === 'string' && error.message) return error.message
+  return 'Unable to update branch status.'
+}
+
 export default function Branches() {
   const navigate = useNavigate()
   const [branches, setBranches] = useState([])
-  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getBranches(), [])
+  const [statusError, setStatusError] = useState('')
+  const [pendingBranchId, setPendingBranchId] = useState(null)
+  const { data, error, isLoading, refetch } = useVendorBranches()
+  const { mutate: setBranchStatus } = useApiMutation((branchId, status) =>
+    branchService.setBranchStatus(branchId, status),
+  )
 
   useEffect(() => {
-    if (data) setBranches(data)
+    if (data?.branches) setBranches(data.branches)
   }, [data])
 
   if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading branches…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load branches. <button onClick={refetch} className="underline">Try again</button></div>
+  if (error)
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load branches.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
 
-  function setStatus(name, status) {
-    setBranches((prev) => prev.map((b) => (b.name === name ? { ...b, status } : b)))
+  const branchCount = typeof data?.count === 'number' ? data.count : branches.length
+
+  async function setStatus(branch, nextUiStatus) {
+    const id = branch.id
+    if (!id || branch.status === nextUiStatus || pendingBranchId) return
+
+    const previous = branches
+    setStatusError('')
+    setPendingBranchId(id)
+    setBranches((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, status: nextUiStatus, isSuspended: false } : b)),
+    )
+
+    try {
+      const result = await setBranchStatus(id, nextUiStatus)
+      const updated = result?.data
+      if (updated) {
+        setBranches((prev) => prev.map((b) => (b.id === id ? { ...b, ...updated } : b)))
+      }
+      notifyVendorBranchesUpdated()
+    } catch (err) {
+      setBranches(previous)
+      setStatusError(getStatusErrorMessage(err))
+    } finally {
+      setPendingBranchId(null)
+    }
   }
 
   function openEdit(branch) {
     const id = branch.id || branch.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
-    navigate(`/branches/${id}/edit`)
+    navigate(`/branches/${encodeURIComponent(id)}/edit`)
   }
 
   return (
     <div className="px-[28px] pt-[26px] pb-10">
       <div className="mb-[18px]">
         <h1 className="text-[20px] font-bold text-ink">Branches</h1>
-        <p className="text-[13px] text-ink-muted">{branches.length} branches</p>
+        <p className="text-[13px] text-ink-muted">{branchCount} branches</p>
+        {statusError ? <p className="mt-2 text-[12px] text-danger">{statusError}</p> : null}
       </div>
 
       <div className="flex flex-wrap gap-4">
         {branches.map((branch) => {
-          const isSuspended = branch.status === 'Suspended'
+          const isSuspended = branch.status === 'Suspended' || branch.isSuspended
+          const isPending = pendingBranchId === branch.id
           return (
             <div
               key={branch.id || branch.name}
@@ -63,7 +118,7 @@ export default function Branches() {
                   </div>
                 </div>
                 <span
-                  className={`inline-flex shrink-0 items-center rounded-full border px-[10px] py-[3px] text-[10px] font-medium whitespace-nowrap ${statusPillTones[branch.status]}`}
+                  className={`inline-flex shrink-0 items-center rounded-full border px-[10px] py-[3px] text-[10px] font-medium whitespace-nowrap ${statusPillTones[branch.status] || statusPillTones.Closed}`}
                 >
                   {branch.status}
                 </span>
@@ -79,12 +134,13 @@ export default function Branches() {
                     <button
                       key={s}
                       type="button"
-                      className={`rounded-[8px] border px-3 py-[6px] text-[11px] font-medium ${
+                      disabled={isPending || Boolean(pendingBranchId)}
+                      className={`rounded-[8px] border px-3 py-[6px] text-[11px] font-medium disabled:opacity-60 ${
                         branch.status === s
                           ? 'border-[#1aa64d] bg-green-active-bg text-green-active-text'
                           : 'border-border bg-white text-ink-muted'
                       }`}
-                      onClick={() => setStatus(branch.name, s)}
+                      onClick={() => setStatus(branch, s)}
                     >
                       {s}
                     </button>

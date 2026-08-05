@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Activity, AlertCircle, Check, Clock, Flame, XCircle } from 'lucide-react'
 import { PageHeader, StatusPill } from '../../components/ui'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useAuth } from '../../context/AuthContext'
+import { useVendorDashboard } from '../../hooks/vendor/useVendorDashboard'
 
 const kpiIcons = {
   Completed: { icon: Check, tone: 'green' },
@@ -13,26 +13,44 @@ const kpiIcons = {
   'Avg Prep': { icon: Clock, tone: 'blue' },
 }
 
+function formatPeriodDate(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${month}/${day}/${year}`
+}
+
 export default function Dashboard() {
+  const { user } = useAuth()
   const [range, setRange] = useState('Day')
-  const { data, error, isLoading, refetch } = useApiResource(() => vendorService.getDashboard(), [])
+  const { data, error, isLoading, refetch } = useVendorDashboard({ rangeLabel: range })
 
   const thClass = 'text-left text-[11px] tracking-[0.04em] text-ink-muted font-bold uppercase py-3 px-4 border-b border-border'
   const tdClass = 'py-[14px] px-4 text-[13px] text-ink'
   if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading dashboard…</div>
   if (error) return <div className="p-7 text-[13px] text-danger">Unable to load dashboard. <button onClick={refetch} className="underline">Try again</button></div>
-  const { kpis, recentOrders, revenueDays, topSellers } = data
+
+  const kpis = data?.kpis || []
+  const recentOrders = data?.recentOrders || []
+  const revenueDays = data?.revenueDays || []
+  const topSellers = data?.topSellers || []
+  const greetingName = user?.vendorName || user?.name || 'Green Kitchen'
+  const periodFrom = formatPeriodDate(data?.period?.from) || '05/16/2026'
+  const periodTo = formatPeriodDate(data?.period?.to) || '06/15/2026'
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
       <PageHeader
-        title="Hi, Green Kitchen"
+        title={`Hi, ${greetingName}`}
         actions={
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <div className="border border-border rounded-[8px] py-2 px-[10px] text-xs bg-white">05/16/2026</div>
+              <div className="border border-border rounded-[8px] py-2 px-[10px] text-xs bg-white">{periodFrom}</div>
               <span className="text-ink-muted text-[13px] font-medium">→</span>
-              <div className="border border-border rounded-[8px] py-2 px-[10px] text-xs bg-white">06/15/2026</div>
+              <div className="border border-border rounded-[8px] py-2 px-[10px] text-xs bg-white">{periodTo}</div>
             </div>
             <div className="inline-flex bg-[#eef1ee] rounded-[10px] p-[3px] gap-[2px]" style={{ float: 'right' }}>
               {['Day', 'Week', 'Month'].map((item) => (
@@ -91,33 +109,41 @@ export default function Dashboard() {
             <span className="text-ink-muted text-[13px] font-medium">last 7 days</span>
           </div>
           <div className="flex items-end gap-4 h-[220px] pt-3">
-            {revenueDays.map((d) => (
-              <div key={d.day} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                <div
-                  className="w-full max-w-[70px] rounded-t-[6px] rounded-b-[2px] bg-[linear-gradient(180deg,#3bc46a,var(--color-green-primary))] min-h-2"
-                  style={{ height: `${d.height}%` }}
-                />
-                <span className="text-[11px] text-ink-muted font-medium">{d.day}</span>
-              </div>
-            ))}
+            {revenueDays.length === 0 ? (
+              <div className="w-full h-full grid place-items-center text-[13px] text-ink-muted">No revenue data for this period</div>
+            ) : (
+              revenueDays.map((d) => (
+                <div key={d.day} className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                  <div
+                    className="w-full max-w-[70px] rounded-t-[6px] rounded-b-[2px] bg-[linear-gradient(180deg,#3bc46a,var(--color-green-primary))] min-h-2"
+                    style={{ height: `${d.height}%` }}
+                  />
+                  <span className="text-[11px] text-ink-muted font-medium">{d.day}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         <div className="bg-white border border-border rounded-lg shadow-card overflow-hidden py-[18px] px-5">
           <div className="text-[16px] font-bold mb-[14px] flex items-center justify-between">🏆 Top sellers</div>
-          {topSellers.map((item, idx) => (
-            <div key={item.name} className="flex items-center justify-between py-2 text-[13px]">
-              <div className="flex items-center gap-2.5">
-                <span className="w-[22px] h-[13px] rounded-[6px] bg-green-active-bg grid place-items-center text-[11px] font-bold text-green-active-text">
-                  {idx + 1}
-                </span>
-                <span className="min-w-[120px] h-4 font-medium text-[13px] leading-[100%] tracking-[0%] whitespace-nowrap">
-                  {item.name}
-                </span>
+          {topSellers.length === 0 ? (
+            <div className="py-6 text-[13px] text-ink-muted">No top sellers for this period</div>
+          ) : (
+            topSellers.map((item, idx) => (
+              <div key={item.productId || `${item.name}-${item.rank || idx}`} className="flex items-center justify-between py-2 text-[13px]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[22px] h-[13px] rounded-[6px] bg-green-active-bg grid place-items-center text-[11px] font-bold text-green-active-text">
+                    {item.rank || idx + 1}
+                  </span>
+                  <span className="min-w-[120px] h-4 font-medium text-[13px] leading-[100%] tracking-[0%] whitespace-nowrap">
+                    {item.name}
+                  </span>
+                </div>
+                <span className="text-ink-muted text-[13px] font-medium">{item.sold} sold</span>
               </div>
-              <span className="text-ink-muted text-[13px] font-medium">{item.sold} sold</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
 
@@ -137,24 +163,32 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {recentOrders.map((order, idx) => {
-                const border = idx === recentOrders.length - 1 ? '' : 'border-b border-border'
-                return (
-                  <tr key={order.id}>
-                    <td className={`${tdClass} ${border}`}>
-                      <strong>{order.id}</strong>
-                    </td>
-                    <td className={`${tdClass} ${border} text-ink-muted`}>{order.type}</td>
-                    <td className={`${tdClass} ${border} `}>
-                      <StatusPill status={order.status} />
-                    </td>
-                    <td className={`${tdClass} ${border}`}>{order.branch}</td>
-                    <td className={`${tdClass} ${border}`}>
-                      <strong>{order.total}</strong>
-                    </td>
-                  </tr>
-                )
-              })}
+              {recentOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className={`${tdClass} text-ink-muted`}>
+                    No recent orders for this period
+                  </td>
+                </tr>
+              ) : (
+                recentOrders.map((order, idx) => {
+                  const border = idx === recentOrders.length - 1 ? '' : 'border-b border-border'
+                  return (
+                    <tr key={order.id}>
+                      <td className={`${tdClass} ${border}`}>
+                        <strong>{order.id}</strong>
+                      </td>
+                      <td className={`${tdClass} ${border} text-ink-muted`}>{order.type}</td>
+                      <td className={`${tdClass} ${border} `}>
+                        <StatusPill status={order.status} />
+                      </td>
+                      <td className={`${tdClass} ${border}`}>{order.branch}</td>
+                      <td className={`${tdClass} ${border}`}>
+                        <strong>{order.total}</strong>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>

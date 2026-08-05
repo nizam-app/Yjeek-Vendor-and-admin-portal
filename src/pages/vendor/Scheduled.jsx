@@ -7,22 +7,70 @@ import ScheduledOrderModal from '../../components/ScheduledOrderModal'
 import ScheduledReceiptModal from '../../components/ScheduledReceiptModal'
 import ScheduledRejectOrderModal from '../../components/ScheduledRejectOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
+import { useVendorScheduledOrders } from '../../hooks/vendor/useVendorScheduledOrders'
 
 export default function Scheduled() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [receiptOrder, setReceiptOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
-  const columns = getScheduledColumns()
+  const [searchQuery, setSearchQuery] = useState('')
+  const { data, error, isLoading, refetch } = useVendorScheduledOrders({ date: 'today' })
+
+  const columns = getScheduledColumns(data).map((col) => ({
+    ...col,
+    items: col.items.filter((order) => {
+      if (!searchQuery.trim()) return true
+      const haystack = [order.id, order.customer, order.customerName, order.itemsPreview]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(searchQuery.trim().toLowerCase())
+    }),
+  }))
+
+  if (isLoading && !data) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading scheduled orders…</div>
+  }
+  if (error && !data) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load scheduled orders.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
-      <PageHeader title="Scheduled orders" />
+      <PageHeader
+        title="Scheduled orders"
+        subtitle={typeof data?.count === 'number' ? `${data.count} scheduled` : undefined}
+      />
 
-      <div className="flex items-center justify-end gap-3 mb-4">
+      <div className="flex items-center justify-end gap-3 mb-4 flex-wrap">
+        {error ? (
+          <p className="text-[12px] text-danger mr-auto">
+            Refresh failed.{' '}
+            <button type="button" onClick={refetch} className="underline">
+              Retry
+            </button>
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="border border-border rounded-[8px] h-10 px-[14px] text-xs bg-white font-medium hover:bg-[#f7f9f7]"
+        >
+          ↻ Refresh
+        </button>
         <input
           className="border border-border rounded-[8px] h-10 px-[14px] text-xs bg-white min-w-[220px]"
           placeholder="Search by order #…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
         />
       </div>
 
@@ -50,7 +98,7 @@ export default function Scheduled() {
             ) : (
               col.items.map((order, idx) => (
                 <ScheduleCard
-                  key={`${order.id}-${idx}`}
+                  key={`${order.backendId || order.id}-${idx}`}
                   order={order}
                   columnKey={col.key}
                   onSelect={setSelectedOrder}

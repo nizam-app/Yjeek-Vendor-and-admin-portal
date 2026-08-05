@@ -51,11 +51,18 @@ export default function AdminCommissionEditModal({
   commission,
   onClose,
   onSave,
+  saving = false,
+  error = null,
 }) {
   const [form, setForm] = useState(() => buildFormState(commission))
+  const [localError, setLocalError] = useState(null)
+  const [pending, setPending] = useState(false)
 
   useEffect(() => {
-    if (open) setForm(buildFormState(commission))
+    if (open) {
+      setForm(buildFormState(commission))
+      setLocalError(null)
+    }
   }, [open, commission])
 
   if (!open) return null
@@ -64,8 +71,11 @@ export default function AdminCommissionEditModal({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleSave = () => {
-    onSave?.({
+  const busy = saving || pending
+  const displayError = localError || error
+
+  const handleSave = async () => {
+    const payload = {
       ...commission,
       model: form.model,
       rate: form.rate ? `${stripPercent(form.rate)}%` : commission?.rate,
@@ -83,8 +93,17 @@ export default function AdminCommissionEditModal({
         otherChargesPct: form.otherChargesPct,
         fixedCharge: form.fixedCharge,
       },
-    })
-    onClose?.()
+    }
+
+    setLocalError(null)
+    setPending(true)
+    try {
+      await onSave?.(payload)
+    } catch (err) {
+      setLocalError(err)
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
@@ -93,6 +112,7 @@ export default function AdminCommissionEditModal({
         type="button"
         aria-label="Close edit commission"
         onClick={onClose}
+        disabled={busy}
         className="absolute inset-0 bg-black/40"
       />
 
@@ -120,6 +140,7 @@ export default function AdminCommissionEditModal({
                   key={option}
                   type="button"
                   onClick={() => setField('model', option)}
+                  disabled={busy}
                   className={cn(
                     'h-[32px] rounded-[8px] px-3 text-[12px]',
                     form.model === option
@@ -139,6 +160,7 @@ export default function AdminCommissionEditModal({
               <input
                 className={inputClass}
                 value={form.rate}
+                disabled={busy}
                 onChange={(e) => setField('rate', e.target.value)}
               />
             </label>
@@ -147,6 +169,7 @@ export default function AdminCommissionEditModal({
               <input
                 className={inputClass}
                 value={form.platformServiceFee}
+                disabled={busy}
                 onChange={(e) => setField('platformServiceFee', e.target.value)}
               />
             </label>
@@ -155,6 +178,7 @@ export default function AdminCommissionEditModal({
               <input
                 className={inputClass}
                 value={form.vatOnCommission}
+                disabled={busy}
                 onChange={(e) => setField('vatOnCommission', e.target.value)}
               />
             </label>
@@ -163,6 +187,7 @@ export default function AdminCommissionEditModal({
               <input
                 className={inputClass}
                 value={form.currency}
+                disabled={busy}
                 onChange={(e) => setField('currency', e.target.value)}
               />
             </label>
@@ -188,6 +213,7 @@ export default function AdminCommissionEditModal({
                   <input
                     className={inputClass}
                     value={form[key]}
+                    disabled={busy}
                     onChange={(e) => setField(key, e.target.value)}
                   />
                 </label>
@@ -197,27 +223,36 @@ export default function AdminCommissionEditModal({
                 <input
                   className={inputClass}
                   value={form.fixedCharge}
+                  disabled={busy}
                   onChange={(e) => setField('fixedCharge', e.target.value)}
                 />
               </label>
             </div>
           </div>
+
+          {displayError ? (
+            <p className="text-[12px] text-[#d64044]">
+              {displayError.message || 'Failed to save commission.'}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex items-center  gap-5  px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4.5 py-2.5 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
+            disabled={busy}
+            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4.5 py-2.5 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4.5 py-2.5 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={busy}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4.5 py-2.5 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Save commission
+            {busy ? 'Saving…' : 'Save commission'}
           </button>
         </div>
       </div>

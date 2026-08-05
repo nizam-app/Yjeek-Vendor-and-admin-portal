@@ -6,8 +6,7 @@ import ServicesCalendarDayView from '../../components/ServicesCalendarDayView'
 import ServiceBookingModal from '../../components/ServiceBookingModal'
 import ServiceRejectBookingModal from '../../components/ServiceRejectBookingModal'
 import ServiceAcceptBookingModal from '../../components/ServiceAcceptBookingModal'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useVendorServiceOrders } from '../../hooks/vendor/useVendorServiceOrders'
 
 const tagTones = {
   blue: 'bg-[#e5f0ff] text-[#2978db]',
@@ -62,7 +61,9 @@ function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
       >
         <div className="flex w-full items-center gap-1.5">
           {order.tag ? (
-            <span className={`inline-flex h-5 items-center whitespace-nowrap rounded-full px-[9px] py-[3px] text-[11px] font-medium ${tagTones[order.tagTone]}`}>
+            <span
+              className={`inline-flex h-5 items-center whitespace-nowrap rounded-full px-[9px] py-[3px] text-[11px] font-medium ${tagTones[order.tagTone] || tagTones.blue}`}
+            >
               {order.tag}
             </span>
           ) : null}
@@ -107,7 +108,11 @@ function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
       ) : null}
 
       {order.buttonLabel ? (
-        <button type="button" className="h-8 w-full rounded-[8px] bg-[#2e9e4d] text-[13px] font-medium text-white" onClick={stopCardAction}>
+        <button
+          type="button"
+          className="h-8 w-full rounded-[8px] bg-[#2e9e4d] text-[13px] font-medium text-white"
+          onClick={stopCardAction}
+        >
           {order.buttonLabel}
         </button>
       ) : null}
@@ -121,38 +126,50 @@ export default function Services() {
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [rejectBooking, setRejectBooking] = useState(null)
   const [acceptedBooking, setAcceptedBooking] = useState(null)
-  const { data: serviceBookings, error, isLoading, refetch } = useApiResource(() => vendorService.getServiceBookings(), [])
-  const columnMeta = serviceBookings ? {
-    new: { title: 'New', items: serviceBookings.new },
-    upcoming: { title: 'Upcoming', items: serviceBookings.upcoming },
-    inProgress: { title: 'In progress', items: serviceBookings.inProgress },
-  } : {}
+  const [searchQuery, setSearchQuery] = useState('')
+  const { data: serviceBookings, error, isLoading, refetch } = useVendorServiceOrders()
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading service bookings…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load service bookings. <button onClick={refetch} className="underline">Try again</button></div>
+  const columnMeta = serviceBookings
+    ? {
+        new: { title: 'New', items: serviceBookings.new || [] },
+        upcoming: { title: 'Upcoming', items: serviceBookings.upcoming || [] },
+        inProgress: { title: 'In progress', items: serviceBookings.inProgress || [] },
+      }
+    : {
+        new: { title: 'New', items: [] },
+        upcoming: { title: 'Upcoming', items: [] },
+        inProgress: { title: 'In progress', items: [] },
+      }
 
-  function mapCalendarBookingToOrder(booking) {
-    const columnKey =
-      booking.status === 'In progress' ? 'inProgress' : 'upcoming'
-
-    return {
-      order: {
-        id: '#YJK-…48',
-        when: booking.time,
-        customer: booking.customer,
-        customerPhone: '+973 3xxx xxxx',
-        service: booking.service,
-        category: 'Salon & Beauty',
-        bookingType: 'Salon & Beauty · booking',
-        venueType: 'At venue',
-        duration: '45 mins',
-        durationLabel: 'Duration: 45 mins',
-        staff: booking.staff,
-        price: 'BHD 15.000',
-        servicesList: [{ qty: 1, name: booking.service }],
+  const filteredColumns = Object.fromEntries(
+    Object.entries(columnMeta).map(([key, meta]) => [
+      key,
+      {
+        ...meta,
+        items: meta.items.filter((order) => {
+          if (!searchQuery.trim()) return true
+          const haystack = [order.id, order.customer, order.service]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+          return haystack.includes(searchQuery.trim().toLowerCase())
+        }),
       },
-      columnKey,
-    }
+    ]),
+  )
+
+  if (view === 'board' && isLoading && !serviceBookings) {
+    return <div className="p-7 text-[13px] text-ink-muted">Loading service bookings…</div>
+  }
+  if (view === 'board' && error && !serviceBookings) {
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load service bookings.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -172,10 +189,29 @@ export default function Services() {
             <CalendarDateIcon />
             Calendar view
           </button>
-          <input
-            className="h-10 min-w-[220px] rounded-[8px] border border-border bg-white px-[14px] text-xs"
-            placeholder="Search by order #…"
-          />
+          <div className="flex items-center gap-2">
+            {error ? (
+              <p className="text-[12px] text-danger">
+                Refresh failed.{' '}
+                <button type="button" onClick={refetch} className="underline">
+                  Retry
+                </button>
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="h-10 rounded-[8px] border border-border bg-white px-[14px] text-xs font-medium hover:bg-[#f7f9f7]"
+            >
+              ↻ Refresh
+            </button>
+            <input
+              className="h-10 min-w-[220px] rounded-[8px] border border-border bg-white px-[14px] text-xs"
+              placeholder="Search by order #…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -184,14 +220,15 @@ export default function Services() {
           year={calendarDay.year}
           month={calendarDay.month}
           day={calendarDay.day}
+          count={calendarDay.count}
+          statuses={calendarDay.statuses}
           onBack={() => setCalendarDay(null)}
-          onSelect={({ booking }) => setSelectedBooking(mapCalendarBookingToOrder(booking))}
         />
       ) : null}
 
       {view === 'calendar' && !calendarDay ? (
         <ServicesCalendarView
-          leftAction={(
+          leftAction={
             <button
               type="button"
               className="inline-flex items-center gap-[6px] rounded-[18px] border-[1.2px] border-[#e0e5e0] bg-white py-2 px-[14px] text-[13px] font-medium text-ink"
@@ -200,41 +237,40 @@ export default function Services() {
               <LayoutGrid size={16} />
               Board view
             </button>
-          )}
+          }
           onDaySelect={setCalendarDay}
         />
       ) : null}
 
       {view === 'board' ? (
-      <div className="grid grid-cols-3 gap-[14px] max-[1200px]:grid-cols-1">
-        {Object.entries(columnMeta).map(([key, meta]) => (
-          <div key={key} className="flex min-h-[520px] flex-col gap-2.5 rounded-lg bg-[#eef2ee] px-3 py-[14px]">
-            <div className="mb-3 flex items-center justify-between text-sm font-bold">
-              <span>{meta.title}</span>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-white px-[7px] py-[2px] text-[11px] font-medium text-ink-muted">{meta.items.length}</span>
-                <span className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-[6px] border border-[#d9ded9] bg-white text-[11px] font-medium text-ink-muted">
-                  ↗
-                </span>
+        <div className="grid grid-cols-3 gap-[14px] max-[1200px]:grid-cols-1">
+          {Object.entries(filteredColumns).map(([key, meta]) => (
+            <div key={key} className="flex min-h-[520px] flex-col gap-2.5 rounded-lg bg-[#eef2ee] px-3 py-[14px]">
+              <div className="mb-3 flex items-center justify-between text-sm font-bold">
+                <span>{meta.title}</span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-white px-[7px] py-[2px] text-[11px] font-medium text-ink-muted">
+                    {meta.items.length}
+                  </span>
+                </div>
               </div>
+              {meta.items.length === 0 ? (
+                <div className="p-6 text-center text-[13px] text-ink-muted">No bookings</div>
+              ) : (
+                meta.items.map((order, idx) => (
+                  <BookingCard
+                    key={`${order.backendId || order.id}-${idx}`}
+                    order={order}
+                    columnKey={key}
+                    onSelect={setSelectedBooking}
+                    onAccept={({ order: acceptTarget }) => setAcceptedBooking(acceptTarget)}
+                    onReject={({ order: rejectTarget }) => setRejectBooking(rejectTarget)}
+                  />
+                ))
+              )}
             </div>
-            {meta.items.length === 0 ? (
-              <div className="p-6 text-center text-[13px] text-ink-muted">No bookings</div>
-            ) : (
-              meta.items.map((order, idx) => (
-                <BookingCard
-                  key={`${order.id}-${idx}`}
-                  order={order}
-                  columnKey={key}
-                  onSelect={setSelectedBooking}
-                  onAccept={({ order: acceptTarget }) => setAcceptedBooking(acceptTarget)}
-                  onReject={({ order: rejectTarget }) => setRejectBooking(rejectTarget)}
-                />
-              ))
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
       ) : null}
 
       <ServiceBookingModal

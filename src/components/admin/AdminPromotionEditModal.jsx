@@ -14,11 +14,18 @@ function stripCurrency(value) {
   return String(value).replace(/^BHD\s*/i, '').trim()
 }
 
+function formatDateForInput(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
 function extractValue(promo) {
   if (promo?.value != null && promo.value !== '') return String(promo.value)
   const match = String(promo?.detailType || '').match(/\((\d+(?:\.\d+)?)%?\)/)
   if (match) return match[1]
-  if (promo?.type === '% off') return '20'
+  if (promo?.type === '% off') return '10'
   return ''
 }
 
@@ -37,7 +44,11 @@ function parsePeriodDates(period) {
 }
 
 function buildFormState(promo) {
-  const dates = parsePeriodDates(promo?.detailPeriod || promo?.period)
+  const fromIso = formatDateForInput(promo?.from)
+  const toIso = formatDateForInput(promo?.to)
+  const dates = fromIso || toIso
+    ? { from: fromIso, to: toIso }
+    : parsePeriodDates(promo?.detailPeriod || promo?.period)
   const isAllBranches = !promo?.scope || /^all branches$/i.test(promo.scope)
 
   return {
@@ -49,20 +60,29 @@ function buildFormState(promo) {
     scope: isAllBranches ? 'All branches' : 'Selected branches',
     from: dates.from,
     to: dates.to,
-    active: promo?.status === 'Active',
+    active: promo?.status === 'Active' || Boolean(promo?.active),
   }
 }
 
 export default function AdminPromotionEditModal({
   open,
   promotion,
+  mode = 'edit',
   onClose,
   onSave,
+  saving = false,
+  error = null,
 }) {
   const [form, setForm] = useState(() => buildFormState(promotion))
+  const [localError, setLocalError] = useState(null)
+  const [pending, setPending] = useState(false)
+  const isCreate = mode === 'create' || Boolean(promotion?.__create)
 
   useEffect(() => {
-    if (open) setForm(buildFormState(promotion))
+    if (open) {
+      setForm(buildFormState(promotion))
+      setLocalError(null)
+    }
   }, [open, promotion])
 
   if (!open || !promotion) return null
@@ -71,8 +91,11 @@ export default function AdminPromotionEditModal({
     setForm((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleSave = () => {
-    onSave?.({
+  const busy = saving || pending
+  const displayError = localError || error
+
+  const handleSave = async () => {
+    const payload = {
       ...promotion,
       name: form.name.trim(),
       type: form.type,
@@ -80,18 +103,31 @@ export default function AdminPromotionEditModal({
       discountCap: form.cap ? `BHD ${form.cap}` : '—',
       minOrder: form.minOrder ? `BHD ${form.minOrder}` : '—',
       scope: form.scope,
+      from: form.from,
+      to: form.to,
       detailPeriod: form.from && form.to ? `${form.from} – ${form.to}` : form.from || form.to,
       status: form.active ? 'Active' : 'Scheduled',
-    })
-    onClose?.()
+      active: form.active,
+    }
+
+    setLocalError(null)
+    setPending(true)
+    try {
+      await onSave?.(payload)
+    } catch (err) {
+      setLocalError(err)
+    } finally {
+      setPending(false)
+    }
   }
 
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
       <button
         type="button"
-        aria-label="Close edit promotion"
+        aria-label="Close promotion form"
         onClick={onClose}
+        disabled={busy}
         className="absolute inset-0 bg-black/40"
       />
 
@@ -102,8 +138,11 @@ export default function AdminPromotionEditModal({
         className="relative w-full max-w-[520px] overflow-hidden rounded-[14px] bg-white shadow-[0_12px_40px_rgba(20,40,28,.18)]"
       >
         <div className="px-5 pt-5 pb-1">
-          <h2 id="promotion-edit-title" className="text-[16px] font-bold tracking-[-0.02em] text-[#17231c]">
-            Edit promotion
+          <h2
+            id="promotion-edit-title"
+            className="text-[16px] font-bold tracking-[-0.02em] text-[#17231c]"
+          >
+            {isCreate ? 'New promotion' : 'Edit promotion'}
           </h2>
         </div>
 
@@ -114,6 +153,7 @@ export default function AdminPromotionEditModal({
               <input
                 className={inputClass}
                 value={form.name}
+                disabled={busy}
                 onChange={(e) => setField('name', e.target.value)}
               />
             </label>
@@ -123,6 +163,7 @@ export default function AdminPromotionEditModal({
                 <select
                   className={cn(inputClass, 'appearance-none pr-9')}
                   value={form.type}
+                  disabled={busy}
                   onChange={(e) => setField('type', e.target.value)}
                 >
                   {TYPE_OPTIONS.map((option) => (
@@ -143,6 +184,7 @@ export default function AdminPromotionEditModal({
               <input
                 className={inputClass}
                 value={form.value}
+                disabled={busy}
                 onChange={(e) => setField('value', e.target.value)}
               />
             </label>
@@ -151,6 +193,7 @@ export default function AdminPromotionEditModal({
               <input
                 className={inputClass}
                 value={form.cap}
+                disabled={busy}
                 onChange={(e) => setField('cap', e.target.value)}
               />
             </label>
@@ -159,6 +202,7 @@ export default function AdminPromotionEditModal({
               <input
                 className={inputClass}
                 value={form.minOrder}
+                disabled={busy}
                 onChange={(e) => setField('minOrder', e.target.value)}
               />
             </label>
@@ -171,6 +215,7 @@ export default function AdminPromotionEditModal({
                 <button
                   key={option}
                   type="button"
+                  disabled={busy}
                   onClick={() => setField('scope', option)}
                   className={cn(
                     'h-[32px] rounded-[8px] px-3 text-[12px]',
@@ -189,16 +234,20 @@ export default function AdminPromotionEditModal({
             <label className="block min-w-0">
               <span className={labelClass}>From</span>
               <input
+                type="date"
                 className={inputClass}
-                value={form.from}
+                value={/^\d{4}-\d{2}-\d{2}$/.test(form.from) ? form.from : ''}
+                disabled={busy}
                 onChange={(e) => setField('from', e.target.value)}
               />
             </label>
             <label className="block min-w-0">
               <span className={labelClass}>To</span>
               <input
+                type="date"
                 className={inputClass}
-                value={form.to}
+                value={/^\d{4}-\d{2}-\d{2}$/.test(form.to) ? form.to : ''}
+                disabled={busy}
                 onChange={(e) => setField('to', e.target.value)}
               />
             </label>
@@ -215,6 +264,7 @@ export default function AdminPromotionEditModal({
               type="button"
               role="switch"
               aria-checked={form.active}
+              disabled={busy}
               onClick={() => setField('active', !form.active)}
               className={cn(
                 'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition',
@@ -229,22 +279,30 @@ export default function AdminPromotionEditModal({
               />
             </button>
           </div>
+
+          {displayError ? (
+            <p className="text-[12px] text-[#d64044]">
+              {displayError.message || 'Failed to save promotion.'}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex items-center  gap-6  px-5 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
+            disabled={busy}
+            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:opacity-60"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={busy}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Save changes
+            {busy ? 'Saving…' : isCreate ? 'Create promotion' : 'Save changes'}
           </button>
         </div>
       </div>

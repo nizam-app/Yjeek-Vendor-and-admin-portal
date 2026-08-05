@@ -1,6 +1,8 @@
-import { ChevronRight, Clock3, Flame, ShieldAlert, ShieldCheck, TriangleAlert } from 'lucide-react'
-import { useApiResource } from '../../../hooks/useApiResource'
-import { adminService } from '../../../services/adminService'
+import { Flame, ShieldAlert, ShieldCheck, TriangleAlert, ChevronRight } from 'lucide-react'
+import { useAdminDashboard } from '../../../hooks/admin/useAdminDashboard'
+import { useAdminDashboardMap } from '../../../hooks/admin/useAdminDashboardMap'
+import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
+import { AdminLiveMap } from '../../../components/admin/AdminLiveMap'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 
@@ -34,7 +36,21 @@ function DashboardKpiStrip({ items }) {
 }
 
 export default function AdminDashboardPage() {
-  const { data, error, isLoading, refetch } = useApiResource(() => adminService.getDashboard(), [])
+  const { data, error, isLoading, refetch } = useAdminDashboard({ region: 'BH' })
+  const {
+    data: mapData,
+    error: mapError,
+    isLoading: mapLoading,
+    refetch: refetchMap,
+    layer,
+    setLayer,
+  } = useAdminDashboardMap({
+    region: 'BH',
+    refreshSeconds: data?.autoRefreshSeconds,
+  })
+  const { data: incidentsData } = useAdminIncidents()
+  const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   return (
@@ -42,32 +58,26 @@ export default function AdminDashboardPage() {
       <DashboardKpiStrip items={data.summary} />
 
       <div className="mt-4 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
-        <section className="h-[407px] rounded-xl border border-[#e4e8e4] bg-white p-3 shadow-[0_1px_2px_rgba(20,40,28,.025)]">
-          <div className="flex h-[20px] items-center justify-between">
-            <h2 className="text-[16px] font-bold leading-4">Live map</h2>
-            <div className="flex items-center gap-1 text-[11px] font-medium text-[#6f7a73]">
-              {data.map.tabs.map((tab) => (
-                <button key={tab} className={cn('rounded px-2 py-1', data.map.activeTabs.includes(tab) && 'bg-[#edf8f0] text-[#168247]')}>{tab}</button>
-              ))}
-            </div>
-          </div>
-          <div className="relative mt-1 h-[347px] overflow-hidden rounded-lg bg-[#e9eeea]">
-            <div className="absolute bottom-2 left-2 flex items-center gap-2 rounded-md bg-white/95 px-2.5 py-1.5 text-[11px] font-medium text-[#667269] shadow-sm">
-              {data.map.legend.map((item) => (
-                <span key={item.label}><i className="mr-1 inline-block h-2 w-2 rounded-full" style={{ backgroundColor: item.color }} />{item.label}</span>
-              ))}
-            </div>
-          </div>
-          <p className="mt-1 text-[10px] font-normal text-[#a1a8a3]">{data.map.scopeNote}</p>
-        </section>
+        <AdminLiveMap
+          layer={layer}
+          onLayerChange={setLayer}
+          legend={mapData?.legend || []}
+          points={mapData?.points || []}
+          scopeNote={mapData?.scopeNote}
+          isLoading={mapLoading}
+          error={mapError}
+          onRetry={refetchMap}
+        />
 
         <section className="h-[360px] overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px] shadow-[0_1px_2px_rgba(20,40,28,.025)]">
           <div className="flex h-[44px] items-center gap-1.5 px-0.5">
             <ShieldAlert size={14} strokeWidth={2} className="text-[#d46763]" />
             <h2 className="text-[14px] font-bold">Incidents Log</h2>
           </div>
-          {data.incidents.map(({ priority, title, detail, tone }) => (
-            <div key={title} className="flex h-[63px] items-center border-b border-[#e2e6e3] px-0.5">
+          {incidents.length === 0 ? (
+            <div className="px-0.5 py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
+          ) : incidents.map(({ id, priority, title, detail, tone }) => (
+            <div key={id} className="flex h-[63px] items-center border-b border-[#e2e6e3] px-0.5">
               <span className={cn(
                 'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[10px] font-medium',
                 tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
@@ -103,17 +113,19 @@ export default function AdminDashboardPage() {
             </div>
             {column.orders.length ? (
               <div className="mt-1.5 space-y-2.5">
-                {column.orders.map(({ id, detail, timeLeft }) => (
+                {column.orders.map(({ id, detail, timeLeft, hasIncident }) => (
                   <article key={id} className="h-[74px] rounded-[8px] border border-[#e5e8e5] bg-white px-2.5 py-2 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
                     <div className="flex items-center justify-between">
                       <strong className="text-[11px] font-medium leading-3 tracking-[.02em]">{id}</strong>
-                      <span className={cn('flex items-center gap-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : 'text-[#b27b17]')}>
-                        <Clock3 size={12} strokeWidth={1.8} />
+                      <span className={cn('flex items-center gap-3 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : column.tone === 'yellow' ? 'text-[#b27b17]' : 'text-[#32815a]')}>
+                      ⏱ 
                         {timeLeft}
                       </span>
                     </div>
-                    <p className="mt-1 text-[11px] font-medium leading-3 text-[#727c76]">{detail}</p>
-                    <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'bg-[#fdecec] text-[#d44749]' : 'bg-[#fff4dc] text-[#b67f17]')}>Incident</span>
+                    <p className="mt-1 truncate text-[11px] font-medium leading-3 text-[#727c76]">{detail}</p>
+                    {hasIncident ? (
+                      <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'bg-[#fdecec] text-[#d44749]' : 'bg-[#fff4dc] text-[#b67f17]')}>Incident</span>
+                    ) : null}
                   </article>
                 ))}
               </div>

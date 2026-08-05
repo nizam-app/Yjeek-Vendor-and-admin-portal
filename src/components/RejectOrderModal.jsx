@@ -1,23 +1,9 @@
 import { useEffect, useState } from 'react'
 import warningIcon from '../assets/warning-icon.png'
-
-const deliveryRejectReasons = [
-  'Item(s) out of stock',
-  'Kitchen too busy right now',
-  'Closing soon',
-  'Cannot fulfil on time',
-  'Price / menu error',
-  'Other (please specify)',
-]
-
-const dineInRejectReasons = [
-  'Fully booked — no tables',
-  'Kitchen too busy right now',
-  'Closing soon',
-  'Cannot accommodate party size',
-  'Closed for the day',
-  'Other (please specify)',
-]
+import {
+  DELIVERY_REJECT_REASONS,
+  DINE_IN_REJECT_REASONS,
+} from '../mappers/vendor/mapVendorRejectionReason'
 
 function buildDineInSubtitle(order) {
   const guest = order.guest || 'Guest'
@@ -26,15 +12,25 @@ function buildDineInSubtitle(order) {
   return `${guest} · ${guests} · ${when}. Tell us why you're rejecting this reservation. The guest is notified and refunded if prepaid.`
 }
 
-export default function RejectOrderModal({ open, onClose, order, tab = 'delivery', intent = 'reject' }) {
-  const [reason, setReason] = useState('')
+export default function RejectOrderModal({
+  open,
+  onClose,
+  onConfirm,
+  order,
+  tab = 'delivery',
+  intent = 'reject',
+  isSubmitting = false,
+  error = null,
+}) {
+  const [reasonCode, setReasonCode] = useState('')
+  const [reasonLabel, setReasonLabel] = useState('')
   const [note, setNote] = useState('')
   const isDineIn = tab === 'dinein'
 
   useEffect(() => {
     if (!open) return
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !isSubmitting) onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     document.body.style.overflow = 'hidden'
@@ -42,11 +38,12 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = ''
     }
-  }, [open, onClose])
+  }, [open, isSubmitting, onClose])
 
   useEffect(() => {
     if (!open) {
-      setReason('')
+      setReasonCode('')
+      setReasonLabel('')
       setNote('')
     }
   }, [open])
@@ -54,7 +51,7 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
   if (!open || !order) return null
 
   const isNoShow = intent === 'no-show'
-  const rejectReasons = isDineIn ? dineInRejectReasons : deliveryRejectReasons
+  const rejectReasons = isDineIn ? DINE_IN_REJECT_REASONS : DELIVERY_REJECT_REASONS
   const title = isNoShow
     ? isDineIn
       ? `No-show dine-in ${order.id}`
@@ -74,11 +71,22 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
     : isDineIn
       ? 'The guest is notified and refunded if prepaid. Frequent rejections affect your ranking.'
       : 'Frequent rejections lower your acceptance rate and dispatch priority.'
-  const confirmLabel = isNoShow ? 'Confirm no-show' : 'Confirm rejection'
+  const confirmLabel = isSubmitting
+    ? isNoShow
+      ? 'Confirming…'
+      : 'Rejecting…'
+    : isNoShow
+      ? 'Confirm no-show'
+      : 'Confirm rejection'
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-[rgba(0,0,0,0.25)]" aria-label="Close reject order modal" onClick={onClose} />
+      <button
+        type="button"
+        className="absolute inset-0 bg-[rgba(0,0,0,0.25)]"
+        aria-label="Close reject order modal"
+        onClick={isSubmitting ? undefined : onClose}
+      />
       <div className="relative w-[460px] max-w-full bg-white rounded-[16px] shadow-[0px_12px_40px_rgba(0,0,0,0.25)] overflow-hidden">
         <div className="flex flex-col px-[26px] py-[24px] gap-4">
           <div className="flex flex-col gap-1.5">
@@ -89,32 +97,41 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
           <div className="flex flex-col gap-2">
             <p className="text-[13px] font-bold leading-[16px] text-[#1A1A1A]">Reason (required)</p>
             <div className="flex flex-col rounded-[10px] border border-[#DBE0DB] overflow-hidden px-[16px]">
-              {rejectReasons.map((item, idx) => (
-                <label
-                  key={item}
-                  className={`flex items-center justify-between gap-3 py-3 cursor-pointer ${
-                    idx < rejectReasons.length - 1 ? 'border-b border-[#DBE0DB]' : ''
-                  }`}
-                >
-                  <span className="text-[13px] font-medium leading-[16px] text-[#1A1A1A]">{item}</span>
-                  <input
-                    type="radio"
-                    name="reject-reason"
-                    value={item}
-                    checked={reason === item}
-                    onChange={() => setReason(item)}
-                    className="w-[18px] h-[18px] shrink-0 accent-[#1A1A1A]"
-                  />
-                </label>
-              ))}
+              {rejectReasons.map((item, idx) => {
+                const optionKey = `${item.code}:${item.label}`
+                const selected = reasonLabel === item.label
+                return (
+                  <label
+                    key={optionKey}
+                    className={`flex items-center justify-between gap-3 py-3 cursor-pointer ${
+                      idx < rejectReasons.length - 1 ? 'border-b border-[#DBE0DB]' : ''
+                    } ${isSubmitting ? 'opacity-60 pointer-events-none' : ''}`}
+                  >
+                    <span className="text-[13px] font-medium leading-[16px] text-[#1A1A1A]">{item.label}</span>
+                    <input
+                      type="radio"
+                      name="reject-reason"
+                      value={item.code}
+                      checked={selected}
+                      onChange={() => {
+                        setReasonCode(item.code)
+                        setReasonLabel(item.label)
+                      }}
+                      disabled={isSubmitting}
+                      className="w-[18px] h-[18px] shrink-0 accent-[#1A1A1A]"
+                    />
+                  </label>
+                )
+              })}
             </div>
           </div>
 
           <textarea
-            className="box-border flex w-full h-16 resize-none items-start rounded-[12px] border-[1.3px] border-dashed border-[#B3BDB5] bg-white p-[14px] text-[13px] font-normal leading-[18px] text-[#1A1A1A] placeholder:text-[#949C94] outline-none"
+            className="box-border flex w-full h-16 resize-none items-start rounded-[12px] border-[1.3px] border-dashed border-[#B3BDB5] bg-white p-[14px] text-[13px] font-normal leading-[18px] text-[#1A1A1A] placeholder:text-[#949C94] outline-none disabled:opacity-60"
             placeholder="Add a note (optional)…"
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            disabled={isSubmitting}
           />
 
           <div className="flex items-center gap-2 rounded-[10px] bg-warn-soft px-4 py-3">
@@ -122,19 +139,24 @@ export default function RejectOrderModal({ open, onClose, order, tab = 'delivery
             <p className="text-[12.5px] font-medium leading-[18px] text-[#8a5a12]">{warning}</p>
           </div>
 
+          {error ? (
+            <p className="text-[12px] text-danger">{error.message || 'Failed to reject order.'}</p>
+          ) : null}
+
           <div className="flex gap-3 w-full">
             <button
               type="button"
-              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-full text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7]"
+              className="flex-1 h-12 bg-white border-[1.2px] border-[#DBE0DB] rounded-full text-[14px] font-medium leading-[17px] text-[#1A1A1A] hover:bg-[#f7f9f7] disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={onClose}
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="button"
               className="flex-1 h-12 bg-danger rounded-full text-[14px] font-bold leading-[17px] text-white hover:brightness-[0.96] disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!reason}
-              onClick={onClose}
+              disabled={!reasonCode || isSubmitting}
+              onClick={() => onConfirm?.({ reason: reasonCode, note: note.trim() })}
             >
               {confirmLabel}
             </button>

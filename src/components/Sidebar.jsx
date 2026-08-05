@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   LayoutGrid,
@@ -14,12 +15,13 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { getVendorServiceModes } from '../mappers/vendor/authMapper'
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { to: '/live-orders', label: 'Live orders', icon: Zap },
-  { to: '/scheduled', label: 'Scheduled', icon: Zap },
-  { to: '/services', label: 'Services', icon: Calendar },
+  { to: '/scheduled', label: 'Scheduled', icon: Zap, requires: 'scheduledDelivery' },
+  { to: '/services', label: 'Services', icon: Calendar, requires: 'services' },
   { to: '/orders-history', label: 'Orders history', icon: ClipboardList },
   { to: '/catalog', label: 'Catalog', icon: Menu },
   { to: '/branches', label: 'Branches', icon: Home },
@@ -30,7 +32,20 @@ const links = [
 ]
 
 export default function Sidebar() {
-  const { logout } = useAuth()
+  const { user, logout } = useAuth()
+  const [isSigningOut, setIsSigningOut] = useState(false)
+  const modes = getVendorServiceModes(user)
+  const visibleLinks = links.filter((link) => !link.requires || modes[link.requires])
+
+  async function handleSignOut() {
+    if (isSigningOut) return
+    setIsSigningOut(true)
+    try {
+      await logout()
+    } finally {
+      setIsSigningOut(false)
+    }
+  }
 
   return (
     <aside className="w-[var(--sidebar-w)] shrink-0 bg-bg-white border-r border-border flex flex-col py-[18px] px-[14px] sticky top-0 h-screen overflow-y-auto max-[900px]:hidden">
@@ -46,11 +61,11 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-[3px] flex-1">
-        {links.map(({ to, label, icon: Icon }) => (
+        {visibleLinks.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === '/branches' || to === '/catalog' || to === '/dashboard'}
+            end={to === '/branches' || to === '/dashboard'}
             className={({ isActive }) =>
               `flex items-center gap-3 py-[11px] px-3 rounded-md text-[13px] font-medium transition-colors duration-150 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:shrink-0 ${
                 isActive ? 'bg-green-active-bg text-green-active-text font-medium' : 'text-ink-muted hover:bg-[#f3f6f3] hover:text-ink'
@@ -62,7 +77,12 @@ export default function Sidebar() {
           </NavLink>
         ))}
         <div className="flex-1 min-h-6" />
-        <button type="button" className="flex items-center gap-3 py-[11px] px-3 rounded-md text-danger text-[13px] font-medium w-full text-left hover:bg-danger-soft" onClick={logout}>
+        <button
+          type="button"
+          disabled={isSigningOut}
+          className="flex items-center gap-3 py-[11px] px-3 rounded-md text-danger text-[13px] font-medium w-full text-left hover:bg-danger-soft disabled:opacity-60 disabled:pointer-events-none"
+          onClick={handleSignOut}
+        >
           <LogOut size={20} strokeWidth={1.8} />
           Sign out
         </button>

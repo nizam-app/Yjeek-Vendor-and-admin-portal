@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Bell, Check, ChevronDown, Search, Zap } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, Bell, Check, Search, Zap } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
-import { useApiResource } from '../../hooks/useApiResource'
-import { adminService } from '../../services/adminService'
+import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
+import { ApiState } from '../../components/admin/ApiState'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -50,6 +50,7 @@ function statusBadge(order) {
   const payment = order.payment || ''
   if (payment === 'Declined') return { label: 'Declined', tone: 'bg-[#fdebec] text-[#c54749]' }
   if (payment.toLowerCase().includes('expired')) return { label: 'No response', tone: 'bg-[#fdebec] text-[#c54749]' }
+  if (order.bannerTone === 'danger') return { label: 'No response', tone: 'bg-[#fdebec] text-[#c54749]' }
   if (order.column === 'confirmed') return { label: 'Accepted ✓', tone: 'bg-[#e5f5eb] text-[#24834e]' }
   if (order.column === 'new' && payment.includes('Paid')) return { label: 'Vendor accepted', tone: 'bg-[#e5f5eb] text-[#24834e]' }
   if (order.column === 'new' && (payment.includes('vendor') || payment.includes('payment'))) {
@@ -58,15 +59,19 @@ function statusBadge(order) {
   return { label: 'Awaiting', tone: 'bg-[#fff3d6] text-[#9a6d12]' }
 }
 
-function ColumnOrderCard({ order }) {
+function ColumnOrderCard({ order, onAssign }) {
   const status = statusBadge(order)
-  const typeTag = order.tags?.find((tag) => !tag.includes('Special') && tag !== 'Normal') || 'Standard'
-  const isSpecial = order.tags?.some((tag) => tag.includes('Special'))
-  const isFailed = status.label === 'Declined' || status.label === 'No response'
+  const typeTag = order.tags?.find((tag) => !tag.includes('Special') && tag !== 'Normal' && tag !== 'Incident' && tag !== 'Champ')
+    || order.deliverySpeedLabel
+    || 'Standard'
+  const isSpecial = order.tags?.some((tag) => tag.includes('Special')) || order.priorityLabel === 'Special'
+  const actionCode = order.actionCode
 
-  const showRemind = order.column === 'response' && !isFailed
-  const showReassign = (order.column === 'response' || order.column === 'confirmation') && isFailed
-  const showConfirmTimer = order.column === 'confirmation' && !isFailed && order.timer
+  const showAssign = actionCode === 'ASSIGN_DATE_TIME_CHAMP'
+  const showRemind = actionCode === 'REMIND_CHAMP'
+  const showReassign = actionCode === 'REASSIGN_CHAMP'
+  const showBanner = Boolean(order.timer)
+  const showForcePickup = Boolean(order.footer)
 
   return (
     <article className="rounded-[12px] border border-[#e4e8e4] bg-white p-4 shadow-[0_1px_3px_rgba(20,40,28,.05)]">
@@ -103,11 +108,11 @@ function ColumnOrderCard({ order }) {
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <span className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-medium', typeBadgeClass(typeTag))}>{typeTag}</span>
-        <span className="text-[11px] font-medium text-[#78827c]">{order.slot || '30 Jun · 1–3 PM'}</span>
+        <span className="text-[11px] font-medium text-[#78827c]">{order.slot || '—'}</span>
       </div>
 
       <p className="mt-2.5 text-[12px] font-bold text-[#17231c]">{order.route}</p>
-      <p className="mt-1.5 text-[11px] text-[#8a948e]">Prep {order.prep || '~20 min'}</p>
+      <p className="mt-1.5 text-[11px] text-[#8a948e]">Prep {order.prep || '—'}</p>
       <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-[#17231c]">
         <img src={motoBike} alt="" className="h-3.5 w-3.5 object-contain" />
         {order.champ || 'Unassigned'}
@@ -120,22 +125,23 @@ function ColumnOrderCard({ order }) {
       ) : null}
 
       {showReassign ? (
-        <button type="button" className="mt-3.5 h-[32px] w-full rounded-[8px] bg-[#e12e32] text-[11px] font-medium text-white">
+        <button
+          type="button"
+          onClick={() => onAssign?.(order)}
+          className="mt-3.5 h-[32px] w-full rounded-[8px] bg-[#e12e32] text-[11px] font-medium text-white hover:brightness-[0.97]"
+        >
           Reassign champ
         </button>
       ) : null}
 
-      {showConfirmTimer ? (
-        <div className="mt-3.5 rounded-[8px] bg-[#fff3d7] px-2.5 py-2 text-center text-[10px] font-medium text-[#9c6b14]">{order.timer}</div>
-      ) : null}
-
-      {order.column === 'new' && order.action ? (
+      {showAssign && order.action ? (
         <button
           type="button"
+          onClick={() => onAssign?.(order)}
           className={cn(
             'mt-3.5 h-[32px] w-full rounded-[8px] text-[11px] font-medium',
             order.actionTone === 'green' && 'bg-[#19ad5b] text-white',
-            order.actionTone === 'redSoft' && 'bg-[#fde5e5] text-[#bd3b3e]',
+            order.actionTone === 'red' && 'bg-[#e12e32] text-white',
             !order.actionTone && 'border border-[#dfe4e0] bg-white text-[#17231c]',
           )}
         >
@@ -143,17 +149,16 @@ function ColumnOrderCard({ order }) {
         </button>
       ) : null}
 
-      {order.column === 'new' && order.timer ? (
-        <div className="mt-2 rounded-[8px] bg-[#fff3d7] px-2.5 py-2 text-center text-[10px] font-medium text-[#9c6b14]">{order.timer}</div>
+      {showBanner ? (
+        <div className={cn(
+          'mt-2 rounded-[8px] px-2.5 py-2 text-center text-[10px] font-medium',
+          order.bannerTone === 'danger' ? 'bg-[#fdebec] text-[#c54749]' : 'bg-[#fff3d7] text-[#9c6b14]',
+        )}>
+          {order.timer}
+        </div>
       ) : null}
 
-      {order.column === 'confirmed' && order.action ? (
-        <button type="button" className="mt-3.5 h-[32px] w-full rounded-[8px] border border-[#dcecf8] bg-[#e8f3fb] text-[11px] font-medium text-[#35729d]">
-          {order.action}
-        </button>
-      ) : null}
-
-      {order.column === 'confirmed' && order.footer ? (
+      {showForcePickup ? (
         <button type="button" className="mt-2 h-[30px] w-full rounded-[8px] bg-[#ff940f] text-[11px] font-medium text-white">
           {order.footer}
         </button>
@@ -164,8 +169,12 @@ function ColumnOrderCard({ order }) {
 
 export function AdminScheduledColumn() {
   const { columnKey } = useParams()
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const { data, error, isLoading, refetch } = useApiResource(() => adminService.getOperations('scheduled'), [])
+  const { data, error, isLoading, refetch } = useAdminScheduledBoard({
+    sort: 'time_left',
+    limit: 50,
+  })
   const meta = columnMeta[columnKey]
 
   const orders = useMemo(() => {
@@ -177,13 +186,14 @@ export function AdminScheduledColumn() {
     })
   }, [data, columnKey, query])
 
+  const openAssignChamp = (order) => {
+    const orderId = order?.orderId || String(order?.id || '').replace(/^#/, '')
+    if (!orderId) return
+    navigate(`/admin/scheduled/assign/${encodeURIComponent(orderId)}`)
+  }
+
   if (!data) {
-    return (
-      <div className="p-7 text-[12px] text-[#78837c]">
-        {isLoading ? 'Loading…' : null}
-        {error ? <>Unable to load this page. <button type="button" onClick={refetch} className="underline">Try again</button></> : null}
-      </div>
-    )
+    return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
   }
 
   if (!meta) {
@@ -228,8 +238,8 @@ export function AdminScheduledColumn() {
             placeholder="Search orders, vendors, champs…"
           />
         </label>
-        <button type="button" className={FILTER_CLASS}>Sort: Window <ChevronDown size={12} /></button>
-        <button type="button" className={FILTER_CLASS}>Filter: All <ChevronDown size={12} /></button>
+        <button type="button" className={FILTER_CLASS}>Sort: Window ▾</button>
+        <button type="button" className={FILTER_CLASS}>Filter: All ▾</button>
         <button
           type="button"
           className={cn(
@@ -251,12 +261,12 @@ export function AdminScheduledColumn() {
         </label>
         {['Vendor · All', 'Zone · All', 'Type · All', 'Champ · All'].map((filter) => (
           <button key={filter} type="button" className={PILL_FILTER}>
-            {filter} <ChevronDown size={10} />
+            {filter}▾
           </button>
         ))}
         <span className="flex-1" />
         <button type="button" className={PILL_FILTER}>
-          Sort · Time left <ChevronDown size={10} />
+          Sort · Time left▾
         </button>
       </div>
 
@@ -265,7 +275,11 @@ export function AdminScheduledColumn() {
       ) : (
         <div className="grid grid-cols-4 gap-3.5 max-[1200px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
           {orders.map((order, index) => (
-            <ColumnOrderCard key={`${order.id}-${index}`} order={order} />
+            <ColumnOrderCard
+              key={`${order.id}-${index}`}
+              order={order}
+              onAssign={openAssignChamp}
+            />
           ))}
         </div>
       )}

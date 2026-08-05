@@ -85,6 +85,8 @@ async function httpRequest({
   timeout = apiConfig.timeoutMs,
   skipAuth = false,
   scope: scopeOverride,
+  feature,
+  forceReal = false,
 } = {}) {
   if (!url) {
     throw new ApiError({ message: 'Request URL is required.' })
@@ -92,7 +94,7 @@ async function httpRequest({
 
   const scope = scopeOverride || resolveRequestScope(url)
 
-  if (shouldUseMockApi(scope)) {
+  if (shouldUseMockApi(scope, { feature, forceReal })) {
     return mockClient.request({ method, url, params, body, headers, signal })
   }
 
@@ -148,7 +150,9 @@ async function httpRequest({
         requestId: response.headers.get('x-request-id') || response.headers.get('request-id'),
       })
 
-      if (response.status === 401) {
+      // Public endpoints (e.g. login with skipAuth) must not clear sessions or
+      // trigger unauthorized redirects — that would loop users back to /login.
+      if (response.status === 401 && !skipAuth) {
         handleUnauthorized(scope)
       }
 
@@ -200,6 +204,8 @@ function createMethod(method) {
         'timeout' in bodyOrOptions ||
         'skipAuth' in bodyOrOptions ||
         'scope' in bodyOrOptions ||
+        'feature' in bodyOrOptions ||
+        'forceReal' in bodyOrOptions ||
         'body' in bodyOrOptions)
     ) {
       const { body, ...options } = bodyOrOptions
@@ -252,5 +258,30 @@ function verifyVendorLoginUrlResolution() {
 }
 
 verifyVendorLoginUrlResolution()
+
+/**
+ * Development-only Admin login URL resolution check.
+ * Does not send a network request and does not log credentials or tokens.
+ */
+function verifyAdminLoginUrlResolution() {
+  if (!import.meta.env.DEV) return
+  if (!API_BASE_URL) return
+  if (!endpoints.admin?.auth?.login) return
+
+  const fromEndpoint = buildApiUrl(endpoints.admin.auth.login)
+  const expected = `${API_BASE_URL}/admin/auth/login`
+  const ok = fromEndpoint === expected && !fromEndpoint.includes('/api/v1//')
+
+  if (ok) {
+    console.info('[yjeek:api] Admin login URL resolved:', fromEndpoint)
+  } else {
+    console.error('[yjeek:api] Admin login URL resolution failed.', {
+      fromEndpoint,
+      expected,
+    })
+  }
+}
+
+verifyAdminLoginUrlResolution()
 
 export default apiClient

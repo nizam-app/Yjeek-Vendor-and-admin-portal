@@ -42,14 +42,36 @@ const vendorUseMockApi = readBooleanEnv(
 /**
  * Admin mock mode.
  * Default: true — existing Admin mock behavior until Admin API is wired.
+ * Prefer VITE_ADMIN_REAL_API_FEATURES for feature-scoped real APIs so the rest
+ * of Admin can stay on mocks.
  */
 const adminUseMockApi = readBooleanEnv(import.meta.env.VITE_ADMIN_USE_MOCK_API, true)
 
+/**
+ * Comma-separated Admin features that use the real backend while other Admin
+ * screens remain on mocks. Example: `auth` or `auth,dashboard`.
+ */
+function parseAdminRealApiFeatures(rawValue) {
+  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === '') {
+    return []
+  }
+  return String(rawValue)
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+const adminRealApiFeatures = parseAdminRealApiFeatures(
+  import.meta.env.VITE_ADMIN_REAL_API_FEATURES,
+)
+
 const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 30000
 
-if (!vendorUseMockApi && !API_BASE_URL) {
+const needsApiBaseUrl = !vendorUseMockApi || adminRealApiFeatures.length > 0 || !adminUseMockApi
+
+if (needsApiBaseUrl && !API_BASE_URL) {
   const message =
-    '[yjeek:api] VITE_API_BASE_URL is required when VITE_VENDOR_USE_MOCK_API=false. ' +
+    '[yjeek:api] VITE_API_BASE_URL is required when real Vendor/Admin API mode is on. ' +
     'Set it in `.env`, e.g. VITE_API_BASE_URL=http://host:port/api/v1'
   if (import.meta.env.DEV) {
     console.error(message)
@@ -70,14 +92,35 @@ export const apiConfig = {
   timeoutMs,
   vendorUseMockApi,
   adminUseMockApi,
+  /** Lowercased feature names from VITE_ADMIN_REAL_API_FEATURES. */
+  adminRealApiFeatures,
+}
+
+/**
+ * Whether a named Admin feature should hit the real backend.
+ * @param {string} feature e.g. `'auth'`
+ */
+export function isAdminRealApiFeature(feature) {
+  const key = String(feature || '')
+    .trim()
+    .toLowerCase()
+  if (!key) return false
+  return apiConfig.adminRealApiFeatures.includes(key)
 }
 
 /**
  * Resolve whether a request should use the mock client.
  * @param {'vendor' | 'admin' | 'shared'} scope
+ * @param {{ feature?: string, forceReal?: boolean }} [options]
  */
-export function shouldUseMockApi(scope = 'vendor') {
-  if (scope === 'admin') return apiConfig.adminUseMockApi
+export function shouldUseMockApi(scope = 'vendor', options = {}) {
+  if (options.forceReal) return false
+
+  if (scope === 'admin') {
+    if (options.feature && isAdminRealApiFeature(options.feature)) return false
+    return apiConfig.adminUseMockApi
+  }
+
   return apiConfig.vendorUseMockApi
 }
 

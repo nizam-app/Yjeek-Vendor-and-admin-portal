@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Check } from 'lucide-react'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
@@ -7,21 +6,24 @@ export default function AdminAddVendorReview({
   form,
   branches,
   users,
-  onActivate,
+  activateImmediately = true,
+  onActivateImmediatelyChange,
 }) {
-  const [activateImmediately, setActivateImmediately] = useState(true)
-
-  const branchNames = branches
-    .map((branch) => branch.name.split('—')[0]?.trim() || branch.name)
+  const branchNames = (branches || [])
+    .map((branch) => String(branch.name || '').split('—')[0]?.trim() || branch.name)
+    .filter(Boolean)
     .slice(0, 3)
     .join(', ')
 
-  const staffCount = users.length
+  const staffCount = (users || []).length
   const summaryRows = [
     ['Store', `${form.storeName} · ${form.storeType}`],
-    ['Branches', `${branches.length} (${branchNames})`],
-    ['Delivery', 'Radius 5 km · ETA 35 min · min BHD 3.000'],
-    ['Users', `1 admin · ${staffCount} staff/managers`],
+    ['Branches', `${(branches || []).length}${branchNames ? ` (${branchNames})` : ''}`],
+    [
+      'Location',
+      [form.area, form.city].filter(Boolean).join(', ') || '—',
+    ],
+    ['Users', `1 owner · ${staffCount} additional`],
   ]
 
   return (
@@ -35,6 +37,7 @@ export default function AdminAddVendorReview({
               className="flex items-start justify-between gap-4 border-b border-[#eef1ef] py-3 last:border-0"
             >
               <span className="shrink-0 text-[13px] text-[#7c8780] flex-1">{label}</span>
+              <span className="shrink-0 text-black text-[#7c8780] flex-3">{value}</span>
             </div>
           ))}
         </div>
@@ -59,7 +62,7 @@ export default function AdminAddVendorReview({
             type="button"
             role="switch"
             aria-checked={activateImmediately}
-            onClick={() => setActivateImmediately((prev) => !prev)}
+            onClick={() => onActivateImmediatelyChange?.(!activateImmediately)}
             className={cn(
               'relative h-[26px] w-[46px] shrink-0 rounded-full transition',
               activateImmediately ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
@@ -78,15 +81,16 @@ export default function AdminAddVendorReview({
   )
 }
 
-export function AdminAddVendorActivateButton({ onClick }) {
+export function AdminAddVendorActivateButton({ onClick, disabled = false, label = 'Activate vendor' }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+      disabled={disabled}
+      className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
     >
       <Check size={14} strokeWidth={2.5} />
-      Activate vendor
+      {label}
     </button>
   )
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
+import { isAdminRealApiFeature } from '../../../api/config'
+import { adminService } from '../../../services/adminService'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -9,7 +11,6 @@ const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
 
 const ROLES = ['Vendor admin', 'Branch manager', 'Staff']
-const BRANCH_OPTIONS = ['All branches', 'Manama — Al Seef', 'Juffair — Road 2401', 'Riffa — East', 'Riffa']
 const STATUS_OPTIONS = ['Active', 'Inactive', 'Invited']
 
 const PERMISSIONS = [
@@ -23,10 +24,10 @@ const PERMISSIONS = [
 
 function Field({ label, children, className = '' }) {
   return (
-    <label className={cn('block', className)}>
+    <div className={cn('block', className)}>
       <span className={labelClass}>{label}</span>
       {children}
-    </label>
+    </div>
   )
 }
 
@@ -53,20 +54,31 @@ function Toggle({ checked, onChange, label }) {
   )
 }
 
-function SelectField({ value, onChange, options, label }) {
+function SelectField({ value, onChange, options, label, disabled = false }) {
   return (
     <Field label={label}>
-      <div className="relative">
+      <div className="relative block w-full">
         <select
           className={cn(inputClass, 'appearance-none pr-9')}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
         >
-          {options.map((option) => (
-            <option key={option} value={option}>{option}</option>
-          ))}
+          {options.map((option) => {
+            const optValue = typeof option === 'string' ? option : option.value
+            const optLabel = typeof option === 'string' ? option : option.label
+            return (
+              <option key={String(optValue) || optLabel} value={optValue}>
+                {optLabel}
+              </option>
+            )
+          })}
         </select>
-        <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7c8780]" />
+        <ChevronDown
+          size={14}
+          className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#7c8780]"
+          aria-hidden
+        />
       </div>
     </Field>
   )
@@ -88,17 +100,49 @@ function defaultPermissions(role) {
   return { orders: true, catalog: false, hours: false, staff: false, delivery: false, promotions: false }
 }
 
+function emptyCreateForm(firstBranchId = '') {
+  return {
+    fullName: '',
+    email: '',
+    phone: '+973 ',
+    password: '',
+    role: 'Branch manager',
+    branchId: firstBranchId,
+    status: 'Active',
+  }
+}
+
 export default function AdminAddVendorUser() {
   const { vendorId, userId } = useParams()
   const navigate = useNavigate()
   const { state } = useLocation()
 
-  const isVendorDetailFlow = Boolean(vendorId)
+  const isVendorDetailFlow = Boolean(vendorId) && vendorId !== 'new'
   const isNewUser = !userId || userId === 'new'
-  const returnPath = isVendorDetailFlow
-    ? `/admin/vendors/${encodeURIComponent(vendorId)}`
-    : '/admin/vendors/new'
-  const returnState = isVendorDetailFlow ? { tab: 'Users & staff' } : { step: 3 }
+  const useRealStaffApi = isVendorDetailFlow && isAdminRealApiFeature('vendors')
+  const returnToWizard = state?.returnTo === 'wizard'
+  const returnPath = returnToWizard
+    ? '/admin/vendors/new'
+    : isVendorDetailFlow
+      ? `/admin/vendors/${encodeURIComponent(vendorId)}`
+      : '/admin/vendors/new'
+  const returnState = returnToWizard
+    ? {
+        mode: state?.mode || (isVendorDetailFlow ? 'edit' : 'create'),
+        vendorId: state?.vendorId || (isVendorDetailFlow ? vendorId : undefined),
+        storeName: state?.storeName,
+        step: state?.step || 3,
+        wizardDraft: state?.wizardDraft || null,
+      }
+    : isVendorDetailFlow
+      ? { tab: 'Users & staff' }
+      : {
+          mode: state?.mode || 'create',
+          step: 3,
+          wizardDraft: state?.wizardDraft || null,
+          storeName: state?.storeName,
+        }
+  const isLocalWizardCreate = !useRealStaffApi && Boolean(state?.wizardDraft || state?.mode === 'create')
 
   const user = useMemo(() => {
     if (isNewUser) return null
@@ -106,21 +150,102 @@ export default function AdminAddVendorUser() {
     return INITIAL_USERS.find((item) => String(item.id) === String(userId)) ?? null
   }, [isNewUser, state?.user, userId])
 
-  const branchOptions = state?.branches?.length
-    ? ['All branches', ...state.branches.map((b) => b.name || b)]
-    : BRANCH_OPTIONS
+  const [branchList, setBranchList] = useState(() => {
+    const fromState = Array.isArray(state?.branches) ? state.branches : []
+    return fromState.filter((b) => b && (b.id || b.name))
+  })
+  const [branchesLoading, setBranchesLoading] = useState(false)
 
-  const [form, setForm] = useState({
-    fullName: user?.name || (isNewUser ? 'Omar Khalid' : ''),
-    email: user?.email || (isNewUser ? 'omar@greenkitchen.bh' : ''),
-    phone: user?.phone || (isNewUser ? '+973 3xxx xxxx' : ''),
-    password: '',
-    role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
-    branch: user?.branch || 'Manama — Al Seef',
-    status: user?.status || 'Active',
+  const [form, setForm] = useState(() => {
+    if (isNewUser) {
+      const firstId = Array.isArray(state?.branches) ? state.branches.find((b) => b?.id)?.id || '' : ''
+      return emptyCreateForm(firstId)
+    }
+    return {
+      fullName: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      password: '',
+      role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
+      branchId: user?.branchId || user?.branch || '',
+      status: user?.status || 'Active',
+    }
   })
 
-  const [permissions, setPermissions] = useState(() => defaultPermissions(form.role))
+  const [permissions, setPermissions] = useState(() =>
+    user?.permissions && typeof user.permissions === 'object'
+      ? {
+          orders: Boolean(user.permissions.orders),
+          catalog: Boolean(user.permissions.catalog),
+          hours: Boolean(user.permissions.hours),
+          staff: Boolean(user.permissions.staff),
+          delivery: Boolean(user.permissions.delivery),
+          promotions: Boolean(user.permissions.promotions),
+        }
+      : defaultPermissions(form.role),
+  )
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  useEffect(() => {
+    if (!useRealStaffApi) return undefined
+
+    const fromState = Array.isArray(state?.branches) ? state.branches : []
+    if (fromState.some((b) => b?.id)) {
+      setBranchList(fromState.filter((b) => b && b.id))
+      return undefined
+    }
+
+    let cancelled = false
+    setBranchesLoading(true)
+    adminService
+      .listVendorBranches(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        setBranchList(response?.data?.branches || [])
+      })
+      .catch(() => {
+        if (!cancelled) setBranchList([])
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealStaffApi, vendorId, state?.branches])
+
+  const resolvedBranchOptions = useMemo(() => {
+    if (!useRealStaffApi) {
+      const names = state?.branches?.length
+        ? state.branches.map((b) => b.name || b)
+        : ['All branches', 'Manama — Al Seef', 'Juffair — Road 2401', 'Riffa — East', 'Riffa']
+      return names.map((name) => ({ value: name, label: name }))
+    }
+
+    const options = branchList
+      .filter((b) => b?.id)
+      .map((b) => ({ value: b.id, label: b.name || b.id }))
+
+    if (form.role === 'Vendor admin') {
+      return [{ value: '', label: 'All branches' }, ...options]
+    }
+
+    return options.length
+      ? options
+      : [{ value: '', label: branchesLoading ? 'Loading…' : 'No branches' }]
+  }, [useRealStaffApi, branchList, branchesLoading, state?.branches, form.role])
+
+  useEffect(() => {
+    if (!isNewUser || !useRealStaffApi) return
+    if (form.branchId) return
+    if (form.role === 'Vendor admin') return
+    const first = branchList.find((b) => b?.id)
+    if (first?.id) {
+      setForm((prev) => ({ ...prev, branchId: first.id }))
+    }
+  }, [isNewUser, useRealStaffApi, branchList, form.branchId, form.role])
 
   useEffect(() => {
     if (!user && isNewUser) return
@@ -130,10 +255,21 @@ export default function AdminAddVendorUser() {
       phone: user?.phone || '',
       password: '',
       role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
-      branch: user?.branch || 'Manama — Al Seef',
+      branchId: user?.branchId || user?.branch || '',
       status: user?.status || 'Active',
     })
-    setPermissions(defaultPermissions(user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager')))
+    setPermissions(
+      user?.permissions && typeof user.permissions === 'object'
+        ? {
+            orders: Boolean(user.permissions.orders),
+            catalog: Boolean(user.permissions.catalog),
+            hours: Boolean(user.permissions.hours),
+            staff: Boolean(user.permissions.staff),
+            delivery: Boolean(user.permissions.delivery),
+            promotions: Boolean(user.permissions.promotions),
+          }
+        : defaultPermissions(user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager')),
+    )
   }, [user, isNewUser])
 
   const updateField = (key) => (event) => {
@@ -141,7 +277,19 @@ export default function AdminAddVendorUser() {
   }
 
   const setRole = (role) => {
-    setForm((prev) => ({ ...prev, role }))
+    setForm((prev) => {
+      const next = { ...prev, role }
+      if (role === 'Vendor admin' && useRealStaffApi) {
+        next.branchId = ''
+      } else if (
+        useRealStaffApi &&
+        (!prev.branchId || prev.branchId === '') &&
+        branchList[0]?.id
+      ) {
+        next.branchId = branchList[0].id
+      }
+      return next
+    })
     setPermissions(defaultPermissions(role))
   }
 
@@ -151,8 +299,55 @@ export default function AdminAddVendorUser() {
 
   const goBack = () => navigate(returnPath, { state: returnState })
 
-  const handleSave = () => {
-    navigate(returnPath, { state: returnState })
+  async function handleSave() {
+    if (!useRealStaffApi) {
+      if (isLocalWizardCreate || returnToWizard || returnPath === '/admin/vendors/new') {
+        const branch =
+          branchList.find((b) => String(b.id) === String(form.branchId)) || branchList[0]
+        const savedUser = {
+          id: state?.user?.id || `local-user-${Date.now()}`,
+          name: form.fullName.trim() || 'New user',
+          displayName: form.fullName.trim(),
+          email: form.email.trim(),
+          phone: form.phone.trim(),
+          password: form.password,
+          role: form.role,
+          branch: branch?.name || '',
+          branchId: branch?.id || form.branchId || '',
+          branchIndex: Math.max(
+            0,
+            branchList.findIndex((b) => String(b.id) === String(branch?.id || form.branchId)),
+          ),
+          status: form.status || 'Active',
+          permissions: { ...permissions },
+        }
+        navigate(returnPath, {
+          state: {
+            ...returnState,
+            savedUser,
+          },
+        })
+        return
+      }
+      navigate(returnPath, { state: returnState })
+      return
+    }
+
+    setSaveError(null)
+    setSaving(true)
+    try {
+      const payload = { ...form, permissions }
+      if (isNewUser) {
+        await adminService.createVendorStaff(vendorId, payload, branchList)
+      } else {
+        await adminService.updateVendorStaff(vendorId, userId, payload, branchList)
+      }
+      navigate(returnPath, { state: returnState })
+    } catch (err) {
+      setSaveError(err?.message || (isNewUser ? 'Failed to create user.' : 'Failed to update user.'))
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -179,11 +374,18 @@ export default function AdminAddVendorUser() {
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+          disabled={saving}
+          className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          {isNewUser ? 'Create user' : 'Save changes'}
+          {saving ? 'Saving…' : isNewUser ? 'Create user' : 'Save changes'}
         </button>
       </div>
+
+      {saveError ? (
+        <div className="mb-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-4 py-3 text-[13px] text-[#d64044]">
+          {saveError}
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
@@ -196,7 +398,12 @@ export default function AdminAddVendorUser() {
               <input className={inputClass} value={form.email} onChange={updateField('email')} />
             </Field>
             <Field label="Phone">
-              <input className={inputClass} value={form.phone} onChange={updateField('phone')} />
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={updateField('phone')}
+                placeholder="+973 33008888"
+              />
             </Field>
             <Field label="Password">
               <input
@@ -235,15 +442,16 @@ export default function AdminAddVendorUser() {
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
             <SelectField
               label="Assigned branch"
-              value={form.branch}
-              onChange={(value) => setForm((prev) => ({ ...prev, branch: value }))}
-              options={branchOptions}
+              value={form.branchId}
+              onChange={(value) => setForm((prev) => ({ ...prev, branchId: value }))}
+              options={resolvedBranchOptions}
             />
             <SelectField
               label="Status"
               value={form.status}
               onChange={(value) => setForm((prev) => ({ ...prev, status: value }))}
               options={STATUS_OPTIONS}
+              disabled={useRealStaffApi && isNewUser}
             />
           </div>
         </section>
@@ -283,9 +491,10 @@ export default function AdminAddVendorUser() {
           <button
             type="button"
             onClick={handleSave}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47]"
+            disabled={saving}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {isNewUser ? 'Create user' : 'Save changes'}
+            {saving ? 'Saving…' : isNewUser ? 'Create user' : 'Save changes'}
           </button>
         </div>
       </div>

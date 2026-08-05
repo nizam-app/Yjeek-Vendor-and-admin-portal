@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { OrderCard, DineInCard, getColumns } from '../../components/OrderCards'
@@ -6,20 +6,201 @@ import OrderDetailModal from '../../components/OrderDetailModal'
 import AcceptOrderModal from '../../components/AcceptOrderModal'
 import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
-import { useApiResource } from '../../hooks/useApiResource'
-import { vendorService } from '../../services/vendorService'
+import { useAuth } from '../../context/AuthContext'
+import { useApiMutation } from '../../hooks/useApiMutation'
+import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
+import { getVendorServiceModes } from '../../mappers/vendor/authMapper'
+import {
+  moveAcceptedOrderOnLiveBoard,
+  moveOrderToPreparingOnLiveBoard,
+  moveOrderToReadyOnLiveBoard,
+  removeCompletedOrderFromLiveBoard,
+  removeRejectedOrderFromLiveBoard,
+} from '../../mappers/vendor/mapVendorLiveOrders'
+import { orderService } from '../../services/vendor/orderService'
 
 export default function LiveOrderColumn() {
+  const { user } = useAuth()
+  const canDineIn = getVendorServiceModes(user).dineIn
   const { key } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [acceptedOrder, setAcceptedOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
-  const tab = searchParams.get('tab') === 'dinein' ? 'dinein' : 'delivery'
+  const [acceptingId, setAcceptingId] = useState(null)
+  const [acceptError, setAcceptError] = useState(null)
+  const [rejectingId, setRejectingId] = useState(null)
+  const [rejectError, setRejectError] = useState(null)
+  const [actioningId, setActioningId] = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const requestedDineIn = searchParams.get('tab') === 'dinein'
+  const tab = canDineIn && requestedDineIn ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
-  const { data: orders, error, isLoading, refetch } = useApiResource(() => vendorService.getLiveOrders(), [])
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+
+  useEffect(() => {
+    if (!canDineIn && requestedDineIn) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('tab')
+      setSearchParams(next, { replace: true })
+    }
+  }, [canDineIn, requestedDineIn, searchParams, setSearchParams])
+  const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+  const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
+    orderService.rejectOrder(orderId, { reason, note }),
+  )
+  const { mutate: startPreparing } = useApiMutation((orderId) => orderService.startPreparing(orderId))
+  const { mutate: markReady } = useApiMutation((orderId) => orderService.markReady(orderId))
+  const { mutate: completeOrder } = useApiMutation((orderId) => orderService.completeOrder(orderId))
+  const { mutate: performPrimaryAction } = useApiMutation((action) =>
+    orderService.performPrimaryAction(action),
+  )
+
+  const handleAccept = useCallback(
+    async ({ order, mode }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setAcceptError(new Error('Order id is missing.'))
+        return
+      }
+
+      setAcceptError(null)
+      setAcceptingId(String(orderId))
+      try {
+        const result = await acceptOrder(orderId)
+        const mapped = result?.data || order
+        setAcceptedOrder({ order: mapped, mode })
+        setData((current) =>
+          moveAcceptedOrderOnLiveBoard(current, {
+            board: tab,
+            previousOrder: order,
+            acceptedOrder: mapped,
+          }),
+        )
+        refetch()
+      } catch (err) {
+        setAcceptError(err)
+      } finally {
+        setAcceptingId(null)
+      }
+    },
+    [acceptOrder, refetch, setData, tab],
+  )
+
+  const handleReject = useCallback(
+    async ({ reason, note }) => {
+      if (rejectOrder?.intent === 'no-show') {
+        setRejectError(new Error('No-show is not available yet.'))
+        return
+      }
+
+      const order = rejectOrder?.order
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setRejectError(new Error('Order id is missing.'))
+        return
+      }
+
+      setRejectError(null)
+      setRejectingId(String(orderId))
+      try {
+        await rejectOrderMutation({ orderId, reason, note })
+        setData((current) =>
+          removeRejectedOrderFromLiveBoard(current, {
+            board: tab,
+            order,
+          }),
+        )
+        setRejectOrder(null)
+        refetch()
+      } catch (err) {
+        setRejectError(err)
+      } finally {
+        setRejectingId(null)
+      }
+    },
+    [rejectOrder, rejectOrderMutation, refetch, setData, tab],
+  )
+
+  const handlePrimaryAction = useCallback(
+    async ({ order, mode }) => {
+      const action = order?.primaryAction
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      const canStartPreparing = mode === 'accepted' || mode === 'confirmed'
+      const canMarkReady = mode === 'preparing'
+      const canComplete = mode === 'ready'
+      if (!action && !canStartPreparing && !canMarkReady && !canComplete) {
+        setActionError(new Error('This order action is not available.'))
+        return
+      }
+
+      setActionError(null)
+      setActioningId(String(orderId))
+      try {
+        const actionKey = String(action?.key || '').toUpperCase()
+        const actionPath = String(action?.path || '')
+        const isCompleteAction =
+          canComplete &&
+          (tab === 'dinein' ||
+            actionKey === 'HANDOVER_TO_CUSTOMER' ||
+            (!action && tab === 'dinein') ||
+            actionPath.includes('/complete'))
+        const isHandoverAction = actionKey === 'HANDOVER_TO_CHAMP' || actionPath.includes('/handover')
+
+        if (isCompleteAction) {
+          await completeOrder(orderId)
+          setData((current) =>
+            removeCompletedOrderFromLiveBoard(current, {
+              board: tab,
+              order,
+            }),
+          )
+        } else if (action) {
+          await performPrimaryAction(action)
+          if (isHandoverAction) {
+            setData((current) =>
+              removeCompletedOrderFromLiveBoard(current, {
+                board: tab,
+                order,
+              }),
+            )
+          }
+        } else if (canMarkReady) {
+          const result = await markReady(orderId)
+          setData((current) =>
+            moveOrderToReadyOnLiveBoard(current, {
+              board: tab,
+              previousOrder: order,
+              readyOrder: result?.data || order,
+            }),
+          )
+        } else {
+          const result = await startPreparing(orderId)
+          setData((current) =>
+            moveOrderToPreparingOnLiveBoard(current, {
+              board: tab,
+              previousOrder: order,
+              preparingOrder: result?.data || order,
+            }),
+          )
+        }
+        setHandoverOrder(null)
+        await refetch()
+      } catch (err) {
+        setActionError(err)
+      } finally {
+        setActioningId(null)
+      }
+    },
+    [completeOrder, markReady, performPrimaryAction, refetch, setData, startPreparing, tab],
+  )
 
   const column = getColumns(tab, orders).find((col) => col.key === key)
   const items = column
@@ -33,7 +214,15 @@ export default function LiveOrderColumn() {
     : []
 
   if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading orders…</div>
-  if (error) return <div className="p-7 text-[13px] text-danger">Unable to load orders. <button onClick={refetch} className="underline">Try again</button></div>
+  if (error)
+    return (
+      <div className="p-7 text-[13px] text-danger">
+        Unable to load orders.{' '}
+        <button type="button" onClick={refetch} className="underline">
+          Try again
+        </button>
+      </div>
+    )
 
   return (
     <div className="pt-[26px] px-[28px] pb-10">
@@ -67,15 +256,62 @@ export default function LiveOrderColumn() {
         />
       </div>
 
+      {acceptError ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {acceptError.message || 'Failed to accept order.'}
+        </p>
+      ) : null}
+      {rejectError && !rejectOrder ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {rejectError.message || 'Failed to reject order.'}
+        </p>
+      ) : null}
+      {actionError && !handoverOrder ? (
+        <p className="mb-3 text-[12px] text-danger">
+          {actionError.message || 'Failed to update order.'}
+        </p>
+      ) : null}
+
       {items.length === 0 ? (
         <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[14px]">
           {items.map((order) =>
             isDineIn ? (
-              <DineInCard key={order.id} order={order} mode={key} dense onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onReject={setRejectOrder} />
+              <DineInCard
+                key={order.backendId || order.id}
+                order={order}
+                mode={key}
+                dense
+                onSelect={setSelectedOrder}
+                onAccept={handleAccept}
+                onPrimaryAction={handlePrimaryAction}
+                onReject={(payload) => {
+                  setRejectError(null)
+                  setRejectOrder(payload)
+                }}
+                accepting={acceptingId === String(order.backendId || order.id)}
+                rejecting={rejectingId === String(order.backendId || order.id)}
+                actioning={actioningId === String(order.backendId || order.id)}
+              />
             ) : (
-              <OrderCard key={order.id} order={order} mode={key} dense onSelect={setSelectedOrder} onAccept={setAcceptedOrder} onHandoverChamp={setHandoverOrder} onReject={setRejectOrder} />
+              <OrderCard
+                key={order.backendId || order.id}
+                order={order}
+                mode={key}
+                dense
+                onSelect={setSelectedOrder}
+                onAccept={handleAccept}
+                onPrimaryAction={handlePrimaryAction}
+                onHandoverChamp={setHandoverOrder}
+                onReject={(payload) => {
+                  setRejectError(null)
+                  setRejectOrder(payload)
+                }}
+                accepting={acceptingId === String(order.backendId || order.id)}
+                rejecting={rejectingId === String(order.backendId || order.id)}
+                actioning={actioningId === String(order.backendId || order.id)}
+              />
             ),
           )}
         </div>
@@ -98,16 +334,35 @@ export default function LiveOrderColumn() {
 
       <HandoverChampModal
         open={Boolean(handoverOrder)}
-        onClose={() => setHandoverOrder(null)}
+        onClose={() => {
+          setHandoverOrder(null)
+          setActionError(null)
+        }}
+        onConfirm={() => handlePrimaryAction(handoverOrder)}
         order={handoverOrder?.order}
+        isSubmitting={
+          actioningId ===
+          String(handoverOrder?.order?.backendId || handoverOrder?.order?.id || '')
+        }
+        error={actionError}
       />
 
       <RejectOrderModal
         open={Boolean(rejectOrder?.order)}
-        onClose={() => setRejectOrder(null)}
+        onClose={() => {
+          if (rejectingId) return
+          setRejectOrder(null)
+          setRejectError(null)
+        }}
+        onConfirm={handleReject}
         order={rejectOrder?.order}
         tab={tab}
         intent={rejectOrder?.intent}
+        isSubmitting={
+          rejectingId ===
+          String(rejectOrder?.order?.backendId || rejectOrder?.order?.id || '')
+        }
+        error={rejectError}
       />
     </div>
   )

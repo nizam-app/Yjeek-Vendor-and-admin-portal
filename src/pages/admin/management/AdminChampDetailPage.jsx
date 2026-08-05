@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Car, ChevronLeft, Mail, Star } from 'lucide-react'
+import { ChevronLeft, Mail, Star } from 'lucide-react'
 import editIcon from '../../../assets/icon-edit.png'
 import banIcon from '../../../assets/⛔.png'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
@@ -32,7 +35,7 @@ function VehicleLabel({ type }) {
   }
   return (
     <span className="inline-flex items-center gap-1">
-      <Car size={13} strokeWidth={1.8} />
+      <img src={carIcon} alt="" className="h-3.5 w-3.5 object-contain" />
       Car
     </span>
   )
@@ -41,33 +44,132 @@ function VehicleLabel({ type }) {
 export default function AdminChampDetailPage() {
   const { champId } = useParams()
   const navigate = useNavigate()
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const [tab, setTab] = useState('Overview')
   const [online, setOnline] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
+  const [actionBusy, setActionBusy] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
+
   const { data, error, isLoading, refetch } = useApiResource(
     () => adminService.getChampDetail(champId),
     [champId],
   )
 
+  const {
+    data: earnings,
+    error: earningsError,
+    isLoading: earningsLoading,
+    refetch: refetchEarnings,
+  } = useApiResource(
+    () => {
+      if (tab !== 'Earnings') return Promise.resolve({ data: null })
+      if (useRealFleet) {
+        return adminService.getAdminFleetChampEarnings(champId, { limit: 30 })
+      }
+      // Mock overview may embed earnings.
+      return Promise.resolve({ data: data?.earnings || null })
+    },
+    [tab, champId, useRealFleet, data?.earnings],
+  )
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const isOnline = online ?? data.online
+  const isSuspended = Boolean(data.isSuspended)
+  const isTerminated = Boolean(data.isTerminated)
+  const resolvedChampId = data.id || champId
+
+  const handleSuspendSuccess = async () => {
+    setActionError('')
+    setActionSuccess('Champ suspended.')
+    setOnline(false)
+    await refetch()
+  }
+
+  const handleTerminateSuccess = async () => {
+    setActionError('')
+    setActionSuccess('Champ terminated.')
+    setOnline(false)
+    await refetch()
+  }
+
+  const handleUnsuspend = async () => {
+    setActionBusy('unsuspend')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      await adminService.unsuspendAdminFleetChamp(resolvedChampId)
+      setActionSuccess('Champ unsuspended.')
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to unsuspend champ.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  const handleToggleOnline = async () => {
+    if (actionBusy === 'online' || isSuspended || isTerminated || data.canToggleOnline === false) return
+
+    const nextOnline = !isOnline
+    setActionBusy('online')
+    setActionError('')
+    setActionSuccess('')
+
+    try {
+      // Use route id — same {{champId}} Postman uses for fleet champ actions.
+      const response = await adminService.setAdminFleetChampOnline(champId, nextOnline)
+      if (response?.data && typeof response.data.online === 'boolean') {
+        setOnline(response.data.online)
+      } else {
+        setOnline(nextOnline)
+      }
+      setActionSuccess(nextOnline ? 'Champ set online.' : 'Champ set offline.')
+      await refetch()
+      // Prefer server overview after refresh.
+      setOnline(null)
+    } catch (err) {
+      setActionError(
+        formatApiErrorMessage(
+          err,
+          nextOnline ? 'Failed to set champ online.' : 'Failed to set champ offline.',
+        ),
+      )
+    } finally {
+      setActionBusy('')
+    }
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
       <AdminSuspendChampModal
         open={suspendOpen}
         onClose={() => setSuspendOpen(false)}
-        onConfirm={() => setOnline(false)}
+        champId={resolvedChampId}
+        onSuccess={handleSuspendSuccess}
       />
       <AdminTerminateChampModal
         open={terminateOpen}
         onClose={() => setTerminateOpen(false)}
         champName={data.name}
-        champId={data.id}
-        defaultCod={data.cod || 'BHD 12.000'}
+        champId={champId || resolvedChampId}
+        defaultCod={data.cod || 'BHD 0.000'}
+        onSuccess={handleTerminateSuccess}
       />
+
+      {actionError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {actionError}
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {actionSuccess}
+        </div>
+      ) : null}
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
@@ -89,14 +191,26 @@ export default function AdminChampDetailPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#17231c]">{data.name}</h2>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#e8f7ed] px-2.5 py-[3px] text-[11px] font-bold text-[#147940]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#1aa054]" />
-                {data.status}
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-[3px] text-[11px] font-bold',
+                  isSuspended
+                    ? 'bg-[#fdebec] text-[#d64044]'
+                    : 'bg-[#e8f7ed] text-[#147940]',
+                )}
+              >
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    isSuspended ? 'bg-[#d64044]' : 'bg-[#1aa054]',
+                  )}
+                />
+                {isSuspended ? 'Suspended' : data.status}
               </span>
               <Badge tone={tierTone(data.tier)}>{data.tier}</Badge>
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-[#7c8780]">
-              <span>{data.id}</span>
+              <span>{data.displayCode || data.id}</span>
               <span>·</span>
               <VehicleLabel type={data.vehicle} />
               <span>·</span>
@@ -120,15 +234,29 @@ export default function AdminChampDetailPage() {
             <Mail size={14} strokeWidth={1.8} className="text-[#59655e]" />
             Message
           </button>
+          {isSuspended ? (
+            <button
+              type="button"
+              disabled={actionBusy === 'unsuspend'}
+              onClick={handleUnsuspend}
+              className="inline-flex h-[36px] shrink-0 items-center rounded-full border border-[#1aa054] bg-white px-3.5 text-[13px] font-bold text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
+            >
+              {actionBusy === 'unsuspend' ? 'Unsuspending…' : 'Unsuspend'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSuspendOpen(true)}
+              className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#fdebec] px-3.5 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+            >
+              Suspend
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setSuspendOpen(true)}
-            className="inline-flex h-[36px] shrink-0 items-center rounded-full bg-[#fdebec] px-3.5 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
-          >
-            Suspend
-          </button>
-          <button
-            type="button"
+            onClick={() =>
+              navigate(`/admin/fleet/${encodeURIComponent(champId || resolvedChampId)}/edit`)
+            }
             className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#127338] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
             <img src={editIcon} alt="" className="h-3.5 w-3.5 object-contain" />
@@ -202,7 +330,7 @@ export default function AdminChampDetailPage() {
             <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
               <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Status &amp; controls</h3>
 
-              <div className="flex items-start  gap-3 border-b border-[#f0f2f0] pb-3">
+              <div className="flex items-start gap-3 border-b border-[#f0f2f0] pb-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#17231c]">Online</p>
                   <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
@@ -213,9 +341,16 @@ export default function AdminChampDetailPage() {
                   type="button"
                   role="switch"
                   aria-checked={isOnline}
-                  onClick={() => setOnline(!isOnline)}
+                  aria-busy={actionBusy === 'online'}
+                  disabled={
+                    actionBusy === 'online' ||
+                    isSuspended ||
+                    isTerminated ||
+                    data.canToggleOnline === false
+                  }
+                  onClick={handleToggleOnline}
                   className={cn(
-                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition',
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50',
                     isOnline ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
                   )}
                 >
@@ -239,27 +374,65 @@ export default function AdminChampDetailPage() {
               </div>
 
               <div className="mt-5 flex flex-col gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setSuspendOpen(true)}
-                  className="inline-flex h-[40px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
-                >
-                  Suspend champ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTerminateOpen(true)}
-                  className="inline-flex h-[36px] w-fit items-center justify-center gap-1.5 rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c]"
-                >
-                ⊘ 
-                  Terminate
-                </button>
+                {isTerminated ? (
+                  <p className="text-[12.5px] font-medium text-[#d64044]">
+                    This champ is terminated and cannot be reactivated.
+                  </p>
+                ) : isSuspended ? (
+                  <button
+                    type="button"
+                    disabled={actionBusy === 'unsuspend'}
+                    onClick={handleUnsuspend}
+                    className="inline-flex h-[40px] w-fit items-center justify-center rounded-full border border-[#1aa054] bg-white px-4 text-[13px] font-bold text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
+                  >
+                    {actionBusy === 'unsuspend' ? 'Unsuspending…' : 'Unsuspend champ'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setSuspendOpen(true)}
+                    className="inline-flex h-[40px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+                  >
+                    Suspend champ
+                  </button>
+                )}
+                {!isTerminated ? (
+                  <button
+                    type="button"
+                    onClick={() => setTerminateOpen(true)}
+                    className="inline-flex h-[36px] w-fit items-center justify-center gap-1.5 rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c]"
+                  >
+                    ⊘ Terminate
+                  </button>
+                ) : null}
               </div>
             </section>
           </div>
         </>
       ) : tab === 'Earnings' ? (
-        <AdminChampEarnings earnings={data.earnings} />
+        earningsLoading && !earnings ? (
+          <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-10 text-center text-[13px] text-[#7c8780]">
+            Loading earnings…
+          </div>
+        ) : earningsError ? (
+          <div className="rounded-[14px] border border-[#f2cccc] bg-[#fff5f5] px-5 py-6 text-[13px] text-[#a93e42]">
+            {formatApiErrorMessage(earningsError, 'Unable to load earnings.')}
+            <button
+              type="button"
+              onClick={refetchEarnings}
+              className="ml-2 font-medium underline"
+            >
+              Try again
+            </button>
+          </div>
+        ) : earnings ? (
+          <AdminChampEarnings earnings={earnings} />
+        ) : (
+          <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+            <p className="text-[14px] font-medium text-[#17231c]">Earnings</p>
+            <p className="mt-1 text-[12.5px] text-[#7c8780]">No earnings data available.</p>
+          </section>
+        )
       ) : (
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[14px] font-medium text-[#17231c]">{tab}</p>

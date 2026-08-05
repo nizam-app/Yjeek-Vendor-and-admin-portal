@@ -32,40 +32,66 @@ function ItemRow({ name, qty, price }) {
 function buildDeliveryReceipt(order) {
   if (order.receipt) return { ...order.receipt, isDineIn: false }
 
-  const customerName = order.customerName || String(order.customer || '').split(' · ')[0] || 'Sara A.'
+  const customerName = order.customerName || String(order.customer || '').split(' · ')[0] || '—'
   const items =
     order.itemsList?.length > 0
       ? order.itemsList.map((item) => ({
           name: item.name,
           qty: item.qty,
-          price: item.price.includes('BHD') ? item.price : `BHD ${item.price.replace(' BHD', '')}`,
+          price:
+            typeof item.price === 'string' && item.price.includes('BHD')
+              ? item.price
+              : `BHD ${String(item.price || '').replace(/ BHD/i, '')}`,
         }))
-      : [
-          { name: 'Chicken Shawarma', qty: 2, price: 'BHD 3.600' },
-          { name: 'Beef Burger', qty: 1, price: 'BHD 2.900' },
-          { name: 'Hummus', qty: 1, price: 'BHD 1.200' },
-          { name: 'Soft drink', qty: 2, price: 'BHD 0.800' },
-        ]
+      : []
 
-  const totalRaw = order.total || 'BHD 10.120'
-  const total = totalRaw.includes('BHD') ? totalRaw : `BHD ${totalRaw.replace(' BHD', '')}`
+  const totalRaw = order.total || '—'
+  const total = typeof totalRaw === 'string' && totalRaw.includes('BHD') ? totalRaw : String(totalRaw)
+  const dateSource = order.confirmedAt || order.createdAt || order.date
+  let date = order.date || '—'
+  if (dateSource && !order.date) {
+    const d = new Date(dateSource)
+    if (!Number.isNaN(d.getTime())) {
+      date = d.toLocaleString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    }
+  }
+
+  const typeLabel =
+    order.fulfillmentType === 'ON_DEMAND'
+      ? 'On Demand delivery'
+      : order.orderType
+        ? String(order.orderType)
+            .toLowerCase()
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase())
+        : order.receiptType || 'Delivery'
 
   return {
     isDineIn: false,
     badge: 'ORDER ACCEPTED',
-    branchName: order.branch || 'Green Kitchen — Seef',
-    branchAddress: order.branchAddress || 'Block 338, Road 3801, Seef · CR 12345',
-    orderId: order.receiptId || order.id.replace('#', '').replace('…', '') || 'YJK-2YK',
-    date: order.date || '16 Jun 2026 · 16:12',
-    type: order.receiptType || 'On Demand delivery',
+    branchName: order.branch || '—',
+    branchAddress:
+      order.branchAddress ||
+      (order.branchArea ? `${order.branchArea}` : '') ||
+      order.deliveryAddress?.formatted ||
+      '',
+    orderId: order.orderNumber || order.receiptId || order.id || '—',
+    date,
+    type: typeLabel,
     customer: customerName,
     items,
-    subtotal: order.subtotal || 'BHD 8.500',
-    delivery: order.deliveryFee || 'BHD 0.700',
-    vat: order.vat || 'BHD 0.920',
+    subtotal: order.subtotal || '—',
+    delivery: order.deliveryFee || 'BHD 0.000',
+    vat: order.vat || '—',
     vatLabel: 'VAT (10%)',
     total,
-    paid: order.paid || 'Card · ending 4421',
+    paid: order.paid || order.paymentMethod || '—',
   }
 }
 
@@ -77,33 +103,46 @@ function buildDineInReceipt(order) {
       ? order.itemsList.map((item) => ({
           name: item.name,
           qty: item.qty,
-          price: item.price.includes('BHD') ? item.price : `BHD ${item.price.replace(' BHD', '')}`,
+          price:
+            typeof item.price === 'string' && item.price.includes('BHD')
+              ? item.price
+              : `BHD ${String(item.price || '').replace(/ BHD/i, '')}`,
         }))
-      : [
-          { name: 'Mixed Grill Platter', qty: 1, price: 'BHD 12.000' },
-          { name: 'Hummus & Bread', qty: 2, price: 'BHD 4.000' },
-          { name: 'Fresh Juice', qty: 1, price: 'BHD 4.500' },
-        ]
+      : []
 
-  const totalRaw = order.total || 'BHD 20.500'
-  const total = totalRaw.includes('BHD') ? totalRaw : `BHD ${totalRaw.replace(' BHD', '')}`
+  const totalRaw = order.total || '—'
+  const total = typeof totalRaw === 'string' && totalRaw.includes('BHD') ? totalRaw : String(totalRaw)
+  const dateSource = order.confirmedAt || order.createdAt || order.when
+  let date = order.when || '—'
+  if (dateSource && !order.when) {
+    const d = new Date(dateSource)
+    if (!Number.isNaN(d.getTime())) {
+      date = d.toLocaleString(undefined, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    }
+  }
 
   return {
     isDineIn: true,
     badge: 'DINE-IN CONFIRMED',
-    branchName: order.branch || 'Green Kitchen — Manama',
-    branchAddress: order.branchAddress || 'Block 338, Road 3801, Seef · CR 12345',
-    orderId: order.receiptId || order.id.replace('#', '') || 'YJK-…70',
-    date: order.when || 'Today · 7:30 PM',
+    branchName: order.branch || '—',
+    branchAddress: order.branchAddress || (order.branchArea ? `${order.branchArea}` : '') || '',
+    orderId: order.orderNumber || order.receiptId || order.id || '—',
+    date,
     type: 'Dine-in',
-    guest: order.guest || 'Sara A.',
-    party: order.guests ? `${order.guests} guests` : '2 guests',
+    guest: order.guest || order.customerName || '—',
+    party: order.guests != null ? `${order.guests} guests` : '—',
     items,
-    subtotal: order.subtotal || 'BHD 20.500',
-    vat: order.vat || 'BHD 1.864',
+    subtotal: order.subtotal || '—',
+    vat: order.vat || '—',
     vatLabel: 'VAT (incl. 10%)',
     total,
-    paid: order.paid || 'Online · BenefitPay',
+    paid: order.paid || order.paymentMethod || '—',
   }
 }
 

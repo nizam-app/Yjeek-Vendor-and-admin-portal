@@ -1,43 +1,20 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Clock, Copy } from 'lucide-react'
-import { branches } from '../../data/mockData'
-import editIcon from '../../assets/icon-edit.png'
-
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+import { Copy } from 'lucide-react'
+import { useApiMutation } from '../../hooks/useApiMutation'
+import { useVendorBranch } from '../../hooks/vendor/useVendorBranch'
+import { branchService } from '../../services/vendor/branchService'
+import { ApiError, getFirstFieldErrorMessage } from '../../api/errors'
+import DeleteBranchModal from '../../components/DeleteBranchModal'
+import {
+  defaultUiOpeningHours,
+  mapApiOpeningHoursToUi,
+  UI_DAYS,
+} from '../../mappers/vendor/mapVendorOpeningHours'
 
 const labelClass = 'mb-1.5 block text-[13px] font-medium uppercase leading-[13px] text-[#69706E]'
 const inputClass =
   'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-medium text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
-
-function defaultHours() {
-  return {
-    Monday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Tuesday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Wednesday: {
-      open: true,
-      mode: 'split',
-      shifts: [
-        { from: '8:00 AM', to: '12:00 PM' },
-        { from: '4:00 PM', to: '10:00 PM' },
-      ],
-    },
-    Thursday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-    Friday: { open: false, mode: 'single', shifts: [] },
-    Saturday: { open: true, mode: 'single', shifts: [{ from: '10:00 AM', to: '12:00 AM' }] },
-    Sunday: { open: true, mode: 'single', shifts: [{ from: '9:00 AM', to: '11:00 PM' }] },
-  }
-}
-
-function findBranch(branchId) {
-  if (!branchId) return null
-  const decoded = decodeURIComponent(branchId)
-  return (
-    branches.find((b) => b.id === decoded) ||
-    branches.find((b) => b.name === decoded) ||
-    branches.find((b) => b.id === decoded.toLowerCase())
-  )
-}
 
 function buildForm(branch) {
   const radiusFromLabel = String(branch.radius || '').replace(/[^\d.]/g, '')
@@ -48,11 +25,26 @@ function buildForm(branch) {
     name: branch.name ?? '',
     address: branch.address ?? '',
     phone: branch.phone ?? '',
-    radiusKm: branch.radiusKm || radiusFromLabel || '5',
-    etaMin: branch.etaMin || etaFromLabel || '30',
-    minOrderValue: branch.minOrderValue || minFromLabel || '2.000',
-    hours: defaultHours(),
+    radiusKm: String(branch.radiusKm ?? (radiusFromLabel || '5')),
+    etaMin: String(branch.etaMin ?? (etaFromLabel || '30')),
+    minOrderValue: String(
+      branch.minOrderValue ??
+        branch.minOrderAmount ??
+        (minFromLabel || '2.000'),
+    ),
+    hours: mapApiOpeningHoursToUi(branch.openingHours) || defaultUiOpeningHours(),
   }
+}
+
+function getSaveErrorMessage(error) {
+  if (!error) return 'Unable to save branch. Please try again.'
+  if (error instanceof ApiError) {
+    const fieldMessage = getFirstFieldErrorMessage(error.fieldErrors)
+    if (fieldMessage) return fieldMessage
+    if (error.message) return error.message
+  }
+  if (typeof error?.message === 'string' && error.message) return error.message
+  return 'Unable to save branch. Please try again.'
 }
 
 function Toggle({ checked, onChange, label }) {
@@ -75,7 +67,7 @@ function Toggle({ checked, onChange, label }) {
 function ShiftPill({ from, to }) {
   return (
     <div className="box-border inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-lg border-[1.1px] border-[#E0E6E0] bg-white px-2.5 py-[5px]">
-    <span className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]">🕒</span>
+      <span className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]">🕒</span>
       <span className="whitespace-nowrap text-[12.5px] leading-[15px] font-medium text-[#1A1A1A]">
         {from} – {to}
       </span>
@@ -93,7 +85,6 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         isOpen ? 'border-[#E0E6E0] bg-white' : 'border-[#E0E6E0] bg-[#F2F4F2]'
       }`}
     >
-      {/* top */}
       <div className="flex h-6 w-full flex-row items-center gap-2.5 self-stretch">
         <p
           className={`shrink-0 text-[14px] leading-[17px] font-bold ${
@@ -132,7 +123,6 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         <Toggle checked={isOpen} onChange={onToggle} label={`${day} open`} />
       </div>
 
-      {/* tl — time line (horizontal for split) */}
       {!isOpen ? (
         <p className="text-[12.5px] leading-[15px] font-medium text-[#949C94]">Closed all day</p>
       ) : isSplit ? (
@@ -155,7 +145,6 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         </div>
       )}
 
-      {/* manage-line */}
       <div className="flex h-[18px] w-full flex-row items-center gap-3.5 self-stretch">
         {!isOpen ? (
           <button
@@ -171,7 +160,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
               type="button"
               className="inline-flex items-center gap-1 text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
             >
-            ✎ Edit break
+              ✎ Edit break
             </button>
             <button
               type="button"
@@ -198,15 +187,30 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
 export default function EditBranch() {
   const { branchId } = useParams()
   const navigate = useNavigate()
-  const branch = useMemo(() => findBranch(branchId), [branchId])
+  const decodedId = branchId ? decodeURIComponent(branchId) : ''
+  const { data: branch, error, isLoading, refetch } = useVendorBranch(decodedId)
+  const { mutate: saveBranch, isLoading: isSaving } = useApiMutation((payload) =>
+    branchService.updateBranch(decodedId, payload),
+  )
+  const { mutate: removeBranch, isLoading: isDeleting } = useApiMutation(() =>
+    branchService.deleteBranch(decodedId),
+  )
   const [form, setForm] = useState(null)
+  const [saveError, setSaveError] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     if (!branch) return
     setForm(buildForm(branch))
+    setSaveError('')
   }, [branch])
 
-  if (!branch) {
+  if (isLoading) {
+    return <div className="px-[28px] pt-[26px] pb-10 text-[13px] text-ink-muted">Loading branch…</div>
+  }
+
+  if (error || !branch) {
     return (
       <div className="px-[28px] pt-[26px] pb-10">
         <Link
@@ -215,7 +219,14 @@ export default function EditBranch() {
         >
           ‹ Branches
         </Link>
-        <p className="text-[14px] text-ink-muted">Branch not found.</p>
+        <p className="text-[14px] text-ink-muted">
+          {error?.status === 404 || !branch ? 'Branch not found.' : 'Unable to load branch.'}{' '}
+          {error ? (
+            <button type="button" onClick={refetch} className="underline">
+              Try again
+            </button>
+          ) : null}
+        </p>
       </div>
     )
   }
@@ -224,6 +235,7 @@ export default function EditBranch() {
 
   function updateField(field, value) {
     setForm((c) => ({ ...c, [field]: value }))
+    setSaveError('')
   }
 
   function toggleDay(day) {
@@ -265,14 +277,6 @@ export default function EditBranch() {
     }))
   }
 
-  function setDayMode(day, mode) {
-    if (mode === 'split') {
-      addBreak(day)
-      return
-    }
-    removeBreak(day)
-  }
-
   function removeBreak(day) {
     setForm((c) => ({
       ...c,
@@ -287,11 +291,19 @@ export default function EditBranch() {
     }))
   }
 
+  function setDayMode(day, mode) {
+    if (mode === 'split') {
+      addBreak(day)
+      return
+    }
+    removeBreak(day)
+  }
+
   function copyMondayToAll() {
     setForm((c) => {
       const monday = c.hours.Monday
       const hours = { ...c.hours }
-      DAYS.forEach((day) => {
+      UI_DAYS.forEach((day) => {
         hours[day] = {
           open: monday.open,
           mode: monday.mode,
@@ -302,13 +314,52 @@ export default function EditBranch() {
     })
   }
 
-  function handleSave() {
-    navigate('/branches')
+  async function handleSave() {
+    if (isSaving || isDeleting) return
+    setSaveError('')
+    try {
+      await saveBranch({
+        name: form.name,
+        address: form.address,
+        phone: form.phone,
+        deliveryRadiusKm: form.radiusKm,
+        etaMin: form.etaMin,
+        minOrderValue: form.minOrderValue,
+        hours: form.hours,
+      })
+      navigate('/branches')
+    } catch (err) {
+      setSaveError(getSaveErrorMessage(err))
+    }
+  }
+
+  function openDeleteModal() {
+    if (isSaving || isDeleting) return
+    setDeleteError('')
+    setDeleteOpen(true)
+  }
+
+  function closeDeleteModal() {
+    if (isDeleting) return
+    setDeleteOpen(false)
+    setDeleteError('')
+  }
+
+  async function handleConfirmDelete() {
+    if (isSaving || isDeleting) return
+    setDeleteError('')
+    setSaveError('')
+    try {
+      await removeBranch()
+      setDeleteOpen(false)
+      navigate('/branches')
+    } catch (err) {
+      setDeleteError(getSaveErrorMessage(err) || 'Unable to delete branch. Please try again.')
+    }
   }
 
   return (
     <div className="px-[28px] pt-[18px] pb-10">
-      {/* Page header */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <Link
           to="/branches"
@@ -324,15 +375,21 @@ export default function EditBranch() {
         <button
           type="button"
           onClick={handleSave}
-          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-4 text-[13px] font-medium text-white hover:brightness-[0.96]"
+          disabled={isSaving || isDeleting}
+          className="inline-flex h-[40px] items-center justify-center rounded-full bg-[#1AA34D] px-4 text-[13px] font-medium text-white hover:brightness-[0.96] disabled:opacity-60 disabled:pointer-events-none"
         >
-          Save changes
+          {isSaving ? 'Saving…' : 'Save changes'}
         </button>
       </div>
 
-      {/* Top grid */}
+      {saveError ? (
+        <div className="mb-4 flex items-center gap-2.5 rounded-md bg-danger-soft px-[14px] py-3 text-[13px] text-danger">
+          <span>⚠️</span>
+          <span>{saveError}</span>
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
-        {/* Branch details */}
         <section className="rounded-[14px] border border-border bg-white p-5">
           <h2 className="mb-4 text-[16px] font-bold text-ink">Branch details</h2>
 
@@ -343,6 +400,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.name}
                 onChange={(e) => updateField('name', e.target.value)}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -352,6 +410,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.address}
                 onChange={(e) => updateField('address', e.target.value)}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -361,6 +420,7 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.phone}
                 onChange={(e) => updateField('phone', e.target.value)}
+                disabled={isSaving || isDeleting}
               />
             </div>
 
@@ -371,6 +431,7 @@ export default function EditBranch() {
                   className={inputClass}
                   value={form.radiusKm}
                   onChange={(e) => updateField('radiusKm', e.target.value)}
+                  disabled={isSaving || isDeleting}
                 />
               </div>
               <div>
@@ -379,6 +440,7 @@ export default function EditBranch() {
                   className={inputClass}
                   value={form.etaMin}
                   onChange={(e) => updateField('etaMin', e.target.value)}
+                  disabled={isSaving || isDeleting}
                 />
               </div>
             </div>
@@ -389,12 +451,12 @@ export default function EditBranch() {
                 className={inputClass}
                 value={form.minOrderValue}
                 onChange={(e) => updateField('minOrderValue', e.target.value)}
+                disabled={isSaving || isDeleting}
               />
             </div>
           </div>
         </section>
 
-        {/* Right stack */}
         <div className="flex flex-col gap-3">
           <section className="rounded-[14px] border border-border bg-white  px-5 py-4.5">
             <h2 className="mb-3 text-[16px] font-bold text-ink">Delivery coverage</h2>
@@ -415,7 +477,7 @@ export default function EditBranch() {
               <button
                 type="button"
                 onClick={() =>
-                  navigate(`/branches/${encodeURIComponent(branch.id || branchId)}/menu`)
+                  navigate(`/branches/${encodeURIComponent(branch.id || decodedId)}/menu`)
                 }
                 className="shrink-0 text-[13px] font-medium text-[#127036] hover:underline"
               >
@@ -434,7 +496,9 @@ export default function EditBranch() {
               </div>
               <button
                 type="button"
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-medium text-white hover:brightness-[0.96]"
+                onClick={openDeleteModal}
+                disabled={isSaving || isDeleting}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-[9px] bg-[#DB2626] px-3.5 py-2 text-[12.5px] font-medium text-white hover:brightness-[0.96] disabled:opacity-60 disabled:pointer-events-none"
               >
                 🗑
                 Delete
@@ -444,7 +508,6 @@ export default function EditBranch() {
         </div>
       </div>
 
-      {/* Working hours */}
       <section className="rounded-[14px] border border-border bg-white p-5">
         <h2 className="mb-2 text-[16px] font-bold text-ink">Working hours</h2>
 
@@ -457,7 +520,6 @@ export default function EditBranch() {
           Copy Monday&apos;s hours to all days
         </button>
 
-        {/* Left: Mon–Thu · Right: Fri–Sun */}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <div className="flex flex-col gap-2.5">
             {['Monday', 'Tuesday', 'Wednesday', 'Thursday'].map((day) => (
@@ -488,6 +550,15 @@ export default function EditBranch() {
           </div>
         </div>
       </section>
+
+      <DeleteBranchModal
+        open={deleteOpen}
+        branchName={branch.name}
+        isDeleting={isDeleting}
+        error={deleteError}
+        onClose={closeDeleteModal}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

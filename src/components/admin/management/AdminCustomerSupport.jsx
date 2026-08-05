@@ -34,22 +34,30 @@ export function AdminCustomerSupport({ support }) {
               </tr>
             </thead>
             <tbody>
-              {support.tickets.map((row) => (
-                <tr key={row.ticket} className="border-b border-[#f0f2f0] last:border-0 hover:bg-[#fafbfa]">
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] font-bold text-[#17231c]">
-                    {row.ticket}
+              {support.tickets?.length ? (
+                support.tickets.map((row) => (
+                  <tr key={row.id || row.ticket} className="border-b border-[#f0f2f0] last:border-0 hover:bg-[#fafbfa]">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] font-bold text-[#17231c]">
+                      {row.ticket}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.subject}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.order}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5">
+                      <Badge tone={statusTone(row.status)}>{row.status}</Badge>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.date}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.time}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#7c8780]">{row.updated}</td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.remark}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-[#7c8780]">
+                    No support tickets yet.
                   </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.subject}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.order}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5">
-                    <Badge tone={statusTone(row.status)}>{row.status}</Badge>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.date}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.time}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#7c8780]">{row.updated}</td>
-                  <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">{row.remark}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

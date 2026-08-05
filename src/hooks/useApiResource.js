@@ -26,19 +26,25 @@ export function useApiResource(loader, dependencies = []) {
       const response = await loaderRef.current()
       if (requestId !== requestIdRef.current) return
 
-      setState({
+      setState((current) => ({
+        ...current,
         data: response?.data ?? null,
         meta: response?.meta ?? null,
         error: null,
         isLoading: false,
-      })
+      }))
     } catch (error) {
       if (requestId !== requestIdRef.current) return
       if (error?.name === 'AbortError') {
         setState((current) => ({ ...current, isLoading: false }))
         return
       }
-      setState({ data: null, meta: null, error, isLoading: false })
+      // Keep previous data on refresh failure so the board does not flash empty.
+      setState((current) => ({
+        ...current,
+        error,
+        isLoading: false,
+      }))
     }
   }, dependencies)
 
@@ -49,5 +55,16 @@ export function useApiResource(loader, dependencies = []) {
     }
   }, [load])
 
-  return { ...state, refetch: load }
+  const setData = useCallback((updater) => {
+    setState((current) => ({
+      ...current,
+      data: typeof updater === 'function' ? updater(current.data) : updater,
+    }))
+  }, [])
+
+  return {
+    ...state,
+    refetch: load,
+    setData,
+  }
 }

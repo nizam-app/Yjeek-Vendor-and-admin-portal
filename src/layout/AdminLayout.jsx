@@ -19,6 +19,7 @@ import {
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { cn } from '../components/admin/cn'
 
 const dashboardChildren = [
   ['Full Overview', '/admin/dashboard'],
@@ -59,12 +60,24 @@ const pageTitles = {
   '/admin/fleet/suppliers': 'Fleet Management · Suppliers',
   '/admin/fleet/suppliers/new': 'Fleet Management · Suppliers',
   '/admin/customers': 'Customer Management',
-  '/admin/marketing': 'Marketing',
-  '/admin/sla-models': 'SLA Models',
+  '/admin/marketing': 'Marketing · Notifications',
+  '/admin/marketing/notifications/customers': 'Customer Management',
+  '/admin/marketing/notifications/vendors': 'Vendor Management',
+  '/admin/marketing/promo-codes': 'Marketing · Promo codes',
+  '/admin/marketing/promo-codes/new': 'Marketing · Create promo code',
+  '/admin/sla-models': 'SLA Models · Vendor SLA',
+  '/admin/sla-models/champ': 'SLA Models · Champ SLA',
+  '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
+
   '/admin/ui-editor': 'UI Editor',
-  '/admin/users': 'Users',
-  '/admin/reports': 'Reports',
-  '/admin/settings': 'Settings',
+  '/admin/users': 'Users & Roles · Users',
+  '/admin/users/new': 'Users & Roles · Create user',
+  '/admin/users/roles/new': 'Users & Roles · Create role',
+  '/admin/users/roles': 'Users & Roles · Roles',
+  '/admin/users/activity': 'Users & Roles · Activity log',
+  '/admin/reports': 'Reports · Orders',
+  '/admin/settings': 'Settings · General',
+  '/admin/account': 'Account',
 }
 
 function AdminSidebar() {
@@ -104,7 +117,7 @@ function AdminSidebar() {
               : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
           }`}
         >
-          <Activity size={15} strokeWidth={1.8} />
+          <Activity size={15} strokeWidth={1.8} className={`${dashboardActive ? 'text-[#2EC75E]' : 'text-white'}`}/>
           <span className="min-w-0 flex-1 text-left">Live Dashboard</span>
           <ChevronDown
             size={12}
@@ -120,7 +133,7 @@ function AdminSidebar() {
                 to={to}
                 end={to !== '/admin/scheduled'}
                 className={({ isActive }) =>
-                  `flex h-[27px] items-center gap-2 rounded-md px-[34px] text-[12.5px] font-medium transition ${
+                  `flex h-[27px] mt-1 items-center gap-2 rounded-sm px-[34px] text-[12.5px] font-medium transition ${
                     isActive || (to === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
                       ? 'bg-[#28473a] font-medium text-white'
                       : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
@@ -145,20 +158,39 @@ function AdminSidebar() {
               }`
             }
           >
-            <Icon size={15} strokeWidth={1.8} />
-            {label}
+            {({ isActive }) => (
+              <>
+                <Icon
+                  size={15}
+                  strokeWidth={1.8}
+                  className={isActive ? 'text-[#2EC75E]' : undefined}
+                />
+                {label}
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
       <div>
-        <div className="flex min-h-[36px] items-center gap-2 rounded-md bg-[#234438] px-2.5">
-          <div className="grid h-[18px] w-[25px] place-items-center rounded-full bg-[#36c66b] text-[9px] font-bold text-[#0e3423]">SA</div>
+        <button
+          type="button"
+          onClick={() => navigate('/admin/account')}
+          className={cn(
+            'flex min-h-[36px] w-full items-center gap-2 rounded-md px-2.5 text-left transition',
+            pathname === '/admin/account' || pathname.startsWith('/admin/account/')
+              ? 'bg-[#2a5544]'
+              : 'bg-[#234438] hover:bg-[#2a5544]',
+          )}
+        >
+          <div className="grid h-[18px] w-[25px] place-items-center rounded-full bg-[#36c66b] text-[9px] font-bold text-[#0e3423]">
+            {user?.initials || '—'}
+          </div>
           <div className="min-w-0">
             <div className="text-[12px] text-white">{user?.name}</div>
             <div className="truncate text-[10px] font-normal text-[#9fb2a8]">{user?.email}</div>
           </div>
-        </div>
+        </button>
         <button onClick={signOut} className="flex h-[32px] w-full items-center gap-2 px-2.5 text-[13px] font-medium text-[#ef817c] hover:text-[#ffaba7]">
           <LogOut size={14} />
           Sign out
@@ -169,8 +201,19 @@ function AdminSidebar() {
 }
 
 function AdminTopbar() {
-  const { pathname } = useLocation()
-  const title = pageTitles[pathname]
+  const { pathname, search } = useLocation()
+  const settingsTab = new URLSearchParams(search).get('tab') || 'general'
+  const settingsTitles = {
+    general: 'Settings · General',
+    localization: 'Settings · Localization & regions',
+    notifications: 'Settings · Notifications',
+    security: 'Settings · Security',
+    integrations: 'Settings · Integrations',
+  }
+
+  const title =
+    (pathname === '/admin/settings' ? settingsTitles[settingsTab] || settingsTitles.general : null)
+    || pageTitles[pathname]
     || (pathname.startsWith('/admin/scheduled/assign') ? 'Scheduled Orders · Assign champ' : null)
     || (pathname.startsWith('/admin/scheduled/') ? 'Scheduled Orders' : null)
     || (pathname.startsWith('/admin/stores/') ? 'Store Management' : null)
@@ -178,6 +221,14 @@ function AdminTopbar() {
     || (pathname.startsWith('/admin/fleet/suppliers') ? 'Fleet Management · Suppliers' : null)
     || (pathname.startsWith('/admin/fleet/') ? 'Fleet Management · Champs' : null)
     || (pathname.startsWith('/admin/customers/') ? 'Customer Management' : null)
+    || (pathname.startsWith('/admin/users/') ? 'Users & Roles · User' : null)
+    || (() => {
+      const match = pathname.match(/^\/admin\/marketing\/notifications\/([^/]+)$/)
+      if (!match) return null
+      const id = match[1]
+      if (id === 'customers' || id === 'vendors') return null
+      return id === 'ntf-7791' || id === 'ntf-7770' ? 'Customer Management' : 'Vendor Management'
+    })()
     || 'Admin Console'
 
   return (

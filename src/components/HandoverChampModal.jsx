@@ -12,11 +12,18 @@ const checklistItems = [
   'Bag labelled with order #',
 ]
 
-export default function HandoverChampModal({ open, onClose, order }) {
+export default function HandoverChampModal({
+  open,
+  onClose,
+  onConfirm,
+  order,
+  isSubmitting = false,
+  error = null,
+}) {
   useEffect(() => {
     if (!open) return
     function onKeyDown(e) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape' && !isSubmitting) onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     document.body.style.overflow = 'hidden'
@@ -24,7 +31,7 @@ export default function HandoverChampModal({ open, onClose, order }) {
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = ''
     }
-  }, [open, onClose])
+  }, [open, isSubmitting, onClose])
 
   if (!open || !order) return null
 
@@ -32,7 +39,12 @@ export default function HandoverChampModal({ open, onClose, order }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true">
-      <button type="button" className="absolute inset-0 bg-[rgba(0,0,0,0.25)]" aria-label="Close handover modal" onClick={onClose} />
+      <button
+        type="button"
+        className="absolute inset-0 bg-[rgba(0,0,0,0.25)]"
+        aria-label="Close handover modal"
+        onClick={isSubmitting ? undefined : onClose}
+      />
       <div className="relative w-[640px] max-w-full bg-white rounded-[16px]  shadow-[0px_12px_40px_rgba(41,120,219,0.18)] overflow-hidden">
         <div className="flex flex-col py-[18px] gap-4">
           <div className="flex items-center justify-between gap-3 px-[24px]">
@@ -46,6 +58,7 @@ export default function HandoverChampModal({ open, onClose, order }) {
               type="button"
               className="w-8 h-8 rounded-[8px] border-0 bg-transparent text-[#949C94] hover:bg-[#f7f9f7] grid place-items-center shrink-0"
               onClick={onClose}
+              disabled={isSubmitting}
               aria-label="Close"
             >
               <X size={18} strokeWidth={2} />
@@ -76,13 +89,19 @@ export default function HandoverChampModal({ open, onClose, order }) {
           </div>
 
           <div className="px-[24px]">
+            {error ? (
+              <p className="mb-3 rounded-[8px] bg-danger-soft px-3 py-2 text-[12px] text-danger">
+                {error.message || 'Unable to hand over this order.'}
+              </p>
+            ) : null}
             <button
               type="button"
-              className="flex items-center justify-center gap-2 w-full h-12 bg-green-primary rounded-[10px] text-[14px] font-bold leading-[17px] text-white hover:brightness-[0.96]"
-              onClick={onClose}
+              className="flex items-center justify-center gap-2 w-full h-12 bg-green-primary rounded-[10px] text-[14px] font-bold leading-[17px] text-white hover:brightness-[0.96] disabled:opacity-60"
+              onClick={onConfirm}
+              disabled={isSubmitting}
             >
               <Check size={16} strokeWidth={3} />
-              Hand over to champ
+              {isSubmitting ? 'Handing over…' : 'Hand over to champ'}
             </button>
           </div>
         </div>

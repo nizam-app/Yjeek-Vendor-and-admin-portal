@@ -1,10 +1,25 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Car, ChevronDown, ChevronLeft } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ChevronDown, ChevronLeft } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
+import carIcon from '../../../assets/💨.png'
 import uploadIcon from '../../../assets/⬆.png'
 import imageUploadIcon from '../../../assets/🖼.png'
 import { cn } from '../../../components/admin/cn'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import {
+  CHAMP_DOC_SLOT_META,
+  mapAdminChampDetailToForm,
+} from '../../../mappers/admin/mapAdminFleet'
+import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
+import { adminService } from '../../../services/adminService'
+import {
+  ADMIN_IMAGE_UPLOAD_ACCEPT,
+  ADMIN_IMAGE_UPLOAD_MAX_BYTES,
+  adminUploadService,
+  validateAdminImageFile,
+} from '../../../services/admin/uploadService'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -32,7 +47,16 @@ const STORE_TYPES = [
   'Stationery',
   'Baby & Kids',
   'Sports',
+  'Flowers',
 ]
+
+const MOCK_SUPPLIERS = [
+  { id: '', name: 'Yjeek Fleet (In-house)' },
+  { id: '', name: 'SwiftFleet' },
+  { id: '', name: 'PrimeRide' },
+]
+
+const EMPTY_DOCS = Object.fromEntries(Object.keys(CHAMP_DOC_SLOT_META).map((key) => [key, '']))
 
 function Field({ label, children, className }) {
   return (
@@ -57,18 +81,123 @@ function Select({ children, ...props }) {
   )
 }
 
-function UploadBox({ label, variant = 'file' }) {
+function UploadBox({ label, variant = 'file', imageUrl = '', category = 'documents', onUrlChange }) {
+  const inputRef = useRef(null)
+  const localPreviewRef = useRef(null)
+  const [localPreviewUrl, setLocalPreviewUrl] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState(null)
   const iconSrc = variant === 'image' ? imageUploadIcon : uploadIcon
 
+  const revokeLocalPreview = () => {
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current)
+      localPreviewRef.current = null
+    }
+    setLocalPreviewUrl('')
+  }
+
+  useEffect(
+    () => () => {
+      if (localPreviewRef.current) {
+        URL.revokeObjectURL(localPreviewRef.current)
+        localPreviewRef.current = null
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (imageUrl && !String(imageUrl).startsWith('blob:') && localPreviewRef.current) {
+      revokeLocalPreview()
+    }
+  }, [imageUrl])
+
+  const handlePick = () => {
+    if (isUploading) return
+    inputRef.current?.click()
+  }
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setUploadError(null)
+
+    try {
+      validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
+    } catch (err) {
+      setUploadError(err)
+      return
+    }
+
+    revokeLocalPreview()
+    const objectUrl = URL.createObjectURL(file)
+    localPreviewRef.current = objectUrl
+    setLocalPreviewUrl(objectUrl)
+
+    setIsUploading(true)
+    try {
+      const result = await adminUploadService.uploadFleetImage(file, {
+        feature: 'fleet',
+        category,
+      })
+      const url = result?.data?.url
+      if (!url) {
+        throw new Error('Upload succeeded but no image URL was returned.')
+      }
+      onUrlChange?.(url)
+    } catch (err) {
+      setUploadError(err)
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const displayUrl = localPreviewUrl || resolveAdminMediaUrl(imageUrl) || imageUrl || ''
+  const hasImage = Boolean(displayUrl)
+
   return (
-    <button
-      type="button"
-      className="flex h-[110px] w-[140px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-[10px] border border-dashed border-[#d5dbd7] bg-[#f6f8f6] transition hover:border-[#1aa054] hover:bg-[#eef7f1]"
-    >
-      <img src={iconSrc} alt="" className="h-5 w-5 object-contain" />
-      <span className="px-2 text-center text-[12px] font-bold leading-tight text-[#17231c]">{label}</span>
-      <span className="text-[12px] font-medium text-[#1aa054]">Upload</span>
-    </button>
+    <div className="flex w-[140px] shrink-0 flex-col gap-1">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <button
+        type="button"
+        onClick={handlePick}
+        disabled={isUploading}
+        className={cn(
+          'relative flex h-[110px] w-full flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[10px] border border-dashed border-[#d5dbd7] bg-[#f6f8f6] transition hover:border-[#1aa054] hover:bg-[#eef7f1]',
+          isUploading && 'cursor-wait opacity-80',
+        )}
+      >
+        {hasImage ? (
+          <img src={displayUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : null}
+        <span
+          className={cn(
+            'relative z-[1] flex flex-col items-center gap-1.5 px-2',
+            hasImage && 'rounded-md bg-black/45 px-2 py-1.5 text-white',
+          )}
+        >
+          {!hasImage ? <img src={iconSrc} alt="" className="h-5 w-5 object-contain" /> : null}
+          <span className="text-center text-[12px] font-bold leading-tight">{label}</span>
+          <span className={cn('text-[12px] font-medium', hasImage ? 'text-white' : 'text-[#1aa054]')}>
+            {isUploading ? 'Uploading…' : hasImage ? 'Replace' : 'Upload'}
+          </span>
+        </span>
+      </button>
+      {uploadError ? (
+        <p className="text-[11px] leading-snug text-[#b42318]">
+          {formatApiErrorMessage(uploadError, 'Upload failed.')}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -98,13 +227,24 @@ function Card({ title, children }) {
   )
 }
 
-function DocSection({ title, items }) {
+function DocSection({ title, slots, docs, onDocChange }) {
   return (
     <Card title={title}>
       <div className="flex flex-wrap gap-3">
-        {items.map(({ label, variant }) => (
-          <UploadBox key={label} label={label} variant={variant} />
-        ))}
+        {slots.map((slotKey) => {
+          const meta = CHAMP_DOC_SLOT_META[slotKey]
+          if (!meta) return null
+          return (
+            <UploadBox
+              key={slotKey}
+              label={meta.label}
+              variant={meta.kind === 'document' ? 'file' : 'image'}
+              category={meta.category}
+              imageUrl={docs[slotKey] || ''}
+              onUrlChange={(url) => onDocChange(slotKey, url)}
+            />
+          )
+        })}
       </div>
     </Card>
   )
@@ -112,14 +252,27 @@ function DocSection({ title, items }) {
 
 export default function AdminAddChampPage() {
   const navigate = useNavigate()
-  const goBack = () => navigate('/admin/fleet')
+  const { champId } = useParams()
+  const isEdit = Boolean(champId)
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
+  const goBack = () => {
+    if (isEdit) {
+      navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
+      return
+    }
+    navigate('/admin/fleet')
+  }
 
   const [form, setForm] = useState({
-    fullName: 'Khalid Ahmed',
-    phone: '+973 3xxx xxxx',
-    email: 'champ@email.com',
+    fullName: isEdit ? '' : 'Khalid Ahmed',
+    phone: isEdit ? '' : '+973 3xxx xxxx',
+    email: isEdit ? '' : 'champ@email.com',
     nationality: 'Bahraini',
+    supplierId: '',
     supplier: 'Yjeek Fleet (In-house)',
+    city: 'Manama',
+    zone: 'Adliya',
+    tier: 'BRONZE',
     cpr: '',
     cprExpiry: '',
     birthDate: '',
@@ -129,11 +282,11 @@ export default function AdminAddChampPage() {
     visaExpiry: '',
     insuranceExpiry: '',
     licenseExpiry: '',
-    plate: '12345',
-    make: 'Honda',
-    model: 'PCX',
-    color: 'Red',
-    year: '2023',
+    plate: isEdit ? '' : '12345',
+    make: isEdit ? '' : 'Honda',
+    model: isEdit ? '' : 'PCX',
+    color: isEdit ? '' : 'Red',
+    year: isEdit ? '' : '2023',
     vehicleType: 'Bike',
     specialItems: true,
     dailyLimit: 'BHD 50.000',
@@ -141,13 +294,164 @@ export default function AdminAddChampPage() {
     onLimit: 'Stop cash orders',
   })
 
+  const [docs, setDocs] = useState(() => ({ ...EMPTY_DOCS }))
   const [specialTypes, setSpecialTypes] = useState(['Age-restricted 18+', 'Pharmacy', 'Fragile'])
-  const [storeTypes, setStoreTypes] = useState(['Groceries', 'Food'])
+  const [storeTypes, setStoreTypes] = useState(isEdit ? [] : ['Groceries', 'Food'])
+  const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS)
+  const [suppliersError, setSuppliersError] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [createdResult, setCreatedResult] = useState(null)
+  const [loadingEdit, setLoadingEdit] = useState(isEdit)
+  const [loadError, setLoadError] = useState('')
 
   const update = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
   const toggleChip = (list, setList, value) => {
     setList((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]))
+  }
+
+  const onDocChange = (slotKey, url) => {
+    setDocs((prev) => ({ ...prev, [slotKey]: url }))
+  }
+
+  useEffect(() => {
+    if (!useRealFleet) return undefined
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await adminService.listAdminFleetSuppliers()
+        if (cancelled) return
+        const list = result?.data?.suppliers || []
+        setSuppliers(list)
+        setSuppliersError(list.length ? '' : 'No suppliers found. Create a supplier first.')
+        if (list.length && !isEdit) {
+          setForm((prev) => ({
+            ...prev,
+            supplierId: prev.supplierId || list[0].id,
+            supplier: prev.supplierId ? prev.supplier : list[0].name,
+          }))
+        }
+      } catch (err) {
+        if (cancelled) return
+        setSuppliersError(formatApiErrorMessage(err, 'Failed to load suppliers.'))
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealFleet, isEdit])
+
+  useEffect(() => {
+    if (!isEdit || !champId || !useRealFleet) {
+      setLoadingEdit(false)
+      return undefined
+    }
+
+    let cancelled = false
+    setLoadingEdit(true)
+    setLoadError('')
+
+    ;(async () => {
+      try {
+        const [detailResult, docsResult] = await Promise.all([
+          adminService.getChampDetail(champId),
+          adminService.listChampDocuments(champId).catch(() => ({ data: null })),
+        ])
+        if (cancelled) return
+        const mapped = mapAdminChampDetailToForm(detailResult?.data || detailResult, docsResult?.data)
+        const {
+          storeTypes: nextStoreTypes,
+          specialTypes: nextSpecialTypes,
+          docs: nextDocs,
+          ...nextForm
+        } = mapped
+        setForm((prev) => ({ ...prev, ...nextForm }))
+        setStoreTypes(Array.isArray(nextStoreTypes) ? nextStoreTypes : [])
+        if (Array.isArray(nextSpecialTypes) && nextSpecialTypes.length) {
+          setSpecialTypes(nextSpecialTypes)
+        }
+        if (nextDocs && typeof nextDocs === 'object') {
+          setDocs((prev) => ({ ...prev, ...nextDocs }))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(formatApiErrorMessage(err, 'Failed to load champ for edit.'))
+        }
+      } finally {
+        if (!cancelled) setLoadingEdit(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, champId, useRealFleet])
+
+  const handleSupplierChange = (e) => {
+    const value = e.target.value
+    if (useRealFleet) {
+      const match = suppliers.find((s) => s.id === value)
+      setForm((prev) => ({
+        ...prev,
+        supplierId: value,
+        supplier: match?.name || prev.supplier,
+      }))
+      return
+    }
+    setForm((prev) => ({ ...prev, supplier: value, supplierId: '' }))
+  }
+
+  async function handleSave() {
+    setSubmitError('')
+    setCreatedResult(null)
+
+    if (!useRealFleet) {
+      goBack()
+      return
+    }
+
+    setSaving(true)
+    try {
+      const payload = {
+        ...form,
+        storeTypes,
+        allowedCategories: storeTypes,
+        specialTypes,
+        specialItemTypes: specialTypes,
+        docs,
+      }
+
+      if (isEdit) {
+        await adminService.updateAdminFleetChamp(champId, payload)
+        navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
+        return
+      }
+
+      const result = await adminService.createAdminFleetChamp(payload)
+      const created = result?.data
+      setCreatedResult(created)
+
+      if (created?.temporaryPassword) {
+        return
+      }
+
+      const id = created?.id
+      navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
+    } catch (err) {
+      setSubmitError(
+        formatApiErrorMessage(err, isEdit ? 'Failed to update champ.' : 'Failed to create champ.'),
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const goToCreatedChamp = () => {
+    const id = createdResult?.id
+    navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
   }
 
   return (
@@ -161,8 +465,54 @@ export default function AdminAddChampPage() {
           <ChevronLeft size={15} strokeWidth={2.2} />
           Champs
         </button>
-        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Add champ</h2>
+        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+          {isEdit ? 'Edit champ' : 'Add champ'}
+        </h2>
       </div>
+
+      {loadError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {loadError}
+        </div>
+      ) : null}
+
+      {loadingEdit ? (
+        <p className="mb-4 text-[13px] text-[#7c8780]">Loading champ…</p>
+      ) : null}
+
+      {submitError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {submitError}
+        </div>
+      ) : null}
+
+      {suppliersError && useRealFleet ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0e0b2] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+          {suppliersError}
+        </div>
+      ) : null}
+
+      {createdResult?.temporaryPassword ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          <p className="font-bold">
+            Champ created{createdResult.displayCode ? ` (${createdResult.displayCode})` : ''}.
+          </p>
+          <p className="mt-1">
+            Temporary password:{' '}
+            <span className="font-mono font-bold tracking-wide">{createdResult.temporaryPassword}</span>
+          </p>
+          {createdResult.passwordResetRequired ? (
+            <p className="mt-1 text-[#455249]">Password reset required on first login.</p>
+          ) : null}
+          <button
+            type="button"
+            onClick={goToCreatedChamp}
+            className="mt-3 inline-flex h-[34px] items-center rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white hover:bg-[#158a47]"
+          >
+            Open champ profile
+          </button>
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <Card title="Personal">
@@ -171,7 +521,13 @@ export default function AdminAddChampPage() {
               <input className={inputClass} value={form.fullName} onChange={update('fullName')} />
             </Field>
             <Field label="Phone">
-              <input className={inputClass} value={form.phone} onChange={update('phone')} />
+              <input
+                className={inputClass}
+                value={form.phone}
+                onChange={update('phone')}
+                disabled={isEdit}
+                title={isEdit ? 'Phone cannot be changed via edit API' : undefined}
+              />
             </Field>
             <Field label="Email">
               <input className={inputClass} value={form.email} onChange={update('email')} />
@@ -187,13 +543,42 @@ export default function AdminAddChampPage() {
             </Field>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             <Field label="Supplier">
-              <Select value={form.supplier} onChange={update('supplier')}>
-                <option>Yjeek Fleet (In-house)</option>
-                <option>SwiftFleet</option>
-                <option>PrimeRide</option>
+              {useRealFleet ? (
+                <Select value={form.supplierId} onChange={handleSupplierChange} disabled={!suppliers.length}>
+                  {!suppliers.length ? <option value="">No suppliers</option> : null}
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Select value={form.supplier} onChange={handleSupplierChange}>
+                  <option>Yjeek Fleet (In-house)</option>
+                  <option>SwiftFleet</option>
+                  <option>PrimeRide</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="Tier">
+              <Select value={form.tier} onChange={update('tier')}>
+                <option value="BRONZE">Bronze</option>
+                <option value="SILVER">Silver</option>
+                <option value="GOLD">Gold</option>
+                <option value="ELITE">Elite</option>
+                <option value="AT_RISK">At Risk</option>
               </Select>
+            </Field>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+            <Field label="City">
+              <input className={inputClass} value={form.city} onChange={update('city')} />
+            </Field>
+            <Field label="Zone">
+              <input className={inputClass} value={form.zone} onChange={update('zone')} />
             </Field>
           </div>
 
@@ -253,10 +638,10 @@ export default function AdminAddChampPage() {
         </Card>
 
         <Card title="Vehicle type">
-          <div className="inline-flex items-center gap-2 rounded-[12px] bg-[#f3f5f3] p-1.5 w-[554px]">
+          <div className="inline-flex items-center gap-2 rounded-[12px] bg-[#f3f5f3] p-1.5 w-[554px] max-[700px]:w-full">
             {[
               { id: 'Bike', icon: <img src={motoBikeIcon} alt="" className="h-4 w-4 object-contain" /> },
-              { id: 'Car', icon: <Car size={15} strokeWidth={1.8}  className=' fill-[#ff0000]'/> },
+              { id: 'Car', icon: <img src={carIcon} alt="" className="h-4 w-4 object-contain" /> },
             ].map(({ id, icon }) => (
               <button
                 key={id}
@@ -276,49 +661,36 @@ export default function AdminAddChampPage() {
           </div>
         </Card>
 
+        <DocSection title="Personal picture" slots={['personalPicture']} docs={docs} onDocChange={onDocChange} />
+        <DocSection title="CPR" slots={['cprFront', 'cprBack']} docs={docs} onDocChange={onDocChange} />
         <DocSection
-          title="Personal picture"
-          items={[{ label: 'Personal picture', variant: 'image' }]}
+          title="Passport"
+          slots={['passportFront', 'passportBack']}
+          docs={docs}
+          onDocChange={onDocChange}
         />
-        <DocSection
-          title="CPR"
-          items={[
-            { label: 'CPR - Front', variant: 'file' },
-            { label: 'CPR - Back', variant: 'file' },
-          ]}
-        />
-        <DocSection title="Passport" items={[{ label: 'Passport', variant: 'file' }]} />
-        <DocSection
-          title="Visa"
-          items={[
-            { label: 'Resident permit', variant: 'file' },
-            { label: 'Work permit', variant: 'file' },
-          ]}
-        />
+        <DocSection title="Visa" slots={['visaFront', 'visaBack']} docs={docs} onDocChange={onDocChange} />
         <DocSection
           title="Driving license"
-          items={[
-            { label: 'License - Front', variant: 'file' },
-            { label: 'License - Back', variant: 'file' },
-          ]}
+          slots={['licenseFront', 'licenseBack']}
+          docs={docs}
+          onDocChange={onDocChange}
         />
         <DocSection
           title="Vehicle registration"
-          items={[
-            { label: 'Reg - Front', variant: 'file' },
-            { label: 'Reg - Back', variant: 'file' },
-            { label: 'Vehicle photo 1', variant: 'image' },
-            { label: 'Vehicle photo 2', variant: 'image' },
-            { label: 'Vehicle photo 3', variant: 'image' },
-          ]}
+          slots={['regFront', 'regBack', 'vehiclePhoto1', 'vehiclePhoto2', 'vehiclePhoto3']}
+          docs={docs}
+          onDocChange={onDocChange}
         />
-        <DocSection title="Vehicle insurance" items={[{ label: 'Insurance', variant: 'file' }]} />
+        <DocSection title="Vehicle insurance" slots={['insurance']} docs={docs} onDocChange={onDocChange} />
 
         <Card title="Delivery permissions & limits">
           <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
             <div>
-              <p className="text-[13px] font-bold text-[#17231c] mb-1"  >Can deliver special items</p>
-              <p className='text-[12px] font-medium text-[#7c8780]'>Alcohol, age-restricted, pharmacy, fragile or high-value items</p>
+              <p className="text-[13px] font-bold text-[#17231c] mb-1">Can deliver special items</p>
+              <p className="text-[12px] font-medium text-[#7c8780]">
+                Alcohol, age-restricted, pharmacy, fragile or high-value items
+              </p>
             </div>
             <button
               type="button"
@@ -389,7 +761,7 @@ export default function AdminAddChampPage() {
         <button
           type="button"
           onClick={goBack}
-          className="text-[13px] font-semibold hover:text-[#455249]  py-2.5 px-3 rounded-full bg-white text-black" 
+          className="text-[13px] font-semibold hover:text-[#455249]  py-2.5 px-3 rounded-full bg-white text-black"
         >
           Cancel
         </button>
@@ -402,10 +774,17 @@ export default function AdminAddChampPage() {
           </button>
           <button
             type="button"
-            onClick={goBack}
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={saving || loadingEdit || Boolean(createdResult?.id) || Boolean(loadError)}
+            onClick={handleSave}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Create champ
+            {saving
+              ? isEdit
+                ? 'Saving…'
+                : 'Creating…'
+              : isEdit
+                ? 'Save changes'
+                : 'Create champ'}
           </button>
         </div>
       </div>

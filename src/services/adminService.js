@@ -1,34 +1,345 @@
 import { apiClient } from '../api/client'
+import { apiConfig, isAdminRealApiFeature } from '../api/config'
+import { adminDashboardService } from './admin/dashboardService'
+import { adminVendorService } from './admin/vendorService'
+import { adminUserService } from './admin/userService'
+import { adminFleetService } from './admin/fleetService'
+import { adminStoreTypeService } from './admin/storeTypeService'
+import { adminCustomerService } from './admin/customerService'
+import { adminMarketingService } from './admin/marketingService'
+import { adminReportService } from './admin/reportService'
 
 export const adminService = {
   getDashboard(options) {
-    return apiClient.get('/admin/dashboard', options)
+    return adminDashboardService.getDashboard(options)
   },
   getLiveOrders(options) {
-    return apiClient.get('/admin/live-orders', options)
+    return adminDashboardService.getLiveOrders(options)
   },
   getPickup(options) {
-    return apiClient.get('/admin/pickup', options)
+    return adminDashboardService.getPickupBoard(options)
   },
   getDineIn(options) {
-    return apiClient.get('/admin/dine-in', options)
+    return adminDashboardService.getDineInBoard(options)
   },
   getServices(options) {
-    return apiClient.get('/admin/services', options)
+    return adminDashboardService.getServicesBoard(options)
   },
   getOperations(mode, options = {}) {
+    if (mode === 'scheduled') {
+      return adminDashboardService.getScheduledBoard(options)
+    }
     return apiClient.get('/admin/operations', { ...options, params: { ...options.params, mode } })
   },
   getManagement(type, options = {}) {
+    if (type === 'vendors') {
+      return adminVendorService.listVendors(options)
+    }
+    if (type === 'stores' && (isAdminRealApiFeature('store-types') || !apiConfig.adminUseMockApi)) {
+      return adminStoreTypeService.listForPage(options)
+    }
+    if (type === 'customers' && (isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi)) {
+      return adminCustomerService.listForPage(options)
+    }
+    // Fleet list not wired yet — use getAdminFleetSummary for KPIs.
+    // Users list uses listAdminUsers().
+    // Marketing notifications / promo codes: use dedicated list methods.
     return apiClient.get('/admin/management', { ...options, params: { ...options.params, type } })
   },
+  listAdminStoreTypes(options = {}) {
+    return adminStoreTypeService.listStoreTypes(options)
+  },
+  getAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.getStoreType(storeTypeId, options)
+  },
+  createAdminStoreType(form, options = {}) {
+    return adminStoreTypeService.createStoreType(form, options)
+  },
+  updateAdminStoreType(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.updateStoreType(storeTypeId, form, options)
+  },
+  publishAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.publishStoreType(storeTypeId, options)
+  },
+  draftAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.draftStoreType(storeTypeId, options)
+  },
+  addAdminStoreTypeMenuCategory(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.addMenuCategory(storeTypeId, form, options)
+  },
+  updateAdminStoreTypeMenuCategory(storeTypeId, menuCategoryId, form, options = {}) {
+    return adminStoreTypeService.updateMenuCategory(storeTypeId, menuCategoryId, form, options)
+  },
+  deleteAdminStoreTypeMenuCategory(storeTypeId, menuCategoryId, options = {}) {
+    return adminStoreTypeService.deleteMenuCategory(storeTypeId, menuCategoryId, options)
+  },
+  addAdminStoreTypeBadge(storeTypeId, form, options = {}) {
+    return adminStoreTypeService.addBadge(storeTypeId, form, options)
+  },
+  updateAdminStoreTypeBadge(storeTypeId, badgeId, form, options = {}) {
+    return adminStoreTypeService.updateBadge(storeTypeId, badgeId, form, options)
+  },
+  deleteAdminStoreTypeBadge(storeTypeId, badgeId, options = {}) {
+    return adminStoreTypeService.deleteBadge(storeTypeId, badgeId, options)
+  },
+  getAdminFleetSummary(options = {}) {
+    return adminFleetService.getFleetSummary(options)
+  },
+  listAdminFleetChamps(filters, options = {}) {
+    return adminFleetService.listChamps(filters, options)
+  },
+  listAdminFleetSuppliers(options = {}) {
+    return adminFleetService.listSuppliers(options)
+  },
+  getAdminFleetSupplier(supplierId, filters, options = {}) {
+    return adminFleetService.getSupplier(supplierId, filters, options)
+  },
+  createAdminFleetSupplier(form, options = {}) {
+    return adminFleetService.createSupplier(form, options)
+  },
+  updateAdminFleetSupplier(supplierId, form, options = {}) {
+    return adminFleetService.updateSupplier(supplierId, form, options)
+  },
+  createAdminFleetChamp(form, options = {}) {
+    return adminFleetService.createChamp(form, options)
+  },
+  updateAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.updateChamp(champId, form, options)
+  },
+  getAdminFleetChampEarnings(champId, filters, options = {}) {
+    return adminFleetService.getChampEarnings(champId, filters, options)
+  },
+  suspendAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.suspendChamp(champId, form, options)
+  },
+  unsuspendAdminFleetChamp(champId, options = {}) {
+    return adminFleetService.unsuspendChamp(champId, options)
+  },
+  terminateAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.terminateChamp(champId, form, options)
+  },
+  setAdminFleetChampOnline(champId, online, options = {}) {
+    return adminFleetService.setChampOnline(champId, online, options)
+  },
+  estimateAdminFleetNotify(form, options = {}) {
+    return adminFleetService.estimateNotify(form, options)
+  },
+  sendAdminFleetNotify(form, options = {}) {
+    return adminFleetService.sendNotify(form, options)
+  },
+  listAdminFleetNotifyHistory(options = {}) {
+    return adminFleetService.listNotifyHistory(options)
+  },
+  listAdminUsers(options = {}) {
+    return adminUserService.listUsers(options)
+  },
+  getAdminUsersSummary(options = {}) {
+    return adminUserService.getUsersSummary(options)
+  },
+  getAdminUsersMeta(options = {}) {
+    return adminUserService.getUsersMeta(options)
+  },
+  getAdminUserDetail(userId, options = {}) {
+    return adminUserService.getUserDetail(userId, options)
+  },
+  createAdminUser(form, options = {}) {
+    return adminUserService.createUser(form, options)
+  },
+  updateAdminUser(userId, form, options = {}) {
+    return adminUserService.updateUser(userId, form, options)
+  },
+  resetAdminUserPassword(userId, options = {}) {
+    return adminUserService.resetUserPassword(userId, options)
+  },
+  resendAdminUserInvite(userId, options = {}) {
+    return adminUserService.resendUserInvite(userId, options)
+  },
+  suspendAdminUser(userId, options = {}) {
+    return adminUserService.suspendUser(userId, options)
+  },
+  unsuspendAdminUser(userId, options = {}) {
+    return adminUserService.unsuspendUser(userId, options)
+  },
+  listAdminRoles(options = {}) {
+    return adminUserService.listRoles(options)
+  },
+  getAdminRolesMeta(options = {}) {
+    return adminUserService.getRolesMeta(options)
+  },
+  getAdminRoleDetail(roleId, options = {}) {
+    return adminUserService.getRoleDetail(roleId, options)
+  },
+  createAdminRole(form, options = {}) {
+    return adminUserService.createRole(form, options)
+  },
+  updateAdminRole(roleId, form, options = {}) {
+    return adminUserService.updateRole(roleId, form, options)
+  },
+  getAdminActivityMeta(options = {}) {
+    return adminUserService.getActivityMeta(options)
+  },
+  listAdminActivity(filters, options = {}) {
+    return adminUserService.listActivity(filters, options)
+  },
+  exportAdminActivity(filters, options = {}) {
+    return adminUserService.exportActivity(filters, options)
+  },
+  getVendors(options = {}) {
+    return adminVendorService.listVendors(options)
+  },
   getVendorDetail(vendorId, options = {}) {
-    return apiClient.get('/admin/vendors/detail', { ...options, params: { ...options.params, id: vendorId } })
+    return adminVendorService.getVendorDetail(vendorId, options)
+  },
+  createVendor(wizard, options = {}) {
+    return adminVendorService.createVendor(wizard, options)
+  },
+  activateVendor(vendorId, options = {}) {
+    return adminVendorService.activateVendor(vendorId, options)
+  },
+  listSlaModels(options = {}) {
+    return adminVendorService.listSlaModels(options)
+  },
+  updateVendor(vendorId, form, options = {}) {
+    return adminVendorService.updateVendor(vendorId, form, options)
+  },
+  listStoreTypes(options = {}) {
+    return adminVendorService.listStoreTypes(options)
+  },
+  forceCloseVendor(vendorId, form, options = {}) {
+    return adminVendorService.forceCloseVendor(vendorId, form, options)
+  },
+  reopenVendor(vendorId, form = {}, options = {}) {
+    return adminVendorService.reopenVendor(vendorId, form, options)
+  },
+  suspendVendor(vendorId, form, options = {}) {
+    return adminVendorService.suspendVendor(vendorId, form, options)
+  },
+  unsuspendVendor(vendorId, options = {}) {
+    return adminVendorService.unsuspendVendor(vendorId, options)
+  },
+  listVendorBranches(vendorId, options = {}) {
+    return adminVendorService.listBranches(vendorId, options)
+  },
+  createVendorBranch(vendorId, form, options = {}) {
+    return adminVendorService.createBranch(vendorId, form, options)
+  },
+  updateVendorBranch(vendorId, branchId, form, options = {}) {
+    return adminVendorService.updateBranch(vendorId, branchId, form, options)
+  },
+  deleteVendorBranch(vendorId, branchId, options = {}) {
+    return adminVendorService.deleteBranch(vendorId, branchId, options)
+  },
+  listVendorStaff(vendorId, options = {}) {
+    return adminVendorService.listStaff(vendorId, options)
+  },
+  createVendorStaff(vendorId, form, branchOptions = [], options = {}) {
+    return adminVendorService.createStaff(vendorId, form, branchOptions, options)
+  },
+  updateVendorStaff(vendorId, staffId, form, branchOptions = [], options = {}) {
+    return adminVendorService.updateStaff(vendorId, staffId, form, branchOptions, options)
+  },
+  getVendorDeliveryZones(vendorId, options = {}) {
+    return adminVendorService.getDeliveryZones(vendorId, options)
+  },
+  updateVendorDeliveryZones(vendorId, form, options = {}) {
+    return adminVendorService.updateDeliveryZones(vendorId, form, options)
+  },
+  applyVendorDeliveryZonesToAll(vendorId, options = {}) {
+    return adminVendorService.applyDeliveryZonesToAll(vendorId, options)
+  },
+  getVendorCommission(vendorId, options = {}) {
+    return adminVendorService.getCommission(vendorId, options)
+  },
+  updateVendorCommission(vendorId, form, options = {}) {
+    return adminVendorService.updateCommission(vendorId, form, options)
+  },
+  listVendorPromotions(vendorId, options = {}) {
+    return adminVendorService.listPromotions(vendorId, options)
+  },
+  getVendorPromotion(vendorId, promotionId, options = {}) {
+    return adminVendorService.getPromotion(vendorId, promotionId, options)
+  },
+  createVendorPromotion(vendorId, form, options = {}) {
+    return adminVendorService.createPromotion(vendorId, form, options)
+  },
+  updateVendorPromotion(vendorId, promotionId, form, options = {}) {
+    return adminVendorService.updatePromotion(vendorId, promotionId, form, options)
+  },
+  getVendorSla(vendorId, options = {}) {
+    return adminVendorService.getSla(vendorId, options)
+  },
+  updateVendorSla(vendorId, form, options = {}) {
+    return adminVendorService.updateSla(vendorId, form, options)
   },
   getCustomerDetail(customerId, options = {}) {
-    return apiClient.get('/admin/customers/detail', { ...options, params: { ...options.params, id: customerId } })
+    if (isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi) {
+      return adminCustomerService.getCustomer(customerId, options)
+    }
+    return apiClient.get('/admin/customers/detail', {
+      ...options,
+      params: { ...options.params, id: customerId },
+    })
+  },
+  listAdminCustomers(filters, options = {}) {
+    return adminCustomerService.listForPage({ ...filters, ...options })
+  },
+  getAdminCustomer(customerId, options = {}) {
+    return adminCustomerService.getCustomer(customerId, options)
+  },
+  getAdminCustomerWallet(customerId, options = {}) {
+    return adminCustomerService.getWallet(customerId, options)
+  },
+  getAdminCustomerSupport(customerId, options = {}) {
+    return adminCustomerService.getSupportTickets(customerId, options)
+  },
+  suspendAdminCustomer(customerId, form, options = {}) {
+    return adminCustomerService.suspendCustomer(customerId, form, options)
+  },
+  activateAdminCustomer(customerId, options = {}) {
+    return adminCustomerService.activateCustomer(customerId, options)
+  },
+  listAdminMarketingNotifications(options = {}) {
+    return adminMarketingService.listNotifications(options)
+  },
+  getAdminMarketingNotification(notificationId, options = {}) {
+    return adminMarketingService.getNotification(notificationId, options)
+  },
+  listAdminMarketingPromoCodes(options = {}) {
+    return adminMarketingService.listPromoCodes(options)
+  },
+  createAdminMarketingPromoCode(form, options = {}) {
+    return adminMarketingService.createPromoCode(form, options)
+  },
+  sendAdminCustomerNotification(form, options = {}) {
+    return adminMarketingService.sendCustomerNotification(form, options)
+  },
+  listAdminCustomerNotificationHistory(options = {}) {
+    return adminMarketingService.listCustomerNotificationHistory(options)
+  },
+  sendAdminVendorNotification(form, options = {}) {
+    return adminMarketingService.sendVendorNotification(form, options)
+  },
+  listAdminVendorNotificationHistory(options = {}) {
+    return adminMarketingService.listVendorNotificationHistory(options)
+  },
+  getOrdersReport(filters, options = {}) {
+    return adminReportService.getOrdersReport(filters, options)
+  },
+  exportOrdersReport(filters, options = {}) {
+    return adminReportService.exportOrdersReport(filters, options)
   },
   getChampDetail(champId, options = {}) {
-    return apiClient.get('/admin/champs/detail', { ...options, params: { ...options.params, id: champId } })
+    // Real admin mode (mocks off) or fleet feature flag → Postman overview endpoint.
+    // Avoid dead mock path `/admin/champs/detail` when VITE_ADMIN_USE_MOCK_API=false.
+    if (isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi) {
+      return adminFleetService.getChamp(champId, options)
+    }
+    return apiClient.get('/admin/champs/detail', {
+      ...options,
+      params: { ...options.params, id: champId },
+    })
+  },
+  listChampDocuments(champId, options = {}) {
+    return adminFleetService.listChampDocuments(champId, options)
   },
 }

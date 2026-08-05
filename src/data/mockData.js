@@ -835,6 +835,161 @@ export const catalogItems = [
   },
 ]
 
+/** Shared mock opening hours (API shape) for branch edit. */
+export const mockOpeningHours = {
+  mon: { open: '09:00', lastOrder: '22:30', close: '23:00' },
+  tue: { open: '09:00', lastOrder: '22:30', close: '23:00' },
+  wed: { open: '09:00', lastOrder: '22:30', close: '23:00' },
+  thu: { open: '09:00', lastOrder: '22:30', close: '23:00' },
+  fri: 'closed',
+  sat: { open: '10:00', lastOrder: '23:30', close: '00:00' },
+  sun: { open: '09:00', lastOrder: '22:30', close: '23:00' },
+}
+
+/**
+ * Mock GET/PATCH branch menu tree (API shape).
+ * Matches Postman: category nodes with type + isVisible + children (nested categories or products).
+ */
+export const mockBranchMenu = [
+  {
+    id: 'gk-cat-starters',
+    name: 'Starters',
+    type: 'category',
+    isVisible: true,
+    children: [
+      {
+        id: 'hummus',
+        name: 'Hummus Beiruti',
+        type: 'product',
+        isAvailable: true,
+        isVisible: true,
+        product: { id: 'hummus', name: 'Hummus Beiruti', price: 1.5 },
+      },
+      {
+        id: 'mezze',
+        name: 'Gourmet Mezze Platter',
+        type: 'product',
+        isAvailable: true,
+        isVisible: true,
+        product: { id: 'mezze', name: 'Gourmet Mezze Platter', price: 3.6 },
+      },
+      {
+        id: 'falafel',
+        name: 'Falafel (6 pcs)',
+        type: 'product',
+        isAvailable: false,
+        isVisible: true,
+        product: { id: 'falafel', name: 'Falafel (6 pcs)', price: 1.2 },
+      },
+    ],
+  },
+  {
+    id: 'gk-cat-mains',
+    name: 'Main dishes',
+    type: 'category',
+    isVisible: true,
+    children: [
+      {
+        id: 'gk-sub-grilled',
+        name: 'Grilled',
+        type: 'category',
+        isVisible: true,
+        children: [
+          {
+            id: 'gk-type-charcoal',
+            name: 'Charcoal grills',
+            type: 'category',
+            isVisible: true,
+            children: [
+              {
+                id: 'mixed-grill',
+                name: 'Mixed Grill',
+                type: 'product',
+                isAvailable: true,
+                product: { id: 'mixed-grill', name: 'Mixed Grill', price: 5 },
+              },
+              {
+                id: 'lamb-chops',
+                name: 'Lamb chops',
+                type: 'product',
+                isAvailable: true,
+                product: { id: 'lamb-chops', name: 'Lamb chops', price: 6 },
+              },
+            ],
+          },
+          {
+            id: 'gk-type-skewers',
+            name: 'Skewers',
+            type: 'category',
+            isVisible: false,
+            children: [
+              {
+                id: 'tawook',
+                name: 'Shish tawook',
+                type: 'product',
+                isAvailable: false,
+                product: { id: 'tawook', name: 'Shish tawook', price: 4 },
+              },
+              {
+                id: 'kofta',
+                name: 'Kofta',
+                type: 'product',
+                isAvailable: false,
+                product: { id: 'kofta', name: 'Kofta', price: 3.5 },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'gk-sub-rice',
+        name: 'Rice dishes',
+        type: 'category',
+        isVisible: true,
+        children: [
+          {
+            id: 'gk-type-biryani',
+            name: 'Biryani',
+            type: 'category',
+            isVisible: true,
+            children: [
+              {
+                id: 'chicken-biryani',
+                name: 'Chicken biryani',
+                type: 'product',
+                isAvailable: true,
+                product: { id: 'chicken-biryani', name: 'Chicken biryani', price: 3.5 },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'gk-cat-drinks',
+    name: 'Drinks',
+    type: 'category',
+    isVisible: true,
+    children: [
+      {
+        id: 'juice',
+        name: 'Fresh juice',
+        type: 'product',
+        isAvailable: true,
+        product: { id: 'juice', name: 'Fresh juice', price: 1.5 },
+      },
+      {
+        id: 'soft',
+        name: 'Soft drink',
+        type: 'product',
+        isAvailable: true,
+        product: { id: 'soft', name: 'Soft drink', price: 0.5 },
+      },
+    ],
+  },
+]
+
 export const branches = [
   {
     id: 'manama',
@@ -848,6 +1003,7 @@ export const branches = [
     phone: '+973 1700 0001',
     minOrder: '2.000 BHD',
     minOrderValue: '2.000',
+    openingHours: mockOpeningHours,
   },
   {
     id: 'seef',
