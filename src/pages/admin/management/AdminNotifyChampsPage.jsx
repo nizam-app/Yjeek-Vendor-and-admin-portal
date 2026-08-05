@@ -1,39 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
+import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { adminService } from '../../../services/adminService'
 
 const AUDIENCE_OPTIONS = ['All champs', 'Online', 'By category', 'By zone', 'Selected']
 const MESSAGE_TYPES = ['Info', 'Incentive', 'Alert', 'Policy']
 const SCHEDULE_OPTIONS = ['Send now', 'Schedule later']
-
-const HISTORY = [
-  {
-    id: 1,
-    notification: 'Peak hour bonus',
-    audience: 'Online champs',
-    sentTo: 148,
-    date: '2 Mar',
-    status: 'Delivered',
-  },
-  {
-    id: 2,
-    notification: 'New zone: Hidd',
-    audience: 'By zone',
-    sentTo: 18,
-    date: '26 Feb',
-    status: 'Delivered',
-  },
-  {
-    id: 3,
-    notification: 'Policy update',
-    audience: 'All champs',
-    sentTo: 312,
-    date: '20 Feb',
-    status: 'Delivered',
-  },
-]
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -100,22 +76,163 @@ function Toggle({ label, checked, onChange }) {
           )}
         />
       </button>
-          <span className="text-[13px] font-medium text-[#455249]">{label}</span>
+      <span className="text-[13px] font-medium text-[#455249]">{label}</span>
     </div>
   )
 }
 
+function statusTone(statusKey) {
+  const key = String(statusKey || '').toUpperCase()
+  if (key === 'FAILED') return 'red'
+  if (key === 'SCHEDULED' || key === 'PROCESSING' || key === 'PARTIAL') return 'yellow'
+  return 'green'
+}
+
+function defaultScheduledAtLocal() {
+  const d = new Date(Date.now() + 60 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 export default function AdminNotifyChampsPage() {
   const navigate = useNavigate()
+  const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const goBack = () => navigate('/admin/fleet')
 
   const [audience, setAudience] = useState('Online')
+  const [category, setCategory] = useState('Food')
+  const [zone, setZone] = useState('Adliya')
+  const [champIdsText, setChampIdsText] = useState('')
   const [messageType, setMessageType] = useState('Incentive')
-  const [title, setTitle] = useState('🔥 Peak hour bonus active!')
+  const [title, setTitle] = useState('Peak hour bonus active!')
   const [body, setBody] = useState('Go online now — earn +BHD 0.500 extra per trip from 7–9 PM.')
   const [push, setPush] = useState(true)
   const [sms, setSms] = useState(false)
   const [schedule, setSchedule] = useState('Send now')
+  const [scheduledAt, setScheduledAt] = useState(defaultScheduledAtLocal)
+
+  const [estimated, setEstimated] = useState(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+  const [estimateError, setEstimateError] = useState('')
+
+  const [historyRows, setHistoryRows] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
+
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [sendSuccess, setSendSuccess] = useState('')
+
+  const estimatePayload = useMemo(
+    () => ({
+      audience,
+      category,
+      zone,
+      champIdsText,
+    }),
+    [audience, category, zone, champIdsText],
+  )
+
+  const formPayload = useMemo(
+    () => ({
+      ...estimatePayload,
+      type: messageType,
+      messageType,
+      title,
+      body,
+      push,
+      sms,
+      schedule,
+      scheduledAt,
+    }),
+    [estimatePayload, messageType, title, body, push, sms, schedule, scheduledAt],
+  )
+
+  const loadHistory = async () => {
+    if (!useRealFleet) {
+      setHistoryRows([])
+      return
+    }
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const result = await adminService.listAdminFleetNotifyHistory()
+      setHistoryRows(result?.data?.rows || [])
+    } catch (err) {
+      setHistoryError(formatApiErrorMessage(err, 'Failed to load notification history.'))
+      setHistoryRows([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRealFleet])
+
+  useEffect(() => {
+    if (!useRealFleet) {
+      setEstimated(null)
+      setEstimateError('')
+      return undefined
+    }
+
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setEstimateLoading(true)
+      setEstimateError('')
+      try {
+        const result = await adminService.estimateAdminFleetNotify(estimatePayload)
+        if (cancelled) return
+        setEstimated(result?.data?.estimatedRecipients ?? 0)
+      } catch (err) {
+        if (cancelled) return
+        setEstimated(null)
+        setEstimateError(formatApiErrorMessage(err, 'Could not estimate recipients.'))
+      } finally {
+        if (!cancelled) setEstimateLoading(false)
+      }
+    }, 350)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [useRealFleet, estimatePayload])
+
+  const handleSend = async () => {
+    setSendError('')
+    setSendSuccess('')
+
+    if (!useRealFleet) {
+      goBack()
+      return
+    }
+
+    setSending(true)
+    try {
+      const result = await adminService.sendAdminFleetNotify(formPayload)
+      const data = result?.data
+      if (data?.scheduled) {
+        setSendSuccess(
+          `Scheduled for ${data.sentTo ?? 0} champ${data.sentTo === 1 ? '' : 's'}.`,
+        )
+      } else {
+        setSendSuccess(
+          `Sent to ${data?.sentTo ?? 0} champ${data?.sentTo === 1 ? '' : 's'}` +
+            (data?.deliveredCount != null ? ` · delivered ${data.deliveredCount}` : '') +
+            (data?.failedCount ? ` · failed ${data.failedCount}` : '') +
+            '.',
+        )
+      }
+      await loadHistory()
+    } catch (err) {
+      setSendError(formatApiErrorMessage(err, 'Failed to send notification.'))
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -136,12 +253,70 @@ export default function AdminNotifyChampsPage() {
         </div>
       </div>
 
+      {sendError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {sendError}
+        </div>
+      ) : null}
+      {sendSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {sendSuccess}
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <div className="space-y-4">
           <Card title="Audience">
             <p className={labelClass}>Send to</p>
             <Segmented options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
+
+            {audience === 'By category' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Category</span>
+                <input
+                  className={inputClass}
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="e.g. Food"
+                />
+              </label>
+            ) : null}
+
+            {audience === 'By zone' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Zone</span>
+                <input
+                  className={inputClass}
+                  value={zone}
+                  onChange={(e) => setZone(e.target.value)}
+                  placeholder="e.g. Adliya"
+                />
+              </label>
+            ) : null}
+
+            {audience === 'Selected' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Champ IDs</span>
+                <textarea
+                  className="box-border min-h-[72px] w-full resize-y rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
+                  value={champIdsText}
+                  onChange={(e) => setChampIdsText(e.target.value)}
+                  placeholder="Paste champ ids or display codes, comma or newline separated"
+                />
+              </label>
+            ) : null}
+
             <p className="mt-4 text-[12.5px] text-[#7c8780]">Estimated recipients</p>
+            <p className="mt-1 text-[18px] font-bold text-[#17231c]">
+              {estimateLoading
+                ? '…'
+                : estimated == null
+                  ? '—'
+                  : estimated.toLocaleString()}
+            </p>
+            {estimateError ? (
+              <p className="mt-1 text-[12px] text-[#b42318]">{estimateError}</p>
+            ) : null}
           </Card>
 
           <Card title="Message">
@@ -175,6 +350,18 @@ export default function AdminNotifyChampsPage() {
               <p className={labelClass}>Schedule</p>
               <Segmented options={SCHEDULE_OPTIONS} value={schedule} onChange={setSchedule} />
             </div>
+
+            {schedule === 'Schedule later' ? (
+              <label className="mt-3 block">
+                <span className={labelClass}>Send at</span>
+                <input
+                  type="datetime-local"
+                  className={inputClass}
+                  value={scheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
+              </label>
+            ) : null}
           </Card>
         </div>
 
@@ -188,25 +375,43 @@ export default function AdminNotifyChampsPage() {
                 <p className="text-[12px] font-medium text-[#7c8780]">Yjeek Champ</p>
               </div>
             </div>
-                <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#17231c]">
-                  {title || 'Notification title'}
-                </p>
-                <p className="mt-1 text-[12px] leading-snug text-[#455249]">
-                  {body || 'Notification body'}
-                </p>
+            <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#17231c]">
+              {title || 'Notification title'}
+            </p>
+            <p className="mt-1 text-[12px] leading-snug text-[#455249]">
+              {body || 'Notification body'}
+            </p>
           </div>
 
           <button
             type="button"
-            onClick={goBack}
-            className="mt-4 inline-flex h-[40px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
+            disabled={sending || !useRealFleet}
+            onClick={handleSend}
+            className="mt-4 inline-flex h-[40px] w-full items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            Send notification
+            {sending
+              ? schedule === 'Schedule later'
+                ? 'Scheduling…'
+                : 'Sending…'
+              : schedule === 'Schedule later'
+                ? 'Schedule notification'
+                : 'Send notification'}
           </button>
+          {!useRealFleet ? (
+            <p className="mt-2 text-[12px] text-[#8a948e]">Enable real fleet API to send.</p>
+          ) : null}
         </Card>
       </div>
 
       <Card title="Notification history">
+        {historyError ? (
+          <div className="mb-3 rounded-[10px] border border-[#f0c9c6] bg-[#fff5f4] px-3 py-2 text-[12.5px] text-[#b42318]">
+            {historyError}
+          </div>
+        ) : null}
+        {historyLoading ? (
+          <p className="mb-3 text-[13px] text-[#7c8780]">Loading history…</p>
+        ) : null}
         <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
           <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
             <table className="w-full min-w-[640px] border-collapse text-left">
@@ -223,7 +428,17 @@ export default function AdminNotifyChampsPage() {
                 </tr>
               </thead>
               <tbody>
-                {HISTORY.map((row) => (
+                {historyRows.length === 0 && !historyLoading ? (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-[13px] text-[#7c8780]"
+                    >
+                      No notifications yet.
+                    </td>
+                  </tr>
+                ) : null}
+                {historyRows.map((row) => (
                   <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
                     <td className="whitespace-nowrap px-4 py-3.5 text-[13px] font-medium text-[#17231c]">
                       {row.notification}
@@ -238,7 +453,7 @@ export default function AdminNotifyChampsPage() {
                       {row.date}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
-                      <Badge tone="green">{row.status}</Badge>
+                      <Badge tone={statusTone(row.statusKey)}>{row.status}</Badge>
                     </td>
                   </tr>
                 ))}

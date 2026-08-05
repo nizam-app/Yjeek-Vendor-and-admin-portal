@@ -97,7 +97,12 @@ export function mapAdminStoreTypesListPage(data, summaryData = null) {
     .map((item) => {
       const slug = item.slug != null ? String(item.slug) : ''
       const iconEmoji = item.iconEmoji ?? item.icon ?? null
-      const iconUrl = item.iconUrl ? String(item.iconUrl) : null
+      const rawIconUrl = item.iconUrl ? String(item.iconUrl) : null
+      const iconUrl =
+        rawIconUrl &&
+        (/^https?:\/\//i.test(rawIconUrl) || rawIconUrl.startsWith('data:image/'))
+          ? rawIconUrl
+          : null
 
       return {
         id: String(item.id),
@@ -372,15 +377,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
     publishStatus,
   }
 
-  const iconUrl = String(form.iconUrl || '').trim()
-  if (iconUrl) {
-    body.iconUrl = iconUrl
-  }
-
-  const iconEmoji = String(form.iconEmoji || '').trim()
-  if (iconEmoji) {
-    body.iconEmoji = iconEmoji
-  }
+  applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
 
   return body
 }
@@ -403,6 +400,13 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
 
   const modes = form.modes && typeof form.modes === 'object' ? form.modes : {}
 
+  const publishStatus =
+    String(form.publishStatus || '').trim().toUpperCase() === 'PUBLISHED'
+      ? 'PUBLISHED'
+      : String(form.publishStatus || '').trim().toUpperCase() === 'DRAFT'
+        ? 'DRAFT'
+        : undefined
+
   const body = {
     name,
     sortOrder,
@@ -413,17 +417,44 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
     services: Boolean(modes.Services),
   }
 
-  const iconUrl = String(form.iconUrl || '').trim()
-  if (iconUrl) {
-    body.iconUrl = iconUrl
+  if (publishStatus) {
+    body.publishStatus = publishStatus
   }
 
-  const iconEmoji = String(form.iconEmoji || '').trim()
-  if (iconEmoji) {
-    body.iconEmoji = iconEmoji
+  if (form.visibleInApp != null || form.isActive != null) {
+    body.isActive = form.visibleInApp === true || form.isActive === true
   }
+
+  applyStoreTypeIconFields(body, form, { clearWhenEmpty: true })
 
   return body
+}
+
+/**
+ * Persist catalog/emoji icons safely. Only remote http(s)/data URLs are stored as iconUrl.
+ */
+function applyStoreTypeIconFields(body, form = {}, { clearWhenEmpty = false } = {}) {
+  const rawUrl = form.iconUrl
+  if (rawUrl === null || rawUrl === '') {
+    if (clearWhenEmpty) body.iconUrl = null
+  } else {
+    const iconUrl = String(rawUrl || '').trim()
+    if (/^https?:\/\//i.test(iconUrl) || iconUrl.startsWith('data:image/')) {
+      body.iconUrl = iconUrl
+    } else if (clearWhenEmpty) {
+      // Drop invalid / broken local paths so UI can use catalog + emoji.
+      body.iconUrl = null
+    }
+  }
+
+  const iconEmoji = String(form.iconEmoji || form.icon || '').trim()
+  if (iconEmoji) {
+    body.iconEmoji = iconEmoji
+  } else if (form.iconId) {
+    body.iconEmoji = '🛒'
+  } else if (clearWhenEmpty && (form.iconEmoji === null || form.iconEmoji === '')) {
+    body.iconEmoji = null
+  }
 }
 
 /**
@@ -436,7 +467,12 @@ export function mapAdminStoreTypeDetail(data) {
 
   const slug = data.slug != null ? String(data.slug) : ''
   const iconEmoji = data.iconEmoji ?? data.icon ?? null
-  const iconUrl = data.iconUrl ? String(data.iconUrl) : null
+  const rawIconUrl = data.iconUrl ? String(data.iconUrl) : null
+  const iconUrl =
+    rawIconUrl &&
+    (/^https?:\/\//i.test(rawIconUrl) || rawIconUrl.startsWith('data:image/'))
+      ? rawIconUrl
+      : null
 
   return {
     id: String(data.id),

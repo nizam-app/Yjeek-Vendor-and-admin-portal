@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronDown, Copy, Map, MapPin, Pause, Pencil, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, Map, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
 import AdminDeleteBranchModal from '../../../components/admin/AdminDeleteBranchModal'
 import AdminBranchLocationPicker from '../../../components/admin/AdminBranchLocationPicker'
@@ -286,6 +286,9 @@ export default function AdminAddVendorBrunchs() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [allBranches, setAllBranches] = useState([])
+  const [reopening, setReopening] = useState(false)
+  const [actionError, setActionError] = useState(null)
 
   const branch = useMemo(() => {
     if (isNewBranch) {
@@ -320,6 +323,7 @@ export default function AdminAddVendorBrunchs() {
 
         if (!isNewBranch) {
           const list = results[0]?.data?.branches || []
+          setAllBranches(list)
           const found = list.find((item) => String(item.id) === String(branchId))
           if (!found) {
             setLoadError('Branch not found.')
@@ -327,6 +331,8 @@ export default function AdminAddVendorBrunchs() {
           } else {
             setLoadedBranch(found)
           }
+        } else {
+          setAllBranches([])
         }
 
         const zones = (!isNewBranch ? results[1] : results[0])?.data?.defaults || null
@@ -385,6 +391,82 @@ export default function AdminAddVendorBrunchs() {
       setBranchOnline(!/closed|suspended/i.test(String(branch.status)))
     }
   }, [branch, isNewBranch])
+
+  const isBranchForceClosed = useMemo(() => {
+    if (!branch || isNewBranch) return false
+    const until = branch.forceClosedUntil ? new Date(branch.forceClosedUntil) : null
+    if (until && !Number.isNaN(until.getTime()) && until > new Date()) return true
+    return /force-?closed/i.test(String(branch.status || ''))
+  }, [branch, isNewBranch])
+
+  async function refreshBranchList() {
+    if (!useRealBranchApi || isNewBranch) return null
+    const response = await adminService.listVendorBranches(vendorId)
+    const list = response?.data?.branches || []
+    setAllBranches(list)
+    const found = list.find((item) => String(item.id) === String(branchId))
+    if (found) setLoadedBranch(found)
+    return found
+  }
+
+  async function handleForceClose(form) {
+    setActionError(null)
+    if (!isVendorDetailFlow || isNewBranch) {
+      setBranchOnline(false)
+      return
+    }
+    const response = await adminService.forceCloseVendor(vendorId, {
+      ...form,
+      scope: form.scope || 'Single branch',
+      branchId: form.branchId || branchId,
+    })
+    if (useRealBranchApi) {
+      await refreshBranchList()
+    } else {
+      setBranchOnline(false)
+      setLoadedBranch((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'Force-closed',
+              operationalStatus: 'CLOSED',
+              forceClosedUntil: response?.data?.forceClosedUntil || form.to,
+            }
+          : prev,
+      )
+    }
+  }
+
+  async function handleReopenBranch() {
+    if (reopening || isNewBranch || !isVendorDetailFlow) return
+    setActionError(null)
+    setReopening(true)
+    try {
+      await adminService.reopenVendor(vendorId, {
+        scope: 'single_branch',
+        branchId,
+      })
+      if (useRealBranchApi) {
+        await refreshBranchList()
+      } else {
+        setBranchOnline(true)
+        setLoadedBranch((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: 'Open',
+                operationalStatus: 'OPEN',
+                forceClosedUntil: null,
+              }
+            : prev,
+        )
+      }
+    } catch (err) {
+      setActionError(err?.message || 'Failed to reopen branch.')
+    } finally {
+      setReopening(false)
+    }
+  }
 
   function updateField(field, value) {
     setForm((c) => ({ ...c, [field]: value }))
@@ -623,14 +705,28 @@ export default function AdminAddVendorBrunchs() {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setForceCloseOpen(true)}
-            className="inline-flex h-[36px] items-center gap-2 rounded-full bg-[#fff3d6] px-4 text-[13px] font-bold text-[#9E6B0D] hover:bg-[#ffecc0]"
-          >
-            <Pause size={14} className="text-[#3b82f6]" fill="#3b82f6" strokeWidth={0} />
-            Force close
-          </button>
+          {!isNewBranch ? (
+            isBranchForceClosed ? (
+              <button
+                type="button"
+                onClick={handleReopenBranch}
+                disabled={reopening}
+                className="inline-flex h-[36px] items-center gap-2 rounded-full bg-[#e8f7ed] px-4 text-[13px] font-bold text-[#147940] hover:bg-[#d8f0e2] disabled:opacity-60"
+              >
+                <Play size={14} className="text-[#1aa054]" fill="#1aa054" strokeWidth={0} />
+                {reopening ? 'Reopening…' : 'Reopen branch'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setForceCloseOpen(true)}
+                className="inline-flex h-[36px] items-center gap-2 rounded-full bg-[#fff3d6] px-4 text-[13px] font-bold text-[#9E6B0D] hover:bg-[#ffecc0]"
+              >
+                <Pause size={14} className="text-[#3b82f6]" fill="#3b82f6" strokeWidth={0} />
+                Force close
+              </button>
+            )
+          ) : null}
           <button
             type="button"
             onClick={handleSaveBranch}
@@ -641,6 +737,10 @@ export default function AdminAddVendorBrunchs() {
           </button>
         </div>
       </div>
+
+      {actionError ? (
+        <p className="mb-3 text-[12px] font-medium text-[#d64044]">{actionError}</p>
+      ) : null}
 
       {loadError ? (
         <p className="mb-3 text-[12px] font-medium text-[#d64044]">{loadError}</p>
@@ -1008,19 +1108,35 @@ export default function AdminAddVendorBrunchs() {
 
           <div className="mt-3 flex items-center justify-between gap-4 rounded-[10px] bg-[#fff7d8] px-3.5 py-3">
             <div className="min-w-0">
-              <p className="text-[13px] font-bold text-[#c4841a]">Force close this branch</p>
+              <p className="text-[13px] font-bold text-[#c4841a]">
+                {isBranchForceClosed ? 'Branch is force-closed' : 'Force close this branch'}
+              </p>
               <p className="mt-0.5 text-[12px] leading-[16px] text-[#c4841a]">
-                Temporarily stop orders (e.g. emergency, out of stock). Customers see it as closed.
+                {isBranchForceClosed
+                  ? 'Customers see this branch as closed. Reopen when ready to accept orders again.'
+                  : 'Temporarily stop orders (e.g. emergency, out of stock). Customers see it as closed.'}
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setForceCloseOpen(true)}
-              className="inline-flex h-[32px] shrink-0 items-center justify-center rounded-full border border-[#c4841a] bg-white px-4 text-[12px] font-bold text-[#c4841a] hover:bg-[#fff3d6]"
-            >
-              Force close
-            </button>
+            {isBranchForceClosed ? (
+              <button
+                type="button"
+                onClick={handleReopenBranch}
+                disabled={reopening || isNewBranch}
+                className="inline-flex h-[32px] shrink-0 items-center justify-center rounded-full border border-[#1aa054] bg-white px-4 text-[12px] font-bold text-[#147940] hover:bg-[#e8f7ed] disabled:opacity-60"
+              >
+                {reopening ? 'Reopening…' : 'Reopen'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setForceCloseOpen(true)}
+                disabled={isNewBranch}
+                className="inline-flex h-[32px] shrink-0 items-center justify-center rounded-full border border-[#c4841a] bg-white px-4 text-[12px] font-bold text-[#c4841a] hover:bg-[#fff3d6] disabled:opacity-60"
+              >
+                Force close
+              </button>
+            )}
           </div>
         </section>
 
@@ -1080,10 +1196,17 @@ export default function AdminAddVendorBrunchs() {
         open={forceCloseOpen}
         onClose={() => setForceCloseOpen(false)}
         storeName={storeName}
-        branchName={form.name || 'Manama — Al Seef'}
-        branches={[form.name, 'Juffair — Road 2401', 'Riffa — East'].filter(Boolean)}
+        branchName={form.name || branch?.name || ''}
+        branchId={branchId}
+        branches={
+          allBranches.length
+            ? allBranches.map((item) => ({ id: item.id, name: item.name }))
+            : branch
+              ? [{ id: branch.id || branchId, name: form.name || branch.name }]
+              : []
+        }
         defaultScope="branch"
-        onConfirm={() => setBranchOnline(false)}
+        onConfirm={handleForceClose}
       />
     </div>
   )

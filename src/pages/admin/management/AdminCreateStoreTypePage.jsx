@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import vegetarianBadgeIcon from '../../../assets/🥗.png'
-import { CatalogStoreIcon, catalogStoreIconSrc } from '../../../components/CatalogStoreIcons'
+import { CatalogStoreIcon, catalogStoreIconSrc, resolveCatalogIconKey } from '../../../components/CatalogStoreIcons'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
@@ -145,13 +145,20 @@ function mockInitialValues(storeTypeId, isEdit) {
 }
 
 function initialFromDetail(detail) {
+  const slug = detail.internalKey || detail.slug || ''
+  const resolvedIconId =
+    resolveCatalogIconKey(detail.iconId) ||
+    resolveCatalogIconKey(slug) ||
+    'food'
+
   return {
     displayName: detail.displayName || '',
-    internalKey: detail.internalKey || detail.slug || '',
+    internalKey: slug,
     homeOrder: detail.homeOrder || '',
     visibleInApp: Boolean(detail.visibleInApp),
-    iconId: detail.iconId || detail.slug || 'food',
-    iconEmoji: detail.iconEmoji || null,
+    iconId: resolvedIconId,
+    iconEmoji: detail.iconEmoji || ICON_EMOJI_BY_KEY[resolvedIconId] || '🛒',
+    // Prefer catalog/emoji when remote URL is missing or invalid (avoids broken <img>).
     iconUrl: detail.iconUrl || null,
     modes: detail.modes || { ...EMPTY_MODES },
     categories: Array.isArray(detail.categories) ? detail.categories : [],
@@ -532,19 +539,21 @@ function StoreTypeForm({
   const isEditMode = mode === 'edit'
   const canManageNested = Boolean(storeTypeId && isEditMode && canSaveRemote)
 
-  const buildFormPayload = (publishStatus = 'DRAFT') => ({
+  const buildFormPayload = (publishStatus = 'DRAFT', visible = visibleInApp) => ({
     displayName,
     internalKey,
     homeOrder,
-    visibleInApp,
+    visibleInApp: visible,
+    isActive: visible,
     iconId,
-    iconEmoji,
-    iconUrl,
+    iconEmoji: iconEmoji || ICON_EMOJI_BY_KEY[iconId] || '🛒',
+    // Local catalog icons are not remote URLs — never send a bad path as iconUrl.
+    iconUrl: iconUrl || null,
     modes,
     publishStatus,
   })
 
-  const handleSave = async (publishStatus = 'DRAFT') => {
+  const handleSave = async (intent = 'DRAFT') => {
     if (!canSaveRemote) {
       onBack()
       return
@@ -555,14 +564,31 @@ function StoreTypeForm({
       return
     }
 
+    // List "Visible" = PUBLISHED + isActive. Keep that in sync with the
+    // "Visible in customer app" toggle so Save draft + Visible ON is not Hidden.
+    const nextVisible = intent === 'PUBLISHED' ? true : Boolean(visibleInApp)
+    const publishStatus = nextVisible ? 'PUBLISHED' : 'DRAFT'
+
+    if (nextVisible) {
+      const hasMode = Object.values(modes || {}).some(Boolean)
+      if (!hasMode) {
+        setSaveError('Enable at least one order mode before making this store type visible.')
+        return
+      }
+    }
+
+    if (nextVisible !== visibleInApp) setVisibleInApp(nextVisible)
+
     setSaving(true)
     setSaveError('')
     try {
       if (isEditMode) {
-        // Confirmed: PATCH /admin/store-types/:storeTypeId
-        await adminService.updateAdminStoreType(storeTypeId, buildFormPayload(publishStatus))
+        await adminService.updateAdminStoreType(
+          storeTypeId,
+          buildFormPayload(publishStatus, nextVisible),
+        )
       } else {
-        await adminService.createAdminStoreType(buildFormPayload(publishStatus))
+        await adminService.createAdminStoreType(buildFormPayload(publishStatus, nextVisible))
       }
       onBack()
     } catch (err) {
@@ -1157,7 +1183,11 @@ function StoreTypeForm({
             disabled={saving}
             className="inline-flex h-[36px] items-center rounded-full border border-[#d7e8dc] bg-white px-4 text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
           >
-            {saving ? 'Saving…' : 'Save draft'}
+            {saving
+              ? 'Saving…'
+              : visibleInApp
+                ? 'Save & make visible'
+                : 'Save draft'}
           </button>
           <button
             type="button"

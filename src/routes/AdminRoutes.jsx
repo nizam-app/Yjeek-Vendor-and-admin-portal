@@ -66,6 +66,7 @@ export const adminRoutes = (
     <Route path="stores/:storeTypeId" element={<AdminCreateStoreTypePage />} />
     <Route path="stores" element={<AdminStoresPage />} />
     <Route path="fleet/new" element={<AdminAddChampPage />} />
+    <Route path="fleet/:champId/edit" element={<AdminAddChampPage />} />
     <Route path="fleet/notify" element={<AdminNotifyChampsPage />} />
     <Route path="fleet/suppliers/new" element={<AdminAddSupplierPage />} />
     <Route path="fleet/suppliers/:supplierId/edit" element={<AdminAddSupplierPage />} />

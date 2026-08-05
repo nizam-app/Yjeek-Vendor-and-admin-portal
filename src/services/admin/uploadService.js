@@ -71,7 +71,7 @@ export function validateAdminImageFile(file, { maxBytes = ADMIN_IMAGE_UPLOAD_MAX
 export const adminUploadService = {
   /**
    * @param {File} file
-   * @param {{ signal?: AbortSignal, feature?: string }} [options]
+   * @param {{ signal?: AbortSignal, feature?: string, category?: string }} [options]
    * @returns {Promise<{ data: { url: string }, meta: object|null, raw: unknown }>}
    */
   async uploadImage(file, options = {}) {
@@ -100,6 +100,49 @@ export const adminUploadService = {
 
     return {
       data: { url: mapped.url },
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  /**
+   * Fleet / champ document & vehicle image upload.
+   * POST /admin/uploads/fleet-images?category=documents|avatars|vehicle-photos
+   *
+   * @param {File} file
+   * @param {{ signal?: AbortSignal, feature?: string, category?: string }} [options]
+   */
+  async uploadFleetImage(file, options = {}) {
+    if (
+      !useRealUploadApi() &&
+      !isAdminRealApiFeature('fleet') &&
+      apiConfig.adminUseMockApi
+    ) {
+      throw new ApiError({ message: 'Admin fleet upload API is not enabled.' })
+    }
+
+    validateAdminImageFile(file)
+
+    const category = String(options.category || 'documents').trim() || 'documents'
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await apiClient.post(
+      `${endpoints.admin.uploads.fleetImages}?category=${encodeURIComponent(category)}`,
+      formData,
+      requestOptions({ ...options, feature: options.feature || 'fleet' }),
+    )
+
+    const mapped = mapAdminUploadImageResponse(response?.data)
+    if (!mapped.url) {
+      throw new ApiError({
+        message: 'Upload succeeded but no image URL was returned.',
+        details: response?.data,
+      })
+    }
+
+    return {
+      data: { url: mapped.url, category },
       meta: response?.meta ?? null,
       raw: response?.data ?? null,
     }

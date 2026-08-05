@@ -383,19 +383,19 @@ const MONTH_INDEX = {
 }
 
 /**
- * Parse modal "To" text → ISO for POST force-close.
+ * Parse modal date text → ISO for force-close from/to.
  * Accepts ISO already, or UI text like "9 Apr 2026 · 18:00".
  */
-export function mapAdminForceCloseToIso(value) {
+export function mapAdminForceCloseToIso(value, label = 'time') {
   const raw = String(value || '').trim()
   if (!raw) {
-    throw new ApiError({ message: 'Force close end time (To) is required.' })
+    throw new ApiError({ message: `Force close ${label} is required.` })
   }
 
   if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
     const date = new Date(raw)
     if (Number.isNaN(date.getTime())) {
-      throw new ApiError({ message: 'Force close end time is invalid.' })
+      throw new ApiError({ message: `Force close ${label} is invalid.` })
     }
     return date.toISOString()
   }
@@ -405,7 +405,7 @@ export function mapAdminForceCloseToIso(value) {
   )
   if (!match) {
     throw new ApiError({
-      message: 'Use To format like "9 Apr 2026 · 18:00" or an ISO date.',
+      message: `Use ${label} format like "9 Apr 2026 · 18:00" or an ISO date.`,
     })
   }
 
@@ -415,37 +415,68 @@ export function mapAdminForceCloseToIso(value) {
   const hour = Number(match[4])
   const minute = Number(match[5])
   if (month == null || Number.isNaN(day) || Number.isNaN(year)) {
-    throw new ApiError({ message: 'Force close end time is invalid.' })
+    throw new ApiError({ message: `Force close ${label} is invalid.` })
   }
 
   const date = new Date(Date.UTC(year, month, day, hour, minute, 0, 0))
   if (Number.isNaN(date.getTime())) {
-    throw new ApiError({ message: 'Force close end time is invalid.' })
+    throw new ApiError({ message: `Force close ${label} is invalid.` })
   }
   return date.toISOString()
 }
 
+function isSingleBranchScope(scope) {
+  const label = String(scope || '').trim()
+  return label === 'Single branch' || label === 'single_branch'
+}
+
 /**
  * Map Force close modal values → POST /admin/vendors/:id/force-close body.
- * Confirmed Postman fields only: scope, reason, to.
- * Skips modal from / note / branch (not in API).
+ * Supports whole_store and single_branch (branchId required for single).
  */
 export function mapAdminForceCloseRequest(form = {}) {
-  const scopeLabel = String(form.scope || 'Whole store').trim()
-  if (scopeLabel === 'Single branch') {
-    throw new ApiError({
-      message: 'Single-branch force close is not supported by the API yet. Use Whole store.',
-    })
-  }
-
+  const singleBranch = isSingleBranchScope(form.scope)
   const reason = String(form.reason || '').trim()
   if (!reason) {
     throw new ApiError({ message: 'Force close reason is required.' })
   }
 
-  return {
-    scope: 'whole_store',
+  const body = {
+    scope: singleBranch ? 'single_branch' : 'whole_store',
     reason,
-    to: mapAdminForceCloseToIso(form.to),
+    to: mapAdminForceCloseToIso(form.to, 'end time (To)'),
   }
+
+  if (form.from != null && String(form.from).trim()) {
+    body.from = mapAdminForceCloseToIso(form.from, 'start time (From)')
+  }
+
+  const note = String(form.note || '').trim()
+  if (note) body.note = note
+
+  if (singleBranch) {
+    const branchId = String(form.branchId || '').trim()
+    if (!branchId) {
+      throw new ApiError({
+        message: 'Select a branch for single-branch force close.',
+      })
+    }
+    body.branchId = branchId
+  }
+
+  return body
+}
+
+/**
+ * Map reopen form → POST /admin/vendors/:id/reopen body.
+ */
+export function mapAdminReopenRequest(form = {}) {
+  if (isSingleBranchScope(form.scope)) {
+    const branchId = String(form.branchId || '').trim()
+    if (!branchId) {
+      throw new ApiError({ message: 'Branch id is required to reopen a single branch.' })
+    }
+    return { scope: 'single_branch', branchId }
+  }
+  return { scope: 'whole_store' }
 }

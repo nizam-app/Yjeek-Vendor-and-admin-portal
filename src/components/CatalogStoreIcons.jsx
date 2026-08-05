@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import iconAll from '../assets/catalog-all.png'
 import iconFood from '../assets/catalog-food.png'
 import iconGroceries from '../assets/catalog-groceries.png'
@@ -37,17 +38,81 @@ function normalizeIconKey(id) {
     .replace(/\s+/g, '-')
 }
 
-export function CatalogStoreIcon({ id, emoji, iconUrl, className = 'size-[22px]' }) {
-  if (iconUrl) {
-    return <img src={iconUrl} alt="" className={`object-contain ${className}`} />
+/**
+ * Resolve a store-type slug / icon id to a known catalog key.
+ * e.g. food_2, food2222, Food-Drink → food
+ */
+export function resolveCatalogIconKey(id) {
+  const key = normalizeIconKey(id)
+  if (!key) return null
+
+  const underscored = key.replace(/-/g, '_')
+  if (catalogStoreIconSrc[key]) return key
+  if (catalogStoreIconSrc[underscored]) return underscored
+
+  const candidates = Object.keys(catalogStoreIconSrc)
+    .filter((name) => name !== 'all')
+    .sort((a, b) => b.length - a.length)
+
+  for (const candidate of candidates) {
+    const cKey = normalizeIconKey(candidate)
+    const cUnder = cKey.replace(/-/g, '_')
+    if (
+      key === cKey ||
+      key === cUnder ||
+      key.startsWith(`${cKey}-`) ||
+      key.startsWith(`${cKey}_`) ||
+      key.startsWith(`${cUnder}_`) ||
+      key.startsWith(cKey) ||
+      key.startsWith(cUnder)
+    ) {
+      return candidate
+    }
   }
 
-  const key = normalizeIconKey(id)
-  const underscored = key.replace(/-/g, '_')
-  const src = catalogStoreIconSrc[key] || catalogStoreIconSrc[underscored]
+  return null
+}
 
-  if (src) {
-    return <img src={src} alt="" className={`object-contain ${className}`} />
+export function resolveCatalogIconSrc(id) {
+  const resolved = resolveCatalogIconKey(id)
+  if (!resolved) return null
+  return catalogStoreIconSrc[resolved] || null
+}
+
+function isUsableRemoteIconUrl(url) {
+  const value = String(url || '').trim()
+  if (!value) return false
+  return (
+    /^https?:\/\//i.test(value) ||
+    value.startsWith('data:image/') ||
+    value.startsWith('blob:') ||
+    value.startsWith('/')
+  )
+}
+
+export function CatalogStoreIcon({ id, emoji, iconUrl, className = 'size-[22px]' }) {
+  const [urlFailed, setUrlFailed] = useState(false)
+
+  useEffect(() => {
+    setUrlFailed(false)
+  }, [iconUrl])
+
+  const catalogSrc = resolveCatalogIconSrc(id)
+  const usableUrl = isUsableRemoteIconUrl(iconUrl) ? String(iconUrl).trim() : null
+
+  if (usableUrl && !urlFailed) {
+    return (
+      <img
+        src={usableUrl}
+        alt=""
+        className={`object-contain ${className}`}
+        onError={() => setUrlFailed(true)}
+      />
+    )
+  }
+
+  if (catalogSrc) {
+    return <img src={catalogSrc} alt="" className={`object-contain ${className}`} />
   }
 
   if (emoji) {

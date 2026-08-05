@@ -21,6 +21,15 @@ Confirmed from Postman **"POST Reopen"**.
 }
 ```
 
+### Single branch
+
+```json
+{
+  "scope": "single_branch",
+  "branchId": "{{branchId}}"
+}
+```
+
 ### Success
 
-Returns full vendor detail (same shape as Get vendor). Overview updates: `status: "Active"`, `forceClosed: false`, online on, KPIs, and the button switches back to **Force close store**.
+Returns full vendor detail (same shape as Get vendor). Overview updates: `status: "Active"`, `forceClosed: false`, online on, KPIs, and the button switches back to **Force close store**. For `single_branch`, that location is set back to `OPEN`.

@@ -1,39 +1,29 @@
-import { useMemo } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useApiResource } from '../useApiResource'
-import { useVendorBranches } from './useVendorBranches'
-import { resolveVendorBoardBranchId } from './resolveVendorBoardBranchId'
 import { orderService } from '../../services/vendor/orderService'
 
 /**
  * Vendor live orders board.
  * LiveOrders → useVendorLiveOrders → orderService.getLiveOrders → mapper → apiClient
  *
+ * Branch scoping matches Dashboard: only send `branchId` when the staff account
+ * is bound to a location (`user.vendorLocationId`).
+ *
+ * Do NOT fall back to primary/first branch — that filters `vendorLocationId = X`
+ * and hides orders with no branch (Dashboard Recent orders shows Branch: —).
+ *
  * @param {'delivery'|'dinein'} board
  */
 export function useVendorLiveOrders(board = 'delivery') {
   const { user } = useAuth()
-  const { data: branchesData, isLoading: branchesLoading } = useVendorBranches()
-  const branchId = useMemo(
-    () => resolveVendorBoardBranchId(user, branchesData?.branches),
-    [user, branchesData?.branches],
-  )
+  const branchId = user?.vendorLocationId || null
 
-  const resource = useApiResource(
-    () => {
-      if (!branchId && branchesLoading) {
-        return Promise.resolve({ data: null, meta: null })
-      }
-      return orderService.getLiveOrders({
+  return useApiResource(
+    () =>
+      orderService.getLiveOrders({
         board,
         branchId,
-      })
-    },
-    [board, branchId, branchesLoading],
+      }),
+    [board, branchId],
   )
-
-  return {
-    ...resource,
-    isLoading: resource.isLoading || (!branchId && branchesLoading),
-  }
 }

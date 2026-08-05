@@ -290,14 +290,192 @@ function parseDailyCashLimit(value) {
   return Number.isFinite(numeric) ? numeric : 0
 }
 
+/** Parse DD/MM/YYYY or YYYY-MM-DD → ISO date string (YYYY-MM-DD). */
+export function parseChampFormDate(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return undefined
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  const m = raw.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/)
+  if (!m) return undefined
+  const day = Number(m[1])
+  const month = Number(m[2])
+  const year = Number(m[3])
+  if (!day || !month || !year || month > 12 || day > 31) return undefined
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+export function formatChampFormDate(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    const [y, mo, d] = raw.slice(0, 10).split('-')
+    return `${d}/${mo}/${y}`
+  }
+  return raw
+}
+
+const CASH_LIMIT_ACTION_TO_API = {
+  'Stop cash orders': 'STOP_CASH_ORDERS',
+  'Notify only': 'WARN_ONLY',
+  'Require approval': 'REQUIRE_APPROVAL',
+  STOP_CASH_ORDERS: 'STOP_CASH_ORDERS',
+  WARN_ONLY: 'WARN_ONLY',
+  REQUIRE_APPROVAL: 'REQUIRE_APPROVAL',
+}
+
+const CASH_LIMIT_ACTION_TO_FORM = {
+  STOP_CASH_ORDERS: 'Stop cash orders',
+  WARN_ONLY: 'Notify only',
+  REQUIRE_APPROVAL: 'Require approval',
+}
+
+/** UI upload slot key → API document type or vehicle/avatar field */
+export const CHAMP_DOC_SLOT_META = {
+  personalPicture: { kind: 'avatar', label: 'Personal picture', category: 'avatars' },
+  cprFront: { kind: 'document', type: 'CPR_FRONT', label: 'CPR - Front', category: 'documents' },
+  cprBack: { kind: 'document', type: 'CPR_BACK', label: 'CPR - Back', category: 'documents' },
+  passportFront: { kind: 'document', type: 'PASSPORT', label: 'Passport - Front', category: 'documents' },
+  passportBack: { kind: 'document', type: 'PASSPORT_BACK', label: 'Passport - Back', category: 'documents' },
+  visaFront: { kind: 'document', type: 'VISA_FRONT', label: 'Visa - Front', category: 'documents' },
+  visaBack: { kind: 'document', type: 'VISA_BACK', label: 'Visa - Back', category: 'documents' },
+  licenseFront: { kind: 'document', type: 'DRIVING_LICENSE', label: 'License - Front', category: 'documents' },
+  licenseBack: { kind: 'document', type: 'DRIVING_LICENSE_BACK', label: 'License - Back', category: 'documents' },
+  regFront: {
+    kind: 'document',
+    type: 'VEHICLE_REGISTRATION_FRONT',
+    label: 'Reg - Front',
+    category: 'documents',
+  },
+  regBack: {
+    kind: 'document',
+    type: 'VEHICLE_REGISTRATION_BACK',
+    label: 'Reg - Back',
+    category: 'documents',
+  },
+  vehiclePhoto1: { kind: 'vehiclePhoto', field: 'vehicleFrontPhotoUrl', label: 'Vehicle photo 1', category: 'vehicle-photos' },
+  vehiclePhoto2: { kind: 'vehiclePhoto', field: 'vehicleBackPhotoUrl', label: 'Vehicle photo 2', category: 'vehicle-photos' },
+  vehiclePhoto3: { kind: 'vehiclePhoto', field: 'vehicleSidePhotoUrl', label: 'Vehicle photo 3', category: 'vehicle-photos' },
+  insurance: { kind: 'document', type: 'INSURANCE', label: 'Insurance', category: 'documents' },
+}
+
+function buildChampDocumentsPayload(docs = {}, form = {}) {
+  const list = []
+  for (const [slot, meta] of Object.entries(CHAMP_DOC_SLOT_META)) {
+    if (meta.kind !== 'document') continue
+    const imageUrl = String(docs[slot] || '').trim()
+    if (!imageUrl) continue
+    const item = { type: meta.type, imageUrl }
+    if (meta.type === 'CPR_FRONT' || meta.type === 'CPR_BACK') {
+      const num = String(form.cpr || form.cprNumber || '').trim()
+      const exp = parseChampFormDate(form.cprExpiry)
+      if (num) item.documentNumber = num
+      if (exp) item.expiryDate = exp
+    }
+    if (meta.type === 'PASSPORT' || meta.type === 'PASSPORT_BACK') {
+      const num = String(form.passport || form.passportNumber || '').trim()
+      const exp = parseChampFormDate(form.passportExpiry)
+      if (num) item.documentNumber = num
+      if (exp) item.expiryDate = exp
+    }
+    if (meta.type === 'VISA_FRONT' || meta.type === 'VISA_BACK') {
+      const num = String(form.visa || form.visaNumber || '').trim()
+      const exp = parseChampFormDate(form.visaExpiry)
+      if (num) item.documentNumber = num
+      if (exp) item.expiryDate = exp
+    }
+    if (meta.type === 'DRIVING_LICENSE' || meta.type === 'DRIVING_LICENSE_BACK') {
+      const exp = parseChampFormDate(form.licenseExpiry)
+      if (exp) item.expiryDate = exp
+    }
+    if (meta.type === 'INSURANCE') {
+      const exp = parseChampFormDate(form.insuranceExpiry)
+      if (exp) item.expiryDate = exp
+    }
+    const nationality = String(form.nationality || '').trim()
+    if (nationality) item.nationality = nationality
+    list.push(item)
+  }
+  return list
+}
+
+function appendChampExtendedFields(body, form = {}, docs = {}) {
+  const nationality = String(form.nationality || '').trim()
+  if (nationality) body.nationality = nationality
+
+  const dateOfBirth = parseChampFormDate(form.birthDate || form.dateOfBirth)
+  if (dateOfBirth) body.dateOfBirth = dateOfBirth
+
+  const cprExpiryDate = parseChampFormDate(form.cprExpiry || form.cprExpiryDate)
+  if (cprExpiryDate) body.cprExpiryDate = cprExpiryDate
+
+  const passportNumber = String(form.passport || form.passportNumber || '').trim()
+  if (passportNumber) body.passportNumber = passportNumber
+
+  const passportExpiryDate = parseChampFormDate(form.passportExpiry || form.passportExpiryDate)
+  if (passportExpiryDate) body.passportExpiryDate = passportExpiryDate
+
+  const visaNumber = String(form.visa || form.visaNumber || '').trim()
+  if (visaNumber) body.visaNumber = visaNumber
+
+  const visaExpiryDate = parseChampFormDate(form.visaExpiry || form.visaExpiryDate)
+  if (visaExpiryDate) body.visaExpiryDate = visaExpiryDate
+
+  const licenseExpiryDate = parseChampFormDate(form.licenseExpiry || form.licenseExpiryDate)
+  if (licenseExpiryDate) body.licenseExpiryDate = licenseExpiryDate
+
+  const insuranceExpiryDate = parseChampFormDate(form.insuranceExpiry || form.insuranceExpiryDate)
+  if (insuranceExpiryDate) body.insuranceExpiryDate = insuranceExpiryDate
+
+  const vehicleColor = String(form.color || form.vehicleColor || '').trim()
+  if (vehicleColor) body.vehicleColor = vehicleColor
+
+  const avatarUrl = String(docs.personalPicture || form.avatarUrl || '').trim()
+  if (avatarUrl) body.avatarUrl = avatarUrl
+
+  const front = String(docs.vehiclePhoto1 || form.vehicleFrontPhotoUrl || '').trim()
+  if (front) body.vehicleFrontPhotoUrl = front
+  const back = String(docs.vehiclePhoto2 || form.vehicleBackPhotoUrl || '').trim()
+  if (back) body.vehicleBackPhotoUrl = back
+  const side = String(docs.vehiclePhoto3 || form.vehicleSidePhotoUrl || '').trim()
+  if (side) body.vehicleSidePhotoUrl = side
+
+  if (form.specialItems != null || form.specialItemsEnabled != null) {
+    body.specialItemsEnabled = Boolean(
+      form.specialItemsEnabled != null ? form.specialItemsEnabled : form.specialItems,
+    )
+  }
+
+  const specialItemTypes = Array.isArray(form.specialItemTypes)
+    ? form.specialItemTypes
+    : Array.isArray(form.specialTypes)
+      ? form.specialTypes
+      : null
+  if (specialItemTypes) body.specialItemTypes = specialItemTypes
+
+  if (form.orderLimit != null || form.perOrderCashLimit != null) {
+    body.perOrderCashLimit = parseDailyCashLimit(form.perOrderCashLimit ?? form.orderLimit)
+  }
+
+  const cashLimitAction =
+    CASH_LIMIT_ACTION_TO_API[form.onLimit] ||
+    CASH_LIMIT_ACTION_TO_API[form.cashLimitAction] ||
+    null
+  if (cashLimitAction) body.cashLimitAction = cashLimitAction
+
+  const documents = buildChampDocumentsPayload(docs, form)
+  if (documents.length) body.documents = documents
+
+  return body
+}
+
 /**
  * Map Add Champ form → POST /admin/fleet/champs body.
- * Confirmed Postman fields only — UI-only fields (docs, nationality, etc.) omitted.
  */
 export function mapAdminCreateChampRequest(form = {}) {
   const { firstName, lastName } = splitFullName(form.fullName || form.firstName)
   const { countryCode, phone } = parseChampPhone(form.phone, form.countryCode || '+973')
   const supplierId = String(form.supplierId || '').trim()
+  const docs = form.docs && typeof form.docs === 'object' ? form.docs : {}
 
   if (!firstName || !lastName) {
     throw new ApiError({ message: 'Full name is required.' })
@@ -335,6 +513,8 @@ export function mapAdminCreateChampRequest(form = {}) {
     supplierId,
   }
 
+  appendChampExtendedFields(body, form, docs)
+
   if (!body.email) delete body.email
   if (!body.cprNumber) delete body.cprNumber
   if (!body.vehicleMake) delete body.vehicleMake
@@ -344,6 +524,190 @@ export function mapAdminCreateChampRequest(form = {}) {
   if (!body.allowedCategories.length) delete body.allowedCategories
 
   return body
+}
+
+/**
+ * Map Edit Champ form → PATCH /admin/fleet/champs/:champId body.
+ */
+export function mapAdminUpdateChampRequest(form = {}) {
+  const body = {}
+  const docs = form.docs && typeof form.docs === 'object' ? form.docs : {}
+
+  const { firstName, lastName } = splitFullName(form.fullName || form.firstName)
+  if (firstName) body.firstName = firstName
+  if (lastName) body.lastName = lastName
+
+  const email = String(form.email || '').trim()
+  if (email) body.email = email
+
+  const cprNumber = String(form.cprNumber || form.cpr || '').trim()
+  if (cprNumber) body.cprNumber = cprNumber
+
+  const allowedCategories = Array.isArray(form.allowedCategories)
+    ? form.allowedCategories
+    : Array.isArray(form.storeTypes)
+      ? form.storeTypes
+      : null
+  if (allowedCategories) body.allowedCategories = allowedCategories
+
+  if (form.dailyCashLimit != null || form.dailyLimit != null) {
+    body.dailyCashLimit = parseDailyCashLimit(form.dailyCashLimit ?? form.dailyLimit)
+  }
+
+  const tier = mapFleetTierToApi(form.tier)
+  if (tier) body.tier = tier
+
+  const city = String(form.city || '').trim()
+  if (city) body.city = city
+
+  const zone = String(form.zone || '').trim()
+  if (zone) body.zone = zone
+
+  const supplierId = String(form.supplierId || '').trim()
+  if (supplierId) body.supplierId = supplierId
+
+  const vehicleType = mapFleetVehicleToApi(form.vehicleType)
+  if (vehicleType) body.vehicleType = vehicleType
+
+  const vehicleMake = String(form.vehicleMake || form.make || '').trim()
+  if (vehicleMake) body.vehicleMake = vehicleMake
+
+  const vehicleModel = String(form.vehicleModel || form.model || '').trim()
+  if (vehicleModel) body.vehicleModel = vehicleModel
+
+  const vehicleYear = Number(form.vehicleYear || form.year)
+  if (Number.isFinite(vehicleYear) && vehicleYear > 0) body.vehicleYear = vehicleYear
+
+  const plateNumber = String(form.plateNumber || form.plate || '').trim()
+  if (plateNumber) body.plateNumber = plateNumber
+
+  appendChampExtendedFields(body, form, docs)
+
+  if (!Object.keys(body).length) {
+    throw new ApiError({ message: 'No champ fields to update.' })
+  }
+
+  return body
+}
+
+/**
+ * Map GET champ overview → Add/Edit champ form values.
+ */
+export function mapAdminChampDetailToForm(detail, documentsPayload) {
+  if (!detail || typeof detail !== 'object') {
+    throw new ApiError({ message: 'Invalid champ detail for edit form.' })
+  }
+
+  const raw = detail.raw && typeof detail.raw === 'object' ? detail.raw : {}
+  const profile = raw.profile && typeof raw.profile === 'object' ? raw.profile : {}
+  const header = raw.header && typeof raw.header === 'object' ? raw.header : {}
+  const vehicle = profile.vehicle && typeof profile.vehicle === 'object' ? profile.vehicle : {}
+  const supplier = header.supplier && typeof header.supplier === 'object' ? header.supplier : {}
+
+  const firstName = profile.firstName || ''
+  const lastName = profile.lastName || ''
+  const fullName =
+    detail.name && detail.name !== '—'
+      ? String(detail.name)
+      : [firstName, lastName].filter(Boolean).join(' ').trim()
+
+  const vehicleTypeRaw = vehicle.type || detail.vehicle || 'BIKE'
+  const vehicleType =
+    String(vehicleTypeRaw).toUpperCase() === 'CAR' || String(vehicleTypeRaw) === 'Car'
+      ? 'Car'
+      : 'Bike'
+
+  const categories = Array.isArray(detail.allowedCategories)
+    ? detail.allowedCategories
+    : Array.isArray(profile.allowedCategories)
+      ? profile.allowedCategories
+      : []
+
+  const dailyLimitRaw = profile.dailyCashLimit ?? detail.cashLimit
+  const dailyLimit =
+    typeof dailyLimitRaw === 'number'
+      ? `BHD ${Number(dailyLimitRaw).toFixed(3)}`
+      : String(dailyLimitRaw || 'BHD 50.000')
+
+  const orderLimitRaw = profile.perOrderCashLimit
+  const orderLimit =
+    typeof orderLimitRaw === 'number'
+      ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
+      : orderLimitRaw != null
+        ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
+        : 'BHD 20.000'
+
+  const tierRaw = profile.tier || detail.tier || 'BRONZE'
+  const tier = mapFleetTierToApi(tierRaw) || String(tierRaw).toUpperCase() || 'BRONZE'
+
+  const docs = {
+    personalPicture: profile.avatarUrl || header.avatarUrl || '',
+    cprFront: '',
+    cprBack: '',
+    passportFront: '',
+    passportBack: '',
+    visaFront: '',
+    visaBack: '',
+    licenseFront: '',
+    licenseBack: '',
+    regFront: '',
+    regBack: '',
+    vehiclePhoto1: vehicle.frontPhotoUrl || '',
+    vehiclePhoto2: vehicle.backPhotoUrl || '',
+    vehiclePhoto3: vehicle.sidePhotoUrl || '',
+    insurance: '',
+  }
+
+  const typeToSlot = Object.fromEntries(
+    Object.entries(CHAMP_DOC_SLOT_META)
+      .filter(([, meta]) => meta.kind === 'document')
+      .map(([slot, meta]) => [meta.type, slot]),
+  )
+
+  const docList = Array.isArray(documentsPayload?.documents)
+    ? documentsPayload.documents
+    : Array.isArray(documentsPayload)
+      ? documentsPayload
+      : []
+
+  for (const doc of docList) {
+    const slot = typeToSlot[doc?.type]
+    if (slot && doc?.imageUrl) docs[slot] = String(doc.imageUrl)
+  }
+
+  return {
+    fullName: fullName || '',
+    phone: detail.phone && detail.phone !== '—' ? String(detail.phone) : '',
+    email: profile.email ? String(profile.email) : '',
+    nationality: profile.nationality ? String(profile.nationality) : 'Bahraini',
+    supplierId: String(profile.supplierId || supplier.id || '').trim(),
+    supplier: String(detail.supplier || supplier.name || '').trim(),
+    city: String(profile.city || '').trim() || 'Manama',
+    zone: String(profile.zone || '').trim() || 'Adliya',
+    tier,
+    cpr: profile.cprNumber ? String(profile.cprNumber) : detail.cpr && detail.cpr !== '—' ? String(detail.cpr) : '',
+    cprExpiry: formatChampFormDate(profile.cprExpiryDate),
+    birthDate: formatChampFormDate(profile.dateOfBirth),
+    passport: profile.passportNumber ? String(profile.passportNumber) : '',
+    passportExpiry: formatChampFormDate(profile.passportExpiryDate),
+    visa: profile.visaNumber ? String(profile.visaNumber) : '',
+    visaExpiry: formatChampFormDate(profile.visaExpiryDate),
+    insuranceExpiry: formatChampFormDate(vehicle.insuranceExpiryDate || profile.insuranceExpiryDate),
+    licenseExpiry: formatChampFormDate(profile.licenseExpiryDate),
+    plate: vehicle.plateNumber ? String(vehicle.plateNumber) : '',
+    make: vehicle.make ? String(vehicle.make) : '',
+    model: vehicle.model ? String(vehicle.model) : '',
+    color: vehicle.color ? String(vehicle.color) : '',
+    year: vehicle.year != null ? String(vehicle.year) : '',
+    vehicleType,
+    specialItems: profile.specialItemsEnabled != null ? Boolean(profile.specialItemsEnabled) : true,
+    specialTypes: Array.isArray(profile.specialItemTypes) ? profile.specialItemTypes : [],
+    dailyLimit,
+    orderLimit,
+    onLimit: CASH_LIMIT_ACTION_TO_FORM[profile.cashLimitAction] || 'Stop cash orders',
+    storeTypes: categories,
+    docs,
+  }
 }
 
 /**
@@ -894,6 +1258,8 @@ export function mapAdminChampDetailResponse(data) {
     accountStatus === 'SUSPENDED' ||
     String(status).toLowerCase() === 'suspended' ||
     Boolean(suspension?.suspendedAt)
+  const isTerminated =
+    accountStatus === 'TERMINATED' || String(status).toLowerCase() === 'terminated'
   const online = Boolean(controls.online)
   const avatar = avatarForKey(id + name)
   const categories = Array.isArray(profile.allowedCategories) ? profile.allowedCategories : []
@@ -912,6 +1278,7 @@ export function mapAdminChampDetailResponse(data) {
     status: String(status),
     accountStatus: header.accountStatus || null,
     isSuspended,
+    isTerminated,
     tier,
     vehicle,
     supplier: supplierName,
@@ -992,6 +1359,88 @@ export function mapAdminChampSuspendRequest(form = {}) {
     duration: mapChampSuspendDurationToApi(form.duration),
     notifyChamp: form.notifyChamp !== false && form.notify !== false,
   }
+
+  const note = String(form.note || '').trim()
+  if (note) body.note = note
+
+  return body
+}
+
+const TERMINATE_MONTH_INDEX = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+}
+
+/**
+ * Parse terminate modal date → ISO datetime for POST .../terminate.
+ * Accepts ISO, YYYY-MM-DD, or UI text like "29 Jun 2026".
+ */
+export function mapAdminChampTerminateEffectiveDate(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
+    const date = new Date(raw)
+    if (Number.isNaN(date.getTime())) {
+      throw new ApiError({ message: 'Effective date is invalid.' })
+    }
+    return date.toISOString()
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T00:00:00.000Z`)
+    if (Number.isNaN(date.getTime())) {
+      throw new ApiError({ message: 'Effective date is invalid.' })
+    }
+    return date.toISOString()
+  }
+
+  const match = raw.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/)
+  if (!match) {
+    throw new ApiError({
+      message: 'Use effective date like "29 Jun 2026" or an ISO date.',
+    })
+  }
+
+  const day = Number(match[1])
+  const month = TERMINATE_MONTH_INDEX[match[2].toLowerCase()]
+  const year = Number(match[3])
+  if (month == null || Number.isNaN(day) || Number.isNaN(year)) {
+    throw new ApiError({ message: 'Effective date is invalid.' })
+  }
+
+  const date = new Date(Date.UTC(year, month, day, 0, 0, 0, 0))
+  if (Number.isNaN(date.getTime())) {
+    throw new ApiError({ message: 'Effective date is invalid.' })
+  }
+  return date.toISOString()
+}
+
+/**
+ * Map Terminate champ modal → POST /admin/fleet/champs/:id/terminate body.
+ * Confirmed: reason, effectiveDate?, note?
+ * COD is server-authoritative — not sent.
+ */
+export function mapAdminChampTerminateRequest(form = {}) {
+  const reason = String(form.reason || '').trim()
+  if (!reason) {
+    throw new ApiError({ message: 'Termination reason is required.' })
+  }
+
+  const body = { reason }
+
+  const effectiveDate = mapAdminChampTerminateEffectiveDate(form.effectiveDate)
+  if (effectiveDate) body.effectiveDate = effectiveDate
 
   const note = String(form.note || '').trim()
   if (note) body.note = note
@@ -1128,6 +1577,208 @@ export function mapAdminChampEarningsResponse(data) {
     ],
     // Keep raw buckets for future UI (deliveries / tips) if needed.
     buckets: { today, week, lifetime },
+    rows,
+  }
+}
+
+const AUDIENCE_UI_TO_API = {
+  'All champs': 'all',
+  Online: 'online',
+  'By category': 'by_category',
+  'By zone': 'by_zone',
+  Selected: 'selected',
+}
+
+const AUDIENCE_API_TO_LABEL = {
+  all: 'All champs',
+  ALL: 'All champs',
+  online: 'Online champs',
+  ONLINE: 'Online champs',
+  by_category: 'By category',
+  BY_CATEGORY: 'By category',
+  by_zone: 'By zone',
+  BY_ZONE: 'By zone',
+  selected: 'Selected',
+  SELECTED: 'Selected',
+}
+
+const SCHEDULE_UI_TO_API = {
+  'Send now': 'now',
+  'Schedule later': 'later',
+}
+
+const STATUS_LABEL = {
+  DELIVERED: 'Delivered',
+  PROCESSING: 'Sending',
+  SCHEDULED: 'Scheduled',
+  FAILED: 'Failed',
+  PARTIAL: 'Partial',
+}
+
+function formatNotifyHistoryDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function parseChampIdsInput(value) {
+  return String(value || '')
+    .split(/[\s,;]+/)
+    .map((id) => id.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Map Notify Champs form → POST /admin/fleet/notify/estimate body.
+ */
+export function mapAdminFleetNotifyEstimateRequest(form = {}) {
+  const audience =
+    AUDIENCE_UI_TO_API[form.audience] ||
+    String(form.audienceApi || form.audience || 'all').toLowerCase()
+
+  const body = { audience }
+
+  if (audience === 'by_category') {
+    const category = String(form.category || '').trim()
+    if (!category) throw new ApiError({ message: 'Category is required for this audience.' })
+    body.category = category
+  }
+
+  if (audience === 'by_zone') {
+    const zone = String(form.zone || '').trim()
+    if (!zone) throw new ApiError({ message: 'Zone is required for this audience.' })
+    body.zone = zone
+  }
+
+  if (audience === 'selected') {
+    const champIds = Array.isArray(form.champIds)
+      ? form.champIds.filter(Boolean)
+      : parseChampIdsInput(form.champIdsText || form.selectedChampIds)
+    if (!champIds.length) {
+      throw new ApiError({ message: 'Enter at least one champ id for Selected audience.' })
+    }
+    body.champIds = champIds
+  }
+
+  return body
+}
+
+/**
+ * Map Notify Champs form → POST /admin/fleet/notify body.
+ */
+export function mapAdminFleetNotifyRequest(form = {}) {
+  const body = mapAdminFleetNotifyEstimateRequest(form)
+
+  const type = String(form.type || form.messageType || 'Info').trim()
+  if (!['Info', 'Incentive', 'Alert', 'Policy'].includes(type)) {
+    throw new ApiError({ message: 'Invalid notification type.' })
+  }
+
+  const title = String(form.title || '').trim()
+  const messageBody = String(form.body || '').trim()
+  if (!title) throw new ApiError({ message: 'Title is required.' })
+  if (!messageBody) throw new ApiError({ message: 'Body is required.' })
+
+  body.type = type
+  body.title = title
+  body.body = messageBody
+  body.push = form.push !== false
+  body.sms = Boolean(form.sms)
+
+  const schedule =
+    SCHEDULE_UI_TO_API[form.schedule] ||
+    String(form.scheduleApi || 'now').toLowerCase()
+  body.schedule = schedule === 'later' ? 'later' : 'now'
+
+  if (body.schedule === 'later') {
+    const scheduledAt = String(form.scheduledAt || '').trim()
+    if (!scheduledAt) {
+      throw new ApiError({ message: 'Pick a date/time for Schedule later.' })
+    }
+    const when = new Date(scheduledAt)
+    if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now()) {
+      throw new ApiError({ message: 'Scheduled time must be in the future.' })
+    }
+    body.scheduledAt = when.toISOString()
+  }
+
+  if (!body.push && !body.sms) {
+    throw new ApiError({ message: 'Enable Push and/or SMS.' })
+  }
+
+  return body
+}
+
+/**
+ * Map POST /admin/fleet/notify/estimate → UI.
+ */
+export function mapAdminFleetNotifyEstimateResponse(data) {
+  const estimated =
+    typeof data?.estimatedRecipients === 'number'
+      ? data.estimatedRecipients
+      : typeof data?.count === 'number'
+        ? data.count
+        : 0
+
+  return {
+    audience: data?.audience || null,
+    estimatedRecipients: estimated,
+  }
+}
+
+/**
+ * Map POST /admin/fleet/notify success.
+ */
+export function mapAdminFleetNotifyResponse(data) {
+  if (!data || typeof data !== 'object') {
+    throw new ApiError({ message: 'Invalid notify response from the server.' })
+  }
+
+  return {
+    campaignId: data.campaignId || data.id || null,
+    audience: data.audience || null,
+    sentTo: typeof data.sentTo === 'number' ? data.sentTo : 0,
+    scheduled: Boolean(data.scheduled),
+    scheduledAt: data.scheduledAt || null,
+    status: data.status || null,
+    deliveredCount: typeof data.deliveredCount === 'number' ? data.deliveredCount : 0,
+    failedCount: typeof data.failedCount === 'number' ? data.failedCount : 0,
+  }
+}
+
+/**
+ * Map GET /admin/fleet/notify/history → table rows.
+ */
+export function mapAdminFleetNotifyHistoryResponse(data) {
+  const list = Array.isArray(data?.campaigns)
+    ? data.campaigns
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data)
+        ? data
+        : []
+
+  const rows = list
+    .map((row) => {
+      if (!row || typeof row !== 'object') return null
+      const statusKey = String(row.status || '').toUpperCase()
+      const audienceKey = String(row.audience || '')
+      return {
+        id: String(row.id || ''),
+        notification: String(row.title || '—'),
+        audience: AUDIENCE_API_TO_LABEL[audienceKey] || audienceKey || '—',
+        sentTo: typeof row.sentTo === 'number' ? row.sentTo : 0,
+        date: formatNotifyHistoryDate(row.sentAt || row.scheduledAt || row.createdAt),
+        status: STATUS_LABEL[statusKey] || statusKey || '—',
+        statusKey,
+        raw: row,
+      }
+    })
+    .filter((row) => row && row.id)
+
+  return {
+    count: typeof data?.count === 'number' ? data.count : rows.length,
     rows,
   }
 }

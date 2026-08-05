@@ -201,6 +201,56 @@ export const adminStoreTypeService = {
     return { data: raw ?? { id, ...body }, meta: response?.meta ?? null }
   },
 
+  /**
+   * Publish store type (list Visible / Show).
+   * POST /admin/store-types/:storeTypeId/publish
+   */
+  async publishStoreType(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    if (!useRealStoreTypesApi()) {
+      return { data: { id, visible: true, publishStatus: 'PUBLISHED', isActive: true }, meta: null }
+    }
+
+    const response = await apiClient.post(endpoints.admin.storeTypes.publish(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    const raw = response?.data
+    return {
+      data: raw?.id ? mapAdminStoreTypeDetail(raw) : raw,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Move store type to draft (list Hidden / Hide).
+   * POST /admin/store-types/:storeTypeId/draft
+   */
+  async draftStoreType(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    if (!useRealStoreTypesApi()) {
+      return { data: { id, visible: false, publishStatus: 'DRAFT', isActive: false }, meta: null }
+    }
+
+    const response = await apiClient.post(endpoints.admin.storeTypes.draft(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    const raw = response?.data
+    return {
+      data: raw?.id ? mapAdminStoreTypeDetail(raw) : raw,
+      meta: response?.meta ?? null,
+    }
+  },
+
   async addMenuCategory(storeTypeId, form, options = {}) {
     const id = String(storeTypeId || '').trim()
     if (!id) throw new Error('Store type id is required.')

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
@@ -16,17 +16,45 @@ const REASONS = [
   'Other',
 ]
 
+function normalizeBranchOptions(branches = []) {
+  return (Array.isArray(branches) ? branches : [])
+    .map((item) => {
+      if (item && typeof item === 'object') {
+        const id = String(item.id || '').trim()
+        const name = String(item.name || item.label || '').trim()
+        if (!name && !id) return null
+        return { id, name: name || id }
+      }
+      const name = String(item || '').trim()
+      if (!name) return null
+      return { id: '', name }
+    })
+    .filter(Boolean)
+}
+
+function defaultFromTo() {
+  const now = new Date()
+  const later = new Date(now.getTime() + 4 * 60 * 60 * 1000)
+  const fmt = (d) => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    return `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`
+  }
+  return { from: fmt(now), to: fmt(later) }
+}
+
 export default function AdminForceCloseModal({
   open,
   onClose,
   storeName = 'Green Kitchen',
   branchName = '',
+  branchId = '',
   branches = [],
   defaultScope = 'branch',
   onConfirm,
 }) {
+  const branchOptions = useMemo(() => normalizeBranchOptions(branches), [branches])
   const [scope, setScope] = useState(defaultScope === 'store' ? 'Whole store' : 'Single branch')
-  const [branch, setBranch] = useState(branchName || branches[0] || '')
+  const [selectedBranchId, setSelectedBranchId] = useState('')
   const [reason, setReason] = useState(REASONS[0])
   const [from, setFrom] = useState('9 Apr 2026 · 14:00')
   const [to, setTo] = useState('9 Apr 2026 · 18:00')
@@ -37,16 +65,27 @@ export default function AdminForceCloseModal({
   useEffect(() => {
     if (!open) return
     setScope(defaultScope === 'store' ? 'Whole store' : 'Single branch')
-    setBranch(branchName || branches[0] || '')
+    const preferredId = String(branchId || '').trim()
+    const preferredName = String(branchName || '').trim()
+    const match =
+      branchOptions.find((b) => b.id && b.id === preferredId) ||
+      branchOptions.find((b) => b.name === preferredName) ||
+      branchOptions[0]
+    setSelectedBranchId(match?.id || match?.name || '')
     setReason(REASONS[0])
-    setFrom('9 Apr 2026 · 14:00')
-    setTo('9 Apr 2026 · 18:00')
+    const defaults = defaultFromTo()
+    setFrom(defaults.from)
+    setTo(defaults.to)
     setNote('')
     setSubmitting(false)
     setError(null)
-  }, [open, defaultScope, branchName, branches])
+  }, [open, defaultScope, branchName, branchId, branchOptions])
 
   if (!open) return null
+
+  const selectedBranch = branchOptions.find(
+    (b) => b.id === selectedBranchId || b.name === selectedBranchId,
+  )
 
   const handleConfirm = async () => {
     setError(null)
@@ -54,7 +93,8 @@ export default function AdminForceCloseModal({
     try {
       await onConfirm?.({
         scope,
-        branch: scope === 'Single branch' ? branch : null,
+        branch: scope === 'Single branch' ? selectedBranch?.name || null : null,
+        branchId: scope === 'Single branch' ? selectedBranch?.id || null : null,
         reason,
         from,
         to,
@@ -142,15 +182,17 @@ export default function AdminForceCloseModal({
             <div className="relative">
               <select
                 className={cn(inputClass, 'appearance-none pr-9', scope !== 'Single branch' && 'opacity-60')}
-                value={branch}
+                value={selectedBranchId}
                 disabled={scope !== 'Single branch' || submitting}
-                onChange={(e) => setBranch(e.target.value)}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
               >
-                {branches.length === 0 ? (
+                {branchOptions.length === 0 ? (
                   <option value="">No branches loaded</option>
                 ) : (
-                  branches.map((item) => (
-                    <option key={item} value={item}>{item}</option>
+                  branchOptions.map((item) => (
+                    <option key={item.id || item.name} value={item.id || item.name}>
+                      {item.name}
+                    </option>
                   ))
                 )}
               </select>

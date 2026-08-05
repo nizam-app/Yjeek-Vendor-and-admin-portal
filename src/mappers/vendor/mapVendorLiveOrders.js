@@ -74,17 +74,72 @@ function mapReadyLabel(order) {
   const status = String(order?.status || '').trim().toUpperCase()
   const driverName = order?.driver?.name
 
-  if (status === 'ON_THE_WAY') {
+  if (status === 'ON_THE_WAY' || status === 'IN_TRANSIT' || status === 'PICKED_UP') {
     return driverName ? `On the way · ${driverName}` : 'On the way'
   }
-  if (status === 'DRIVER_ASSIGNED') {
-    return driverName ? `Driver assigned · ${driverName}` : 'Driver assigned'
+  if (status === 'ARRIVED_AT_PICKUP') {
+    return driverName ? `Champ arrived · ${driverName}` : 'Champ arrived'
   }
-  if (status === 'READY_FOR_PICKUP') {
+  if (status === 'DRIVER_ASSIGNED') {
+    return driverName ? `Champ assigned · ${driverName}` : 'Champ assigned'
+  }
+  if (status === 'SEARCHING_DRIVER' || status === 'AWAITING_DRIVER_CONFIRM') {
+    return 'Finding champ…'
+  }
+  if (status === 'READY_FOR_PICKUP' || status === 'READY') {
     return String(order?.orderType || '').toUpperCase() === 'PICKUP'
       ? 'Ready · awaiting customer'
-      : 'Ready · awaiting champ'
+      : driverName
+        ? `Ready · ${driverName}`
+        : 'Ready · awaiting champ'
   }
+  return null
+}
+
+function fallbackPrimaryAction(order) {
+  const id = String(order?.id || '').trim()
+  if (!id || order?.handedOverAt) return null
+
+  const status = String(order?.status || '').toUpperCase()
+  const type = String(order?.orderType || '').toUpperCase()
+  const hasChamp = Boolean(order?.driver?.id || order?.driverId)
+
+  if (type === 'DELIVERY') {
+    if (hasChamp && ['DRIVER_ASSIGNED', 'ARRIVED_AT_PICKUP', 'READY_FOR_PICKUP', 'READY'].includes(status)) {
+      return {
+        key: 'HANDOVER_TO_CHAMP',
+        label: 'Handover to champ',
+        method: 'POST',
+        path: `/vendor-panel/orders/${id}/handover`,
+      }
+    }
+    if (
+      ['SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM', 'READY_FOR_PICKUP', 'READY', 'CONFIRMED', 'PREPARING'].includes(
+        status,
+      ) &&
+      (order?.readyAt || ['READY_FOR_PICKUP', 'READY', 'SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM'].includes(status))
+    ) {
+      return {
+        key: 'FIND_CHAMP',
+        label:
+          status === 'SEARCHING_DRIVER' || status === 'AWAITING_DRIVER_CONFIRM'
+            ? 'Retry find champ'
+            : 'Find champ',
+        method: 'POST',
+        path: `/vendor-panel/orders/${id}/request-champ`,
+      }
+    }
+  }
+
+  if (type === 'PICKUP' && ['READY_FOR_PICKUP', 'READY'].includes(status)) {
+    return {
+      key: 'HANDOVER_TO_CUSTOMER',
+      label: 'Handover to customer',
+      method: 'POST',
+      path: `/vendor-panel/orders/${id}/complete`,
+    }
+  }
+
   return null
 }
 
@@ -159,7 +214,8 @@ export function mapVendorLiveOrder(order) {
   const specialStatus = mapRejectedStatus(order.status)
   const typeBadge = mapOrderTypeBadge(order.orderType)
   const displayId = order.orderNumber ? String(order.orderNumber) : String(order.id || '')
-  const primaryAction = normalizePrimaryAction(order.primaryAction)
+  const primaryAction =
+    normalizePrimaryAction(order.primaryAction) || fallbackPrimaryAction(order)
   const prepTime = formatElapsedSince(order.prepStartedAt)
   const itemsList = Array.isArray(order.items)
     ? order.items.map((item) => ({

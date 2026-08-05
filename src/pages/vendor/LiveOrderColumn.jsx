@@ -144,10 +144,17 @@ export default function LiveOrderColumn() {
       setActionError(null)
       setActioningId(String(orderId))
       try {
-        if (
+        const actionKey = String(action?.key || '').toUpperCase()
+        const actionPath = String(action?.path || '')
+        const isCompleteAction =
           canComplete &&
-          (tab === 'dinein' || !action || String(action.path || '').includes('/complete'))
-        ) {
+          (tab === 'dinein' ||
+            actionKey === 'HANDOVER_TO_CUSTOMER' ||
+            (!action && tab === 'dinein') ||
+            actionPath.includes('/complete'))
+        const isHandoverAction = actionKey === 'HANDOVER_TO_CHAMP' || actionPath.includes('/handover')
+
+        if (isCompleteAction) {
           await completeOrder(orderId)
           setData((current) =>
             removeCompletedOrderFromLiveBoard(current, {
@@ -157,7 +164,7 @@ export default function LiveOrderColumn() {
           )
         } else if (action) {
           await performPrimaryAction(action)
-          if (canComplete) {
+          if (isHandoverAction) {
             setData((current) =>
               removeCompletedOrderFromLiveBoard(current, {
                 board: tab,

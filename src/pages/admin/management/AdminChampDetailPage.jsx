@@ -79,11 +79,19 @@ export default function AdminChampDetailPage() {
 
   const isOnline = online ?? data.online
   const isSuspended = Boolean(data.isSuspended)
+  const isTerminated = Boolean(data.isTerminated)
   const resolvedChampId = data.id || champId
 
   const handleSuspendSuccess = async () => {
     setActionError('')
     setActionSuccess('Champ suspended.')
+    setOnline(false)
+    await refetch()
+  }
+
+  const handleTerminateSuccess = async () => {
+    setActionError('')
+    setActionSuccess('Champ terminated.')
     setOnline(false)
     await refetch()
   }
@@ -104,7 +112,7 @@ export default function AdminChampDetailPage() {
   }
 
   const handleToggleOnline = async () => {
-    if (actionBusy === 'online' || isSuspended || data.canToggleOnline === false) return
+    if (actionBusy === 'online' || isSuspended || isTerminated || data.canToggleOnline === false) return
 
     const nextOnline = !isOnline
     setActionBusy('online')
@@ -147,8 +155,9 @@ export default function AdminChampDetailPage() {
         open={terminateOpen}
         onClose={() => setTerminateOpen(false)}
         champName={data.name}
-        champId={data.id}
-        defaultCod={data.cod || 'BHD 12.000'}
+        champId={champId || resolvedChampId}
+        defaultCod={data.cod || 'BHD 0.000'}
+        onSuccess={handleTerminateSuccess}
       />
 
       {actionError ? (
@@ -245,6 +254,9 @@ export default function AdminChampDetailPage() {
           )}
           <button
             type="button"
+            onClick={() =>
+              navigate(`/admin/fleet/${encodeURIComponent(champId || resolvedChampId)}/edit`)
+            }
             className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#127338] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
             <img src={editIcon} alt="" className="h-3.5 w-3.5 object-contain" />
@@ -331,7 +343,10 @@ export default function AdminChampDetailPage() {
                   aria-checked={isOnline}
                   aria-busy={actionBusy === 'online'}
                   disabled={
-                    actionBusy === 'online' || isSuspended || data.canToggleOnline === false
+                    actionBusy === 'online' ||
+                    isSuspended ||
+                    isTerminated ||
+                    data.canToggleOnline === false
                   }
                   onClick={handleToggleOnline}
                   className={cn(
@@ -359,7 +374,11 @@ export default function AdminChampDetailPage() {
               </div>
 
               <div className="mt-5 flex flex-col gap-2.5">
-                {isSuspended ? (
+                {isTerminated ? (
+                  <p className="text-[12.5px] font-medium text-[#d64044]">
+                    This champ is terminated and cannot be reactivated.
+                  </p>
+                ) : isSuspended ? (
                   <button
                     type="button"
                     disabled={actionBusy === 'unsuspend'}
@@ -377,13 +396,15 @@ export default function AdminChampDetailPage() {
                     Suspend champ
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setTerminateOpen(true)}
-                  className="inline-flex h-[36px] w-fit items-center justify-center gap-1.5 rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c]"
-                >
-                  ⊘ Terminate
-                </button>
+                {!isTerminated ? (
+                  <button
+                    type="button"
+                    onClick={() => setTerminateOpen(true)}
+                    className="inline-flex h-[36px] w-fit items-center justify-center gap-1.5 rounded-full bg-[#d64044] px-4 text-[13px] font-bold text-white hover:bg-[#c0383c]"
+                  >
+                    ⊘ Terminate
+                  </button>
+                ) : null}
               </div>
             </section>
           </div>

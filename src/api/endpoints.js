@@ -58,6 +58,12 @@ export const endpoints = {
       /** Confirmed: POST /vendor-panel/orders/:orderId/mark-ready */
       markReady: (orderId) =>
         `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/mark-ready`,
+      /** POST /vendor-panel/orders/:orderId/request-champ — retry champ dispatch */
+      requestChamp: (orderId) =>
+        `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/request-champ`,
+      /** Confirmed: POST /vendor-panel/orders/:orderId/handover */
+      handover: (orderId) =>
+        `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/handover`,
       /** Confirmed: POST /vendor-panel/orders/:orderId/complete */
       complete: (orderId) =>
         `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/complete`,
@@ -372,6 +378,18 @@ export const endpoints = {
        */
       detail: (storeTypeId) => `/admin/store-types/${encodeURIComponent(storeTypeId)}`,
       /**
+       * Confirmed: POST /admin/store-types/:storeTypeId/publish
+       * @param {string} storeTypeId
+       */
+      publish: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/publish`,
+      /**
+       * Confirmed: POST /admin/store-types/:storeTypeId/draft
+       * @param {string} storeTypeId
+       */
+      draft: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/draft`,
+      /**
        * Confirmed menu categories under a store type.
        * @param {string} storeTypeId
        */
@@ -546,6 +564,13 @@ export const endpoints = {
       champUnsuspend: (champId) =>
         `/admin/fleet/champs/${encodeURIComponent(champId)}/unsuspend`,
       /**
+       * Confirmed: POST /admin/fleet/champs/:champId/terminate
+       * Body: { reason, effectiveDate?, note? }
+       * @param {string} champId
+       */
+      champTerminate: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/terminate`,
+      /**
        * Confirmed: POST /admin/fleet/champs/:champId/online
        * Body: { online: boolean }
        * Errors: 403 POD_CASH_OUTSTANDING when POD cash must be reconciled first
@@ -561,6 +586,13 @@ export const endpoints = {
       champReconcilePod: (champId) =>
         `/admin/fleet/champs/${encodeURIComponent(champId)}/reconcile-pod`,
       /**
+       * Confirmed: GET /admin/fleet/champs/:champId/documents
+       * Also POST upsert document: { type, imageUrl, documentNumber?, expiryDate?, nationality? }
+       * @param {string} champId
+       */
+      champDocuments: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/documents`,
+      /**
        * Confirmed: GET /admin/fleet/suppliers — list suppliers
        * Also POST create supplier.
        */
@@ -572,6 +604,18 @@ export const endpoints = {
        */
       supplier: (supplierId) =>
         `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`,
+      /**
+       * Confirmed: POST /admin/fleet/notify — send/schedule champ notification
+       * Body: { audience, type, title, body, push, sms, schedule, ... }
+       */
+      notify: '/admin/fleet/notify',
+      /**
+       * Confirmed: POST /admin/fleet/notify/estimate
+       * Body: { audience, category?, zone?, champIds? }
+       */
+      notifyEstimate: '/admin/fleet/notify/estimate',
+      /** Confirmed: GET /admin/fleet/notify/history */
+      notifyHistory: '/admin/fleet/notify/history',
     },
     /**
      * Confirmed Marketing — Postman folder 12.
@@ -625,6 +669,11 @@ export const endpoints = {
     uploads: {
       /** Confirmed: POST /admin/uploads/images (multipart field: file) → data.url */
       images: '/admin/uploads/images',
+      /**
+       * Fleet / champ images: POST /admin/uploads/fleet-images?category=documents|avatars|vehicle-photos
+       * multipart field: file → data.url
+       */
+      fleetImages: '/admin/uploads/fleet-images',
     },
     /**
      * Confirmed UI Editor — Postman folder 17.

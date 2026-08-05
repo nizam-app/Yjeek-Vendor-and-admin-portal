@@ -79,6 +79,7 @@ export {
 export {
   mapAdminForceCloseRequest,
   mapAdminForceCloseToIso,
+  mapAdminReopenRequest,
   mapAdminVendorDetailResponse,
   mapAdminVendorListItem,
   mapAdminVendorsListResponse,

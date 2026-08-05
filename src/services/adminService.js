@@ -58,6 +58,12 @@ export const adminService = {
   updateAdminStoreType(storeTypeId, form, options = {}) {
     return adminStoreTypeService.updateStoreType(storeTypeId, form, options)
   },
+  publishAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.publishStoreType(storeTypeId, options)
+  },
+  draftAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.draftStoreType(storeTypeId, options)
+  },
   addAdminStoreTypeMenuCategory(storeTypeId, form, options = {}) {
     return adminStoreTypeService.addMenuCategory(storeTypeId, form, options)
   },
@@ -97,6 +103,9 @@ export const adminService = {
   createAdminFleetChamp(form, options = {}) {
     return adminFleetService.createChamp(form, options)
   },
+  updateAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.updateChamp(champId, form, options)
+  },
   getAdminFleetChampEarnings(champId, filters, options = {}) {
     return adminFleetService.getChampEarnings(champId, filters, options)
   },
@@ -106,8 +115,20 @@ export const adminService = {
   unsuspendAdminFleetChamp(champId, options = {}) {
     return adminFleetService.unsuspendChamp(champId, options)
   },
+  terminateAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.terminateChamp(champId, form, options)
+  },
   setAdminFleetChampOnline(champId, online, options = {}) {
     return adminFleetService.setChampOnline(champId, online, options)
+  },
+  estimateAdminFleetNotify(form, options = {}) {
+    return adminFleetService.estimateNotify(form, options)
+  },
+  sendAdminFleetNotify(form, options = {}) {
+    return adminFleetService.sendNotify(form, options)
+  },
+  listAdminFleetNotifyHistory(options = {}) {
+    return adminFleetService.listNotifyHistory(options)
   },
   listAdminUsers(options = {}) {
     return adminUserService.listUsers(options)
@@ -187,8 +208,8 @@ export const adminService = {
   forceCloseVendor(vendorId, form, options = {}) {
     return adminVendorService.forceCloseVendor(vendorId, form, options)
   },
-  reopenVendor(vendorId, options = {}) {
-    return adminVendorService.reopenVendor(vendorId, options)
+  reopenVendor(vendorId, form = {}, options = {}) {
+    return adminVendorService.reopenVendor(vendorId, form, options)
   },
   suspendVendor(vendorId, form, options = {}) {
     return adminVendorService.suspendVendor(vendorId, form, options)
@@ -317,5 +338,8 @@ export const adminService = {
       ...options,
       params: { ...options.params, id: champId },
     })
+  },
+  listChampDocuments(champId, options = {}) {
+    return adminFleetService.listChampDocuments(champId, options)
   },
 }

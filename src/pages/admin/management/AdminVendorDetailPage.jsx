@@ -843,7 +843,10 @@ export default function AdminVendorDetailPage() {
         open={forceCloseOpen}
         onClose={() => setForceCloseOpen(false)}
         storeName={data.name}
-        branches={(data.branches || []).map((branch) => branch.name).filter(Boolean)}
+        branches={(branches.length ? branches : data.branches || []).map((branch) => ({
+          id: branch.id,
+          name: branch.name,
+        }))}
         defaultScope="store"
         onConfirm={handleForceClose}
       />

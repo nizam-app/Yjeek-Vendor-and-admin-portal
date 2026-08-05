@@ -5,9 +5,12 @@ import motoBikeIcon from '../../../assets/moto_bike.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
+import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
 import { cn } from '../../../components/admin/cn'
 
 const statTone = {
@@ -105,6 +108,12 @@ export default function AdminFleetPage() {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
+  const [actionChamp, setActionChamp] = useState(null)
+  const [suspendOpen, setSuspendOpen] = useState(false)
+  const [terminateOpen, setTerminateOpen] = useState(false)
+  const [actionBusy, setActionBusy] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => {
@@ -173,6 +182,49 @@ export default function AdminFleetPage() {
     navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
   }
 
+  const openSuspend = (row) => {
+    setActionError('')
+    setActionSuccess('')
+    setActionChamp(row)
+    setSuspendOpen(true)
+  }
+
+  const openTerminate = (row) => {
+    setActionError('')
+    setActionSuccess('')
+    setActionChamp(row)
+    setTerminateOpen(true)
+  }
+
+  const handleSuspendSuccess = async () => {
+    setActionSuccess(`${actionChamp?.name || 'Champ'} suspended.`)
+    setActionChamp(null)
+    await refetch()
+  }
+
+  const handleTerminateSuccess = async () => {
+    setActionSuccess(`${actionChamp?.name || 'Champ'} terminated.`)
+    setActionChamp(null)
+    await refetch()
+  }
+
+  const handleUnsuspend = async (row) => {
+    const id = String(row?.id || '').trim()
+    if (!id || actionBusy) return
+    setActionBusy(`unsuspend:${id}`)
+    setActionError('')
+    setActionSuccess('')
+    try {
+      await adminService.unsuspendAdminFleetChamp(id)
+      setActionSuccess(`${row.name || 'Champ'} unsuspended.`)
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to unsuspend champ.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
   useEffect(() => {
     if (!menuId) return undefined
 
@@ -197,6 +249,38 @@ export default function AdminFleetPage() {
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
+      <AdminSuspendChampModal
+        open={suspendOpen}
+        onClose={() => {
+          setSuspendOpen(false)
+          setActionChamp(null)
+        }}
+        champId={actionChamp?.id}
+        onSuccess={handleSuspendSuccess}
+      />
+      <AdminTerminateChampModal
+        open={terminateOpen}
+        onClose={() => {
+          setTerminateOpen(false)
+          setActionChamp(null)
+        }}
+        champName={actionChamp?.name || 'Champ'}
+        champId={actionChamp?.id || ''}
+        defaultCod="BHD 0.000"
+        onSuccess={handleTerminateSuccess}
+      />
+
+      {actionError ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {actionError}
+        </div>
+      ) : null}
+      {actionSuccess ? (
+        <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
+          {actionSuccess}
+        </div>
+      ) : null}
+
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
           Fleet · Champs
@@ -426,28 +510,50 @@ export default function AdminFleetPage() {
                                   View champ
                                 </button>
                                 <div className="my-1 border-t border-[#edf0ee]" />
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#c4841a] hover:bg-[#fff8eb]"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setMenuId(null)
-                                  }}
-                                >
-                                  Suspend
-                                </button>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setMenuId(null)
-                                  }}
-                                >
-                                  Terminate
-                                </button>
+                                {String(row.status).toLowerCase() === 'suspended' ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={actionBusy === `unsuspend:${row.id}`}
+                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setMenuId(null)
+                                      handleUnsuspend(row)
+                                    }}
+                                  >
+                                    {actionBusy === `unsuspend:${row.id}`
+                                      ? 'Unsuspending…'
+                                      : 'Unsuspend'}
+                                  </button>
+                                ) : String(row.status).toLowerCase() !== 'terminated' ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#c4841a] hover:bg-[#fff8eb]"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setMenuId(null)
+                                      openSuspend(row)
+                                    }}
+                                  >
+                                    Suspend
+                                  </button>
+                                ) : null}
+                                {String(row.status).toLowerCase() !== 'terminated' ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
+                                    onClick={(event) => {
+                                      event.stopPropagation()
+                                      setMenuId(null)
+                                      openTerminate(row)
+                                    }}
+                                  >
+                                    Terminate
+                                  </button>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>

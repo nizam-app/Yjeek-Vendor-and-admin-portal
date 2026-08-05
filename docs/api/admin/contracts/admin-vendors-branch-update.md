@@ -41,5 +41,5 @@ Same list envelope as list/create: `{ count, branches[] }`.
 
 - **Working hours** day cards — API only has string `hours` (e.g. `"08:00–23:00"`)
 - **Customer delivery details** section — no confirmed API on this page
-- **Force close** on Branch setup — local UI only (use vendor force-close API separately)
+- **Force close / Reopen** on Branch setup — uses `POST .../force-close` and `POST .../reopen` with `scope: "single_branch"` + `branchId`
 - **Phone** — accepted by API but not on this form

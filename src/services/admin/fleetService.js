@@ -6,8 +6,11 @@ import {
   mapAdminChampEarningsParams,
   mapAdminChampEarningsResponse,
   mapAdminChampSuspendRequest,
+  mapAdminChampTerminateRequest,
   mapAdminCreateChampRequest,
   mapAdminCreateChampResponse,
+  mapAdminChampDetailToForm,
+  mapAdminUpdateChampRequest,
   mapAdminCreateSupplierRequest,
   mapAdminCreateSupplierResponse,
   mapAdminUpdateSupplierRequest,
@@ -18,6 +21,11 @@ import {
   mapAdminFleetSuppliersListResponse,
   mapAdminSupplierDetailParams,
   mapAdminSupplierDetailResponse,
+  mapAdminFleetNotifyEstimateRequest,
+  mapAdminFleetNotifyEstimateResponse,
+  mapAdminFleetNotifyRequest,
+  mapAdminFleetNotifyResponse,
+  mapAdminFleetNotifyHistoryResponse,
 } from '../../mappers/admin/mapAdminFleet'
 
 function useFleetRealApi() {
@@ -124,6 +132,33 @@ export const adminFleetService = {
   },
 
   /**
+   * Champ documents list.
+   * Confirmed: GET /admin/fleet/champs/:champId/documents
+   */
+  async listChampDocuments(champId, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to load champ documents.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.fleet.champDocuments(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * Suspend champ.
    * Confirmed: POST /admin/fleet/champs/:champId/suspend
    * Body: { reason, duration, note?, notifyChamp }
@@ -169,6 +204,35 @@ export const adminFleetService = {
     }
 
     const response = await apiClient.post(endpoints.admin.fleet.champUnsuspend(id), null, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Terminate champ (permanent / scheduled).
+   * Confirmed: POST /admin/fleet/champs/:champId/terminate
+   * Body: { reason, effectiveDate?, note? }
+   */
+  async terminateChamp(champId, form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to terminate a champ.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const body = mapAdminChampTerminateRequest(form)
+    const response = await apiClient.post(endpoints.admin.fleet.champTerminate(id), body, {
       ...options,
       scope: 'admin',
       feature: 'fleet',
@@ -383,6 +447,102 @@ export const adminFleetService = {
 
     return {
       data: mapAdminCreateChampResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update champ.
+   * Confirmed: PATCH /admin/fleet/champs/:champId
+   */
+  async updateChamp(champId, form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to update a champ.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const body = mapAdminUpdateChampRequest(form)
+    const response = await apiClient.patch(endpoints.admin.fleet.champ(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: mapAdminChampDetailResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Estimate notify recipients.
+   * Confirmed: POST /admin/fleet/notify/estimate
+   */
+  async estimateNotify(form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to estimate notify audience.')
+    }
+
+    const body = mapAdminFleetNotifyEstimateRequest(form)
+    const response = await apiClient.post(endpoints.admin.fleet.notifyEstimate, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: mapAdminFleetNotifyEstimateResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Send / schedule fleet notification.
+   * Confirmed: POST /admin/fleet/notify
+   */
+  async sendNotify(form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to notify champs.')
+    }
+
+    const body = mapAdminFleetNotifyRequest(form)
+    const response = await apiClient.post(endpoints.admin.fleet.notify, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: mapAdminFleetNotifyResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Notification history.
+   * Confirmed: GET /admin/fleet/notify/history
+   */
+  async listNotifyHistory(options = {}) {
+    if (!useFleetRealApi()) {
+      return { data: { count: 0, rows: [] }, meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.fleet.notifyHistory, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: mapAdminFleetNotifyHistoryResponse(response?.data),
       meta: response?.meta ?? null,
     }
   },

@@ -34,6 +34,49 @@ function openDetailsOnClick(mode) {
   return mode === 'new'
 }
 
+function readyColumnAction(order) {
+  const existing = order?.primaryAction
+  if (existing?.key && existing?.label && existing?.path) return existing
+
+  const id = String(order?.backendId || '').trim()
+  if (!id || order?.handedOverAt) return null
+
+  const type = String(order?.orderType || '').toUpperCase()
+  const status = String(order?.backendStatus || '').toUpperCase()
+  if (['PICKED_UP', 'ON_THE_WAY', 'IN_TRANSIT', 'DELIVERED', 'COLLECTED'].includes(status)) {
+    return null
+  }
+
+  if (type === 'PICKUP') {
+    return {
+      key: 'HANDOVER_TO_CUSTOMER',
+      label: 'Handover to customer',
+      method: 'POST',
+      path: `/vendor-panel/orders/${id}/complete`,
+    }
+  }
+
+  const hasChamp = Boolean(order?.driver?.id || order?.champName)
+  if (hasChamp && ['DRIVER_ASSIGNED', 'ARRIVED_AT_PICKUP', 'READY_FOR_PICKUP', 'READY'].includes(status)) {
+    return {
+      key: 'HANDOVER_TO_CHAMP',
+      label: 'Handover to champ',
+      method: 'POST',
+      path: `/vendor-panel/orders/${id}/handover`,
+    }
+  }
+
+  return {
+    key: 'FIND_CHAMP',
+    label:
+      status === 'SEARCHING_DRIVER' || status === 'AWAITING_DRIVER_CONFIRM'
+        ? 'Retry find champ'
+        : 'Find champ',
+    method: 'POST',
+    path: `/vendor-panel/orders/${id}/request-champ`,
+  }
+}
+
 export function OrderCard({
   order,
   mode,
@@ -52,6 +95,7 @@ export function OrderCard({
   const isBusy = isAccepting || isRejecting
   const isActioning = Boolean(actioning)
   const canOpenDetails = openDetailsOnClick(mode)
+  const readyAction = mode === 'ready' ? readyColumnAction(order) : null
   const { acceptCountdown, prepElapsed, prepDelay } = useOrderTimers(order, {
     trackAccept: mode === 'new' && order.status !== 'rejected' && order.status !== 'no-show-cancelled',
     trackPrep: mode === 'preparing',
@@ -196,21 +240,22 @@ export function OrderCard({
       ) : null}
       {mode === 'ready' ? (
         <>
-          {order.primaryAction ? (
+          {readyAction ? (
             <button
               type="button"
-              className={btnPrimaryFull}
+              className={`${btnPrimaryFull} disabled:cursor-not-allowed disabled:opacity-50`}
               disabled={isActioning}
               onClick={(e) => {
                 stopCardAction(e)
-                if (order.primaryAction?.key === 'HANDOVER_TO_CHAMP') {
-                  onHandoverChamp?.({ order, mode })
+                const nextOrder = { ...order, primaryAction: readyAction }
+                if (readyAction.key === 'HANDOVER_TO_CHAMP') {
+                  onHandoverChamp?.({ order: nextOrder, mode })
                 } else {
-                  onPrimaryAction?.({ order, mode })
+                  onPrimaryAction?.({ order: nextOrder, mode })
                 }
               }}
             >
-              {isActioning ? 'Updating…' : order.primaryAction.label}
+              {isActioning ? 'Updating…' : readyAction.label}
             </button>
           ) : null}
           {order.noShow ? (

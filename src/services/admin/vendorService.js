@@ -3,6 +3,7 @@ import { isAdminRealApiFeature } from '../../api/config'
 import { endpoints } from '../../api/endpoints'
 import {
   mapAdminForceCloseRequest,
+  mapAdminReopenRequest,
   mapAdminUpdateVendorStoreRequest,
   mapAdminVendorDetailResponse,
   mapAdminVendorsListResponse,
@@ -374,19 +375,20 @@ export const adminVendorService = {
   },
 
   /**
-   * Reopen a force-closed store.
-   * Confirmed body: { scope: "whole_store" }
+   * Reopen a force-closed store or branch.
+   * Body: { scope: "whole_store" } | { scope: "single_branch", branchId }
    *
    * @param {string} vendorId
+   * @param {{ scope?: string, branchId?: string }} [form]
    * @param {{ signal?: AbortSignal }} [options]
    */
-  async reopenVendor(vendorId, options = {}) {
+  async reopenVendor(vendorId, form = {}, options = {}) {
     const id = String(vendorId || '').trim()
     if (!id) {
       throw new Error('Vendor id is required.')
     }
 
-    const body = { scope: 'whole_store' }
+    const body = mapAdminReopenRequest(form)
 
     if (!isAdminRealApiFeature('vendors')) {
       return {

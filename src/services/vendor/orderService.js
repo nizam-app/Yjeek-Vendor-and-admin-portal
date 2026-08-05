@@ -258,6 +258,37 @@ export const orderService = {
   },
 
   /**
+   * POST /vendor-panel/orders/:orderId/request-champ
+   */
+  async requestChamp(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.requestChamp(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+    let data = null
+    if (raw && typeof raw === 'object') {
+      try {
+        data = mapVendorLiveOrder(raw)
+      } catch {
+        data = null
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
    * POST /vendor-panel/orders/:orderId/complete
    * Confirmed from Postman "POST Complete". Empty body.
    * Used for dine-in Ready → Verify & complete (and delivery handover-to-customer when advertised).
