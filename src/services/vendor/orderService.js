@@ -23,10 +23,10 @@ const LIVE_TAB_BY_BOARD = {
  */
 export const orderService = {
   /**
-   * GET /vendor-panel/orders/live?tab=delivery_pickup|dine_in&branchId=
+   * GET /vendor-panel/orders/live?tab=delivery_pickup|dine_in&branchId=&search=
    */
   async getLiveOrders(options = {}) {
-    const { board = 'delivery', branchId, params, ...requestOptions } = options
+    const { board = 'delivery', branchId, search, params, ...requestOptions } = options
     const tab = LIVE_TAB_BY_BOARD[board] || LIVE_TAB_BY_BOARD.delivery
 
     const query = {
@@ -35,6 +35,12 @@ export const orderService = {
     }
     if (branchId) {
       query.branchId = String(branchId)
+    }
+    const searchTerm = String(search || '')
+      .trim()
+      .replace(/^#/, '')
+    if (searchTerm) {
+      query.search = searchTerm
     }
 
     const response = await apiClient.get(endpoints.vendor.orders.live, {
@@ -353,15 +359,46 @@ export const orderService = {
   },
 
   /**
-   * GET /vendor-panel/orders/history?limit=
+   * GET /vendor-panel/orders/history?limit=&search=&status=&type=&branchId=&from=&to=
    */
   async getOrderHistory(options = {}) {
-    const { limit = 20, branchId, params, ...requestOptions } = options
+    const {
+      limit = 20,
+      page,
+      branchId,
+      search,
+      status,
+      type,
+      from,
+      to,
+      params,
+      ...requestOptions
+    } = options
+
     const query = {
       limit,
       ...(params || {}),
     }
+    if (page != null) query.page = page
     if (branchId) query.branchId = String(branchId)
+
+    const searchTerm = String(search || '')
+      .trim()
+      .replace(/^#/, '')
+    if (searchTerm) query.search = searchTerm
+
+    const statusValue = String(status || '')
+      .trim()
+      .toUpperCase()
+    if (statusValue && statusValue !== 'ALL') query.status = statusValue
+
+    const typeValue = String(type || '')
+      .trim()
+      .toUpperCase()
+    if (typeValue && typeValue !== 'ALL') query.type = typeValue
+
+    if (from) query.from = from
+    if (to) query.to = to
 
     const response = await apiClient.get(endpoints.vendor.orders.history, {
       ...requestOptions,

@@ -6,7 +6,36 @@ import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
+
+const AGE_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: 'under18', label: 'Under 18' },
+  { value: '18-24', label: '18–24' },
+  { value: '25-34', label: '25–34' },
+  { value: '35-44', label: '35–44' },
+  { value: '45+', label: '45+' },
+]
+
+const GENDER_OPTIONS = [
+  { value: '', label: 'All' },
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' },
+]
+
+function matchesAgeFilter(age, filter) {
+  if (!filter) return true
+  const n = typeof age === 'number' ? age : Number(age)
+  if (!Number.isFinite(n)) return false
+  if (filter === 'under18') return n < 18
+  if (filter === '18-24') return n >= 18 && n <= 24
+  if (filter === '25-34') return n >= 25 && n <= 34
+  if (filter === '35-44') return n >= 35 && n <= 44
+  if (filter === '45+') return n >= 45
+  return true
+}
 
 const statTone = {
   ink: 'text-[#17231c]',
@@ -31,6 +60,8 @@ export default function AdminCustomersPage() {
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState('')
+  const [ageFilter, setAgeFilter] = useState('')
+  const [genderFilter, setGenderFilter] = useState('')
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => {
@@ -48,13 +79,20 @@ export default function AdminCustomersPage() {
 
   const rows = useMemo(() => {
     if (!data?.rows) return []
-    if (useReal) return data.rows
-    return data.rows.filter((row) => {
-      const matchesTab = tab === 'All' || row.status === tab
-      const haystack = `${row.name} ${row.contact} ${row.email} ${row.status}`.toLowerCase()
-      return matchesTab && haystack.includes(query.toLowerCase())
+    const base = useReal
+      ? data.rows
+      : data.rows.filter((row) => {
+          const matchesTab = tab === 'All' || row.status === tab
+          const haystack = `${row.name} ${row.contact} ${row.email} ${row.status}`.toLowerCase()
+          return matchesTab && haystack.includes(query.toLowerCase())
+        })
+    return base.filter((row) => {
+      const matchesGender =
+        !genderFilter || String(row.gender || '').toLowerCase() === genderFilter.toLowerCase()
+      const matchesAge = matchesAgeFilter(row.age, ageFilter)
+      return matchesGender && matchesAge
     })
-  }, [data, tab, query, useReal])
+  }, [data, tab, query, useReal, ageFilter, genderFilter])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
@@ -120,26 +158,24 @@ export default function AdminCustomersPage() {
             </button>
           ))}
         </div>
-        <div>
-          <p className="pb-1.5 text-[10px] font-semibold text-[#6B736E]">AGE</p>
-
-          <button
-            type="button"
-            className="inline-flex h-[32px] w-24 items-center gap-1 rounded-sm border border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-          >
-            All ▾
-          </button>
-        </div>
-        <div>
-          <p className="pb-1.5 text-[10px] font-semibold text-[#6B736E]">GENDER</p>
-
-          <button
-            type="button"
-            className="inline-flex h-[32px] w-24 items-center gap-1 rounded-sm border border-[#e4e8e4] bg-white px-3.5 text-[13px] font-bold text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#fafbfa]"
-          >
-            All ▾
-          </button>
-        </div>
+        <AdminFilterSelect
+          fieldLabel="Age"
+          label="Filter by age"
+          shape="square"
+          options={AGE_OPTIONS}
+          value={ageFilter}
+          onChange={setAgeFilter}
+          className="h-[32px] min-w-[96px] font-bold text-[#6B736E]"
+        />
+        <AdminFilterSelect
+          fieldLabel="Gender"
+          label="Filter by gender"
+          shape="square"
+          options={GENDER_OPTIONS}
+          value={genderFilter}
+          onChange={setGenderFilter}
+          className="h-[32px] min-w-[96px] font-bold text-[#6B736E]"
+        />
 
         <span className="flex-1" />
 

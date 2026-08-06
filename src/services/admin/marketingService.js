@@ -21,6 +21,8 @@ function useRealMarketingApi() {
  * Confirmed:
  *   GET /admin/marketing/notifications?target=all&status=all&limit=20
  *   GET /admin/marketing/notifications/:notificationId
+ *   POST /admin/marketing/notifications/:notificationId/resend
+ *   DELETE /admin/marketing/notifications/:notificationId
  *   GET /admin/marketing/promo-codes?status=all&limit=20
  *
  * Feature flag: `marketing` (also on when VITE_ADMIN_USE_MOCK_API=false)
@@ -90,6 +92,74 @@ export const adminMarketingService = {
 
     return {
       data: mapAdminMarketingNotificationDetail(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Resend an existing notification (same audience / channels / message).
+   * Confirmed: POST /admin/marketing/notifications/:notificationId/resend
+   * Creates a new campaign row and returns it.
+   *
+   * @param {string} notificationId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async resendNotification(notificationId, options = {}) {
+    const id = String(notificationId || '').trim()
+    if (!id) {
+      throw new Error('Notification id is required.')
+    }
+
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to resend a notification.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.marketing.notifications.resend(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Delete or cancel a notification.
+   * Confirmed: DELETE /admin/marketing/notifications/:notificationId
+   *
+   * @param {string} notificationId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async deleteNotification(notificationId, options = {}) {
+    const id = String(notificationId || '').trim()
+    if (!id) {
+      throw new Error('Notification id is required.')
+    }
+
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to delete a notification.')
+    }
+
+    const response = await apiClient.delete(
+      endpoints.admin.marketing.notifications.remove(id),
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+
+    return {
+      data: response?.data ?? null,
       meta: response?.meta ?? null,
     }
   },

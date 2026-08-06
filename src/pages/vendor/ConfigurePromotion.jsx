@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, useMatch, useNavigate, useParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { formatApiErrorMessage } from '../../api/errors'
+import {
+  AdminDatePicker,
+  todayLocalIsoDate,
+} from '../../components/admin/AdminDatePicker'
 import { useVendorPromotionDetail } from '../../hooks/vendor/useVendorPromotionDetail'
 import { mapVendorPromotionToEditForm } from '../../mappers/vendor/mapVendorPromotions'
 import { promotionService } from '../../services/vendor/promotionService'
@@ -15,6 +19,17 @@ const labelClass = 'mb-1.5 block text-[13px] font-medium uppercase tracking-[0.0
 const inputClass =
   'box-border h-[42px] w-full rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[13px] font-medium text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 const cardClass = 'rounded-[14px] border border-[#E0E6E0] bg-white p-5'
+
+function defaultEndDateIso(startIso) {
+  const base = String(startIso || todayLocalIsoDate())
+  const date = new Date(`${base}T12:00:00`)
+  if (Number.isNaN(date.getTime())) return todayLocalIsoDate()
+  date.setDate(date.getDate() + 7)
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
 
 const DEFAULT_NAMES = {
   'Item / category deal': 'Ramadan 20% Off',
@@ -173,17 +188,20 @@ export default function ConfigurePromotion() {
   ])
   const [buyItems, setBuyItems] = useState([{ id: 'classic-burger', name: 'Classic Burger' }])
   const [getItems, setGetItems] = useState([{ id: 'fries-regular', name: 'Fries (regular)' }])
-  const [form, setForm] = useState({
-    name: 'Ramadan 20% Off',
-    discount: '20',
-    maxCap: '3.000',
-    minOrder: '5.000',
-    buyQty: '1',
-    getQty: '1',
-    startDate: '22 Mar 2026',
-    endDate: '30 Mar 2026',
-    usageLimit: '1000',
-    perCustomer: '1',
+  const [form, setForm] = useState(() => {
+    const startDate = todayLocalIsoDate()
+    return {
+      name: 'Ramadan 20% Off',
+      discount: '20',
+      maxCap: '3.000',
+      minOrder: '5.000',
+      buyQty: '1',
+      getQty: '1',
+      startDate,
+      endDate: defaultEndDateIso(startDate),
+      usageLimit: '1000',
+      perCustomer: '1',
+    }
   })
   const [hydrated, setHydrated] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -219,6 +237,21 @@ export default function ConfigurePromotion() {
 
   function updateField(field, value) {
     setForm((current) => ({ ...current, [field]: value }))
+  }
+
+  function setStartDate(next) {
+    const startDate = String(next || '')
+    setForm((current) => {
+      const endDate =
+        startDate && current.endDate && current.endDate < startDate
+          ? startDate
+          : current.endDate
+      return { ...current, startDate, endDate }
+    })
+  }
+
+  function setEndDate(next) {
+    setForm((current) => ({ ...current, endDate: String(next || '') }))
   }
 
   function switchPromoType(next) {
@@ -637,21 +670,21 @@ export default function ConfigurePromotion() {
         <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2">
           <div>
             <label className={labelClass}>Start date</label>
-            <input
-              className={inputClass}
+            <AdminDatePicker
               value={form.startDate}
-              onChange={(e) => updateField('startDate', e.target.value)}
-              placeholder="22 Mar 2026"
+              onChange={setStartDate}
+              min={todayLocalIsoDate()}
+              placeholder="Pick start date"
             />
           </div>
           <div>
             <label className={labelClass}>End date</label>
-            <input
-              className={`${inputClass} ${noEndDate ? 'opacity-50' : ''}`}
+            <AdminDatePicker
               value={form.endDate}
+              onChange={setEndDate}
+              min={form.startDate && form.startDate > todayLocalIsoDate() ? form.startDate : todayLocalIsoDate()}
               disabled={noEndDate}
-              onChange={(e) => updateField('endDate', e.target.value)}
-              placeholder="30 Mar 2026"
+              placeholder="Pick end date"
             />
           </div>
         </div>

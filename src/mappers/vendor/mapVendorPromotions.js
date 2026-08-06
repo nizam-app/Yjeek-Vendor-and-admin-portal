@@ -626,13 +626,14 @@ export function parseVendorPromoDate(value, { endOfDay = false } = {}) {
   const raw = String(value).trim()
   if (!raw) return null
 
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const date = new Date(`${raw}T${endOfDay ? '23:59:59.999' : '00:00:00'}`)
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(raw)) {
     const date = new Date(raw)
-    if (Number.isNaN(date.getTime())) return null
-    if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-      date.setUTCHours(23, 59, 59, 999)
-    }
-    return date.toISOString()
+    return Number.isNaN(date.getTime()) ? null : date.toISOString()
   }
 
   const match = raw.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/)
@@ -642,15 +643,13 @@ export function parseVendorPromoDate(value, { endOfDay = false } = {}) {
     const day = Number(match[1])
     const year = Number(match[3])
     const date = new Date(
-      Date.UTC(
-        year,
-        month,
-        day,
-        endOfDay ? 23 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 59 : 0,
-        endOfDay ? 999 : 0,
-      ),
+      year,
+      month,
+      day,
+      endOfDay ? 23 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 59 : 0,
+      endOfDay ? 999 : 0,
     )
     return Number.isNaN(date.getTime()) ? null : date.toISOString()
   }
@@ -659,15 +658,18 @@ export function parseVendorPromoDate(value, { endOfDay = false } = {}) {
   return Number.isNaN(fallback.getTime()) ? null : fallback.toISOString()
 }
 
+/** Form field value for date picker: yyyy-mm-dd */
 export function formatVendorPromoDateInput(value) {
   if (!value) return ''
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  const raw = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 function toNamedSelections(list, idKeys = ['id']) {

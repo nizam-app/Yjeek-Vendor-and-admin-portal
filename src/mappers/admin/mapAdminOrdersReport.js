@@ -271,7 +271,7 @@ export function mapAdminOrdersReportQuery(filters = {}) {
 /** UI period label → API preset. */
 export function mapReportsPeriodToPreset(periodLabel) {
   const label = String(periodLabel || '')
-    .replace(/^Period · /, '')
+    .replace(/^Period\s*[·:]\s*/i, '')
     .trim()
     .toLowerCase()
   if (label.includes('7')) return '7d'
@@ -295,7 +295,7 @@ export function mapReportsSortToApi(sortLabel) {
 /** UI status filter → API status query. */
 export function mapReportsStatusFilterToApi(uiValue) {
   const raw = String(uiValue || '')
-    .replace(/^Status · /i, '')
+    .replace(/^Status\s*[·:]\s*/i, '')
     .trim()
     .toLowerCase()
   if (!raw || raw === 'all') return 'all'
@@ -305,7 +305,7 @@ export function mapReportsStatusFilterToApi(uiValue) {
   if (raw === 'confirmed') return 'CONFIRMED'
   if (raw === 'preparing') return 'PREPARING'
   return String(uiValue)
-    .replace(/^Status · /i, '')
+    .replace(/^Status\s*[·:]\s*/i, '')
     .trim()
     .toUpperCase()
 }
@@ -313,7 +313,7 @@ export function mapReportsStatusFilterToApi(uiValue) {
 /** UI SLA filter → API sla query. */
 export function mapReportsSlaFilterToApi(uiValue) {
   const raw = String(uiValue || '')
-    .replace(/^SLA · /i, '')
+    .replace(/^SLA\s*[·:]\s*/i, '')
     .trim()
     .toLowerCase()
   if (!raw || raw === 'all') return 'all'
@@ -325,20 +325,20 @@ export function mapReportsSlaFilterToApi(uiValue) {
 /** UI payment filter → API payMethod. */
 export function mapReportsPaymentFilterToApi(uiValue) {
   const raw = String(uiValue || '')
-    .replace(/^Payment · /i, '')
+    .replace(/^Payment\s*[·:]\s*/i, '')
     .trim()
     .toLowerCase()
   if (!raw || raw === 'all') return 'all'
   if (raw === 'wallet') return 'YJEEK_WALLET'
   if (raw === 'card') return 'CARD'
   if (raw === 'cod') return 'COD'
-  return String(uiValue).replace(/^Payment · /i, '').trim()
+  return String(uiValue).replace(/^Payment\s*[·:]\s*/i, '').trim()
 }
 
 /** UI type filter → API mode. */
 export function mapReportsTypeFilterToApi(uiValue) {
   const raw = String(uiValue || '')
-    .replace(/^Type · /i, '')
+    .replace(/^Type\s*[·:]\s*/i, '')
     .trim()
   if (!raw || raw.toLowerCase() === 'all') return 'all'
   return raw
@@ -346,7 +346,7 @@ export function mapReportsTypeFilterToApi(uiValue) {
 
 function stripFilterPrefix(value, prefix) {
   return String(value || '')
-    .replace(new RegExp(`^${prefix}\\s*·\\s*`, 'i'), '')
+    .replace(new RegExp(`^${prefix}\\s*[·:]\\s*`, 'i'), '')
     .trim()
 }
 

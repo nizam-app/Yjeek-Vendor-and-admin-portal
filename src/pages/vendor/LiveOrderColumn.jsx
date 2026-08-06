@@ -19,12 +19,40 @@ import {
 } from '../../mappers/vendor/mapVendorLiveOrders'
 import { orderService } from '../../services/vendor/orderService'
 
+const SEARCH_DEBOUNCE_MS = 300
+
+function matchesLiveOrderSearch(order, query) {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, '')
+  if (!q) return true
+  const haystack = [
+    order.id,
+    order.orderNumber,
+    order.backendId,
+    order.customer,
+    order.customerName,
+    order.customerPhone,
+    order.items,
+    order.guest,
+    order.table,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/#/g, '')
+  return haystack.includes(q)
+}
+
 export default function LiveOrderColumn() {
   const { user } = useAuth()
   const canDineIn = getVendorServiceModes(user).dineIn
   const { key } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [acceptedOrder, setAcceptedOrder] = useState(null)
   const [handoverOrder, setHandoverOrder] = useState(null)
@@ -38,7 +66,16 @@ export default function LiveOrderColumn() {
   const requestedDineIn = searchParams.get('tab') === 'dinein'
   const tab = canDineIn && requestedDineIn ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
-  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab)
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab, {
+    search: debouncedSearch,
+  })
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(query.trim())
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [query])
 
   useEffect(() => {
     if (!canDineIn && requestedDineIn) {
@@ -57,6 +94,16 @@ export default function LiveOrderColumn() {
   const { mutate: performPrimaryAction } = useApiMutation((action) =>
     orderService.performPrimaryAction(action),
   )
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refetch, refreshing])
 
   const handleAccept = useCallback(
     async ({ order, mode }) => {
@@ -204,21 +251,15 @@ export default function LiveOrderColumn() {
 
   const column = getColumns(tab, orders).find((col) => col.key === key)
   const items = column
-    ? column.items.filter((order) =>
-        [order.id, order.customer, order.items, order.guest]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(query.toLowerCase()),
-      )
+    ? column.items.filter((order) => matchesLiveOrderSearch(order, query))
     : []
 
-  if (isLoading) return <div className="p-7 text-[13px] text-ink-muted">Loading orders…</div>
-  if (error)
+  if (isLoading && !orders) return <div className="p-7 text-[13px] text-ink-muted">Loading orders…</div>
+  if (error && !orders)
     return (
       <div className="p-7 text-[13px] text-danger">
         Unable to load orders.{' '}
-        <button type="button" onClick={refetch} className="underline">
+        <button type="button" onClick={handleRefresh} className="underline">
           Try again
         </button>
       </div>
@@ -247,15 +288,32 @@ export default function LiveOrderColumn() {
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <button
+          type="button"
+          onClick={handleRefresh}
+          disabled={refreshing || (isLoading && !orders)}
+          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
+        </button>
         <input
           className="border border-border rounded-md py-[10px] px-[14px] text-[13px] bg-white min-w-[220px]"
           style={{ flex: 1 }}
-          placeholder="Search orders, customers, items…"
+          placeholder="Search by order #…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          aria-label="Search orders by order number"
         />
       </div>
 
+      {error ? (
+        <p className="mb-3 text-[12px] text-danger">
+          Refresh failed.{' '}
+          <button type="button" onClick={handleRefresh} className="underline">
+            Retry
+          </button>
+        </p>
+      ) : null}
       {acceptError ? (
         <p className="mb-3 text-[12px] text-danger">
           {acceptError.message || 'Failed to accept order.'}
@@ -273,7 +331,9 @@ export default function LiveOrderColumn() {
       ) : null}
 
       {items.length === 0 ? (
-        <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
+        <div className="text-ink-muted text-[13px] p-6 text-center">
+          {query.trim() ? 'No matching orders' : 'No orders'}
+        </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-[14px]">
           {items.map((order) =>

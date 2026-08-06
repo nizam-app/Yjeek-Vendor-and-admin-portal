@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Download, Plus, Search, ChevronDown } from 'lucide-react'
+import { Download, Plus, Search } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
 
 const statTone = {
@@ -48,18 +49,6 @@ function activityTypeTone(type) {
   return 'gray'
 }
 
-function normalizeOptions(options = []) {
-  return (Array.isArray(options) ? options : []).map((option) => {
-    if (option && typeof option === 'object') {
-      return {
-        value: String(option.value ?? ''),
-        label: String(option.label ?? option.value ?? ''),
-      }
-    }
-    return { value: String(option), label: String(option) }
-  })
-}
-
 function formatDateLabel(value) {
   const raw = String(value || '').trim()
   if (!raw) return '—'
@@ -86,35 +75,6 @@ function toApiDate(value) {
   const m = String(date.getMonth() + 1).padStart(2, '0')
   const d = String(date.getDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
-}
-
-function FilterSelect({ options, value, onChange, label }) {
-  const normalized = normalizeOptions(options)
-  const currentLabel = normalized.find((option) => option.value === value)?.label || value || '—'
-
-  return (
-    <div className="relative inline-flex h-[34px] items-center rounded-sm border border-[#e4e8e4] bg-white pl-3 pr-7 text-[12px] font-medium text-[#455249]">
-      <span className="whitespace-nowrap">{currentLabel}</span>
-      <ChevronDown
-        size={13}
-        strokeWidth={2.2}
-        className="pointer-events-none absolute right-2.5 text-[#7c8780]"
-        aria-hidden
-      />
-      <select
-        aria-label={label}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {normalized.map((option) => (
-          <option key={`${option.value}-${option.label}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
 }
 
 function DateFilter({ label, value, onChange }) {
@@ -443,20 +403,23 @@ export default function AdminUsersPage() {
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-sm border border-[#eceeec]">
             <div className="flex flex-wrap items-center gap-2">
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by role"
+                shape="square"
                 options={filterRoles}
                 value={roleFilter || (typeof filterRoles[0] === 'string' ? filterRoles[0] : filterRoles[0]?.value) || ''}
                 onChange={setRoleFilter}
               />
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by country"
+                shape="square"
                 options={filterCountries}
                 value={countryFilter || (typeof filterCountries[0] === 'string' ? filterCountries[0] : filterCountries[0]?.value) || ''}
                 onChange={setCountryFilter}
               />
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by status"
+                shape="square"
                 options={filterStatuses}
                 value={statusFilter || (typeof filterStatuses[0] === 'string' ? filterStatuses[0] : filterStatuses[0]?.value) || ''}
                 onChange={setStatusFilter}
@@ -651,20 +614,23 @@ export default function AdminUsersPage() {
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-[#eceeec] bg-[#f6f8f6] p-3 bg-white">
             <div className="flex flex-wrap items-center gap-2">
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by user"
+                shape="square"
                 options={activityData.filters.users}
                 value={activityUserFilter}
                 onChange={setActivityUserFilter}
               />
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by module"
+                shape="square"
                 options={activityData.filters.modules}
                 value={activityModuleFilter}
                 onChange={setActivityModuleFilter}
               />
-              <FilterSelect
+              <AdminFilterSelect
                 label="Filter by action"
+                shape="square"
                 options={activityData.filters.actions}
                 value={activityActionFilter}
                 onChange={setActivityActionFilter}

@@ -21,6 +21,31 @@ import {
 import { orderService } from '../../services/vendor/orderService'
 
 const AUTO_REFRESH_MS = 8000
+const SEARCH_DEBOUNCE_MS = 300
+
+function matchesLiveOrderSearch(order, query) {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, '')
+  if (!q) return true
+  const haystack = [
+    order.id,
+    order.orderNumber,
+    order.backendId,
+    order.customer,
+    order.customerName,
+    order.customerPhone,
+    order.items,
+    order.guest,
+    order.table,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/#/g, '')
+  return haystack.includes(q)
+}
 
 export default function LiveOrders() {
   const { user, refreshVendorSession } = useAuth()
@@ -34,6 +59,8 @@ export default function LiveOrders() {
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const [acceptingId, setAcceptingId] = useState(null)
   const [acceptError, setAcceptError] = useState(null)
   const [rejectingId, setRejectingId] = useState(null)
@@ -42,7 +69,9 @@ export default function LiveOrders() {
   const [actionError, setActionError] = useState(null)
   const isDineIn = canDineIn && tab === 'dinein'
   const board = isDineIn ? 'dinein' : 'delivery'
-  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(board)
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(board, {
+    search: debouncedSearch,
+  })
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
   const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
     orderService.rejectOrder(orderId, { reason, note }),
@@ -53,6 +82,13 @@ export default function LiveOrders() {
   const { mutate: performPrimaryAction } = useApiMutation((action) =>
     orderService.performPrimaryAction(action),
   )
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -91,6 +127,16 @@ export default function LiveOrders() {
       setSearchParams(next, { replace: true })
     }
   }, [canDineIn, searchParams, setSearchParams])
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refetch, refreshing])
 
   const handleAccept = useCallback(
     async ({ order, mode }) => {
@@ -238,14 +284,7 @@ export default function LiveOrders() {
 
   const columns = getColumns(board, orders).map((col) => ({
     ...col,
-    items: col.items.filter((order) => {
-      if (!searchQuery.trim()) return true
-      const haystack = [order.id, order.customer, order.items, order.guest]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(searchQuery.trim().toLowerCase())
-    }),
+    items: col.items.filter((order) => matchesLiveOrderSearch(order, searchQuery)),
   }))
   // Keep the server's count stable while the user filters cards locally.
   const totalActive =
@@ -260,7 +299,7 @@ export default function LiveOrders() {
     return (
       <div className="p-7 text-[13px] text-danger">
         Unable to load live orders.{' '}
-        <button type="button" onClick={refetch} className="underline">
+        <button type="button" onClick={handleRefresh} className="underline">
           Try again
         </button>
       </div>
@@ -302,21 +341,23 @@ export default function LiveOrders() {
           placeholder="Search by order #…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search live orders by order number"
         />
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <button
           type="button"
-          onClick={() => refetch()}
-          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7]"
+          onClick={handleRefresh}
+          disabled={refreshing || (isLoading && !orders)}
+          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          ↻ Refresh
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
         </button>
         {error ? (
           <p className="text-[12px] text-danger">
             Refresh failed.{' '}
-            <button type="button" onClick={refetch} className="underline">
+            <button type="button" onClick={handleRefresh} className="underline">
               Retry
             </button>
           </p>
@@ -358,7 +399,9 @@ export default function LiveOrders() {
               </div>
             </div>
             {col.items.length === 0 ? (
-              <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
+              <div className="text-ink-muted text-[13px] p-6 text-center">
+                {searchQuery.trim() ? 'No matching orders' : 'No orders'}
+              </div>
             ) : (
               col.items.map((order) =>
                 isDineIn ? (

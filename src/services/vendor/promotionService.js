@@ -23,11 +23,33 @@ import {
  */
 export const promotionService = {
   /**
-   * GET /vendor-panel/promotions
+   * GET /vendor-panel/promotions?status=&type=&search=
    */
   async getPromotionList(options = {}) {
+    const { status, type, search, params, signal, ...rest } = options
+    const query = { ...(params || {}) }
+
+    const statusValue = String(status || '')
+      .trim()
+      .toLowerCase()
+    if (statusValue && statusValue !== 'all') {
+      query.status = statusValue
+    }
+
+    const typeValue = String(type || '').trim().toUpperCase()
+    if (typeValue) {
+      query.type = typeValue
+    }
+
+    const searchTerm = String(search || '').trim()
+    if (searchTerm) {
+      query.search = searchTerm
+    }
+
     const response = await apiClient.get(endpoints.vendor.promotions.list, {
-      ...options,
+      ...rest,
+      signal,
+      params: query,
       scope: 'vendor',
     })
 
@@ -199,7 +221,7 @@ export const promotionService = {
       this.getPromotionList(options).catch((error) => {
         throw error
       }),
-      this.getPromotionSummary(options).catch(() => ({
+      this.getPromotionSummary().catch(() => ({
         data: mapVendorPromotionsSummaryResponse(null),
       })),
     ])

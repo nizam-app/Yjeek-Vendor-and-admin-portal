@@ -35,7 +35,7 @@ const DEFAULT_OPTION_GROUPS = [
   },
 ]
 
-/** Prefill matching Figma “Add product” screenshot */
+/** Prefill matching Figma sample (demos / mocks only) */
 export const SAMPLE_PRODUCT = {
   id: null,
   name: 'Classic Burger',
@@ -72,7 +72,43 @@ export const SAMPLE_PRODUCT = {
   imagePreviews: [null, null, null, null],
 }
 
-export const EMPTY_PRODUCT = SAMPLE_PRODUCT
+/** Blank form for “Add product” — inputs show placeholders only */
+export const EMPTY_PRODUCT = {
+  id: null,
+  name: '',
+  nameAr: '',
+  category: '',
+  categoryValue: '',
+  subcategory: 'None',
+  subSubcategory: 'None',
+  icon: '🍔',
+  price: '',
+  priceValue: '',
+  stock: 'Made to order',
+  status: 'Active',
+  prepTime: '',
+  descriptionEn: '',
+  descriptionAr: '',
+  badges: [],
+  timeSlot: 'All day',
+  availableFrom: '',
+  availableTo: '',
+  optionGroups: [],
+  addOns: [{ name: '', price: '+0.000' }],
+  active: true,
+  cardTone: '#FFF4D6',
+  badge: null,
+  badgeTone: null,
+  imageUrl: null,
+  imageUrls: [],
+  imageFiles: [null, null, null, null],
+  imagePreviews: [null, null, null, null],
+  categoryRootId: '',
+  subcategoryId: '',
+  subSubcategoryId: '',
+  catalogCategoryId: '',
+  platformCategoryId: null,
+}
 
 /** Dedupe imageUrl + imageUrls into main + extras (extras-only list). */
 function normalizeRemoteImages(product = {}) {
@@ -97,7 +133,7 @@ function normalizeRemoteImages(product = {}) {
 
 function buildForm(product) {
   const addOns = product.addOns?.length ? product.addOns.map((item) => ({ ...item })) : []
-  while (addOns.length < 3) addOns.push({ name: '', price: '+0.000' })
+  while (addOns.length < 1) addOns.push({ name: '', price: '+0.000' })
 
   const remotes = normalizeRemoteImages(product)
 
@@ -113,13 +149,13 @@ function buildForm(product) {
     subSubcategory: product.subSubcategory ?? 'None',
     catalogCategoryId: product.catalogCategoryId ?? '',
     platformCategoryId: product.platformCategoryId ?? null,
-    prepTime: product.prepTime ?? '20',
+    prepTime: product.prepTime ?? '',
     descriptionEn: product.descriptionEn ?? '',
     descriptionAr: product.descriptionAr ?? '',
     badges: [...(product.badges ?? [])],
     timeSlot: product.timeSlot ?? 'All day',
-    availableFrom: product.availableFrom ?? '11:00',
-    availableTo: product.availableTo ?? '23:00',
+    availableFrom: product.availableFrom ?? '',
+    availableTo: product.availableTo ?? '',
     optionGroups: product.optionGroups?.length ? product.optionGroups : [],
     addOns,
     active: product.active ?? product.status === 'Active',
@@ -133,7 +169,7 @@ function buildForm(product) {
 
 const labelClass = 'text-[13px] font-medium leading-[13px] text-[#69706E]'
 const inputBox =
-  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
+  'box-border flex h-[42px] w-full items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none placeholder:text-[#949C94] focus:border-[#1AA34D]'
 const selectBox =
   'box-border flex h-[42px] w-full appearance-none items-center rounded-[9px] border border-[#D6DBD6] bg-white px-3 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]'
 
@@ -202,7 +238,7 @@ export default function EditProductModal({
   const [uploadError, setUploadError] = useState('')
   const fileInputRefs = useRef([])
   const isAdd = mode === 'add'
-  const source = isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT
+  const source = isAdd ? EMPTY_PRODUCT : product || EMPTY_PRODUCT
 
   const tree = useMemo(
     () => (Array.isArray(categoryTree) && categoryTree.length ? categoryTree : []),
@@ -283,7 +319,7 @@ export default function EditProductModal({
 
   useEffect(() => {
     if (!open) return
-    const base = buildForm(isAdd ? SAMPLE_PRODUCT : product || SAMPLE_PRODUCT)
+    const base = buildForm(isAdd ? EMPTY_PRODUCT : product || EMPTY_PRODUCT)
     const chain = Array.isArray(product?.categoryChain) ? product.categoryChain : []
     let categoryRootId = product?.categoryRootId || ''
     let subcategoryId = product?.subcategoryId || ''
@@ -322,13 +358,7 @@ export default function EditProductModal({
         categoryValue: product?.catalogCategoryName || base.categoryValue,
         platformCategoryId: catalogId || product?.platformCategoryId || null,
         optionGroups: isAdd ? [] : base.optionGroups,
-        addOns: isAdd
-          ? [
-              { name: '', price: '+0.000' },
-              { name: '', price: '+0.000' },
-              { name: '', price: '+0.000' },
-            ]
-          : base.addOns,
+        addOns: isAdd ? [{ name: '', price: '+0.000' }] : base.addOns,
         badges: isAdd ? [] : base.badges,
       }
     })
@@ -543,7 +573,7 @@ export default function EditProductModal({
 
     try {
       await onSave?.({
-        ...SAMPLE_PRODUCT,
+        ...EMPTY_PRODUCT,
         ...source,
         id: isAdd ? null : source.id,
         name,
@@ -702,6 +732,7 @@ export default function EditProductModal({
                   className={inputBox}
                   value={form.name}
                   onChange={(e) => updateField('name', e.target.value)}
+                  placeholder="e.g. Classic Burger"
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
@@ -711,6 +742,7 @@ export default function EditProductModal({
                   dir="rtl"
                   value={form.nameAr}
                   onChange={(e) => updateField('nameAr', e.target.value)}
+                  placeholder="اسم المنتج"
                 />
               </div>
             </div>
@@ -723,6 +755,7 @@ export default function EditProductModal({
                   className={inputBox}
                   value={form.priceValue}
                   onChange={(e) => updateField('priceValue', e.target.value)}
+                  placeholder="0.000"
                 />
               </div>
 
@@ -791,6 +824,7 @@ export default function EditProductModal({
                   className={inputBox}
                   value={form.prepTime}
                   onChange={(e) => updateField('prepTime', e.target.value)}
+                  placeholder="20"
                 />
               </div>
             </div>
@@ -800,18 +834,20 @@ export default function EditProductModal({
               <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                 <label className={labelClass}>DESCRIPTION (EN)</label>
                 <textarea
-                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-[12.5px] font-medium leading-[15px] text-[#1A1A1A] outline-none focus:border-[#1AA34D] placeholder:text-[#949C94]"
                   value={form.descriptionEn}
                   onChange={(e) => updateField('descriptionEn', e.target.value)}
+                  placeholder="Short description for the menu"
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
                 <label className={labelClass}>DESCRIPTION (AR)</label>
                 <textarea
-                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-right text-[12.5px] font-medium leading-[23px] text-[#1A1A1A] outline-none focus:border-[#1AA34D]"
+                  className="box-border h-[68px] w-full resize-none rounded-[9px] border border-[#D6DBD6] bg-white px-3 pt-2.5 text-right text-[12.5px] font-medium leading-[23px] text-[#1A1A1A] outline-none placeholder:text-[#949C94] focus:border-[#1AA34D]"
                   dir="rtl"
                   value={form.descriptionAr}
                   onChange={(e) => updateField('descriptionAr', e.target.value)}
+                  placeholder="وصف قصير للقائمة"
                 />
               </div>
             </div>
@@ -847,6 +883,7 @@ export default function EditProductModal({
                   className={inputBox}
                   value={form.availableFrom}
                   onChange={(e) => updateField('availableFrom', e.target.value)}
+                  placeholder="11:00"
                 />
               </div>
               <div className="flex w-[100px] flex-col items-start gap-1.5">
@@ -855,6 +892,7 @@ export default function EditProductModal({
                   className={inputBox}
                   value={form.availableTo}
                   onChange={(e) => updateField('availableTo', e.target.value)}
+                  placeholder="23:00"
                 />
               </div>
             </div>

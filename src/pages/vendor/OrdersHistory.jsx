@@ -1,36 +1,172 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check } from 'lucide-react'
 import { StatusPill } from '../../components/ui'
 import OrderHistoryReceiptModal from '../../components/OrderHistoryReceiptModal'
+import { useVendorBranches } from '../../hooks/vendor/useVendorBranches'
 import { useVendorOrderHistory } from '../../hooks/vendor/useVendorOrderHistory'
 
-const TYPE_OPTIONS = ['All types', 'Delivery', 'Pickup', 'Dine-in', 'Services']
+const SEARCH_DEBOUNCE_MS = 300
+
+const TYPE_OPTIONS = [
+  { label: 'All types', value: '' },
+  { label: 'Delivery', value: 'DELIVERY' },
+  { label: 'Pickup', value: 'PICKUP' },
+  { label: 'Dine-in', value: 'DINE_IN' },
+  { label: 'Services', value: 'SERVICE' },
+]
+
+const STATUS_OPTIONS = [
+  { label: 'All', value: 'all' },
+  { label: 'Delivered', value: 'DELIVERED' },
+  { label: 'Completed', value: 'COMPLETED' },
+  { label: 'Collected', value: 'COLLECTED' },
+  { label: 'Cancelled', value: 'CANCELLED' },
+  { label: 'Rejected', value: 'REJECTED' },
+]
 
 const fieldLabelClass = 'text-[13px] font-medium text-ink-muted tracking-[0.02em] uppercase'
 const selectClass =
-  'h-10 border border-border rounded-[8px] px-3 flex items-center justify-between gap-2 text-xs text-ink-faint bg-white whitespace-nowrap'
+  'h-10 border border-border rounded-[8px] px-3 flex items-center justify-between gap-2 text-xs bg-white whitespace-nowrap'
 
 const thClass = 'text-left text-[10px] tracking-[0.02em] text-ink-muted font-bold uppercase'
 const tdClass = 'text-[12px] text-ink'
 
+function toStartIso(dateValue) {
+  const raw = String(dateValue || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return ''
+  const date = new Date(`${raw}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString()
+}
+
+function toEndIso(dateValue) {
+  const raw = String(dateValue || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return ''
+  const date = new Date(`${raw}T23:59:59.999`)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString()
+}
+
+function FilterSelect({ label, value, options, open, onToggle, onSelect, widthClass = 'w-[150px]', listRef }) {
+  const selected = options.find((opt) => opt.value === value) || options[0]
+
+  return (
+    <div className="relative flex flex-col gap-1.5" ref={listRef}>
+      <span className={fieldLabelClass}>{label}</span>
+      <button
+        type="button"
+        className={`${selectClass} ${widthClass} cursor-pointer`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span className={!value || value === 'all' ? 'text-ink-faint' : 'text-ink'}>
+          {selected?.label || 'All'}
+        </span>
+        <span className="text-ink-muted text-[11px]">▾</span>
+      </button>
+      {open ? (
+        <div
+          className={`absolute top-[calc(100%+6px)] left-0 z-30 overflow-hidden rounded-[10px] border border-border bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)] ${widthClass}`}
+          role="listbox"
+          aria-label={label}
+        >
+          {options.map((option, idx) => {
+            const isSelected = option.value === value
+            return (
+              <button
+                key={option.value || option.label}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                className={`flex w-full items-center justify-between px-3 py-[11px] text-left text-[13px] ${
+                  idx > 0 ? 'border-t border-border' : ''
+                } ${isSelected ? 'font-medium text-green-light-text' : 'font-medium text-ink hover:bg-[#f7f9f7]'}`}
+                onClick={() => onSelect(option.value)}
+              >
+                <span>{option.label}</span>
+                {isSelected ? (
+                  <span className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-primary">
+                    <Check size={11} strokeWidth={3} className="text-white" />
+                  </span>
+                ) : null}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function OrdersHistory() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState('All types')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [branchFilter, setBranchFilter] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [statusOpen, setStatusOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
+  const [branchOpen, setBranchOpen] = useState(false)
   const [menuOrderId, setMenuOrderId] = useState(null)
   const [receiptOrder, setReceiptOrder] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const statusRef = useRef(null)
   const typeRef = useRef(null)
+  const branchRef = useRef(null)
   const menuRef = useRef(null)
-  const { data: orderHistory, error, isLoading, refetch } = useVendorOrderHistory({ limit: 20 })
+
+  const { data: branchesData } = useVendorBranches()
+  const branchOptions = useMemo(() => {
+    const rows = Array.isArray(branchesData?.branches) ? branchesData.branches : []
+    return [
+      { label: 'All', value: '' },
+      ...rows
+        .map((branch) => ({
+          label: String(branch.name || branch.id || 'Branch'),
+          value: String(branch.id || ''),
+        }))
+        .filter((opt) => opt.value),
+    ]
+  }, [branchesData])
 
   useEffect(() => {
-    if (!typeOpen && !menuOrderId) return undefined
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(query.trim())
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const fromIso = toStartIso(fromDate)
+  const toIso = toEndIso(toDate)
+
+  const { data: orderHistory, error, isLoading, refetch } = useVendorOrderHistory({
+    limit: 50,
+    search: debouncedSearch,
+    status: statusFilter,
+    type: typeFilter,
+    branchId: branchFilter || undefined,
+    from: fromIso || undefined,
+    to: toIso || undefined,
+  })
+
+  useEffect(() => {
+    if (!statusOpen && !typeOpen && !branchOpen && !menuOrderId) return undefined
 
     function handlePointerDown(event) {
+      if (statusOpen && statusRef.current && !statusRef.current.contains(event.target)) {
+        setStatusOpen(false)
+      }
       if (typeOpen && typeRef.current && !typeRef.current.contains(event.target)) {
         setTypeOpen(false)
+      }
+      if (branchOpen && branchRef.current && !branchRef.current.contains(event.target)) {
+        setBranchOpen(false)
       }
       if (menuOrderId && menuRef.current && !menuRef.current.contains(event.target)) {
         setMenuOrderId(null)
@@ -39,17 +175,19 @@ export default function OrdersHistory() {
 
     document.addEventListener('mousedown', handlePointerDown)
     return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [typeOpen, menuOrderId])
+  }, [statusOpen, typeOpen, branchOpen, menuOrderId])
 
-  const filtered = (orderHistory || []).filter((o) => {
-    const haystack = [o.id, o.branch, o.status, o.customer, o.orderNumber]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-    const matchesQuery = !query.trim() || haystack.includes(query.trim().toLowerCase())
-    const matchesType = typeFilter === 'All types' || o.type === typeFilter
-    return matchesQuery && matchesType
-  })
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refetch, refreshing])
+
+  const rows = Array.isArray(orderHistory) ? orderHistory : []
 
   if (isLoading && !orderHistory) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading order history…</div>
@@ -58,7 +196,7 @@ export default function OrdersHistory() {
     return (
       <div className="p-7 text-[13px] text-danger">
         Unable to load order history.{' '}
-        <button type="button" onClick={refetch} className="underline">
+        <button type="button" onClick={handleRefresh} className="underline">
           Try again
         </button>
       </div>
@@ -73,17 +211,18 @@ export default function OrdersHistory() {
           {error ? (
             <p className="text-[12px] text-danger">
               Refresh failed.{' '}
-              <button type="button" onClick={refetch} className="underline">
+              <button type="button" onClick={handleRefresh} className="underline">
                 Retry
               </button>
             </p>
           ) : null}
           <button
             type="button"
-            onClick={() => refetch()}
-            className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-medium bg-white"
+            onClick={handleRefresh}
+            disabled={refreshing || (isLoading && !orderHistory)}
+            className="border border-border rounded-[8px] py-[10px] px-[18px] text-[13px] font-medium bg-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            ↻ Refresh
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
       </div>
@@ -96,73 +235,90 @@ export default function OrdersHistory() {
             placeholder="Order #, customer…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search orders"
           />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldLabelClass}>Status</span>
-          <div className={`${selectClass} w-[150px]`}>
-            <span>All</span>
-            <span className="text-ink-muted text-[11px]">▾</span>
-          </div>
-        </div>
-        <div className="relative flex flex-col gap-1.5" ref={typeRef}>
-          <span className={fieldLabelClass}>Type</span>
-          <button
-            type="button"
-            className={`${selectClass} w-[140px] cursor-pointer`}
-            aria-haspopup="listbox"
-            aria-expanded={typeOpen}
-            onClick={() => setTypeOpen((open) => !open)}
-          >
-            <span className={typeFilter === 'All types' ? 'text-ink-faint' : 'text-ink'}>{typeFilter}</span>
-            <span className="text-ink-muted text-[11px]">▾</span>
-          </button>
-          {typeOpen ? (
-            <div
-              className="absolute top-[calc(100%+6px)] left-0 z-30 w-[140px] overflow-hidden rounded-[10px] border border-border bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
-              role="listbox"
-              aria-label="Order type"
-            >
-              {TYPE_OPTIONS.map((option, idx) => {
-                const selected = option === typeFilter
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    role="option"
-                    aria-selected={selected}
-                    className={`flex w-full items-center justify-between px-3 py-[11px] text-left text-[13px] ${
-                      idx > 0 ? 'border-t border-border' : ''
-                    } ${selected ? 'font-medium text-green-light-text' : 'font-medium text-ink hover:bg-[#f7f9f7]'}`}
-                    onClick={() => {
-                      setTypeFilter(option)
-                      setTypeOpen(false)
-                    }}
-                  >
-                    <span>{option}</span>
-                    {selected ? (
-                      <span className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-primary">
-                        <Check size={11} strokeWidth={3} className="text-white" />
-                      </span>
-                    ) : null}
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <span className={fieldLabelClass}>Branch</span>
-          <div className={`${selectClass} w-[170px]`}>
-            <span>All</span>
-            <span className="text-ink-muted text-[11px]">▾</span>
-          </div>
-        </div>
+
+        <FilterSelect
+          label="Status"
+          value={statusFilter}
+          options={STATUS_OPTIONS}
+          open={statusOpen}
+          listRef={statusRef}
+          widthClass="w-[150px]"
+          onToggle={() => {
+            setStatusOpen((open) => !open)
+            setTypeOpen(false)
+            setBranchOpen(false)
+          }}
+          onSelect={(value) => {
+            setStatusFilter(value)
+            setStatusOpen(false)
+          }}
+        />
+
+        <FilterSelect
+          label="Type"
+          value={typeFilter}
+          options={TYPE_OPTIONS}
+          open={typeOpen}
+          listRef={typeRef}
+          widthClass="w-[140px]"
+          onToggle={() => {
+            setTypeOpen((open) => !open)
+            setStatusOpen(false)
+            setBranchOpen(false)
+          }}
+          onSelect={(value) => {
+            setTypeFilter(value)
+            setTypeOpen(false)
+          }}
+        />
+
+        <FilterSelect
+          label="Branch"
+          value={branchFilter}
+          options={branchOptions}
+          open={branchOpen}
+          listRef={branchRef}
+          widthClass="w-[170px]"
+          onToggle={() => {
+            setBranchOpen((open) => !open)
+            setStatusOpen(false)
+            setTypeOpen(false)
+          }}
+          onSelect={(value) => {
+            setBranchFilter(value)
+            setBranchOpen(false)
+          }}
+        />
+
         <div className="flex flex-col gap-1.5">
           <span className={fieldLabelClass}>From</span>
-          <div className={`${selectClass} w-[150px]`}>
-            <span>mm/dd/yyyy</span>
-          </div>
+          <input
+            type="date"
+            className="h-10 w-[150px] border border-border rounded-[8px] px-3 text-xs bg-white text-ink"
+            value={fromDate}
+            max={toDate || undefined}
+            onChange={(e) => {
+              const next = e.target.value
+              setFromDate(next)
+              if (toDate && next && toDate < next) setToDate(next)
+            }}
+            aria-label="From date"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className={fieldLabelClass}>To</span>
+          <input
+            type="date"
+            className="h-10 w-[150px] border border-border rounded-[8px] px-3 text-xs bg-white text-ink"
+            value={toDate}
+            min={fromDate || undefined}
+            onChange={(e) => setToDate(e.target.value)}
+            aria-label="To date"
+          />
         </div>
       </div>
 
@@ -182,21 +338,23 @@ export default function OrdersHistory() {
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-10 px-5 text-center text-[13px] text-ink-muted">
                     No orders found
                   </td>
                 </tr>
               ) : (
-                filtered.map((order, idx) => {
+                rows.map((order, idx) => {
                   const menuOpen = menuOrderId === order.id
                   return (
                     <tr
                       key={`${order.backendId || order.id}-${idx}`}
                       className={`${idx % 2 === 1 ? 'bg-[#fbfcfb]' : ''} border-t border-border`}
                     >
-                      <td className="py-[15px] px-5 text-[12px] font-medium text-green-light-text">{order.id}</td>
+                      <td className="py-[15px] px-5 text-[12px] font-medium text-green-light-text">
+                        {order.id}
+                      </td>
                       <td className={`${tdClass} py-[15px] px-5 text-ink-muted`}>{order.type}</td>
                       <td className="py-[15px] px-5">
                         <StatusPill status={order.status} />

@@ -33,7 +33,7 @@ export const endpoints = {
      * Relative paths used by the existing Vendor UI + mockClient.
      * Replace with confirmed backend paths when each resource is wired.
      */
-    /** Confirmed: GET /vendor-panel/dashboard?branchId= */
+    /** Confirmed: GET /vendor-panel/dashboard?branchId=&from=&to= */
     dashboard: '/vendor-panel/dashboard',
     /** Confirmed: GET /vendor-panel/account */
     account: '/vendor-panel/account',
@@ -41,6 +41,7 @@ export const endpoints = {
     profile: '/vendor/profile',
     orders: {
       /** Confirmed: GET /vendor-panel/orders/live?tab=delivery_pickup|dine_in&branchId= */
+      /** Confirmed: GET /vendor-panel/orders/live?tab=&branchId=&search= */
       live: '/vendor-panel/orders/live',
       /** Confirmed: GET /vendor-panel/orders/scheduled?branchId=&date=today */
       scheduled: '/vendor-panel/orders/scheduled',
@@ -68,6 +69,7 @@ export const endpoints = {
       complete: (orderId) =>
         `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/complete`,
       /** Confirmed: GET /vendor-panel/orders/history?limit= */
+      /** Confirmed: GET /vendor-panel/orders/history?search=&status=&type=&branchId=&from=&to=&limit= */
       history: '/vendor-panel/orders/history',
       /** Confirmed: GET /vendor-panel/orders/:orderId */
       detail: (orderId) => `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}`,
@@ -120,7 +122,7 @@ export const endpoints = {
     /** Confirmed: GET /vendor-panel/staff */
     staff: '/vendor-panel/staff',
     promotions: {
-      /** Confirmed: GET /vendor-panel/promotions · POST create */
+      /** Confirmed: GET /vendor-panel/promotions?status=&type=&search= · POST create */
       list: '/vendor-panel/promotions',
       /** Confirmed: POST /vendor-panel/promotions — Create (same path as list) */
       create: '/vendor-panel/promotions',
@@ -634,6 +636,18 @@ export const endpoints = {
         send: '/admin/marketing/notifications',
         /** Confirmed: POST /admin/marketing/notifications/estimate */
         estimate: '/admin/marketing/notifications/estimate',
+        /**
+         * Confirmed: POST /admin/marketing/notifications/:notificationId/resend
+         * @param {string} notificationId
+         */
+        resend: (notificationId) =>
+          `/admin/marketing/notifications/${encodeURIComponent(notificationId)}/resend`,
+        /**
+         * Confirmed: DELETE /admin/marketing/notifications/:notificationId
+         * @param {string} notificationId
+         */
+        remove: (notificationId) =>
+          `/admin/marketing/notifications/${encodeURIComponent(notificationId)}`,
       },
       promoCodes: {
         /** Confirmed: GET /admin/marketing/promo-codes?status=&limit= (includes summary) */

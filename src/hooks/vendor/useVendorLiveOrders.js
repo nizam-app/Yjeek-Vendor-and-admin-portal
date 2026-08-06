@@ -13,17 +13,20 @@ import { orderService } from '../../services/vendor/orderService'
  * and hides orders with no branch (Dashboard Recent orders shows Branch: —).
  *
  * @param {'delivery'|'dinein'} board
+ * @param {{ search?: string }} [options]
  */
-export function useVendorLiveOrders(board = 'delivery') {
+export function useVendorLiveOrders(board = 'delivery', options = {}) {
   const { user } = useAuth()
   const branchId = user?.vendorLocationId || null
+  const search = String(options.search || '').trim()
 
   return useApiResource(
     () =>
       orderService.getLiveOrders({
         board,
         branchId,
+        search: search || undefined,
       }),
-    [board, branchId],
+    [board, branchId, search],
   )
 }

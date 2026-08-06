@@ -106,7 +106,9 @@ export default function Dashboard() {
         <div className="bg-white border border-border rounded-lg shadow-card overflow-hidden py-[18px] px-5">
           <div className="text-[16px] font-bold mb-[14px] flex items-center justify-between">
             <span>Revenue chart</span>
-            <span className="text-ink-muted text-[13px] font-medium">last 7 days</span>
+            <span className="text-ink-muted text-[13px] font-medium">
+              {data?.chartSubtitle || 'today'}
+            </span>
           </div>
           <div className="flex items-end gap-4 h-[220px] pt-3">
             {revenueDays.length === 0 ? (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Car, ChevronDown, MoreVertical, Plus, Search, Star } from 'lucide-react'
+import { Bell, Car, MoreVertical, Plus, Search, Star } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
@@ -9,6 +9,7 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
 import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
 import { cn } from '../../../components/admin/cn'
@@ -46,47 +47,6 @@ function mapTierMatch(rowTier, filter) {
   if (!filter) return true
   if (/^AT_RISK$/i.test(filter)) return String(rowTier).toLowerCase() === 'at risk'
   return String(rowTier).toUpperCase() === String(filter).toUpperCase()
-}
-
-function normalizeOptions(options = []) {
-  return (Array.isArray(options) ? options : []).map((option) => {
-    if (option && typeof option === 'object') {
-      return {
-        value: String(option.value ?? ''),
-        label: String(option.label ?? option.value ?? ''),
-      }
-    }
-    return { value: String(option), label: String(option) }
-  })
-}
-
-function FilterSelect({ options, value, onChange, label }) {
-  const normalized = normalizeOptions(options)
-  const currentLabel = normalized.find((option) => option.value === value)?.label || label || '—'
-
-  return (
-    <div className="relative inline-flex h-[32px] items-center rounded-full border border-[#e4e8e4] bg-white pl-3 pr-7 text-[12px] font-medium text-[#6B736E] shadow-[0_1px_2px_rgba(20,40,28,.04)]">
-      <span className="whitespace-nowrap">{currentLabel}</span>
-      <ChevronDown
-        size={13}
-        strokeWidth={2.2}
-        className="pointer-events-none absolute right-2.5 text-[#7c8780]"
-        aria-hidden
-      />
-      <select
-        aria-label={label}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {normalized.map((option) => (
-          <option key={`${option.value}-${option.label}`} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
 }
 
 function VehicleIcon({ type }) {
@@ -365,23 +325,29 @@ export default function AdminFleetPage() {
         </div>
 
         <span className="flex-1" />
-        <FilterSelect
+        <AdminFilterSelect
           label="Categories"
+          placeholder="Categories"
           options={filterOptions.categories}
           value={categoryFilter}
           onChange={setCategoryFilter}
+          className="h-[32px] text-[#6B736E]"
         />
-        <FilterSelect
+        <AdminFilterSelect
           label="Vehicle"
+          placeholder="Vehicle"
           options={filterOptions.vehicles}
           value={vehicleFilter}
           onChange={setVehicleFilter}
+          className="h-[32px] text-[#6B736E]"
         />
-        <FilterSelect
+        <AdminFilterSelect
           label="Tier"
+          placeholder="Tier"
           options={filterOptions.tiers}
           value={tierFilter}
           onChange={setTierFilter}
+          className="h-[32px] text-[#6B736E]"
         />
 
         <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">

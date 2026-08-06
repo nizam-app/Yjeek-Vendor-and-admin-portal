@@ -304,14 +304,12 @@ export function parseChampFormDate(value) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+/** Normalize API/form dates → YYYY-MM-DD for calendar inputs. */
 export function formatChampFormDate(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
-  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-    const [y, mo, d] = raw.slice(0, 10).split('-')
-    return `${d}/${mo}/${y}`
-  }
-  return raw
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  return parseChampFormDate(raw) || ''
 }
 
 const CASH_LIMIT_ACTION_TO_API = {

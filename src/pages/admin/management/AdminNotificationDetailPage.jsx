@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { ChevronLeft, Mail, RotateCcw, Smartphone, Trash2 } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
@@ -48,6 +50,9 @@ export default function AdminNotificationDetailPage() {
   const navigate = useNavigate()
   const { notificationId } = useParams()
   const useReal = useRealMarketing()
+  const [actionBusy, setActionBusy] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => {
@@ -58,6 +63,47 @@ export default function AdminNotificationDetailPage() {
     },
     [notificationId, useReal],
   )
+
+  async function handleResend() {
+    if (!useReal || !notificationId || actionBusy) return
+    setActionError('')
+    setActionSuccess('')
+    setActionBusy('resend')
+    try {
+      const response = await adminService.resendAdminMarketingNotification(notificationId)
+      const newId = response?.data?.id ? String(response.data.id) : ''
+      if (newId && newId !== String(notificationId)) {
+        setActionSuccess('Notification resent.')
+        navigate(`/admin/marketing/notifications/${encodeURIComponent(newId)}`, {
+          replace: true,
+        })
+        return
+      }
+      setActionSuccess('Notification resent.')
+      await refetch()
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to resend notification.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
+
+  async function handleDelete() {
+    if (!useReal || !notificationId || actionBusy) return
+    const confirmed = window.confirm('Delete this notification? This cannot be undone.')
+    if (!confirmed) return
+
+    setActionError('')
+    setActionSuccess('')
+    setActionBusy('delete')
+    try {
+      await adminService.deleteAdminMarketingNotification(notificationId)
+      navigate('/admin/marketing')
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to delete notification.'))
+      setActionBusy('')
+    }
+  }
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
@@ -91,6 +137,8 @@ export default function AdminNotificationDetailPage() {
     ['Sent by', detail.sentBy],
   ]
 
+  const busy = Boolean(actionBusy)
+
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -114,20 +162,35 @@ export default function AdminNotificationDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#e4e8e4] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6]"
+            onClick={handleResend}
+            disabled={!useReal || busy}
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#e4e8e4] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] hover:bg-[#f6f8f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <RotateCcw size={14} strokeWidth={2.2} className="text-[#1aa054]" />
-            Resend
+            {actionBusy === 'resend' ? 'Resending…' : 'Resend'}
           </button>
           <button
             type="button"
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#f0d4d2] bg-white px-3.5 text-[12.5px] font-bold text-[#d6453d] hover:bg-[#fdf6f5]"
+            onClick={handleDelete}
+            disabled={!useReal || busy}
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#f0d4d2] bg-white px-3.5 text-[12.5px] font-bold text-[#d6453d] hover:bg-[#fdf6f5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Trash2 size={14} strokeWidth={2.2} />
-            Delete
+            {actionBusy === 'delete' ? 'Deleting…' : 'Delete'}
           </button>
         </div>
       </div>
+
+      {actionError ? (
+        <p className="mb-3 rounded-[10px] border border-[#f0d4d2] bg-[#fdf6f5] px-3.5 py-2.5 text-[12.5px] text-[#d6453d]">
+          {actionError}
+        </p>
+      ) : null}
+      {actionSuccess ? (
+        <p className="mb-3 rounded-[10px] border border-[#cfead9] bg-[#f3faf6] px-3.5 py-2.5 text-[12.5px] text-[#147940]">
+          {actionSuccess}
+        </p>
+      ) : null}
 
       <div className="mb-4 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[520px]:grid-cols-1">
         {detail.stats.map(({ label, value, tone }) => (

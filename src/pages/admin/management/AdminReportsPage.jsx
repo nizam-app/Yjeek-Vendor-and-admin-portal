@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Calendar, ChevronDown, Download, Search, Star } from 'lucide-react'
+import { Calendar, Download, Search, Star } from 'lucide-react'
 import { cn } from '../../../components/admin/cn'
 import { ApiState } from '../../../components/admin/ApiState'
+import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { adminReportService } from '../../../services/admin/reportService'
 import {
   mapReportsChampFilterToApi,
@@ -55,59 +56,59 @@ const FILTERS = [
     key: 'status',
     label: 'Status',
     options: [
-      'Status · All',
-      'Status · Delivered',
-      'Status · Cancelled',
-      'Status · Confirmed',
-      'Status · Preparing',
-      'Status · Refunded',
+      'Status: All',
+      'Status: Delivered',
+      'Status: Cancelled',
+      'Status: Confirmed',
+      'Status: Preparing',
+      'Status: Refunded',
     ],
   },
   {
     key: 'type',
     label: 'Type',
     options: [
-      'Type · All',
-      'Type · Instant',
-      'Type · Pickup',
-      'Type · Dine-in',
-      'Type · Hot food',
-      'Type · Grocery',
-      'Type · Services',
+      'Type: All',
+      'Type: Instant',
+      'Type: Pickup',
+      'Type: Dine-in',
+      'Type: Hot food',
+      'Type: Grocery',
+      'Type: Services',
     ],
   },
   {
     key: 'vendor',
     label: 'Vendor',
-    options: ['Vendor · All'],
+    options: ['Vendor: All'],
   },
   {
     key: 'zone',
     label: 'Zone',
-    options: ['Zone · All', 'Zone · Manama', 'Zone · Muharraq', 'Zone · Riffa'],
+    options: ['Zone: All', 'Zone: Manama', 'Zone: Muharraq', 'Zone: Riffa'],
   },
   {
     key: 'champ',
     label: 'Champ',
-    options: ['Champ · All'],
+    options: ['Champ: All'],
   },
   {
     key: 'payment',
     label: 'Payment',
-    options: ['Payment · All', 'Payment · Wallet', 'Payment · Card', 'Payment · COD'],
+    options: ['Payment: All', 'Payment: Wallet', 'Payment: Card', 'Payment: COD'],
   },
   {
     key: 'sla',
     label: 'SLA',
-    options: ['SLA · All', 'SLA · On-time', 'SLA · Late'],
+    options: ['SLA: All', 'SLA: On-time', 'SLA: Late'],
   },
 ]
 
 const PERIOD_OPTIONS = [
-  'Period · Last 7 days',
-  'Period · Last 30 days',
-  'Period · Last 90 days',
-  'Period · This year',
+  'Period: Last 7 days',
+  'Period: Last 30 days',
+  'Period: Last 90 days',
+  'Period: This year',
 ]
 
 const SORT_OPTIONS = [
@@ -187,27 +188,12 @@ function StatusBadge({ value, toneFn }) {
 
 function FilterSelect({ options, value, onChange, label }) {
   return (
-    <div className="relative inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#e4e8e4] bg-white pl-3 pr-7 text-[12px] font-medium text-[#455249]">
-      <span className="whitespace-nowrap">{value}</span>
-      <ChevronDown
-        size={13}
-        strokeWidth={2.2}
-        className="pointer-events-none absolute right-2.5 text-[#7c8780]"
-        aria-hidden
-      />
-      <select
-        aria-label={label}
-        className="absolute inset-0 h-full w-full cursor-pointer appearance-none opacity-0 outline-none"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </div>
+    <AdminFilterSelect
+      label={label}
+      options={options}
+      value={value}
+      onChange={onChange}
+    />
   )
 }
 
@@ -350,12 +336,12 @@ export default function AdminReportsPage() {
 
     return FILTERS.map((filter) => {
       if (filter.key === 'vendor') {
-        const extras = [...vendorNames].sort().map((name) => `Vendor · ${name}`)
-        return { ...filter, options: ['Vendor · All', ...extras] }
+        const extras = [...vendorNames].sort().map((name) => `Vendor: ${name}`)
+        return { ...filter, options: ['Vendor: All', ...extras] }
       }
       if (filter.key === 'champ') {
-        const extras = [...champNames].sort().map((name) => `Champ · ${name}`)
-        return { ...filter, options: ['Champ · All', ...extras] }
+        const extras = [...champNames].sort().map((name) => `Champ: ${name}`)
+        return { ...filter, options: ['Champ: All', ...extras] }
       }
       return filter
     })
@@ -399,10 +385,10 @@ export default function AdminReportsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <FilterSelect
             label="Period"
-            value={`Period · ${period}`}
+            value={`Period: ${period}`}
             options={PERIOD_OPTIONS}
             onChange={(value) => {
-              setPeriod(value.replace(/^Period · /, ''))
+              setPeriod(value.replace(/^Period\s*[·:]\s*/, ''))
               setPage(1)
             }}
           />

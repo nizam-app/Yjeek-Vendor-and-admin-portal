@@ -206,6 +206,11 @@ export const adminDashboardService = {
       sort = 'time_left',
       limit = 50,
       region,
+      q,
+      vendorId,
+      orderType,
+      fulfillmentType,
+      driverId,
       params,
       ...requestOptions
     } = options
@@ -215,6 +220,11 @@ export const adminDashboardService = {
         sort,
         limit,
         ...(region ? { region } : {}),
+        ...(q ? { q: String(q).trim() } : {}),
+        ...(vendorId ? { vendorId: String(vendorId) } : {}),
+        ...(orderType ? { orderType: String(orderType) } : {}),
+        ...(fulfillmentType ? { fulfillmentType: String(fulfillmentType) } : {}),
+        ...(driverId ? { driverId: String(driverId) } : {}),
         ...(params || {}),
       }
 

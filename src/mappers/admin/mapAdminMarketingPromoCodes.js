@@ -1,4 +1,5 @@
 import { ApiError } from '../../api/errors'
+import { localDateToEndIso, localDateToStartIso } from '../../components/admin/AdminDatePicker'
 
 function formatCount(value) {
   if (value == null || value === '') return '—'
@@ -120,11 +121,19 @@ export function mapPromoDiscountTypeToApi(discountType) {
   return String(discountType).trim().toUpperCase().replace(/\s+/g, '_')
 }
 
+function mapIdList(value) {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (item && typeof item === 'object') return String(item.id || '').trim()
+      return String(item || '').trim()
+    })
+    .filter(Boolean)
+}
+
 /**
  * Map Create promo form → POST /admin/marketing/promo-codes body.
- * Confirmed: code, description, discountType, discountValue, maxDiscountAmount, maxUses, isActive
- *
- * UI-only (not sent until confirmed on API): min order, audience, dates, scope, channels.
+ * Matches admin Create promo UI + upsertPromoCodeSchema.
  */
 export function mapAdminCreatePromoCodeRequest(form = {}) {
   const code = String(form.code || '').trim().toUpperCase()
@@ -153,6 +162,12 @@ export function mapAdminCreatePromoCodeRequest(form = {}) {
     discountType,
     discountValue: discountValue == null ? 0 : discountValue,
     isActive: form.isActive !== false,
+    audience: mapPromoAudienceToApi(form.audience),
+    scope: mapPromoScopeToApi(form.scope),
+    channels: mapPromoChannelsToApi(form.channels),
+    vendorIds: [],
+    categoryIds: [],
+    serviceIds: [],
   }
 
   const maxDiscountAmount = parseMoneyNumber(form.maxDiscountAmount ?? form.maxDiscount)
@@ -160,10 +175,88 @@ export function mapAdminCreatePromoCodeRequest(form = {}) {
     body.maxDiscountAmount = maxDiscountAmount
   }
 
+  const minOrderAmount = parseMoneyNumber(form.minOrderAmount ?? form.minOrder)
+  if (minOrderAmount != null) {
+    body.minOrderAmount = minOrderAmount
+  }
+
   const maxUses = parseOptionalInt(form.maxUses ?? form.totalUsageLimit)
   if (maxUses != null) {
     body.maxUses = maxUses
   }
 
+  const maxUsesPerCustomer = parseOptionalInt(
+    form.maxUsesPerCustomer ?? form.perCustomerLimit,
+  )
+  if (maxUsesPerCustomer != null) {
+    body.maxUsesPerCustomer = maxUsesPerCustomer
+  }
+
+  const vendorIds = mapIdList(
+    form.vendorIds ?? form.selectedVendors ?? form.selectedTargets,
+  )
+  const categoryIds = mapIdList(form.categoryIds)
+  const serviceIds = mapIdList(form.serviceIds)
+
+  if (body.scope === 'SPECIFIC_VENDORS') {
+    body.vendorIds = vendorIds
+    if (!vendorIds.length) {
+      throw new ApiError({ message: 'Select at least one vendor for Specific vendors scope.' })
+    }
+  }
+
+  if (body.scope === 'CATEGORIES') {
+    body.categoryIds = categoryIds.length ? categoryIds : vendorIds
+  }
+
+  if (body.scope === 'SERVICES') {
+    body.serviceIds = serviceIds.length ? serviceIds : vendorIds
+  }
+
+  const startsAt = localDateToStartIso(form.validFrom ?? form.startsAt)
+  if (startsAt) body.startsAt = startsAt
+
+  const endsAt = localDateToEndIso(form.validTo ?? form.endsAt)
+  if (endsAt) body.endsAt = endsAt
+
+  if (startsAt && endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime()) {
+    throw new ApiError({ message: 'Valid to must be on or after Valid from.' })
+  }
+
   return body
+}
+
+export function mapPromoAudienceToApi(audience) {
+  const raw = String(audience || '').trim().toLowerCase()
+  if (raw.includes('new')) return 'NEW_CUSTOMERS'
+  if (raw.includes('returning')) return 'RETURNING_CUSTOMERS'
+  if (raw.includes('vip')) return 'VIP_SEGMENT'
+  if (raw === 'new_customers') return 'NEW_CUSTOMERS'
+  if (raw === 'returning_customers') return 'RETURNING_CUSTOMERS'
+  if (raw === 'vip_segment') return 'VIP_SEGMENT'
+  return 'ALL_CUSTOMERS'
+}
+
+export function mapPromoScopeToApi(scope) {
+  const raw = String(scope || '').trim().toLowerCase()
+  if (raw.includes('vendor') || raw === 'specific_vendors') return 'SPECIFIC_VENDORS'
+  if (raw.includes('categor') || raw === 'categories') return 'CATEGORIES'
+  if (raw.includes('service') || raw === 'services') return 'SERVICES'
+  return 'ALL_STORES'
+}
+
+export function mapPromoChannelsToApi(channels) {
+  const list = Array.isArray(channels) ? channels : []
+  const mapped = list
+    .map((item) => {
+      const raw = String(item || '').trim().toLowerCase()
+      if (raw === 'app') return 'APP'
+      if (raw.includes('auto')) return 'AUTO_APPLY'
+      if (raw.includes('banner') || raw.includes('home')) return 'HOME_BANNER'
+      if (raw.includes('push')) return 'PUSH'
+      if (['APP', 'AUTO_APPLY', 'HOME_BANNER', 'PUSH'].includes(String(item))) return String(item)
+      return null
+    })
+    .filter(Boolean)
+  return mapped.length ? [...new Set(mapped)] : ['APP']
 }

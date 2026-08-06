@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronLeft, MoreVertical, Plus, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, MoreVertical } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySearchPicker'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
@@ -157,8 +158,7 @@ export default function AdminSendVendorNotificationPage() {
   const goBack = () => navigate('/admin/marketing')
 
   const [audience, setAudience] = useState('Selected')
-  const [vendorIds, setVendorIds] = useState([])
-  const [vendorInput, setVendorInput] = useState('')
+  const [selectedVendors, setSelectedVendors] = useState([])
   const [messageType, setMessageType] = useState('Promo')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -173,6 +173,22 @@ export default function AdminSendVendorNotificationPage() {
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+
+  const searchVendors = useCallback(async (query, options = {}) => {
+    const result = await adminService.getVendors({
+      search: query,
+      status: 'All',
+      limit: 10,
+      page: 1,
+      signal: options.signal,
+    })
+    const rows = result?.data?.rows || []
+    return rows.map((row) => ({
+      id: String(row.id),
+      label: String(row.name || row.id),
+      meta: [row.area || row.city, row.category, row.status].filter(Boolean).join(' · '),
+    }))
+  }, [])
 
   const {
     data: historyData,
@@ -193,17 +209,6 @@ export default function AdminSendVendorNotificationPage() {
     (row) => channelFilter === 'All channels' || String(row.channel || '').includes(channelFilter),
   )
 
-  function removeVendorId(id) {
-    setVendorIds((prev) => prev.filter((item) => item !== id))
-  }
-
-  function addVendorId() {
-    const id = String(vendorInput || '').trim()
-    if (!id) return
-    setVendorIds((prev) => (prev.includes(id) ? prev : [...prev, id]))
-    setVendorInput('')
-  }
-
   async function handleSend() {
     setActionError('')
     setActionSuccess('')
@@ -211,7 +216,7 @@ export default function AdminSendVendorNotificationPage() {
     try {
       const response = await adminService.sendAdminVendorNotification({
         audience,
-        vendorIds,
+        vendorIds: selectedVendors.map((item) => item.id),
         type: messageType,
         title,
         body,
@@ -295,55 +300,15 @@ export default function AdminSendVendorNotificationPage() {
             />
 
             {audience === 'Selected' ? (
-              <div className="mt-4 space-y-2">
-                <p className={labelClass}>Vendor ids</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  {vendorIds.map((id) => (
-                    <span
-                      key={id}
-                      className="inline-flex h-[30px] max-w-full items-center gap-1.5 rounded-full border border-[#1aa054] bg-[#e8f7ed] px-2.5 text-[12px] font-bold text-[#147940]"
-                    >
-                      <span className="truncate">{id}</span>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${id}`}
-                        disabled={submitting}
-                        onClick={() => removeVendorId(id)}
-                        className="grid h-4 w-4 place-items-center rounded-full text-[#147940] hover:bg-[#d8f0e0]"
-                      >
-                        <X size={11} strokeWidth={2.4} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    className={cn(inputClass, 'max-w-[320px]')}
-                    value={vendorInput}
-                    disabled={submitting}
-                    placeholder="Paste vendor id then Add"
-                    onChange={(event) => setVendorInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault()
-                        addVendorId()
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={submitting}
-                    onClick={addVendorId}
-                    className="inline-flex h-[40px] items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
-                  >
-                    <Plus size={13} strokeWidth={2.4} />
-                    Add
-                  </button>
-                </div>
-                <p className="text-[11.5px] text-[#8a948e]">
-                  API expects real ids in <code>vendorIds</code>.
-                </p>
-              </div>
+              <AdminEntitySearchPicker
+                label="Vendors"
+                placeholder="Type vendor name (e.g. sakura)…"
+                helperText="Suggestions from GET /admin/vendors?search=. Send uses real vendor ids."
+                selected={selectedVendors}
+                onChange={setSelectedVendors}
+                searchFn={searchVendors}
+                disabled={submitting}
+              />
             ) : (
               <p className="mt-4 text-[12.5px] text-[#7c8780]">
                 {audience === 'All vendors'
