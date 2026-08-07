@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
 import { PageHeader } from '../../components/ui'
@@ -9,6 +9,7 @@ import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
 import { useAuth } from '../../context/AuthContext'
 import { useApiMutation } from '../../hooks/useApiMutation'
+import { useNow } from '../../hooks/useNow'
 import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
 import { getVendorServiceModes } from '../../mappers/vendor/authMapper'
 import {
@@ -16,11 +17,43 @@ import {
   moveOrderToPreparingOnLiveBoard,
   moveOrderToReadyOnLiveBoard,
   removeCompletedOrderFromLiveBoard,
-  removeRejectedOrderFromLiveBoard,
+  markRejectedOrderOnLiveBoard,
 } from '../../mappers/vendor/mapVendorLiveOrders'
+import { formatRejectionReasonLabel } from '../../mappers/vendor/mapVendorRejectionReason'
+import {
+  mergeKeptRejectedIntoNewItems,
+  rememberRejectedLiveOrder,
+  subscribeKeptRejectedLiveOrders,
+} from '../../lib/recentRejectedLiveOrders'
+import { syncExpiredAcceptOrders } from '../../lib/handleAcceptSlaExpiry'
 import { orderService } from '../../services/vendor/orderService'
 
 const AUTO_REFRESH_MS = 8000
+const SEARCH_DEBOUNCE_MS = 300
+
+function matchesLiveOrderSearch(order, query) {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^#/, '')
+  if (!q) return true
+  const haystack = [
+    order.id,
+    order.orderNumber,
+    order.backendId,
+    order.customer,
+    order.customerName,
+    order.customerPhone,
+    order.items,
+    order.guest,
+    order.table,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/#/g, '')
+  return haystack.includes(q)
+}
 
 export default function LiveOrders() {
   const { user, refreshVendorSession } = useAuth()
@@ -34,15 +67,21 @@ export default function LiveOrders() {
   const [handoverOrder, setHandoverOrder] = useState(null)
   const [rejectOrder, setRejectOrder] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
   const [acceptingId, setAcceptingId] = useState(null)
   const [acceptError, setAcceptError] = useState(null)
   const [rejectingId, setRejectingId] = useState(null)
   const [rejectError, setRejectError] = useState(null)
   const [actioningId, setActioningId] = useState(null)
   const [actionError, setActionError] = useState(null)
+  const [keptRejectedTick, setKeptRejectedTick] = useState(0)
   const isDineIn = canDineIn && tab === 'dinein'
   const board = isDineIn ? 'dinein' : 'delivery'
-  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(board)
+  const now = useNow(true)
+  const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(board, {
+    search: debouncedSearch,
+  })
   const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
   const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
     orderService.rejectOrder(orderId, { reason, note }),
@@ -55,10 +94,39 @@ export default function LiveOrders() {
   )
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => subscribeKeptRejectedLiveOrders(() => setKeptRejectedTick((n) => n + 1)), [])
+
+  useEffect(() => {
+    const newItems =
+      board === 'dinein' ? orders?.dineIn?.new || [] : orders?.delivery?.new || []
+    void syncExpiredAcceptOrders({
+      orders: newItems,
+      board,
+      now,
+      setData,
+      rejectOrder: rejectOrderMutation,
+    })
+  }, [orders, board, now, setData, rejectOrderMutation])
+
+  useEffect(() => {
     const timer = window.setInterval(() => {
       refetch()
     }, AUTO_REFRESH_MS)
     return () => window.clearInterval(timer)
+  }, [refetch])
+
+  useEffect(() => {
+    const onExternalUpdate = () => {
+      refetch()
+    }
+    window.addEventListener('yjeek:vendor-live-orders-updated', onExternalUpdate)
+    return () => window.removeEventListener('yjeek:vendor-live-orders-updated', onExternalUpdate)
   }, [refetch])
 
   // Refresh serviceModes from /me so Dine-in appears after SLA/supports changes
@@ -91,6 +159,16 @@ export default function LiveOrders() {
       setSearchParams(next, { replace: true })
     }
   }, [canDineIn, searchParams, setSearchParams])
+
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [refetch, refreshing])
 
   const handleAccept = useCallback(
     async ({ order, mode }) => {
@@ -141,10 +219,18 @@ export default function LiveOrders() {
       setRejectingId(String(orderId))
       try {
         await rejectOrderMutation({ orderId, reason, note })
+        const reasonLabel = formatRejectionReasonLabel(reason) || reason
+        rememberRejectedLiveOrder(order, {
+          board,
+          reason: reasonLabel,
+          note,
+        })
         setData((current) =>
-          removeRejectedOrderFromLiveBoard(current, {
-            board: board,
+          markRejectedOrderOnLiveBoard(current, {
+            board,
             order,
+            reason: reasonLabel,
+            note,
           }),
         )
         setRejectOrder(null)
@@ -236,22 +322,25 @@ export default function LiveOrders() {
     [completeOrder, markReady, performPrimaryAction, board, refetch, setData, startPreparing],
   )
 
-  const columns = getColumns(board, orders).map((col) => ({
-    ...col,
-    items: col.items.filter((order) => {
-      if (!searchQuery.trim()) return true
-      const haystack = [order.id, order.customer, order.items, order.guest]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return haystack.includes(searchQuery.trim().toLowerCase())
-    }),
-  }))
+  const columns = useMemo(() => {
+    void keptRejectedTick
+    return getColumns(board, orders, { now }).map((col) => {
+      const items =
+        col.key === 'new'
+          ? mergeKeptRejectedIntoNewItems(col.items, { board, now })
+          : col.items
+      return {
+        ...col,
+        items: items.filter((order) => matchesLiveOrderSearch(order, searchQuery)),
+      }
+    })
+  }, [board, orders, now, searchQuery, keptRejectedTick])
+
   // Keep the server's count stable while the user filters cards locally.
   const totalActive =
     typeof orders?.activeCount === 'number'
       ? orders.activeCount
-      : getColumns(board, orders).reduce((sum, col) => sum + col.items.length, 0)
+      : getColumns(board, orders, { now }).reduce((sum, col) => sum + col.items.length, 0)
 
   if (isLoading && !orders) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading live orders…</div>
@@ -260,7 +349,7 @@ export default function LiveOrders() {
     return (
       <div className="p-7 text-[13px] text-danger">
         Unable to load live orders.{' '}
-        <button type="button" onClick={refetch} className="underline">
+        <button type="button" onClick={handleRefresh} className="underline">
           Try again
         </button>
       </div>
@@ -302,21 +391,23 @@ export default function LiveOrders() {
           placeholder="Search by order #…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          aria-label="Search live orders by order number"
         />
       </div>
 
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <button
           type="button"
-          onClick={() => refetch()}
-          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7]"
+          onClick={handleRefresh}
+          disabled={refreshing || (isLoading && !orders)}
+          className="border border-border rounded-[8px] py-2 px-[14px] text-[13px] bg-white font-medium hover:bg-[#f7f9f7] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          ↻ Refresh
+          {refreshing ? 'Refreshing…' : '↻ Refresh'}
         </button>
         {error ? (
           <p className="text-[12px] text-danger">
             Refresh failed.{' '}
-            <button type="button" onClick={refetch} className="underline">
+            <button type="button" onClick={handleRefresh} className="underline">
               Retry
             </button>
           </p>
@@ -358,7 +449,9 @@ export default function LiveOrders() {
               </div>
             </div>
             {col.items.length === 0 ? (
-              <div className="text-ink-muted text-[13px] p-6 text-center">No orders</div>
+              <div className="text-ink-muted text-[13px] p-6 text-center">
+                {searchQuery.trim() ? 'No matching orders' : 'No orders'}
+              </div>
             ) : (
               col.items.map((order) =>
                 isDineIn ? (

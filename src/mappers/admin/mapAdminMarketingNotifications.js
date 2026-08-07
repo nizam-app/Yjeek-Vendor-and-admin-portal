@@ -247,8 +247,15 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
   if (audience === 'by_segment' && !segmentIds.length) {
     throw new ApiError({ message: 'Add at least one segment id for By segment.' })
   }
-  if (audience === 'selected' && !segmentIds.length) {
-    throw new ApiError({ message: 'Add at least one customer id for Selected.' })
+
+  const customerIds = Array.isArray(form.customerIds)
+    ? form.customerIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : audience === 'selected'
+      ? segmentIds
+      : []
+
+  if (audience === 'selected' && !customerIds.length) {
+    throw new ApiError({ message: 'Add at least one customer for Selected.' })
   }
 
   const scheduleUi = String(form.schedule || 'Send now').trim().toLowerCase()
@@ -280,8 +287,11 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
     schedule,
   }
 
-  if (audience === 'by_segment' || audience === 'selected') {
+  if (audience === 'by_segment') {
     payload.segmentIds = segmentIds
+  }
+  if (audience === 'selected') {
+    payload.customerIds = customerIds
   }
 
   return payload

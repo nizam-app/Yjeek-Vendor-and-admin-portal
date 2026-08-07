@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import Sidebar from '../components/Sidebar'
 import Topbar from '../components/Topbar'
+import VendorIncomingOrderAlerts from '../components/VendorIncomingOrderAlerts'
 
 export default function VendorLayout() {
   return (
@@ -10,6 +11,7 @@ export default function VendorLayout() {
         <Topbar />
         <Outlet />
       </div>
+      <VendorIncomingOrderAlerts />
     </div>
   )
 }

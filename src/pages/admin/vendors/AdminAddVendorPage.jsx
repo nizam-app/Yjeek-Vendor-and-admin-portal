@@ -107,6 +107,190 @@ function VendorSelect({ children, className = '', ...props }) {
   )
 }
 
+/**
+ * Multi-select catalogs. Primary store type = first selected id (storeTypeId).
+ * Keeps single-select compatibility via onPrimaryChange.
+ */
+function VendorCatalogMultiSelect({
+  options = [],
+  selectedIds = [],
+  primaryId = '',
+  onChange,
+  disabled = false,
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const onDoc = (event) => {
+      if (rootRef.current?.contains(event.target)) return
+      setOpen(false)
+    }
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  const selectedSet = new Set(selectedIds.map(String))
+  const selectedOptions = options.filter((opt) => selectedSet.has(String(opt.id)))
+  const primary = selectedOptions.find((opt) => String(opt.id) === String(primaryId)) || selectedOptions[0]
+
+  const toggle = (id) => {
+    const key = String(id)
+    if (selectedSet.has(key)) {
+      if (selectedIds.length <= 1) return
+      const next = selectedIds.filter((item) => String(item) !== key)
+      const nextPrimary = next.includes(String(primaryId)) ? primaryId : (next[0] || '')
+      onChange({ catalogIds: next, storeTypeId: nextPrimary })
+      return
+    }
+    const next = [...selectedIds, key]
+    const nextPrimary = primaryId || key
+    onChange({ catalogIds: next, storeTypeId: nextPrimary })
+  }
+
+  const removeChip = (id) => {
+    if (selectedIds.length <= 1) return
+    const key = String(id)
+    const next = selectedIds.filter((item) => String(item) !== key)
+    const nextPrimary = next.includes(String(primaryId)) ? primaryId : (next[0] || '')
+    onChange({ catalogIds: next, storeTypeId: nextPrimary })
+  }
+
+  const setPrimary = (id) => {
+    const key = String(id)
+    if (!selectedSet.has(key)) return
+    const rest = selectedIds.filter((item) => String(item) !== key)
+    onChange({ catalogIds: [key, ...rest], storeTypeId: key })
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          'flex min-h-[40px] w-full items-center gap-2 rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-1.5 text-left outline-none transition focus:border-[#1aa054]',
+          disabled && 'cursor-not-allowed opacity-60',
+        )}
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
+          {selectedOptions.length === 0 ? (
+            <span className="text-[13px] text-[#9aa49d]">Select one or more catalogs</span>
+          ) : (
+            selectedOptions.map((opt) => {
+              const isPrimary = String(opt.id) === String(primary?.id)
+              return (
+                <span
+                  key={opt.id}
+                  className={cn(
+                    'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                    isPrimary
+                      ? 'bg-[#e8f7ed] text-[#147940]'
+                      : 'bg-[#f1f4f1] text-[#455249]',
+                  )}
+                >
+                  <span className="truncate">{opt.name}</span>
+                  {isPrimary ? <span className="text-[9px] opacity-80">· primary</span> : null}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeChip(opt.id)
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        removeChip(opt.id)
+                      }
+                    }}
+                    className="grid h-3.5 w-3.5 place-items-center rounded-full text-[10px] hover:bg-black/10"
+                    aria-label={`Remove ${opt.name}`}
+                  >
+                    ×
+                  </span>
+                </span>
+              )
+            })
+          )}
+        </div>
+        <ChevronDown size={14} className={cn('shrink-0 text-[#69756d] transition', open && 'rotate-180')} />
+      </button>
+
+      {open ? (
+        <div className="absolute left-0 top-[calc(100%+4px)] z-40 w-full overflow-hidden rounded-[12px] border border-[#e2e6e3] bg-white shadow-[0_12px_32px_rgba(20,40,28,.16)]">
+          <div className="border-b border-[#edf0ee] px-3 py-2 text-[11px] text-[#7c8780]">
+            Select catalogs for this vendor. Mark one as primary for sub-category & listing.
+          </div>
+          <div className="max-h-[260px] space-y-0.5 overflow-y-auto p-1.5">
+            {options.length === 0 ? (
+              <p className="px-2 py-3 text-center text-[11px] text-[#8a948e]">No store types loaded</p>
+            ) : (
+              options.map((opt) => {
+                const checked = selectedSet.has(String(opt.id))
+                const isPrimary = checked && String(opt.id) === String(primary?.id)
+                return (
+                  <div
+                    key={opt.id}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-[8px] px-2 py-2 transition',
+                      checked ? 'bg-[#e8f7ed]' : 'hover:bg-[#f5f8f5]',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggle(opt.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    >
+                      <span className={cn(
+                        'grid h-[15px] w-[15px] shrink-0 place-items-center rounded-[3px] border',
+                        checked ? 'border-[#19ad5b] bg-[#19ad5b] text-white' : 'border-[#c5cdc7] bg-white',
+                      )}>
+                        {checked ? <Check size={10} strokeWidth={3} /> : null}
+                      </span>
+                      <span className={cn(
+                        'min-w-0 flex-1 truncate text-[12px] font-semibold',
+                        checked ? 'text-[#147940]' : 'text-[#314039]',
+                      )}
+                      >
+                        {opt.name}
+                      </span>
+                    </button>
+                    {checked ? (
+                      <button
+                        type="button"
+                        onClick={() => setPrimary(opt.id)}
+                        className={cn(
+                          'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                          isPrimary
+                            ? 'bg-[#19ad5b] text-white'
+                            : 'border border-[#d7ddd8] bg-white text-[#6a746e] hover:border-[#19ad5b] hover:text-[#147940]',
+                        )}
+                      >
+                        {isPrimary ? 'Primary' : 'Make primary'}
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
   const inputRef = useRef(null)
   const localPreviewRef = useRef(null)
@@ -262,6 +446,7 @@ export default function AdminAddVendorPage({ onBack }) {
     legalName: '',
     storeType: 'Food & Beverage',
     storeTypeId: '',
+    catalogIds: [],
     categoryLabel: 'Food & Beverage',
     subCategory: 'None',
     subcategoryId: '',
@@ -433,8 +618,11 @@ export default function AdminAddVendorPage({ onBack }) {
                 ...next,
                 storeTypeId: matched.id,
                 storeType: matched.name || prev.storeType,
+                catalogIds: prev.catalogIds?.length ? prev.catalogIds : [matched.id],
               }
             }
+          } else if (!prev.catalogIds?.length && prev.storeTypeId) {
+            next = { ...next, catalogIds: [prev.storeTypeId] }
           }
           if (!next.slaModelId) {
             const preferred = models.find((m) => m.isDefault) || models[0]
@@ -475,6 +663,12 @@ export default function AdminAddVendorPage({ onBack }) {
         const matchedTypeId =
           vendor.storeTypeId || matchAdminStoreTypeId(types, vendor.categoryLabel || vendor.storeType)
 
+        const loadedCatalogIds = Array.isArray(vendor.catalogIds) && vendor.catalogIds.length
+          ? vendor.catalogIds.map(String)
+          : matchedTypeId
+            ? [String(matchedTypeId)]
+            : []
+
         setForm((prev) => ({
           ...prev,
           storeName: vendor.name || '',
@@ -486,6 +680,7 @@ export default function AdminAddVendorPage({ onBack }) {
                 : '',
           storeType: vendor.categoryLabel || vendor.storeType || prev.storeType,
           storeTypeId: matchedTypeId || '',
+          catalogIds: loadedCatalogIds,
           subCategory: vendor.subCategory || 'None',
           subcategoryId: vendor.subcategoryId || '',
           description: vendor.description || '',
@@ -712,6 +907,9 @@ export default function AdminAddVendorPage({ onBack }) {
           cuisineTags: vendor.cuisineTags || prev.cuisineTags,
           storeType: vendor.categoryLabel || prev.storeType,
           storeTypeId: vendor.storeTypeId || prev.storeTypeId,
+          catalogIds: Array.isArray(vendor.catalogIds) && vendor.catalogIds.length
+            ? vendor.catalogIds.map(String)
+            : (vendor.storeTypeId ? [String(vendor.storeTypeId)] : prev.catalogIds),
           subcategoryId:
             vendor.subcategoryId !== undefined && vendor.subcategoryId !== null
               ? vendor.subcategoryId
@@ -1092,41 +1290,49 @@ export default function AdminAddVendorPage({ onBack }) {
               <VendorField label="Legal name">
                 <VendorInput value={form.legalName} onChange={update('legalName')} placeholder="e.g. Green Kitchen Express W.L.L." />
               </VendorField>
-              <VendorField label="Store type">
-                <VendorSelect
-                  value={form.storeTypeId || form.storeType}
-                  onChange={(e) => {
-                    const value = e.target.value
-                    const matched = storeTypes.find((t) => t.id === value)
-                    setForm((prev) => ({
-                      ...prev,
-                      storeTypeId: matched ? matched.id : '',
-                      storeType: matched ? matched.name : value,
-                      categoryLabel: matched ? matched.name : value,
-                      subcategoryId: '',
-                      subCategory: 'None',
-                    }))
-                  }}
-                >
-                  {storeTypes.length ? (
-                    <>
-                      <option value="">Select store type</option>
-                      {storeTypes.map((type) => (
-                        <option key={type.id} value={type.id}>
-                          {type.name}
-                        </option>
-                      ))}
-                    </>
-                  ) : (
-                    <>
-                      <option>Food & Beverage</option>
-                      <option>Grocery</option>
-                      <option>Electronics</option>
-                      <option>Fashion</option>
-                      <option>Other</option>
-                    </>
-                  )}
-                </VendorSelect>
+              <VendorField label="Catalogs">
+                {storeTypes.length ? (
+                  <VendorCatalogMultiSelect
+                    options={storeTypes}
+                    selectedIds={form.catalogIds?.length ? form.catalogIds : (form.storeTypeId ? [form.storeTypeId] : [])}
+                    primaryId={form.storeTypeId}
+                    onChange={({ catalogIds, storeTypeId }) => {
+                      const primary = storeTypes.find((t) => String(t.id) === String(storeTypeId))
+                      setForm((prev) => ({
+                        ...prev,
+                        catalogIds,
+                        storeTypeId: storeTypeId || '',
+                        storeType: primary?.name || (storeTypeId ? prev.storeType : ''),
+                        categoryLabel: primary?.name || (storeTypeId ? prev.categoryLabel : ''),
+                        subcategoryId: '',
+                        subCategory: 'None',
+                      }))
+                    }}
+                  />
+                ) : (
+                  <VendorSelect
+                    value={form.storeTypeId || form.storeType}
+                    onChange={(e) => {
+                      const value = e.target.value
+                      setForm((prev) => ({
+                        ...prev,
+                        storeTypeId: value,
+                        storeType: value,
+                        categoryLabel: value,
+                        catalogIds: value ? [value] : [],
+                        subcategoryId: '',
+                        subCategory: 'None',
+                      }))
+                    }}
+                  >
+                    <option value="">Select store type</option>
+                    <option>Food & Beverage</option>
+                    <option>Grocery</option>
+                    <option>Electronics</option>
+                    <option>Fashion</option>
+                    <option>Other</option>
+                  </VendorSelect>
+                )}
               </VendorField>
               <VendorField label="Sub-category">
                 <VendorSelect

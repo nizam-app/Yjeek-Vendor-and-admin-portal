@@ -35,6 +35,11 @@ function findMockBranchById(branchId) {
 /** In-memory branch menu (mutated by PATCH Edit Branch menu in mock mode). */
 let mockBranchMenuState = structuredClone(vendorMock.mockBranchMenu || [])
 
+/** Mutable promotions list — ESM namespace imports like vendorMock.promotions are immutable. */
+let promotionsStore = Array.isArray(vendorMock.promotions)
+  ? [...vendorMock.promotions]
+  : []
+
 function applyMockBranchMenuPatch(body = {}) {
   const items = Array.isArray(body.items) ? body.items : []
   const categories = Array.isArray(body.categories) ? body.categories : []
@@ -95,7 +100,7 @@ function findMockPromotion(promotionId) {
   const id = String(promotionId || '').trim()
   if (!id || id === 'new' || id === 'summary') return null
   return (
-    (vendorMock.promotions || []).find(
+    promotionsStore.find(
       (p) => p.id === id || p.title === id,
     ) || null
   )
@@ -684,9 +689,22 @@ const mockRoutes = {
     },
   }),
   'GET /orders/history': () => vendorMock.orderHistory,
-  'GET /vendor-panel/orders/history': () => ({
-    orders: vendorMock.orderHistory,
-  }),
+  'GET /vendor-panel/orders/history': ({ params } = {}) => {
+    const all = Array.isArray(vendorMock.orderHistory) ? vendorMock.orderHistory : []
+    const page = Math.max(1, Number(params?.page) || 1)
+    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 20))
+    const start = (page - 1) * limit
+    const orders = all.slice(start, start + limit)
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total: all.length,
+        pages: Math.ceil(all.length / limit) || 0,
+      },
+    }
+  },
   'GET /services/bookings': () => vendorMock.serviceBookings,
   'GET /vendor-panel/orders/services': () => ({
     view: 'board',
@@ -970,11 +988,11 @@ const mockRoutes = {
   'GET /promotions': () => ({
     kpis: vendorMock.promotionKpis,
     filters: vendorMock.promotionFilters,
-    promotions: vendorMock.promotions,
+    promotions: promotionsStore,
   }),
   'GET /vendor-panel/promotions': () => ({
-    count: (vendorMock.promotions || []).length,
-    items: (vendorMock.promotions || []).map((promo) => ({
+    count: promotionsStore.length,
+    items: promotionsStore.map((promo) => ({
       id: promo.id,
       name: promo.title,
       type:
@@ -1063,8 +1081,7 @@ const mockRoutes = {
       period: '—',
       used: 0,
     }
-    if (!Array.isArray(vendorMock.promotions)) vendorMock.promotions = []
-    vendorMock.promotions.unshift(listRow)
+    promotionsStore.unshift(listRow)
     return {
       id,
       name: listRow.title,

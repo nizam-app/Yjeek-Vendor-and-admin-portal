@@ -1,5 +1,6 @@
-import { StatusPill } from './ui'
 import { useOrderTimers } from '../hooks/useOrderTimers'
+import { materializeExpiredAcceptOrders } from '../lib/orderTimers'
+import { formatRejectionReasonLabel } from '../mappers/vendor/mapVendorRejectionReason'
 
 const btnBase = 'rounded-[8px] px-3 py-2 text-xs font-medium'
 const btnPrimaryAction = `flex-1 text-center bg-green-primary text-white ${btnBase} hover:brightness-[0.96]`
@@ -18,6 +19,47 @@ function SlaRow({ label, value }) {
       <span className="text-[11px] font-medium">⏱️ {label}</span>
       <strong className="text-[13px] font-bold tabular-nums">{value}</strong>
     </p>
+  )
+}
+
+function relativeCustomerLine(order) {
+  const base =
+    order.customer ||
+    order.customerName ||
+    (order.guest
+      ? order.guests != null && order.guests !== ''
+        ? `${order.guest} · ${order.guests} guests`
+        : order.guest
+      : '')
+  if (!base) return '—'
+  if (String(base).includes(' · ')) return base
+  if (order.when) return `${base} · ${order.when}`
+  return base
+}
+
+function RejectedOrderCard({ order, dense, onSelect, canOpenDetails }) {
+  const reasonLabel = formatRejectionReasonLabel(order.reason || order.note)
+
+  return (
+    <div
+      className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
+      onClick={canOpenDetails ? () => onSelect?.({ order, mode: 'new' }) : undefined}
+      role={canOpenDetails ? 'button' : undefined}
+      tabIndex={canOpenDetails ? 0 : undefined}
+    >
+      <span className="inline-flex w-fit items-center rounded-[6px] bg-[#fde8e8] px-[7px] py-[2px] text-[10px] font-bold uppercase tracking-[0.02em] text-[#c54749]">
+        ✕ REJECTED
+      </span>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[12px] font-bold text-ink">{order.id}</span>
+        {order.total ? <span className="text-[13px] font-bold text-green-primary">{order.total}</span> : null}
+      </div>
+      {order.items && order.items !== '—' ? (
+        <p className="text-[12px] text-ink-muted">{order.items}</p>
+      ) : null}
+      <p className="text-[11px] text-ink-faint">{relativeCustomerLine(order)}</p>
+      {reasonLabel ? <p className="text-[12px] text-ink-muted">Reason: {reasonLabel}</p> : null}
+    </div>
   )
 }
 
@@ -103,23 +145,12 @@ export function OrderCard({
 
   if (order.status === 'rejected') {
     return (
-      <div
-        className={`${cardClass(dense)}${canOpenDetails ? ' cursor-pointer' : ''}`}
-        onClick={canOpenDetails ? () => onSelect?.({ order, mode }) : undefined}
-        role={canOpenDetails ? 'button' : undefined}
-        tabIndex={canOpenDetails ? 0 : undefined}
-      >
-        <span className="inline-flex w-fit items-center text-[10px] font-bold py-[2px] px-[7px] rounded-[6px] bg-[#fce8e8] text-[#c91a24]">
-          ✕ REJECTED
-        </span>
-        <div className="flex justify-between text-[12px] font-bold">
-          <span className="text-ink">{order.id}</span>
-          <span className="text-green-primary text-[13px]">{order.total}</span>
-        </div>
-        <p className="text-ink-muted text-xs">{order.items}</p>
-        <p className="text-ink-faint text-[11px]">{order.customer}</p>
-        {order.reason ? <p className="text-ink-muted text-xs">Reason: {order.reason}</p> : null}
-      </div>
+      <RejectedOrderCard
+        order={order}
+        dense={dense}
+        onSelect={onSelect}
+        canOpenDetails={canOpenDetails}
+      />
     )
   }
 
@@ -304,9 +335,20 @@ export function DineInCard({
   const separateRows = mode === 'ready' || (mode === 'confirmed' && order.arrived === false)
   const showTogether = !separateRows && order.when && order.tag
   const { acceptCountdown } = useOrderTimers(order, {
-    trackAccept: mode === 'new',
+    trackAccept: mode === 'new' && order.status !== 'rejected' && order.status !== 'no-show-cancelled',
     trackPrep: false,
   })
+
+  if (order.status === 'rejected') {
+    return (
+      <RejectedOrderCard
+        order={order}
+        dense={dense}
+        onSelect={onSelect}
+        canOpenDetails={canOpenDetails}
+      />
+    )
+  }
 
   return (
     <div
@@ -459,16 +501,21 @@ const columnMeta = {
   },
 }
 
-export function getColumns(tab, orders) {
+export function getColumns(tab, orders, { now = Date.now() } = {}) {
   const isDineIn = tab === 'dinein'
   const source = isDineIn ? orders?.dineIn : orders?.delivery
   const meta = columnMeta[isDineIn ? 'dinein' : 'delivery']
   const keys = isDineIn ? ['new', 'confirmed', 'preparing', 'ready'] : ['new', 'accepted', 'preparing', 'ready']
 
-  return keys.map((key) => ({
-    key,
-    title: meta[key].title,
-    subtitle: meta[key].subtitle,
-    items: source?.[key] || [],
-  }))
+  return keys.map((key) => {
+    const rawItems = source?.[key] || []
+    const items =
+      key === 'new' ? materializeExpiredAcceptOrders(rawItems, now) : rawItems
+    return {
+      key,
+      title: meta[key].title,
+      subtitle: meta[key].subtitle,
+      items,
+    }
+  })
 }

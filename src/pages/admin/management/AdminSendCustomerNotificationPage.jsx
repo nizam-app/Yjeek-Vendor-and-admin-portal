@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, Plus, X } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySearchPicker'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
@@ -119,6 +120,7 @@ export default function AdminSendCustomerNotificationPage() {
   const [audience, setAudience] = useState('By segment')
   const [segmentIds, setSegmentIds] = useState([])
   const [segmentInput, setSegmentInput] = useState('')
+  const [selectedCustomers, setSelectedCustomers] = useState([])
   const [messageType, setMessageType] = useState('Promo')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -131,6 +133,22 @@ export default function AdminSendCustomerNotificationPage() {
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+
+  const searchCustomers = useCallback(async (query, options = {}) => {
+    const result = await adminService.listAdminCustomers({
+      search: query,
+      statusTab: 'All',
+      limit: 10,
+      page: 1,
+      signal: options.signal,
+    })
+    const rows = result?.data?.rows || []
+    return rows.map((row) => ({
+      id: String(row.id),
+      label: String(row.name || row.id),
+      meta: [row.contact, row.email].filter((value) => value && value !== '—').join(' · '),
+    }))
+  }, [])
 
   const {
     data: historyData,
@@ -181,7 +199,8 @@ export default function AdminSendCustomerNotificationPage() {
     try {
       const response = await adminService.sendAdminCustomerNotification({
         audience,
-        segmentIds,
+        segmentIds: audience === 'By segment' ? segmentIds : [],
+        customerIds: audience === 'Selected' ? selectedCustomers.map((item) => item.id) : [],
         type: messageType,
         title,
         body,
@@ -200,9 +219,6 @@ export default function AdminSendCustomerNotificationPage() {
       setSubmitting(false)
     }
   }
-
-  const showIdPicker = audience === 'By segment' || audience === 'Selected'
-  const idPickerLabel = audience === 'Selected' ? 'Customer ids' : 'Segment ids'
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -242,9 +258,21 @@ export default function AdminSendCustomerNotificationPage() {
               disabled={submitting}
             />
 
-            {showIdPicker ? (
+            {audience === 'Selected' ? (
+              <AdminEntitySearchPicker
+                label="Customers"
+                placeholder="Type customer name or phone…"
+                helperText="Suggestions from GET /admin/customers?search=. Send uses real customer ids."
+                selected={selectedCustomers}
+                onChange={setSelectedCustomers}
+                searchFn={searchCustomers}
+                disabled={submitting}
+              />
+            ) : null}
+
+            {audience === 'By segment' ? (
               <div className="mt-4 space-y-2">
-                <p className={labelClass}>{idPickerLabel}</p>
+                <p className={labelClass}>Segment ids</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {segmentIds.map((id) => (
                     <span
@@ -269,11 +297,7 @@ export default function AdminSendCustomerNotificationPage() {
                     className={cn(inputClass, 'max-w-[320px]')}
                     value={segmentInput}
                     disabled={submitting}
-                    placeholder={
-                      audience === 'Selected'
-                        ? 'Paste customer id then Add'
-                        : 'Paste segment id then Add'
-                    }
+                    placeholder="Paste segment id then Add"
                     onChange={(event) => setSegmentInput(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
@@ -293,8 +317,7 @@ export default function AdminSendCustomerNotificationPage() {
                   </button>
                 </div>
                 <p className="text-[11.5px] text-[#8a948e]">
-                  API expects real ids in <code>segmentIds</code>
-                  {audience === 'Selected' ? ' (use customer ids here until a dedicated field exists).' : '.'}
+                  API expects real ids in <code>segmentIds</code>.
                 </p>
               </div>
             ) : null}

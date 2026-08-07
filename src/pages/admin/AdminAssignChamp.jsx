@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Bike, Car, Check, Lock, Search, Star } from 'lucide-react'
+import { ArrowLeft, Bike, Car, Check, ChevronDown, Lock, Search, Star } from 'lucide-react'
 import { ApiState } from '../../components/admin/ApiState'
 import { isAdminRealApiFeature } from '../../api/config'
 import { ApiError, formatApiErrorMessage } from '../../api/errors'
@@ -10,8 +10,6 @@ import { useAdminOrderDetail } from '../../hooks/admin/useAdminOrderDetail'
 import { useAdminOrderActionOptions } from '../../hooks/admin/useAdminOrderActionOptions'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
-
-const FILTER_PILL = 'inline-flex h-[30px] items-center gap-1 rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#455249]'
 
 const FALLBACK_DATES = [
   { id: 'today', label: 'Today' },
@@ -23,9 +21,32 @@ const FALLBACK_DATES = [
 
 const FALLBACK_WINDOWS = ['10–12 PM', '12–2 PM', '2–4 PM', '4–6 PM', '6–8 PM']
 
+const SORT_OPTIONS = [
+  { id: 'nearest', label: 'Nearest' },
+  { id: 'rating', label: 'Top rated' },
+  { id: 'load', label: 'Lightest load' },
+  { id: 'name', label: 'Name A–Z' },
+]
+
+const ALLOWED_OPTIONS = [
+  { id: 'yes', label: 'Allowed' },
+  { id: 'no', label: 'Not allowed' },
+]
+
+function uniqueOptionList(champs, key) {
+  const seen = new Map()
+  for (const champ of champs) {
+    const raw = champ?.[key]
+    if (raw == null || raw === '') continue
+    const id = String(raw)
+    if (!seen.has(id)) seen.set(id, { id, label: id })
+  }
+  return Array.from(seen.values()).sort((a, b) => a.label.localeCompare(b.label))
+}
+
 function tierClass(tier) {
-  if (tier === 'Gold') return 'bg-[#fff3d6] text-[#9a6d12]'
-  if (tier === 'Elite') return 'bg-[#eee8ff] text-[#734dbf]'
+  if (tier === 'Gold' || tier === 'GOLD') return 'bg-[#fff3d6] text-[#9a6d12]'
+  if (tier === 'Elite' || tier === 'ELITE') return 'bg-[#eee8ff] text-[#734dbf]'
   return 'bg-[#eff2f0] text-[#667069]'
 }
 
@@ -92,7 +113,7 @@ function SelectField({ label, value, options, onChange, disabled = false }) {
           value={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
-          className="h-[38px] w-full appearance-none rounded-[8px] border border-[#dfe4e0] bg-white px-3 pr-8 text-[12px] font-medium text-[#17231c] outline-none disabled:bg-[#f6f7f6] disabled:text-[#8a948e]"
+          className="h-[38px] w-full appearance-none rounded-[8px] border border-[#dfe4e0] bg-white px-3 pr-9 text-[12px] font-medium text-[#17231c] outline-none transition focus:border-[#19ad5b] focus:ring-2 focus:ring-[#19ad5b]/15 disabled:bg-[#f6f7f6] disabled:text-[#8a948e]"
         >
           {options.map((option) => (
             <option key={typeof option === 'string' ? option : option.id} value={typeof option === 'string' ? option : option.id}>
@@ -100,9 +121,109 @@ function SelectField({ label, value, options, onChange, disabled = false }) {
             </option>
           ))}
         </select>
-        ▾
+        <ChevronDown
+          size={14}
+          className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[#6f7973]"
+          aria-hidden
+        />
       </span>
     </label>
+  )
+}
+
+/** Single-select pill dropdown used for champ filters / sort. */
+function AssignFilterDropdown({
+  title,
+  items,
+  value,
+  onChange,
+  open,
+  onToggleOpen,
+  allLabel = 'All',
+  align = 'left',
+  emptyHint = 'No options',
+  allowClear = true,
+  emphasize = undefined,
+}) {
+  const active = emphasize ?? (allowClear ? Boolean(value) : open)
+  const selectedLabel = value
+    ? (items.find((item) => item.id === value)?.label || value)
+    : allLabel
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onToggleOpen}
+        aria-expanded={open}
+        className={cn(
+          'inline-flex h-[30px] items-center gap-1 rounded-full border px-3 text-[11px] transition',
+          (open || active) && 'border-[#b7e4c7] bg-[#e8f7ed] text-[#147940]',
+          !open && !active && 'border-[#d7ddd8] bg-white text-[#455249] hover:bg-[#f7f9f7]',
+        )}
+      >
+        <span className={cn('font-medium', open || active ? 'text-[#2f8f55]' : 'text-[#6a746e]')}>{title}</span>
+        <span className={cn('max-w-[110px] truncate font-bold', open || active ? 'text-[#0f6b3a]' : 'text-[#17231c]')}>
+          · {selectedLabel}
+        </span>
+        <ChevronDown size={12} className={cn('shrink-0 opacity-70 transition', open && 'rotate-180')} />
+      </button>
+      {open ? (
+        <div
+          className={cn(
+            'absolute top-[36px] z-40 w-[220px] overflow-hidden rounded-[12px] border border-[#e2e6e3] bg-white shadow-[0_12px_32px_rgba(20,40,28,.16)]',
+            align === 'right' ? 'right-0' : 'left-0',
+          )}
+        >
+          <div className="max-h-[260px] space-y-0.5 overflow-y-auto p-1.5">
+            {allowClear ? (
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left transition',
+                  !value ? 'bg-[#e8f7ed] text-[#147940]' : 'text-[#314039] hover:bg-[#f5f8f5]',
+                )}
+              >
+                <span className={cn(
+                  'grid h-[15px] w-[15px] shrink-0 place-items-center rounded-full border',
+                  !value ? 'border-[#19ad5b] bg-[#19ad5b] text-white' : 'border-[#c5cdc7] bg-white',
+                )}>
+                  {!value ? <Check size={9} strokeWidth={3} /> : null}
+                </span>
+                <span className="text-[11px] font-semibold">{allLabel}</span>
+              </button>
+            ) : null}
+            {items.length === 0 ? (
+              <p className="px-2 py-3 text-center text-[11px] text-[#8a948e]">{emptyHint}</p>
+            ) : (
+              items.map((item) => {
+                const selected = value === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onChange(item.id)}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-[8px] px-2.5 py-2 text-left transition',
+                      selected ? 'bg-[#e8f7ed] text-[#147940]' : 'text-[#314039] hover:bg-[#f5f8f5]',
+                    )}
+                  >
+                    <span className={cn(
+                      'grid h-[15px] w-[15px] shrink-0 place-items-center rounded-full border',
+                      selected ? 'border-[#19ad5b] bg-[#19ad5b] text-white' : 'border-[#c5cdc7] bg-white',
+                    )}>
+                      {selected ? <Check size={9} strokeWidth={3} /> : null}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{item.label}</span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -154,6 +275,15 @@ export function AdminAssignChamp() {
   const [nearbyData, setNearbyData] = useState(null)
   const [selectedChamp, setSelectedChamp] = useState('')
   const [query, setQuery] = useState('')
+  const [filterGov, setFilterGov] = useState(null)
+  const [filterCity, setFilterCity] = useState(null)
+  const [filterVehicle, setFilterVehicle] = useState(null)
+  const [filterType, setFilterType] = useState(null)
+  const [filterTier, setFilterTier] = useState(null)
+  const [filterAllowed, setFilterAllowed] = useState(null)
+  const [sortBy, setSortBy] = useState('nearest')
+  const [openFilter, setOpenFilter] = useState(null)
+  const filterBarRef = useRef(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
@@ -270,32 +400,124 @@ export function AdminAssignChamp() {
   const champs = useMemo(() => {
     const list = nearbyData?.nearby || []
     const q = query.trim().toLowerCase()
-    return list
-      .map((champ) => {
-        const loadCount = champ.activeCount
-        const capacity = champ.capacity
-        const load = loadCount != null && capacity != null
-          ? `${loadCount} / ${capacity}`
-          : loadCount != null
-            ? String(loadCount)
-            : '—'
-        return {
-          ...champ,
-          displayCode: champ.code || champ.id,
-          load,
-          total: loadCount != null ? loadCount : '—',
-          dist: formatDistance(champ.distanceKm),
-        }
-      })
-      .filter((champ) => {
-        if (!q) return true
-        return [champ.name, champ.id, champ.code, champ.city, champ.gov, champ.vehicle]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-          .includes(q)
-      })
-  }, [nearbyData, query])
+
+    const mapped = list.map((champ) => {
+      const loadCount = champ.activeCount
+      const capacity = champ.capacity
+      const load = loadCount != null && capacity != null
+        ? `${loadCount} / ${capacity}`
+        : loadCount != null
+          ? String(loadCount)
+          : '—'
+      return {
+        ...champ,
+        displayCode: champ.code || champ.id,
+        load,
+        total: loadCount != null ? loadCount : '—',
+        dist: formatDistance(champ.distanceKm),
+      }
+    })
+
+    const filtered = mapped.filter((champ) => {
+      if (filterGov && String(champ.gov || '') !== filterGov) return false
+      if (filterCity && String(champ.city || '') !== filterCity) return false
+      if (filterVehicle && String(champ.vehicle || '') !== filterVehicle) return false
+      if (filterType && String(champ.type || '') !== filterType) return false
+      if (filterTier && String(champ.tier || '') !== filterTier) return false
+      if (filterAllowed === 'yes' && champ.allowed !== true) return false
+      if (filterAllowed === 'no' && champ.allowed !== false) return false
+      if (!q) return true
+      return [champ.name, champ.id, champ.code, champ.city, champ.gov, champ.vehicle, champ.tier, champ.type]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    })
+
+    const distanceValue = (champ) => {
+      const n = Number(champ.distanceKm)
+      return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY
+    }
+    const ratingValue = (champ) => {
+      const n = Number(champ.rating)
+      return Number.isFinite(n) ? n : -1
+    }
+    const loadValue = (champ) => {
+      const n = Number(champ.activeCount)
+      return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY
+    }
+
+    filtered.sort((a, b) => {
+      if (sortBy === 'rating') return ratingValue(b) - ratingValue(a)
+      if (sortBy === 'load') return loadValue(a) - loadValue(b)
+      if (sortBy === 'name') {
+        return String(a.name || a.id).localeCompare(String(b.name || b.id))
+      }
+      return distanceValue(a) - distanceValue(b)
+    })
+
+    return filtered
+  }, [
+    nearbyData,
+    query,
+    filterGov,
+    filterCity,
+    filterVehicle,
+    filterType,
+    filterTier,
+    filterAllowed,
+    sortBy,
+  ])
+
+  const filterOptions = useMemo(() => {
+    const source = nearbyData?.nearby || []
+    const govScoped = filterGov
+      ? source.filter((champ) => String(champ.gov || '') === filterGov)
+      : source
+
+    return {
+      governorate: uniqueOptionList(source, 'gov'),
+      city: uniqueOptionList(govScoped, 'city'),
+      vehicle: uniqueOptionList(source, 'vehicle'),
+      type: uniqueOptionList(source, 'type'),
+      tier: uniqueOptionList(source, 'tier'),
+      allowed: ALLOWED_OPTIONS,
+      sort: SORT_OPTIONS,
+    }
+  }, [nearbyData, filterGov])
+
+  useEffect(() => {
+    if (!filterCity) return
+    if (!filterOptions.city.some((item) => item.id === filterCity)) {
+      setFilterCity(null)
+    }
+  }, [filterCity, filterOptions.city])
+
+  useEffect(() => {
+    if (!openFilter) return undefined
+    const onDocClick = (event) => {
+      if (filterBarRef.current?.contains(event.target)) return
+      setOpenFilter(null)
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpenFilter(null)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openFilter])
+
+  const toggleFilter = (key) => {
+    setOpenFilter((current) => (current === key ? null : key))
+  }
+
+  const setFilterValue = (key, setter) => (next) => {
+    setter(next)
+    setOpenFilter(null)
+  }
 
   const activePopoverId = pinnedChamp || hoverChamp
   const hoveredChamp = champs.find((champ) => champ.id === activePopoverId)
@@ -403,7 +625,7 @@ export function AdminAssignChamp() {
           <p className="mt-0.5 text-[11px] text-[#7a847e]">
             Nearby champs for this order{selectedDateLabel ? ` · planning date ${selectedDateLabel}` : ''}
           </p>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div ref={filterBarRef} className="mt-3 flex flex-wrap items-center gap-2">
             <label className="flex h-[30px] min-w-[170px] items-center gap-2 rounded-full border border-[#e2e6e3] bg-[#f3f5f3] px-3">
               <Search size={13} className="text-[#8a948e]" />
               <input
@@ -413,15 +635,78 @@ export function AdminAssignChamp() {
                 placeholder="Search champ…"
               />
             </label>
-            {['Governorate · All', 'City · All', 'Vehicle · All', 'Type · All', 'Tier · All', 'Allowed · All'].map((filter) => (
-              <button key={filter} type="button" className={FILTER_PILL}>
-                {filter}▾
-              </button>
-            ))}
+            <AssignFilterDropdown
+              title="Governorate"
+              items={filterOptions.governorate}
+              value={filterGov}
+              onChange={(next) => {
+                setFilterGov(next)
+                setFilterCity(null)
+                setOpenFilter(null)
+              }}
+              open={openFilter === 'gov'}
+              onToggleOpen={() => toggleFilter('gov')}
+              emptyHint="No governorates in list"
+            />
+            <AssignFilterDropdown
+              title="City"
+              items={filterOptions.city}
+              value={filterCity}
+              onChange={setFilterValue('city', setFilterCity)}
+              open={openFilter === 'city'}
+              onToggleOpen={() => toggleFilter('city')}
+              emptyHint={filterGov ? 'No cities in this governorate' : 'No cities in list'}
+            />
+            <AssignFilterDropdown
+              title="Vehicle"
+              items={filterOptions.vehicle}
+              value={filterVehicle}
+              onChange={setFilterValue('vehicle', setFilterVehicle)}
+              open={openFilter === 'vehicle'}
+              onToggleOpen={() => toggleFilter('vehicle')}
+              emptyHint="No vehicles in list"
+            />
+            <AssignFilterDropdown
+              title="Type"
+              items={filterOptions.type}
+              value={filterType}
+              onChange={setFilterValue('type', setFilterType)}
+              open={openFilter === 'type'}
+              onToggleOpen={() => toggleFilter('type')}
+              emptyHint="No types in list"
+            />
+            <AssignFilterDropdown
+              title="Tier"
+              items={filterOptions.tier}
+              value={filterTier}
+              onChange={setFilterValue('tier', setFilterTier)}
+              open={openFilter === 'tier'}
+              onToggleOpen={() => toggleFilter('tier')}
+              emptyHint="No tiers in list"
+            />
+            <AssignFilterDropdown
+              title="Allowed"
+              items={filterOptions.allowed}
+              value={filterAllowed}
+              onChange={setFilterValue('allowed', setFilterAllowed)}
+              open={openFilter === 'allowed'}
+              onToggleOpen={() => toggleFilter('allowed')}
+            />
             <span className="flex-1" />
-            <button type="button" className={FILTER_PILL}>
-              Sort · Nearest▾
-            </button>
+            <AssignFilterDropdown
+              title="Sort"
+              items={filterOptions.sort}
+              value={sortBy}
+              onChange={(next) => {
+                if (next) setSortBy(next)
+                setOpenFilter(null)
+              }}
+              open={openFilter === 'sort'}
+              onToggleOpen={() => toggleFilter('sort')}
+              align="right"
+              allowClear={false}
+              emphasize={openFilter === 'sort' || sortBy !== 'nearest'}
+            />
           </div>
         </div>
 
@@ -432,7 +717,11 @@ export function AdminAssignChamp() {
             {nearbyError}
           </div>
         ) : champs.length === 0 ? (
-          <div className="px-4 py-10 text-center text-[12px] text-[#78837c]">No nearby champs available</div>
+          <div className="px-4 py-10 text-center text-[12px] text-[#78837c]">
+            {nearbyData?.nearby?.length
+              ? 'No champs match these filters'
+              : 'No nearby champs available'}
+          </div>
         ) : (
           <div className="overflow-x-auto overflow-y-visible rounded-b-[12px]">
             <table className="w-full min-w-[1100px] border-collapse text-left">

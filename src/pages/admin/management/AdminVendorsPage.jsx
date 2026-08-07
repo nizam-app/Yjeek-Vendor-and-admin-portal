@@ -6,6 +6,7 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { adminVendorService } from '../../../services/admin/vendorService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
 
 const PAGE_SIZE = 20
@@ -162,22 +163,16 @@ export default function AdminVendorsPage() {
           ))}
         </div>
         <span className="flex-1" />
-        <label className="relative inline-flex h-[32px] items-center">
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="h-[32px] appearance-none rounded-full border border-[#e4e8e4] bg-white py-0 pl-3.5 pr-8 text-[12px] font-bold text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] outline-none hover:bg-[#fafbfa]"
-            aria-label="Filter by category"
-          >
-            <option value="">All categories</option>
-            {categories.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </select>
-          <span className="pointer-events-none absolute right-3 text-[10px] text-[#69756d]">▾</span>
-        </label>
+        <AdminFilterSelect
+          label="Filter by category"
+          options={[
+            { value: '', label: 'All categories' },
+            ...categories.map((item) => ({ value: item, label: item })),
+          ]}
+          value={category}
+          onChange={setCategory}
+          className="h-[32px] font-bold text-[#17231c]"
+        />
         <label className="flex h-[32px] w-[210px] items-center gap-2 rounded-sm border border-[#e4e8e4] bg-white px-3 shadow-[0_1px_2px_rgba(20,40,28,.04)] max-[700px]:w-full">
           <Search size={14} className="text-[#9aa49d]" />
           <input

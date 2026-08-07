@@ -319,6 +319,11 @@ export function mapAdminCreateVendorRequest(input = {}) {
     throw new ApiError({ message: 'Store type is required. Select a type from the list.' })
   }
 
+  const catalogIds = Array.isArray(form.catalogIds)
+    ? [...new Set(form.catalogIds.map((id) => String(id || '').trim()).filter(Boolean))]
+    : []
+  if (storeTypeId && !catalogIds.includes(storeTypeId)) catalogIds.unshift(storeTypeId)
+
   const ownerName = trim(form.ownerName)
   const ownerEmail = trim(form.ownerEmail)
   const ownerPassword = trim(form.ownerPassword)
@@ -346,6 +351,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     name,
     legalName: trim(form.legalName) || name,
     storeTypeId,
+    catalogIds: catalogIds.length ? catalogIds : undefined,
     subcategoryId: subcategoryId || undefined,
     categoryLabel,
     description: trim(form.description) || undefined,

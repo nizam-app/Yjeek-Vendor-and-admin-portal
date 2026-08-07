@@ -401,11 +401,24 @@ export function mapAdminUsersMetaResponse(data) {
         id,
         name: role.name || role.shortName || id,
         slug: role.slug || '',
-        scopeLevel: role.scopeLevel || '',
+        scopeLevel: String(role.scopeLevel || '').toUpperCase(),
         description: role.description || '',
+        permissions:
+          role.permissions && typeof role.permissions === 'object' && !Array.isArray(role.permissions)
+            ? role.permissions
+            : {},
+        permissionsMatrix: Array.isArray(role.permissionsMatrix) ? role.permissionsMatrix : [],
       }
     })
     .filter(Boolean)
+
+  // Meta often omits top-level modules; derive labels from role permission matrices.
+  if (!modules.length) {
+    const sample = roles.find((role) => role.permissionsMatrix?.length)?.permissionsMatrix
+    if (Array.isArray(sample) && sample.length) {
+      modules = sample.map((item) => mapMetaModuleRow(item)).filter(Boolean)
+    }
+  }
 
   const countries = (Array.isArray(raw.countries) ? raw.countries : []).map((item) => {
     if (typeof item === 'string') return { code: item, name: item }
@@ -427,6 +440,7 @@ export function mapAdminUsersMetaResponse(data) {
     roles,
     countries,
     zones,
+    scopeLevels: Array.isArray(raw.scopeLevels) ? raw.scopeLevels : [],
     suggestedTemporaryPassword: raw.suggestedTemporaryPassword || '',
     modules,
     raw,

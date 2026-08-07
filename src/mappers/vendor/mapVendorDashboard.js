@@ -87,19 +87,54 @@ export function mapVendorDashboardKpis(kpis, rangeLabel = 'Day') {
 }
 
 /**
- * Revenue chart point item shape is not confirmed when points are empty.
- * Pass through UI-shaped mock points; otherwise return [].
+ * Map API revenueChart.points → bar chart rows.
+ * Confirmed API point: { label: "14:00" | "2026-08-03", revenue: number }
+ * UI: { day, height, revenue }
  */
+function formatChartLabel(label, granularity) {
+  const raw = String(label || '').trim()
+  if (!raw) return '—'
+
+  if (granularity === 'hour' || /^\d{1,2}:\d{2}$/.test(raw)) {
+    return raw
+  }
+
+  const date = new Date(raw.includes('T') ? raw : `${raw}T12:00:00`)
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  }
+
+  return raw
+}
+
 function mapRevenueDays(revenueChart) {
   const points = Array.isArray(revenueChart?.points) ? revenueChart.points : []
   if (points.length === 0) return []
 
   if (points.every((point) => point && 'day' in point && 'height' in point)) {
-    return points.map((point) => ({ day: point.day, height: point.height }))
+    return points.map((point) => ({
+      day: point.day,
+      height: point.height,
+      revenue: point.revenue ?? null,
+    }))
   }
 
-  // Unconfirmed backend point fields — keep empty until a non-empty sample is documented.
-  return []
+  const values = points.map((point) => {
+    const revenue = Number(point?.revenue ?? point?.value ?? 0)
+    return Number.isFinite(revenue) ? revenue : 0
+  })
+  const max = Math.max(...values, 0)
+
+  return points.map((point, index) => {
+    const revenue = values[index]
+    const height =
+      max <= 0 ? 8 : Math.max(8, Math.round((revenue / max) * 100))
+    return {
+      day: formatChartLabel(point?.label ?? point?.day, revenueChart?.granularity),
+      height,
+      revenue,
+    }
+  })
 }
 
 /**
@@ -219,7 +254,7 @@ function isUiShapedDashboard(data) {
  * Normalize Vendor dashboard API (or mock UI-shaped) payload for Dashboard.jsx.
  *
  * @param {object|null|undefined} data
- * @param {{ rangeLabel?: string }} [options]
+ * @param {{ rangeLabel?: string, chartSubtitle?: string }} [options]
  */
 export function mapVendorDashboardResponse(data, options = {}) {
   if (!data || typeof data !== 'object') {
@@ -227,6 +262,9 @@ export function mapVendorDashboardResponse(data, options = {}) {
   }
 
   const rangeLabel = options.rangeLabel || 'Day'
+  const chartSubtitle =
+    options.chartSubtitle ||
+    (rangeLabel === 'Week' ? 'last 7 days' : rangeLabel === 'Month' ? 'last 30 days' : 'today')
 
   if (isUiShapedDashboard(data)) {
     return {
@@ -237,6 +275,8 @@ export function mapVendorDashboardResponse(data, options = {}) {
       period: data.period ?? null,
       previousPeriod: data.previousPeriod ?? null,
       revenueChart: data.revenueChart ?? null,
+      chartSubtitle: data.chartSubtitle || chartSubtitle,
+      rangeLabel,
     }
   }
 
@@ -253,5 +293,7 @@ export function mapVendorDashboardResponse(data, options = {}) {
           points: Array.isArray(data.revenueChart.points) ? data.revenueChart.points : [],
         }
       : null,
+    chartSubtitle,
+    rangeLabel,
   }
 }

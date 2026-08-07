@@ -169,7 +169,7 @@ export default function AcceptOrderModal({ open, onClose, order, tab = 'delivery
   const receipt = buildReceipt(order, tab)
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-6" role="dialog" aria-modal="true">
       <button type="button" className="absolute inset-0 bg-[rgba(0,0,0,0.25)]" aria-label="Close accept receipt" onClick={onClose} />
       <div className="relative w-[430px] max-w-full bg-white rounded-[16px] shadow-[0px_12px_40px_rgba(0,0,0,0.25)] overflow-hidden">
         <div className="flex flex-col items-start px-6 pt-6 pb-[22px] gap-3">

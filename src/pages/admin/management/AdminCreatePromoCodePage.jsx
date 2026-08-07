@@ -1,14 +1,13 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  ChevronDown,
-  Coffee,
-  ShoppingCart,
-  Store,
-  X,
-} from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import {
+  AdminDatePicker,
+  todayLocalIsoDate,
+} from '../../../components/admin/AdminDatePicker'
+import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySearchPicker'
 import { cn } from '../../../components/admin/cn'
 
 const labelClass =
@@ -22,14 +21,6 @@ const DISCOUNT_TYPES = ['Percentage %', 'Fixed amount', 'Free delivery', 'BOGO']
 const SCOPE_OPTIONS = ['All stores', 'Specific vendors', 'Categories', 'Services']
 const CHANNEL_OPTIONS = ['App', 'Auto-apply', 'Show on home banner', 'Send via push']
 const AUDIENCE_OPTIONS = ['New customers', 'All customers', 'Returning customers', 'VIP segment']
-
-const VENDOR_OPTIONS = [
-  { name: 'Green Kitchen', Icon: Store },
-  { name: 'Lulu Express', Icon: ShoppingCart },
-  { name: 'Marina Café', Icon: Coffee },
-  { name: 'Burger Hub', Icon: Store },
-  { name: 'Fresh Mart', Icon: ShoppingCart },
-]
 
 function Field({ label, children, className }) {
   return (
@@ -52,26 +43,6 @@ function Select({ children, className, ...props }) {
       >
         {children}
       </select>
-      <ChevronDown
-        size={15}
-        strokeWidth={2}
-        className="pointer-events-none absolute right-3 top-1/2 z-[1] -translate-y-1/2 text-[#7c8780]"
-        aria-hidden
-      />
-    </div>
-  )
-}
-
-function DateField({ value, onChange, placeholder, disabled }) {
-  return (
-    <div className="relative">
-      <input
-        className={cn(inputClass, 'pr-9')}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
       <ChevronDown
         size={15}
         strokeWidth={2}
@@ -130,59 +101,80 @@ function Card({ title, subtitle, children }) {
   )
 }
 
-function VendorIcon({ name }) {
-  const Icon = VENDOR_OPTIONS.find((item) => item.name === name)?.Icon || Store
-  return <Icon size={13} strokeWidth={2} className="shrink-0 text-[#59655e]" aria-hidden />
-}
-
 export default function AdminCreatePromoCodePage() {
   const navigate = useNavigate()
   const goBack = () => navigate('/admin/marketing/promo-codes')
 
-  const [form, setForm] = useState({
-    code: '',
-    description: '',
-    discountType: 'Percentage %',
-    discountValue: '',
-    maxDiscount: '',
-    minOrder: '',
-    totalUsageLimit: '',
-    perCustomerLimit: '',
-    audience: 'All customers',
-    validFrom: '',
-    validTo: '',
-    scope: 'All stores',
-    selectedTargets: [],
-    search: '',
-    channels: ['App'],
+  const [form, setForm] = useState(() => {
+    const today = todayLocalIsoDate()
+    return {
+      code: '',
+      description: '',
+      discountType: 'Percentage %',
+      discountValue: '',
+      maxDiscount: '',
+      minOrder: '',
+      totalUsageLimit: '',
+      perCustomerLimit: '',
+      audience: 'All customers',
+      validFrom: today,
+      validTo: '',
+      scope: 'All stores',
+      selectedVendors: [],
+      categoryIds: [],
+      serviceIds: [],
+      channels: ['App'],
+    }
   })
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
+  const today = todayLocalIsoDate()
+  const validToMin = form.validFrom && form.validFrom > today ? form.validFrom : today
+
+  const searchVendors = useCallback(async (query, options = {}) => {
+    const result = await adminService.getVendors({
+      search: query,
+      status: 'All',
+      limit: 10,
+      page: 1,
+      signal: options.signal,
+    })
+    const rows = result?.data?.rows || []
+    return rows.map((row) => ({
+      id: String(row.id),
+      label: String(row.name || row.id),
+      meta: [row.area || row.city, row.category].filter(Boolean).join(' · '),
+    }))
+  }, [])
+
   function update(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }))
   }
 
-  function removeTarget(name) {
-    setForm((prev) => ({
-      ...prev,
-      selectedTargets: prev.selectedTargets.filter((item) => item !== name),
-    }))
-  }
-
-  function addTarget(name) {
+  function setValidFrom(next) {
     setForm((prev) => {
-      if (prev.selectedTargets.includes(name)) return prev
-      return { ...prev, selectedTargets: [...prev.selectedTargets, name], search: '' }
+      const validFrom = String(next || '')
+      const validTo =
+        validFrom && prev.validTo && prev.validTo < validFrom ? validFrom : prev.validTo
+      return { ...prev, validFrom, validTo }
     })
   }
 
-  const filteredVendors = VENDOR_OPTIONS.filter(
-    (vendor) =>
-      vendor.name.toLowerCase().includes(form.search.toLowerCase()) &&
-      !form.selectedTargets.includes(vendor.name),
-  )
+  function setValidTo(next) {
+    setForm((prev) => ({ ...prev, validTo: String(next || '') }))
+  }
+
+  function setScope(scope) {
+    setForm((prev) => ({
+      ...prev,
+      scope,
+      selectedVendors: scope === 'Specific vendors' ? prev.selectedVendors : [],
+      categoryIds: scope === 'Categories' ? prev.categoryIds : [],
+      serviceIds: scope === 'Services' ? prev.serviceIds : [],
+    }))
+  }
 
   async function handleCreate() {
     setError('')
@@ -296,7 +288,7 @@ export default function AdminCreatePromoCodePage() {
                   className={inputClass}
                   value={form.minOrder}
                   onChange={update('minOrder')}
-                  placeholder="Not sent yet (API)"
+                  placeholder="e.g. 5"
                   disabled={submitting}
                 />
               </Field>
@@ -321,7 +313,7 @@ export default function AdminCreatePromoCodePage() {
                   className={inputClass}
                   value={form.perCustomerLimit}
                   onChange={update('perCustomerLimit')}
-                  placeholder="Not sent yet (API)"
+                  placeholder="e.g. 1"
                   disabled={submitting}
                 />
               </Field>
@@ -337,18 +329,20 @@ export default function AdminCreatePromoCodePage() {
             </div>
             <div className="grid grid-cols-3 gap-3 max-[900px]:grid-cols-1">
               <Field label="Valid from">
-                <DateField
+                <AdminDatePicker
                   value={form.validFrom}
-                  onChange={update('validFrom')}
-                  placeholder="Not sent yet (API)"
+                  onChange={setValidFrom}
+                  min={today}
+                  placeholder="Start date"
                   disabled={submitting}
                 />
               </Field>
               <Field label="Valid to">
-                <DateField
+                <AdminDatePicker
                   value={form.validTo}
-                  onChange={update('validTo')}
-                  placeholder="Not sent yet (API)"
+                  onChange={setValidTo}
+                  min={validToMin}
+                  placeholder="End date"
                   disabled={submitting}
                 />
               </Field>
@@ -356,19 +350,12 @@ export default function AdminCreatePromoCodePage() {
                 <Select
                   value={form.scope}
                   disabled={submitting}
-                  onChange={(event) => {
-                    const scope = event.target.value
-                    setForm((prev) => ({
-                      ...prev,
-                      scope,
-                      selectedTargets: scope === 'All stores' ? [] : prev.selectedTargets,
-                    }))
-                  }}
+                  onChange={(event) => setScope(event.target.value)}
                 >
                   {SCOPE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
                       {option === 'Specific vendors'
-                        ? `Specific vendors (${form.selectedTargets.length})`
+                        ? `Specific vendors (${form.selectedVendors.length})`
                         : option}
                     </option>
                   ))}
@@ -380,7 +367,7 @@ export default function AdminCreatePromoCodePage() {
 
         <Card
           title="Applies to"
-          subtitle="UI only for now — create API body does not include scope/vendors yet"
+          subtitle="Choose store scope and optional vendor / category / service targets"
         >
           <div className="space-y-4">
             <div>
@@ -389,80 +376,51 @@ export default function AdminCreatePromoCodePage() {
                 options={SCOPE_OPTIONS}
                 value={form.scope}
                 disabled={submitting}
-                onChange={(scope) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    scope,
-                    selectedTargets: scope === 'All stores' ? [] : prev.selectedTargets,
-                  }))
-                }
+                onChange={setScope}
               />
             </div>
 
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className={sectionLabelClass}>Selected vendors</p>
-                <span className="text-[12px] font-bold text-[#1aa054]">
-                  {form.selectedTargets.length} selected
-                </span>
-              </div>
+            {form.scope === 'Specific vendors' ? (
+              <AdminEntitySearchPicker
+                label="Selected vendors"
+                placeholder="Type vendor name…"
+                helperText={`${form.selectedVendors.length} selected`}
+                selected={form.selectedVendors}
+                onChange={(selectedVendors) => setForm((prev) => ({ ...prev, selectedVendors }))}
+                searchFn={searchVendors}
+                disabled={submitting}
+              />
+            ) : null}
 
-              <div className="relative rounded-[10px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {form.selectedTargets.map((target) => (
-                    <span
-                      key={target}
-                      className="inline-flex h-[30px] items-center gap-1.5 rounded-full bg-[#f3f5f3] px-2.5 text-[12px] font-medium text-[#17231c]"
-                    >
-                      <VendorIcon name={target} />
-                      {target}
-                      <button
-                        type="button"
-                        aria-label={`Remove ${target}`}
-                        onClick={() => removeTarget(target)}
-                        disabled={submitting}
-                        className="grid h-4 w-4 place-items-center rounded-full text-[#7c8780] hover:bg-[#e4e8e4] hover:text-[#455249]"
-                      >
-                        <X size={11} strokeWidth={2.4} />
-                      </button>
-                    </span>
-                  ))}
-                  <input
-                    className="min-w-[200px] flex-1 border-0 bg-transparent py-1 text-[13px] text-[#17231c] outline-none placeholder:text-[#9aa49d]"
-                    placeholder="Search vendors, categories, services…"
-                    value={form.search}
-                    onChange={update('search')}
-                    disabled={submitting}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && filteredVendors[0]) {
-                        event.preventDefault()
-                        addTarget(filteredVendors[0].name)
-                      }
-                    }}
-                  />
-                </div>
+            {form.scope === 'Categories' ? (
+              <AdminEntitySearchPicker
+                label="Category ids"
+                placeholder="Paste category id then Add"
+                helperText="Add one or more category ids"
+                selected={form.categoryIds}
+                onChange={(categoryIds) => setForm((prev) => ({ ...prev, categoryIds }))}
+                searchFn={async () => []}
+                disabled={submitting}
+                allowRawIdAdd
+              />
+            ) : null}
 
-                {form.search && filteredVendors.length > 0 ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 overflow-hidden rounded-[10px] border border-[#eceeec] bg-white shadow-[0_8px_24px_rgba(20,40,28,.12)]">
-                    {filteredVendors.map(({ name, Icon }) => (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => addTarget(name)}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-[13px] text-[#17231c] hover:bg-[#f6f8f6]"
-                      >
-                        <Icon size={14} strokeWidth={2} className="text-[#59655e]" />
-                        {name}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            {form.scope === 'Services' ? (
+              <AdminEntitySearchPicker
+                label="Service ids"
+                placeholder="Paste service id then Add"
+                helperText="Add one or more service ids"
+                selected={form.serviceIds}
+                onChange={(serviceIds) => setForm((prev) => ({ ...prev, serviceIds }))}
+                searchFn={async () => []}
+                disabled={submitting}
+                allowRawIdAdd
+              />
+            ) : null}
           </div>
         </Card>
 
-        <Card title="Channels" subtitle="UI only for now — create API body does not include channels yet">
+        <Card title="Channels" subtitle="Where this promo can appear or apply">
           <PillGroup
             options={CHANNEL_OPTIONS}
             value={form.channels}

@@ -114,10 +114,9 @@ function fallbackPrimaryAction(order) {
       }
     }
     if (
-      ['SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM', 'READY_FOR_PICKUP', 'READY', 'CONFIRMED', 'PREPARING'].includes(
-        status,
-      ) &&
-      (order?.readyAt || ['READY_FOR_PICKUP', 'READY', 'SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM'].includes(status))
+      ['SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM', 'READY_FOR_PICKUP', 'READY'].includes(status) &&
+      (order?.readyAt ||
+        ['READY_FOR_PICKUP', 'READY', 'SEARCHING_DRIVER', 'AWAITING_DRIVER_CONFIRM'].includes(status))
     ) {
       return {
         key: 'FIND_CHAMP',
@@ -654,10 +653,34 @@ export function moveOrderToReadyOnLiveBoard(
 }
 
 /**
- * After POST reject: remove the order from the New column (leaves the live board).
+ * After POST reject: keep the order in New as a rejected card (reason + badge).
  */
-export function removeRejectedOrderFromLiveBoard(boardData, { board = 'delivery', order } = {}) {
+export function markRejectedOrderOnLiveBoard(
+  boardData,
+  { board = 'delivery', order, reason, note } = {},
+) {
   if (!boardData || typeof boardData !== 'object' || !order) return boardData
+
+  const rejected = {
+    ...order,
+    status: 'rejected',
+    reason: reason || order.reason || undefined,
+    note: note || order.note || undefined,
+    sla: undefined,
+    vendorAcceptDeadline: null,
+    primaryAction: null,
+  }
+
+  const patchNew = (list) => {
+    const rows = Array.isArray(list) ? list : []
+    let found = false
+    const next = rows.map((item) => {
+      if (!sameLiveOrder(item, order)) return item
+      found = true
+      return { ...item, ...rejected }
+    })
+    return found ? next : [rejected, ...next]
+  }
 
   if (board === 'dinein') {
     const dineIn = boardData.dineIn || { ...EMPTY_DINE_IN }
@@ -665,12 +688,8 @@ export function removeRejectedOrderFromLiveBoard(boardData, { board = 'delivery'
       ...boardData,
       dineIn: {
         ...dineIn,
-        new: (dineIn.new || []).filter((item) => !sameLiveOrder(item, order)),
+        new: patchNew(dineIn.new),
       },
-      activeCount:
-        typeof boardData.activeCount === 'number'
-          ? Math.max(0, boardData.activeCount - 1)
-          : boardData.activeCount,
     }
   }
 
@@ -679,13 +698,14 @@ export function removeRejectedOrderFromLiveBoard(boardData, { board = 'delivery'
     ...boardData,
     delivery: {
       ...delivery,
-      new: (delivery.new || []).filter((item) => !sameLiveOrder(item, order)),
+      new: patchNew(delivery.new),
     },
-    activeCount:
-      typeof boardData.activeCount === 'number'
-        ? Math.max(0, boardData.activeCount - 1)
-        : boardData.activeCount,
   }
+}
+
+/** @deprecated Use markRejectedOrderOnLiveBoard — kept for older imports. */
+export function removeRejectedOrderFromLiveBoard(boardData, options = {}) {
+  return markRejectedOrderOnLiveBoard(boardData, options)
 }
 
 /**

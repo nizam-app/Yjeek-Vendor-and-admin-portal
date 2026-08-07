@@ -226,6 +226,16 @@ export function mapAdminVendorDetailResponse(data) {
     city: data.city ?? null,
     cuisineTags: Array.isArray(data.cuisineTags) ? data.cuisineTags.filter(Boolean).map(String) : [],
     storeTypeId: data.storeTypeId ?? null,
+    catalogIds: Array.isArray(data.catalogIds)
+      ? data.catalogIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : Array.isArray(data.catalogs)
+        ? data.catalogs.map((c) => String(c?.id || '').trim()).filter(Boolean)
+        : (data.storeTypeId ? [String(data.storeTypeId)] : []),
+    catalogs: Array.isArray(data.catalogs)
+      ? data.catalogs
+          .map((c) => (c && c.id ? { id: String(c.id), name: String(c.name || c.id) } : null))
+          .filter(Boolean)
+      : [],
     subcategoryId: data.subcategoryId ?? null,
     categoryLabel: data.category ?? null,
     subCategory: data.subcategoryName || null,
@@ -297,6 +307,14 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
 
   const storeTypeId = String(form.storeTypeId || '').trim()
   if (storeTypeId) body.storeTypeId = storeTypeId
+
+  if (Array.isArray(form.catalogIds)) {
+    const catalogIds = [...new Set(
+      form.catalogIds.map((id) => String(id || '').trim()).filter(Boolean),
+    )]
+    if (storeTypeId && !catalogIds.includes(storeTypeId)) catalogIds.unshift(storeTypeId)
+    body.catalogIds = catalogIds
+  }
 
   if (form.subcategoryId !== undefined) {
     const subcategoryId = String(form.subcategoryId || '').trim()

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { LocateFixed } from 'lucide-react'
 import { cn } from './cn'
 import { ADMIN_DASHBOARD_MAP_TABS } from '../../mappers/admin/mapAdminDashboardMap'
 import { hasGoogleMapsApiKey, isPlottableLatLng, loadGoogleMapsApi } from '../../lib/googleMaps'
 
 const DEFAULT_CENTER = { lat: 26.2285, lng: 50.586 }
+const USER_LOCATION_ZOOM = 14
 
 function buildPointTitle(point) {
   return [
@@ -35,8 +37,11 @@ export function AdminLiveMap({
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markersRef = useRef([])
+  const userMarkerRef = useRef(null)
   const [mapStatus, setMapStatus] = useState('loading')
   const [mapError, setMapError] = useState(null)
+  const [locating, setLocating] = useState(false)
+  const [locateError, setLocateError] = useState(null)
 
   const plottable = useMemo(
     () =>
@@ -79,6 +84,9 @@ export function AdminLiveMap({
             streetViewControl: false,
             fullscreenControl: false,
             zoomControl: true,
+            zoomControlOptions: {
+              position: maps.ControlPosition.RIGHT_BOTTOM,
+            },
           })
         }
         setMapStatus('ready')
@@ -107,8 +115,10 @@ export function AdminLiveMap({
     markersRef.current = []
 
     if (!plottable.length) {
-      map.setCenter(DEFAULT_CENTER)
-      map.setZoom(11)
+      if (!userMarkerRef.current) {
+        map.setCenter(DEFAULT_CENTER)
+        map.setZoom(11)
+      }
       return undefined
     }
 
@@ -145,6 +155,94 @@ export function AdminLiveMap({
     }
   }, [mapStatus, pointsKey, plottable])
 
+  useEffect(() => {
+    return () => {
+      if (userMarkerRef.current) {
+        userMarkerRef.current.setMap(null)
+        userMarkerRef.current = null
+      }
+    }
+  }, [])
+
+  function goToCurrentLocation() {
+    if (mapStatus !== 'ready' || !mapInstanceRef.current || !window.google?.maps) return
+    if (!navigator?.geolocation) {
+      setLocateError('Geolocation is not supported in this browser.')
+      return
+    }
+
+    // Browsers only allow geolocation on secure contexts (https:// or localhost).
+    const isSecure =
+      typeof window !== 'undefined' &&
+      (window.isSecureContext ||
+        window.location.protocol === 'https:' ||
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1')
+
+    if (!isSecure) {
+      setLocateError(
+        'Current location needs HTTPS (or localhost). Open the admin panel over https://, not http://.',
+      )
+      return
+    }
+
+    setLocateError(null)
+    setLocating(true)
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false)
+        const maps = window.google.maps
+        const map = mapInstanceRef.current
+        if (!map) return
+
+        const lat = position.coords.latitude
+        const lng = position.coords.longitude
+        const pos = { lat, lng }
+
+        if (userMarkerRef.current) {
+          userMarkerRef.current.setPosition(pos)
+        } else {
+          userMarkerRef.current = new maps.Marker({
+            map,
+            position: pos,
+            title: 'Your current location',
+            zIndex: 999,
+            icon: {
+              path: maps.SymbolPath.CIRCLE,
+              scale: 8,
+              fillColor: '#1a73e8',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2.5,
+            },
+          })
+        }
+
+        map.panTo(pos)
+        if (map.getZoom() < USER_LOCATION_ZOOM) {
+          map.setZoom(USER_LOCATION_ZOOM)
+        }
+      },
+      (err) => {
+        setLocating(false)
+        const msg = String(err?.message || '')
+        if (/secure origins/i.test(msg)) {
+          setLocateError(
+            'Current location needs HTTPS (or localhost). Open the admin panel over https://, not http://.',
+          )
+          return
+        }
+        if (err?.code === 1) {
+          setLocateError('Location permission denied. Allow location access in the browser.')
+          return
+        }
+        setLocateError(msg || 'Unable to get current location.')
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+    )
+  }
+
   const showEmptyLayer =
     !isLoading &&
     !error &&
@@ -174,6 +272,31 @@ export function AdminLiveMap({
 
       <div className="relative mt-1 h-[347px] overflow-hidden rounded-lg bg-[#e9eeea]">
         <div ref={mapRef} className="absolute inset-0 h-full w-full" />
+
+        {mapStatus === 'ready' ? (
+          <button
+            type="button"
+            onClick={goToCurrentLocation}
+            disabled={locating}
+            title="Current location"
+            aria-label="Go to current location"
+            className="absolute right-3 top-3 z-[5] inline-flex h-9 w-9 items-center justify-center rounded-md border border-[#dfe4e0] bg-white text-[#17231c] shadow-sm hover:bg-[#f7f9f7] disabled:opacity-60"
+          >
+            <LocateFixed size={16} strokeWidth={2.2} className={locating ? 'animate-pulse' : ''} />
+          </button>
+        ) : null}
+
+        {locateError ? (
+          <div className="absolute right-3 top-14 z-[5] max-w-[220px] rounded-md border border-[#f0d4d2] bg-[#fdf6f5] px-2.5 py-1.5 text-[11px] font-medium text-[#d6453d] shadow-sm">
+            {locateError}
+          </div>
+        ) : null}
+
+        {locating ? (
+          <div className="absolute bottom-2 right-3 z-[5] rounded-md bg-white/95 px-2.5 py-1.5 text-[11px] font-medium text-[#667269] shadow-sm">
+            Getting current location…
+          </div>
+        ) : null}
 
         {mapStatus === 'missing-key' ? (
           <div className="absolute inset-0 z-[3] grid place-items-center bg-[#e9eeea] px-4 text-center text-[12px] font-medium text-[#7a857e]">

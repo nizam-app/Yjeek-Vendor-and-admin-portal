@@ -6,6 +6,10 @@ import carIcon from '../../../assets/💨.png'
 import uploadIcon from '../../../assets/⬆.png'
 import imageUploadIcon from '../../../assets/🖼.png'
 import { cn } from '../../../components/admin/cn'
+import {
+  AdminDatePicker,
+  todayLocalIsoDate,
+} from '../../../components/admin/AdminDatePicker'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
@@ -67,10 +71,20 @@ function Field({ label, children, className }) {
   )
 }
 
-function Select({ children, ...props }) {
+function Select({ children, className, value, ...props }) {
+  const isPlaceholder = value === '' || value == null
   return (
     <div className="relative">
-      <select className={cn(inputClass, 'appearance-none pr-9')} {...props}>
+      <select
+        className={cn(
+          inputClass,
+          'appearance-none pr-9',
+          isPlaceholder && 'text-[#9aa49d]',
+          className,
+        )}
+        value={value}
+        {...props}
+      >
         {children}
       </select>
       <ChevronDown
@@ -264,15 +278,15 @@ export default function AdminAddChampPage() {
   }
 
   const [form, setForm] = useState({
-    fullName: isEdit ? '' : 'Khalid Ahmed',
-    phone: isEdit ? '' : '+973 3xxx xxxx',
-    email: isEdit ? '' : 'champ@email.com',
-    nationality: 'Bahraini',
+    fullName: '',
+    phone: '',
+    email: '',
+    nationality: '',
     supplierId: '',
-    supplier: 'Yjeek Fleet (In-house)',
-    city: 'Manama',
-    zone: 'Adliya',
-    tier: 'BRONZE',
+    supplier: '',
+    city: '',
+    zone: '',
+    tier: '',
     cpr: '',
     cprExpiry: '',
     birthDate: '',
@@ -282,21 +296,21 @@ export default function AdminAddChampPage() {
     visaExpiry: '',
     insuranceExpiry: '',
     licenseExpiry: '',
-    plate: isEdit ? '' : '12345',
-    make: isEdit ? '' : 'Honda',
-    model: isEdit ? '' : 'PCX',
-    color: isEdit ? '' : 'Red',
-    year: isEdit ? '' : '2023',
+    plate: '',
+    make: '',
+    model: '',
+    color: '',
+    year: '',
     vehicleType: 'Bike',
-    specialItems: true,
-    dailyLimit: 'BHD 50.000',
-    orderLimit: 'BHD 20.000',
-    onLimit: 'Stop cash orders',
+    specialItems: false,
+    dailyLimit: '',
+    orderLimit: '',
+    onLimit: '',
   })
 
   const [docs, setDocs] = useState(() => ({ ...EMPTY_DOCS }))
-  const [specialTypes, setSpecialTypes] = useState(['Age-restricted 18+', 'Pharmacy', 'Fragile'])
-  const [storeTypes, setStoreTypes] = useState(isEdit ? [] : ['Groceries', 'Food'])
+  const [specialTypes, setSpecialTypes] = useState([])
+  const [storeTypes, setStoreTypes] = useState([])
   const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS)
   const [suppliersError, setSuppliersError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -326,13 +340,6 @@ export default function AdminAddChampPage() {
         const list = result?.data?.suppliers || []
         setSuppliers(list)
         setSuppliersError(list.length ? '' : 'No suppliers found. Create a supplier first.')
-        if (list.length && !isEdit) {
-          setForm((prev) => ({
-            ...prev,
-            supplierId: prev.supplierId || list[0].id,
-            supplier: prev.supplierId ? prev.supplier : list[0].name,
-          }))
-        }
       } catch (err) {
         if (cancelled) return
         setSuppliersError(formatApiErrorMessage(err, 'Failed to load suppliers.'))
@@ -518,27 +525,41 @@ export default function AdminAddChampPage() {
         <Card title="Personal">
           <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             <Field label="Full name">
-              <input className={inputClass} value={form.fullName} onChange={update('fullName')} />
+              <input
+                className={inputClass}
+                value={form.fullName}
+                onChange={update('fullName')}
+                placeholder={isEdit ? undefined : 'Khalid Ahmed'}
+              />
             </Field>
             <Field label="Phone">
               <input
                 className={inputClass}
                 value={form.phone}
                 onChange={update('phone')}
+                placeholder={isEdit ? undefined : '+973 3xxx xxxx'}
                 disabled={isEdit}
                 title={isEdit ? 'Phone cannot be changed via edit API' : undefined}
               />
             </Field>
             <Field label="Email">
-              <input className={inputClass} value={form.email} onChange={update('email')} />
+              <input
+                className={inputClass}
+                value={form.email}
+                onChange={update('email')}
+                placeholder={isEdit ? undefined : 'champ@email.com'}
+              />
             </Field>
             <Field label="Nationality">
               <Select value={form.nationality} onChange={update('nationality')}>
-                <option>Bahraini</option>
-                <option>Indian</option>
-                <option>Pakistani</option>
-                <option>Filipino</option>
-                <option>Other</option>
+                <option value="" disabled>
+                  Select nationality
+                </option>
+                <option value="Bahraini">Bahraini</option>
+                <option value="Indian">Indian</option>
+                <option value="Pakistani">Pakistani</option>
+                <option value="Filipino">Filipino</option>
+                <option value="Other">Other</option>
               </Select>
             </Field>
           </div>
@@ -547,7 +568,9 @@ export default function AdminAddChampPage() {
             <Field label="Supplier">
               {useRealFleet ? (
                 <Select value={form.supplierId} onChange={handleSupplierChange} disabled={!suppliers.length}>
-                  {!suppliers.length ? <option value="">No suppliers</option> : null}
+                  <option value="" disabled>
+                    {suppliers.length ? 'Select supplier' : 'No suppliers'}
+                  </option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
@@ -556,14 +579,20 @@ export default function AdminAddChampPage() {
                 </Select>
               ) : (
                 <Select value={form.supplier} onChange={handleSupplierChange}>
-                  <option>Yjeek Fleet (In-house)</option>
-                  <option>SwiftFleet</option>
-                  <option>PrimeRide</option>
+                  <option value="" disabled>
+                    Select supplier
+                  </option>
+                  <option value="Yjeek Fleet (In-house)">Yjeek Fleet (In-house)</option>
+                  <option value="SwiftFleet">SwiftFleet</option>
+                  <option value="PrimeRide">PrimeRide</option>
                 </Select>
               )}
             </Field>
             <Field label="Tier">
               <Select value={form.tier} onChange={update('tier')}>
+                <option value="" disabled>
+                  Select tier
+                </option>
                 <option value="BRONZE">Bronze</option>
                 <option value="SILVER">Silver</option>
                 <option value="GOLD">Gold</option>
@@ -575,64 +604,145 @@ export default function AdminAddChampPage() {
 
           <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             <Field label="City">
-              <input className={inputClass} value={form.city} onChange={update('city')} />
+              <input
+                className={inputClass}
+                value={form.city}
+                onChange={update('city')}
+                placeholder={isEdit ? undefined : 'Manama'}
+              />
             </Field>
             <Field label="Zone">
-              <input className={inputClass} value={form.zone} onChange={update('zone')} />
+              <input
+                className={inputClass}
+                value={form.zone}
+                onChange={update('zone')}
+                placeholder={isEdit ? undefined : 'Adliya'}
+              />
             </Field>
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-3 max-[900px]:grid-cols-2 max-[600px]:grid-cols-1">
             <Field label="CPR number">
-              <input className={inputClass} value={form.cpr} onChange={update('cpr')} placeholder="CPR number" />
+              <input
+                className={inputClass}
+                value={form.cpr}
+                onChange={update('cpr')}
+                placeholder="CPR number"
+              />
             </Field>
             <Field label="CPR Expiry date">
-              <input className={inputClass} value={form.cprExpiry} onChange={update('cprExpiry')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.cprExpiry}
+                onChange={(value) => setForm((prev) => ({ ...prev, cprExpiry: value }))}
+                min={null}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
             <Field label="Birth date">
-              <input className={inputClass} value={form.birthDate} onChange={update('birthDate')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.birthDate}
+                onChange={(value) => setForm((prev) => ({ ...prev, birthDate: value }))}
+                min={null}
+                max={todayLocalIsoDate()}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
           </div>
 
           <div className="mt-3 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[600px]:grid-cols-1">
             <Field label="Passport number">
-              <input className={inputClass} value={form.passport} onChange={update('passport')} />
+              <input
+                className={inputClass}
+                value={form.passport}
+                onChange={update('passport')}
+                placeholder={isEdit ? undefined : 'Passport number'}
+              />
             </Field>
             <Field label="Passport Expiry date">
-              <input className={inputClass} value={form.passportExpiry} onChange={update('passportExpiry')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.passportExpiry}
+                onChange={(value) => setForm((prev) => ({ ...prev, passportExpiry: value }))}
+                min={null}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
             <Field label="Visa number">
-              <input className={inputClass} value={form.visa} onChange={update('visa')} />
+              <input
+                className={inputClass}
+                value={form.visa}
+                onChange={update('visa')}
+                placeholder={isEdit ? undefined : 'Visa number'}
+              />
             </Field>
             <Field label="Visa Expiry date">
-              <input className={inputClass} value={form.visaExpiry} onChange={update('visaExpiry')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.visaExpiry}
+                onChange={(value) => setForm((prev) => ({ ...prev, visaExpiry: value }))}
+                min={null}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             <Field label="Vehicle insurance Expiry date">
-              <input className={inputClass} value={form.insuranceExpiry} onChange={update('insuranceExpiry')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.insuranceExpiry}
+                onChange={(value) => setForm((prev) => ({ ...prev, insuranceExpiry: value }))}
+                min={null}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
             <Field label="Driving license Expiry date">
-              <input className={inputClass} value={form.licenseExpiry} onChange={update('licenseExpiry')} placeholder="DD/MM/YYYY" />
+              <AdminDatePicker
+                value={form.licenseExpiry}
+                onChange={(value) => setForm((prev) => ({ ...prev, licenseExpiry: value }))}
+                min={null}
+                placeholder="DD/MM/YYYY"
+              />
             </Field>
           </div>
 
           <div className="mt-3 grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-[700px]:grid-cols-2 max-[480px]:grid-cols-1">
             <Field label="Plate number">
-              <input className={inputClass} value={form.plate} onChange={update('plate')} />
+              <input
+                className={inputClass}
+                value={form.plate}
+                onChange={update('plate')}
+                placeholder={isEdit ? undefined : '12345'}
+              />
             </Field>
             <Field label="Make">
-              <input className={inputClass} value={form.make} onChange={update('make')} />
+              <input
+                className={inputClass}
+                value={form.make}
+                onChange={update('make')}
+                placeholder={isEdit ? undefined : 'Honda'}
+              />
             </Field>
             <Field label="Model">
-              <input className={inputClass} value={form.model} onChange={update('model')} />
+              <input
+                className={inputClass}
+                value={form.model}
+                onChange={update('model')}
+                placeholder={isEdit ? undefined : 'PCX'}
+              />
             </Field>
             <Field label="Color">
-              <input className={inputClass} value={form.color} onChange={update('color')} />
+              <input
+                className={inputClass}
+                value={form.color}
+                onChange={update('color')}
+                placeholder={isEdit ? undefined : 'Red'}
+              />
             </Field>
             <Field label="Year of make">
-              <input className={inputClass} value={form.year} onChange={update('year')} />
+              <input
+                className={inputClass}
+                value={form.year}
+                onChange={update('year')}
+                placeholder={isEdit ? undefined : '2023'}
+              />
             </Field>
           </div>
         </Card>
@@ -741,16 +851,29 @@ export default function AdminAddChampPage() {
 
           <div className="grid grid-cols-3 gap-3 max-[900px]:grid-cols-1">
             <Field label="Daily cash limit (COD)">
-              <input className={inputClass} value={form.dailyLimit} onChange={update('dailyLimit')} />
+              <input
+                className={inputClass}
+                value={form.dailyLimit}
+                onChange={update('dailyLimit')}
+                placeholder={isEdit ? undefined : 'BHD 50.000'}
+              />
             </Field>
             <Field label="Per-order cash limit">
-              <input className={inputClass} value={form.orderLimit} onChange={update('orderLimit')} />
+              <input
+                className={inputClass}
+                value={form.orderLimit}
+                onChange={update('orderLimit')}
+                placeholder={isEdit ? undefined : 'BHD 20.000'}
+              />
             </Field>
             <Field label="On reaching limit">
               <Select value={form.onLimit} onChange={update('onLimit')}>
-                <option>Stop cash orders</option>
-                <option>Notify only</option>
-                <option>Require approval</option>
+                <option value="" disabled>
+                  Select action
+                </option>
+                <option value="Stop cash orders">Stop cash orders</option>
+                <option value="Notify only">Notify only</option>
+                <option value="Require approval">Require approval</option>
               </Select>
             </Field>
           </div>

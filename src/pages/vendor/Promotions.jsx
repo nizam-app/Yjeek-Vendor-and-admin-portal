@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Check, Search } from 'lucide-react'
 import { StatusPill } from '../../components/ui'
 import { useVendorPromotions } from '../../hooks/vendor/useVendorPromotions'
+
+const SEARCH_DEBOUNCE_MS = 300
 
 const thClass =
   'border-b border-[#E0E6E0] px-5 py-3.5 text-left text-[11px] font-bold tracking-[0.04em] text-ink-muted uppercase'
@@ -15,38 +17,79 @@ const typeTone = {
   '% off': 'bg-green-active-bg text-green-active-text border-green-active-text',
 }
 
+const TYPE_OPTIONS = [
+  { label: 'All types', value: '' },
+  { label: 'Item / category deal', value: 'ITEM_CATEGORY_DEAL' },
+  { label: 'Free delivery', value: 'FREE_DELIVERY' },
+  { label: 'Buy X Get Y', value: 'BUY_X_GET_Y' },
+]
+
+function statusToApi(filter) {
+  const raw = String(filter || 'All').trim().toLowerCase()
+  if (!raw || raw === 'all') return 'all'
+  if (raw === 'active') return 'active'
+  if (raw === 'scheduled') return 'scheduled'
+  if (raw === 'paused') return 'paused'
+  if (raw === 'ended') return 'ended'
+  return 'all'
+}
+
 export default function Promotions() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState('All')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [typeOpen, setTypeOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [menuId, setMenuId] = useState(null)
   const menuRef = useRef(null)
-  const { data, error, isLoading, refetch } = useVendorPromotions()
+  const typeRef = useRef(null)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(query.trim())
+    }, SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  const { data, error, isLoading, refetch } = useVendorPromotions({
+    status: statusToApi(filter),
+    type: typeFilter,
+    search: debouncedSearch,
+  })
   const promotionFilters = data?.filters || ['All', 'Active', 'Scheduled', 'Paused', 'Ended']
   const promotionKpis = data?.kpis || []
   const promotions = data?.promotions || []
 
+  const selectedType = useMemo(
+    () => TYPE_OPTIONS.find((opt) => opt.value === typeFilter) || TYPE_OPTIONS[0],
+    [typeFilter],
+  )
+
+  // Soft client filter while debounced search / API catch up
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase()
+    const selectedTypeLabel = selectedType.label
     return promotions.filter((p) => {
-      const matchesFilter = filter === 'All' || p.status === filter
-      if (!matchesFilter) return false
+      if (filter !== 'All' && p.status !== filter) return false
+      if (typeFilter && p.type !== selectedTypeLabel && p.typeRaw !== typeFilter) return false
       if (!needle) return true
       return [p.title, p.subtitle, p.type, p.scope, p.status, p.period]
         .join(' ')
         .toLowerCase()
         .includes(needle)
     })
-  }, [promotions, filter, query])
+  }, [promotions, filter, query, typeFilter, selectedType.label])
 
   useEffect(() => {
-    if (!menuId) return undefined
+    if (!menuId && !typeOpen) return undefined
     function onDocClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuId(null)
+      if (menuId && menuRef.current && !menuRef.current.contains(e.target)) setMenuId(null)
+      if (typeOpen && typeRef.current && !typeRef.current.contains(e.target)) setTypeOpen(false)
     }
     document.addEventListener('mousedown', onDocClick)
     return () => document.removeEventListener('mousedown', onDocClick)
-  }, [menuId])
+  }, [menuId, typeOpen])
 
   if (isLoading && promotions.length === 0) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading promotions…</div>
@@ -116,9 +159,55 @@ export default function Promotions() {
           ))}
         </div>
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 rounded-full border border-[#E0E6E0] bg-white px-4 py-[10px] text-[12.5px] whitespace-nowrap">
-            <span className="font-medium text-ink">All types</span>
-            <span className="text-[10px] text-ink-muted">▾</span>
+          <div className="relative" ref={typeRef}>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-full border border-[#E0E6E0] bg-white px-4 py-[10px] text-[12.5px] whitespace-nowrap hover:bg-[#f7f9f7]"
+              aria-haspopup="listbox"
+              aria-expanded={typeOpen}
+              onClick={() => {
+                setTypeOpen((open) => !open)
+                setMenuId(null)
+              }}
+            >
+              <span className={`font-medium ${typeFilter ? 'text-ink' : 'text-ink'}`}>
+                {selectedType.label}
+              </span>
+              <span className="text-[10px] text-ink-muted">▾</span>
+            </button>
+            {typeOpen ? (
+              <div
+                className="absolute top-[calc(100%+6px)] right-0 z-30 min-w-[200px] overflow-hidden rounded-[12px] border border-[#E0E6E0] bg-white shadow-[0_12px_28px_rgba(26,28,26,0.14)]"
+                role="listbox"
+                aria-label="Promotion type"
+              >
+                {TYPE_OPTIONS.map((option, idx) => {
+                  const selected = option.value === typeFilter
+                  return (
+                    <button
+                      key={option.value || 'all'}
+                      type="button"
+                      role="option"
+                      aria-selected={selected}
+                      className={`flex w-full items-center justify-between px-3.5 py-2.5 text-left text-[13px] ${
+                        idx > 0 ? 'border-t border-[#EEF1EE]' : ''
+                      } ${selected ? 'font-medium text-green-light-text' : 'font-medium text-ink hover:bg-[#f7f9f7]'}`}
+                      onClick={() => {
+                        setTypeFilter(option.value)
+                        setTypeOpen(false)
+                      }}
+                    >
+                      <span>{option.label}</span>
+                      {selected ? (
+                        <span className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-primary">
+                          <Check size={11} strokeWidth={3} className="text-white" />
+                        </span>
+                      ) : null}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
           </div>
           <div className="flex min-w-[200px] items-center gap-2 rounded-[10px] border border-[#E0E6E0] bg-white px-3 py-[9px] text-[12.5px]">
             <Search size={15} strokeWidth={2.2} className="shrink-0 text-ink-faint" />
@@ -128,10 +217,20 @@ export default function Promotions() {
               placeholder="Search promotions"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              aria-label="Search promotions"
             />
           </div>
         </div>
       </div>
+
+      {error ? (
+        <p className="mb-3 text-[12px] text-danger">
+          Could not refresh promotions.{' '}
+          <button type="button" onClick={refetch} className="underline">
+            Retry
+          </button>
+        </p>
+      ) : null}
 
       <div className="overflow-hidden rounded-[14px] border border-[#E0E6E0] bg-white shadow-card">
         <div className="overflow-x-auto">
@@ -234,7 +333,7 @@ export default function Promotions() {
               ) : (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-ink-muted">
-                    {query || filter !== 'All'
+                    {query || filter !== 'All' || typeFilter
                       ? 'No promotions match your filters.'
                       : 'No promotions yet.'}
                   </td>

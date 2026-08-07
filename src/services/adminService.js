@@ -304,6 +304,12 @@ export const adminService = {
   getAdminMarketingNotification(notificationId, options = {}) {
     return adminMarketingService.getNotification(notificationId, options)
   },
+  resendAdminMarketingNotification(notificationId, options = {}) {
+    return adminMarketingService.resendNotification(notificationId, options)
+  },
+  deleteAdminMarketingNotification(notificationId, options = {}) {
+    return adminMarketingService.deleteNotification(notificationId, options)
+  },
   listAdminMarketingPromoCodes(options = {}) {
     return adminMarketingService.listPromoCodes(options)
   },

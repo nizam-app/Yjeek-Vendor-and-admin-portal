@@ -106,3 +106,44 @@ export function clearOrderTimerAnchors(orderId) {
   acceptDeadlineAnchors.delete(key)
   prepStartAnchors.delete(key)
 }
+
+/**
+ * True when an accept-pending order's SLA deadline has elapsed.
+ * Rejected / no-show cards are never treated as expired.
+ */
+export function isAcceptSlaExpired(order, now = Date.now()) {
+  if (!order || typeof order !== 'object') return false
+  const status = String(order.status || '').toLowerCase()
+  if (status === 'rejected' || status === 'no-show-cancelled') return false
+
+  const deadlineMs = resolveAcceptDeadlineMs(order, now)
+  if (deadlineMs == null) return false
+  return deadlineMs <= now
+}
+
+export const ACCEPT_SLA_EXPIRED_REASON = 'Accept SLA expired'
+
+/**
+ * Keep expired New-column orders visible as REJECTED cards (screenshot flow),
+ * instead of dropping them from the board.
+ */
+export function materializeExpiredAcceptOrders(orders, now = Date.now()) {
+  if (!Array.isArray(orders)) return []
+  return orders.map((order) => {
+    if (!isAcceptSlaExpired(order, now)) return order
+    return {
+      ...order,
+      status: 'rejected',
+      reason: order.reason || ACCEPT_SLA_EXPIRED_REASON,
+      note: order.note || ACCEPT_SLA_EXPIRED_REASON,
+      sla: undefined,
+      vendorAcceptDeadline: null,
+      primaryAction: null,
+    }
+  })
+}
+
+/** @deprecated Prefer materializeExpiredAcceptOrders — expired cards stay visible as rejected. */
+export function filterOutExpiredAcceptOrders(orders, now = Date.now()) {
+  return materializeExpiredAcceptOrders(orders, now)
+}
