@@ -45,6 +45,41 @@ const LABEL_TO_CODE = new Map(
 
 const VALID_CODES = new Set(Object.values(VENDOR_REJECTION_REASONS))
 
+/** Short display labels for rejected order cards. */
+const REJECTION_REASON_LABELS = {
+  OUT_OF_STOCK: 'Out of stock',
+  KITCHEN_TOO_BUSY: 'Kitchen too busy',
+  CLOSING_SOON: 'Closing soon',
+  CANNOT_FULFILL: 'Cannot fulfil on time',
+  BRANCH_UNAVAILABLE: 'Branch unavailable',
+  FULLY_BOOKED: 'Fully booked',
+  CANNOT_ACCOMMODATE_PARTY: 'Cannot accommodate party',
+  CLOSED_FOR_DAY: 'Closed for the day',
+  SPECIALIST_UNAVAILABLE: 'Specialist unavailable',
+  OTHER: 'Other',
+}
+
+/**
+ * Human-readable rejection reason for cards (e.g. "Out of stock").
+ * @param {unknown} reason
+ * @returns {string}
+ */
+export function formatRejectionReasonLabel(reason) {
+  const raw = String(reason || '').trim()
+  if (!raw) return ''
+  if (/accept\s+sla\s+expired/i.test(raw)) return 'Accept SLA expired'
+  if (/did not accept in time/i.test(raw)) return 'Accept SLA expired'
+  if (/item\(s\)\s+out of stock/i.test(raw)) return 'Out of stock'
+
+  const code = mapVendorRejectionReason(raw)
+  if (code === 'OTHER' && /accept\s+sla/i.test(raw)) return 'Accept SLA expired'
+  if (REJECTION_REASON_LABELS[code] && code !== 'OTHER') return REJECTION_REASON_LABELS[code]
+  if (REJECTION_REASON_LABELS[code] && raw === code) return REJECTION_REASON_LABELS[code]
+  if (code === 'OTHER' && raw !== 'OTHER' && !VALID_CODES.has(raw)) return raw
+  if (REJECTION_REASON_LABELS[code]) return REJECTION_REASON_LABELS[code]
+  return raw
+}
+
 /**
  * Normalize a UI reason (label or code) to the API enum value.
  * @param {unknown} reason

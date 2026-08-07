@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { OrderCard, DineInCard, getColumns } from '../../components/OrderCards'
@@ -8,6 +8,7 @@ import HandoverChampModal from '../../components/HandoverChampModal'
 import RejectOrderModal from '../../components/RejectOrderModal'
 import { useAuth } from '../../context/AuthContext'
 import { useApiMutation } from '../../hooks/useApiMutation'
+import { useNow } from '../../hooks/useNow'
 import { useVendorLiveOrders } from '../../hooks/vendor/useVendorLiveOrders'
 import { getVendorServiceModes } from '../../mappers/vendor/authMapper'
 import {
@@ -15,8 +16,15 @@ import {
   moveOrderToPreparingOnLiveBoard,
   moveOrderToReadyOnLiveBoard,
   removeCompletedOrderFromLiveBoard,
-  removeRejectedOrderFromLiveBoard,
+  markRejectedOrderOnLiveBoard,
 } from '../../mappers/vendor/mapVendorLiveOrders'
+import { formatRejectionReasonLabel } from '../../mappers/vendor/mapVendorRejectionReason'
+import {
+  mergeKeptRejectedIntoNewItems,
+  rememberRejectedLiveOrder,
+  subscribeKeptRejectedLiveOrders,
+} from '../../lib/recentRejectedLiveOrders'
+import { syncExpiredAcceptOrders } from '../../lib/handleAcceptSlaExpiry'
 import { orderService } from '../../services/vendor/orderService'
 
 const SEARCH_DEBOUNCE_MS = 300
@@ -63,9 +71,11 @@ export default function LiveOrderColumn() {
   const [rejectError, setRejectError] = useState(null)
   const [actioningId, setActioningId] = useState(null)
   const [actionError, setActionError] = useState(null)
+  const [keptRejectedTick, setKeptRejectedTick] = useState(0)
   const requestedDineIn = searchParams.get('tab') === 'dinein'
   const tab = canDineIn && requestedDineIn ? 'dinein' : 'delivery'
   const isDineIn = tab === 'dinein'
+  const now = useNow(key === 'new')
   const { data: orders, error, isLoading, refetch, setData } = useVendorLiveOrders(tab, {
     search: debouncedSearch,
   })
@@ -76,6 +86,8 @@ export default function LiveOrderColumn() {
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
   }, [query])
+
+  useEffect(() => subscribeKeptRejectedLiveOrders(() => setKeptRejectedTick((n) => n + 1)), [])
 
   useEffect(() => {
     if (!canDineIn && requestedDineIn) {
@@ -94,6 +106,18 @@ export default function LiveOrderColumn() {
   const { mutate: performPrimaryAction } = useApiMutation((action) =>
     orderService.performPrimaryAction(action),
   )
+
+  useEffect(() => {
+    if (key !== 'new') return
+    const newItems = tab === 'dinein' ? orders?.dineIn?.new || [] : orders?.delivery?.new || []
+    void syncExpiredAcceptOrders({
+      orders: newItems,
+      board: tab,
+      now,
+      setData,
+      rejectOrder: rejectOrderMutation,
+    })
+  }, [key, orders, tab, now, setData, rejectOrderMutation])
 
   const handleRefresh = useCallback(async () => {
     if (refreshing) return
@@ -154,10 +178,18 @@ export default function LiveOrderColumn() {
       setRejectingId(String(orderId))
       try {
         await rejectOrderMutation({ orderId, reason, note })
+        const reasonLabel = formatRejectionReasonLabel(reason) || reason
+        rememberRejectedLiveOrder(order, {
+          board: tab,
+          reason: reasonLabel,
+          note,
+        })
         setData((current) =>
-          removeRejectedOrderFromLiveBoard(current, {
+          markRejectedOrderOnLiveBoard(current, {
             board: tab,
             order,
+            reason: reasonLabel,
+            note,
           }),
         )
         setRejectOrder(null)
@@ -249,7 +281,17 @@ export default function LiveOrderColumn() {
     [completeOrder, markReady, performPrimaryAction, refetch, setData, startPreparing, tab],
   )
 
-  const column = getColumns(tab, orders).find((col) => col.key === key)
+  const column = useMemo(() => {
+    void keptRejectedTick
+    const found = getColumns(tab, orders, { now }).find((col) => col.key === key)
+    if (!found) return null
+    if (found.key !== 'new') return found
+    return {
+      ...found,
+      items: mergeKeptRejectedIntoNewItems(found.items, { board: tab, now }),
+    }
+  }, [tab, orders, now, key, keptRejectedTick])
+
   const items = column
     ? column.items.filter((order) => matchesLiveOrderSearch(order, query))
     : []

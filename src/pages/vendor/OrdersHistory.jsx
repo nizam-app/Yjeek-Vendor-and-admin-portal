@@ -7,6 +7,7 @@ import { useVendorBranches } from '../../hooks/vendor/useVendorBranches'
 import { useVendorOrderHistory } from '../../hooks/vendor/useVendorOrderHistory'
 
 const SEARCH_DEBOUNCE_MS = 300
+const PAGE_SIZE = 20
 
 const TYPE_OPTIONS = [
   { label: 'All types', value: '' },
@@ -31,6 +32,13 @@ const selectClass =
 
 const thClass = 'text-left text-[10px] tracking-[0.02em] text-ink-muted font-bold uppercase'
 const tdClass = 'text-[12px] text-ink'
+
+function pageNumbers(current, total) {
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 3) return [1, 2, 3, '…', total]
+  if (current >= total - 2) return [1, '…', total - 2, total - 1, total]
+  return [1, '…', current, '…', total]
+}
 
 function toStartIso(dateValue) {
   const raw = String(dateValue || '').trim()
@@ -109,6 +117,7 @@ export default function OrdersHistory() {
   const [branchFilter, setBranchFilter] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
+  const [page, setPage] = useState(1)
   const [statusOpen, setStatusOpen] = useState(false)
   const [typeOpen, setTypeOpen] = useState(false)
   const [branchOpen, setBranchOpen] = useState(false)
@@ -142,11 +151,16 @@ export default function OrdersHistory() {
     return () => window.clearTimeout(timer)
   }, [query])
 
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, statusFilter, typeFilter, branchFilter, fromDate, toDate])
+
   const fromIso = toStartIso(fromDate)
   const toIso = toEndIso(toDate)
 
   const { data: orderHistory, error, isLoading, refetch } = useVendorOrderHistory({
-    limit: 50,
+    limit: PAGE_SIZE,
+    page,
     search: debouncedSearch,
     status: statusFilter,
     type: typeFilter,
@@ -187,7 +201,24 @@ export default function OrdersHistory() {
     }
   }, [refetch, refreshing])
 
-  const rows = Array.isArray(orderHistory) ? orderHistory : []
+  const rows = Array.isArray(orderHistory?.orders)
+    ? orderHistory.orders
+    : Array.isArray(orderHistory)
+      ? orderHistory
+      : []
+  const pagination = orderHistory?.pagination || {}
+  const total = Number(pagination.total)
+  const resolvedTotal = Number.isFinite(total) ? total : rows.length
+  const totalPages = Math.max(
+    1,
+    Number(pagination.pages) || Math.ceil(resolvedTotal / PAGE_SIZE) || 1,
+  )
+  const shownFrom = resolvedTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const shownTo = Math.min(page * PAGE_SIZE, resolvedTotal)
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
 
   if (isLoading && !orderHistory) {
     return <div className="p-7 text-[13px] text-ink-muted">Loading order history…</div>
@@ -413,6 +444,51 @@ export default function OrdersHistory() {
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3">
+          <p className="text-[12px] text-ink-muted">
+            Showing {shownFrom}–{shownTo} of {resolvedTotal.toLocaleString()}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-border bg-white px-2.5 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              ‹ Prev
+            </button>
+            {pageNumbers(page, totalPages).map((item, index) =>
+              item === '…' ? (
+                <span key={`ellipsis-${index}`} className="px-1 text-[12px] text-ink-muted">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setPage(item)}
+                  className={`inline-flex h-[30px] min-w-[30px] items-center justify-center rounded-[8px] text-[12px] font-semibold transition ${
+                    page === item
+                      ? 'bg-green-primary text-white'
+                      : 'border border-border bg-white text-ink hover:bg-[#f8faf8]'
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-border bg-white px-2.5 text-[12px] font-semibold text-ink disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              Next ›
+            </button>
+          </div>
         </div>
       </div>
 

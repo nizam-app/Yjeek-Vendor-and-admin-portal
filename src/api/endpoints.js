@@ -68,8 +68,7 @@ export const endpoints = {
       /** Confirmed: POST /vendor-panel/orders/:orderId/complete */
       complete: (orderId) =>
         `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}/complete`,
-      /** Confirmed: GET /vendor-panel/orders/history?limit= */
-      /** Confirmed: GET /vendor-panel/orders/history?search=&status=&type=&branchId=&from=&to=&limit= */
+      /** Confirmed: GET /vendor-panel/orders/history?page=&limit=20&search=&status=&type=&branchId=&from=&to= */
       history: '/vendor-panel/orders/history',
       /** Confirmed: GET /vendor-panel/orders/:orderId */
       detail: (orderId) => `/vendor-panel/orders/${encodeURIComponent(String(orderId || '').trim())}`,

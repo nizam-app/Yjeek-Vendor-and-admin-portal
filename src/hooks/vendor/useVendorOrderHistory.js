@@ -18,7 +18,7 @@ import { orderService } from '../../services/vendor/orderService'
  */
 export function useVendorOrderHistory(options = {}) {
   const limit = options.limit ?? 20
-  const page = options.page
+  const page = options.page ?? 1
   const search = String(options.search || '').trim()
   const status = String(options.status || 'all').trim()
   const type = String(options.type || '').trim()

@@ -359,12 +359,12 @@ export const orderService = {
   },
 
   /**
-   * GET /vendor-panel/orders/history?limit=&search=&status=&type=&branchId=&from=&to=
+   * GET /vendor-panel/orders/history?page=&limit=&search=&status=&type=&branchId=&from=&to=
    */
   async getOrderHistory(options = {}) {
     const {
       limit = 20,
-      page,
+      page = 1,
       branchId,
       search,
       status,
@@ -377,9 +377,9 @@ export const orderService = {
 
     const query = {
       limit,
+      page,
       ...(params || {}),
     }
-    if (page != null) query.page = page
     if (branchId) query.branchId = String(branchId)
 
     const searchTerm = String(search || '')

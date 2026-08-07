@@ -684,9 +684,22 @@ const mockRoutes = {
     },
   }),
   'GET /orders/history': () => vendorMock.orderHistory,
-  'GET /vendor-panel/orders/history': () => ({
-    orders: vendorMock.orderHistory,
-  }),
+  'GET /vendor-panel/orders/history': ({ params } = {}) => {
+    const all = Array.isArray(vendorMock.orderHistory) ? vendorMock.orderHistory : []
+    const page = Math.max(1, Number(params?.page) || 1)
+    const limit = Math.min(100, Math.max(1, Number(params?.limit) || 20))
+    const start = (page - 1) * limit
+    const orders = all.slice(start, start + limit)
+    return {
+      orders,
+      pagination: {
+        page,
+        limit,
+        total: all.length,
+        pages: Math.ceil(all.length / limit) || 0,
+      },
+    }
+  },
   'GET /services/bookings': () => vendorMock.serviceBookings,
   'GET /vendor-panel/orders/services': () => ({
     view: 'board',

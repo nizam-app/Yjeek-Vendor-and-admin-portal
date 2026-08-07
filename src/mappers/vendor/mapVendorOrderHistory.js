@@ -130,33 +130,56 @@ export function mapVendorOrderHistoryItem(order) {
   }
 }
 
+function mapHistoryOrders(list) {
+  return list
+    .map((item) => {
+      try {
+        return mapVendorOrderHistoryItem(item)
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
+}
+
+function mapHistoryPagination(pagination, ordersLength, fallbackLimit = 20) {
+  const source = pagination && typeof pagination === 'object' ? pagination : {}
+  const limit = Number(source.limit) || fallbackLimit
+  const total = Number(source.total)
+  const resolvedTotal = Number.isFinite(total) ? total : ordersLength
+  const page = Math.max(1, Number(source.page) || 1)
+  const pagesFromApi = Number(source.pages)
+  const pages = Number.isFinite(pagesFromApi)
+    ? Math.max(0, pagesFromApi)
+    : Math.ceil(resolvedTotal / limit) || 0
+
+  return {
+    page,
+    limit,
+    total: resolvedTotal,
+    pages,
+  }
+}
+
 /**
- * Normalize history list response into UI order rows.
- * Confirmed shape: { orders: [...] }
+ * Normalize history list response into UI shape.
+ * Confirmed shape: { orders: [...], pagination?: { page, limit, total, pages } }
  */
 export function mapVendorOrderHistoryResponse(data) {
   if (Array.isArray(data)) {
-    return data
-      .map((item) => {
-        try {
-          return mapVendorOrderHistoryItem(item)
-        } catch {
-          return null
-        }
-      })
-      .filter(Boolean)
+    const orders = mapHistoryOrders(data)
+    return {
+      orders,
+      pagination: mapHistoryPagination(null, orders.length),
+    }
   }
 
   if (data && typeof data === 'object' && Array.isArray(data.orders)) {
-    return data.orders
-      .map((item) => {
-        try {
-          return mapVendorOrderHistoryItem(item)
-        } catch {
-          return null
-        }
-      })
-      .filter(Boolean)
+    const orders = mapHistoryOrders(data.orders)
+    return {
+      orders,
+      pagination: mapHistoryPagination(data.pagination, orders.length),
+    }
   }
 
   throw new ApiError({ message: 'Invalid order history response from the server.' })
@@ -173,4 +196,7 @@ export function mapVendorOrderDetailResponse(data) {
   return mapVendorOrderHistoryItem(data)
 }
 
-export const emptyVendorOrderHistory = []
+export const emptyVendorOrderHistory = {
+  orders: [],
+  pagination: { page: 1, limit: 20, total: 0, pages: 0 },
+}

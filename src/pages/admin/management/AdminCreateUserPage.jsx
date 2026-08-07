@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { mapApiRoleToPermissionFlags } from '../../../mappers/admin/mapAdminRoles'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
@@ -122,7 +123,7 @@ function Select({ value, onChange, children, label }) {
   )
 }
 
-function PillGroup({ options, value, onChange, multi = false }) {
+function PillGroup({ options, value, onChange, multi = false, lockedValue = null }) {
   const normalized = options.map((option) =>
     typeof option === 'object'
       ? { value: option.value ?? option.code ?? option.id, label: option.label ?? option.name ?? option.value }
@@ -134,11 +135,20 @@ function PillGroup({ options, value, onChange, multi = false }) {
     <div className="flex flex-wrap gap-2">
       {normalized.map((option) => {
         const isActive = selected.includes(option.value)
+        const isLockedOut =
+          lockedValue != null && !multi && String(option.value) !== String(lockedValue)
         return (
           <button
             key={option.value}
             type="button"
+            disabled={isLockedOut}
+            title={
+              isLockedOut
+                ? 'Scope is fixed by the selected role'
+                : undefined
+            }
             onClick={() => {
+              if (isLockedOut) return
               if (!multi) {
                 onChange(option.value)
                 return
@@ -154,6 +164,7 @@ function PillGroup({ options, value, onChange, multi = false }) {
               isActive
                 ? 'border-[#1aa054] bg-[#e8f7ed] font-bold text-[#147940]'
                 : 'border-[#e0e5e1] bg-white font-medium text-[#59655e] hover:bg-[#f6f8f6]',
+              isLockedOut && 'cursor-not-allowed opacity-40 hover:bg-white',
             )}
           >
             {option.label}
@@ -164,24 +175,54 @@ function PillGroup({ options, value, onChange, multi = false }) {
   )
 }
 
-function PermissionCheckbox({ checked, onChange, label }) {
+function PermissionCheckbox({ checked, onChange, label, disabled = false }) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
-      onClick={onChange}
+      aria-disabled={disabled}
+      disabled={disabled}
+      onClick={disabled ? undefined : onChange}
       className={cn(
         'grid h-[17px] w-[17px] place-items-center rounded-[4px] border transition',
         checked
           ? 'border-[#1aa054] bg-[#1aa054] text-white'
-          : 'border-[#cfd6d1] bg-white hover:border-[#9aa49d]',
+          : 'border-[#cfd6d1] bg-white',
+        disabled
+          ? 'cursor-not-allowed opacity-70'
+          : checked
+            ? ''
+            : 'hover:border-[#9aa49d]',
       )}
     >
       {checked ? <Check size={12} strokeWidth={3} /> : null}
     </button>
   )
+}
+
+function scopePatchForLevel(scopeLevel, current, countryOptions, zoneOptions = []) {
+  if (scopeLevel === 'GLOBAL') {
+    return { countries: [], zones: [] }
+  }
+  const countries = current.countries?.length
+    ? current.countries
+    : countryOptions[0]?.code
+      ? [countryOptions[0].code]
+      : ['BH']
+  if (scopeLevel !== 'ZONE') {
+    return { countries, zones: [] }
+  }
+  const zones = current.zones?.length
+    ? current.zones
+    : zoneOptions[0]
+      ? [zoneOptions[0]]
+      : []
+  return {
+    countries: countries.includes('BH') ? countries : ['BH', ...countries.filter((c) => c !== 'BH')],
+    zones,
+  }
 }
 
 export default function AdminCreateUserPage() {
@@ -206,7 +247,13 @@ export default function AdminCreateUserPage() {
   const roleOptions = useMemo(() => {
     if (meta?.roles?.length) return meta.roles
     const rows = rolesPage?.roles?.rows || []
-    return rows.map((row) => ({ id: row.id, name: row.name, scopeLevel: row.scopeLevelValue }))
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      scopeLevel: row.scopeLevelValue || row.scopeLevel || '',
+      permissions: row.permissions || {},
+      permissionsMatrix: row.permissionsMatrix || [],
+    }))
   }, [meta, rolesPage])
 
   const countryOptions = useMemo(() => {
@@ -219,6 +266,16 @@ export default function AdminCreateUserPage() {
       return meta.zones.map((z) => z.name || z.id)
     }
     return FALLBACK_ZONES
+  }, [meta])
+
+  const scopeLevelOptions = useMemo(() => {
+    if (meta?.scopeLevels?.length) {
+      return meta.scopeLevels.map((item) => ({
+        value: String(item.value || item).toUpperCase(),
+        label: item.label || item.value || item,
+      }))
+    }
+    return FALLBACK_SCOPE_LEVELS
   }, [meta])
 
   const modules = useMemo(() => {
@@ -247,22 +304,43 @@ export default function AdminCreateUserPage() {
   const [permissions, setPermissions] = useState(() => emptyPermissions(FALLBACK_MODULES))
   const [bootstrapped, setBootstrapped] = useState(false)
 
+  const applyRoleLimits = useCallback(
+    (role, currentForm = {}) => {
+      const scopeLevel = String(role?.scopeLevel || 'COUNTRY').toUpperCase() || 'COUNTRY'
+      const nextForm = {
+        ...currentForm,
+        roleId: role?.id || currentForm.roleId || '',
+        scopeLevel,
+        ...scopePatchForLevel(scopeLevel, currentForm, countryOptions, zoneOptions),
+      }
+      const flags = mapApiRoleToPermissionFlags(role || {}, modules)
+      setPermissions(Object.keys(flags).length ? flags : emptyPermissions(modules))
+      return nextForm
+    },
+    [countryOptions, zoneOptions, modules],
+  )
+
   useEffect(() => {
     if (!useRealUsers || bootstrapped) return
     if (metaLoading || rolesLoading) return
 
     const firstRole = roleOptions[0]
-    setForm((current) => ({
-      ...current,
-      roleId: current.roleId || firstRole?.id || '',
-      password: meta?.suggestedTemporaryPassword || current.password,
-      countries: current.countries.length
-        ? current.countries
-        : countryOptions[0]?.code
-          ? [countryOptions[0].code]
-          : ['BH'],
-    }))
-    setPermissions(emptyPermissions(modules))
+    setForm((current) => {
+      const withPassword = {
+        ...current,
+        password: meta?.suggestedTemporaryPassword || current.password,
+        countries: current.countries.length
+          ? current.countries
+          : countryOptions[0]?.code
+            ? [countryOptions[0].code]
+            : ['BH'],
+      }
+      if (!firstRole) {
+        setPermissions(emptyPermissions(modules))
+        return withPassword
+      }
+      return applyRoleLimits(firstRole, withPassword)
+    })
     setBootstrapped(true)
   }, [
     useRealUsers,
@@ -273,11 +351,13 @@ export default function AdminCreateUserPage() {
     meta,
     countryOptions,
     modules,
+    applyRoleLimits,
   ])
 
   const selectedRole = roleOptions.find((role) => String(role.id) === String(form.roleId))
+  const lockedScopeLevel = String(selectedRole?.scopeLevel || form.scopeLevel || '').toUpperCase()
   const scopeLabel =
-    FALLBACK_SCOPE_LEVELS.find((item) => item.value === form.scopeLevel)?.label || form.scopeLevel
+    scopeLevelOptions.find((item) => item.value === form.scopeLevel)?.label || form.scopeLevel
 
   const update = (key) => (event) => {
     const value = event.target.value
@@ -290,27 +370,42 @@ export default function AdminCreateUserPage() {
     }))
   }
 
+  const onRoleChange = async (roleId) => {
+    const fromMeta = roleOptions.find((role) => String(role.id) === String(roleId))
+    if (fromMeta?.permissionsMatrix?.length || Object.keys(fromMeta?.permissions || {}).length) {
+      setForm((current) => applyRoleLimits(fromMeta, { ...current, roleId }))
+      return
+    }
+
+    setForm((current) => applyRoleLimits(fromMeta || { id: roleId, scopeLevel: current.scopeLevel }, { ...current, roleId }))
+
+    if (!roleId || !useRealUsers) return
+    try {
+      const result = await adminService.getAdminRoleDetail(roleId)
+      const detail = result?.data
+      if (!detail) return
+      setForm((current) =>
+        applyRoleLimits(
+          {
+            id: roleId,
+            scopeLevel: detail.scopeLevelValue || detail.scopeLevel || fromMeta?.scopeLevel,
+            permissions: detail.permissions || detail.raw?.permissions || {},
+            permissionsMatrix: detail.permissionsMatrix || [],
+          },
+          current,
+        ),
+      )
+    } catch {
+      // Keep role-locked scope even if permission detail fails.
+    }
+  }
+
   const setScopeLevel = (scopeLevel) => {
+    if (lockedScopeLevel && scopeLevel !== lockedScopeLevel) return
     setForm((current) => ({
       ...current,
       scopeLevel,
-      ...(scopeLevel === 'GLOBAL'
-        ? { countries: [], zones: [] }
-        : {
-            countries: current.countries.length
-              ? current.countries
-              : countryOptions[0]?.code
-                ? [countryOptions[0].code]
-                : ['BH'],
-            zones: scopeLevel === 'ZONE' ? current.zones : [],
-          }),
-    }))
-  }
-
-  const togglePermission = (moduleKey, action) => {
-    setPermissions((current) => ({
-      ...current,
-      [moduleKey]: { ...current[moduleKey], [action]: !current[moduleKey]?.[action] },
+      ...scopePatchForLevel(scopeLevel, current, countryOptions, zoneOptions),
     }))
   }
 
@@ -493,7 +588,7 @@ export default function AdminCreateUserPage() {
       {step === 1 ? (
         <Card
           title="Role & scope"
-          subtitle="Role defines permissions. Scope limits which country / zones the user can manage."
+          subtitle="Role locks scope level and permissions. Countries / zones stay editable within that scope."
         >
           <div className="space-y-4">
             <Field label="Role">
@@ -501,12 +596,13 @@ export default function AdminCreateUserPage() {
                 <Select
                   label="Role"
                   value={form.roleId}
-                  onChange={(event) => setForm((current) => ({ ...current, roleId: event.target.value }))}
+                  onChange={(event) => onRoleChange(event.target.value)}
                 >
                   {!roleOptions.length ? <option value="">No roles available</option> : null}
                   {roleOptions.map((role) => (
                     <option key={role.id} value={role.id}>
                       {role.name}
+                      {role.scopeLevel ? ` · ${role.scopeLevel}` : ''}
                     </option>
                   ))}
                 </Select>
@@ -516,10 +612,16 @@ export default function AdminCreateUserPage() {
             <div>
               <p className={labelClass}>Scope level</p>
               <PillGroup
-                options={FALLBACK_SCOPE_LEVELS}
+                options={scopeLevelOptions}
                 value={form.scopeLevel}
+                lockedValue={lockedScopeLevel || null}
                 onChange={setScopeLevel}
               />
+              {lockedScopeLevel ? (
+                <p className="mt-1.5 text-[11px] text-[#8a948e]">
+                  Locked to {lockedScopeLevel} by {selectedRole?.name || 'selected role'}.
+                </p>
+              ) : null}
             </div>
 
             {showCountries ? (
@@ -584,7 +686,7 @@ export default function AdminCreateUserPage() {
 
           <Card
             title="Permissions"
-            subtitle="Inherited from role — toggle preview only (invite sends empty permissionOverrides)."
+            subtitle="Filled automatically from the selected role. Checkboxes are locked on invite (permissionOverrides stay empty)."
           >
             <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
               <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -617,7 +719,7 @@ export default function AdminCreateUserPage() {
                               <div className="flex justify-center">
                                 <PermissionCheckbox
                                   checked={Boolean(permissions[key]?.[action])}
-                                  onChange={() => togglePermission(key, action)}
+                                  disabled
                                   label={`${ACTION_LABELS[action]} ${module.label}`}
                                 />
                               </div>

@@ -20,6 +20,7 @@ export {
   moveAcceptedOrderOnLiveBoard,
   moveOrderToPreparingOnLiveBoard,
   moveOrderToReadyOnLiveBoard,
+  markRejectedOrderOnLiveBoard,
   removeRejectedOrderFromLiveBoard,
 } from './mapVendorLiveOrders'
 export {
