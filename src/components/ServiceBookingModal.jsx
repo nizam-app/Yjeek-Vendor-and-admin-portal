@@ -46,19 +46,19 @@ function buildDetails(order, columnKey) {
       ? order.servicesList
       : order.addOns?.length > 0
         ? [{ qty: 1, name: order.service }, ...order.addOns.map((name) => ({ qty: 1, name }))]
-        : [{ qty: 1, name: order.service || 'Haircut & styling' }]
+        : [{ qty: 1, name: order.service || order.itemsPreview || 'Service' }]
 
   const timeValue = config.useDurationValue
-    ? order.durationLabel || `Duration: ${order.duration || '45 mins'}`
-    : order.when || 'Today · 8–10 PM'
+    ? order.durationLabel || (order.duration ? `Duration: ${order.duration}` : order.when || '—')
+    : order.when || '—'
 
   return {
     title: `Service booking · ${order.id}`,
     status,
     config,
     timeValue,
-    customerLine: `${order.customer || 'Sara A.'} · ${order.customerPhone || '+973 3xxx xxxx'}`,
-    bookingType: order.bookingType || `${order.category || 'Salon & Beauty'} · booking`,
+    customerLine: `${order.customer || 'Customer'}${order.customerPhone ? ` · ${order.customerPhone}` : ''}`,
+    bookingType: order.bookingType || `${order.category || 'Service'} · booking`,
     servicesList,
   }
 }

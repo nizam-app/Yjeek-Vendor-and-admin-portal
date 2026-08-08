@@ -1594,6 +1594,7 @@ export const mockClient = {
             ...(vendorMock.liveOrders?.ready || []),
             ...(vendorMock.dineInOrders?.preparing || []),
             ...(vendorMock.liveOrders?.preparing || []),
+            ...(vendorMock.serviceBookings?.inProgress || []),
           ]
           const found =
             allOrders.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
@@ -1609,6 +1610,11 @@ export const mockClient = {
               (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
             )
           }
+          if (vendorMock.serviceBookings?.inProgress) {
+            vendorMock.serviceBookings.inProgress = vendorMock.serviceBookings.inProgress.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
           return {
             ...(found && typeof found === 'object' ? found : {}),
             id: found?.id || found?.backendId || orderId,
@@ -1616,6 +1622,70 @@ export const mockClient = {
             orderType: found?.orderType || (found?.guest ? 'DINE_IN' : 'DELIVERY'),
             status: 'COMPLETED',
             completedAt: new Date().toISOString(),
+          }
+        }
+      }
+    }
+    // POST /vendor-panel/orders/:orderId/check-in (SERVICE)
+    if (!route && method.toUpperCase() === 'POST') {
+      const checkInMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/check-in$/)
+      if (checkInMatch) {
+        const orderId = decodeURIComponent(checkInMatch[1])
+        route = () => {
+          const upcoming = vendorMock.serviceBookings?.upcoming || []
+          const found =
+            upcoming.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            upcoming[0] ||
+            null
+          if (vendorMock.serviceBookings?.upcoming) {
+            vendorMock.serviceBookings.upcoming = upcoming.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          const moved = {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-SVC-001',
+            orderType: 'SERVICE',
+            status: 'IN_PROGRESS',
+            customer:
+              typeof found?.customer === 'object'
+                ? found.customer
+                : { name: found?.customer || 'Customer' },
+            itemsPreview: found?.service || found?.itemsPreview || '1x Service',
+          }
+          if (vendorMock.serviceBookings) {
+            vendorMock.serviceBookings.inProgress = [
+              moved,
+              ...(vendorMock.serviceBookings.inProgress || []),
+            ]
+          }
+          return moved
+        }
+      }
+    }
+    // POST /vendor-panel/orders/:orderId/no-show
+    if (!route && method.toUpperCase() === 'POST') {
+      const noShowMatch = String(url).match(/^\/vendor-panel\/orders\/([^/?]+)\/no-show$/)
+      if (noShowMatch) {
+        const orderId = decodeURIComponent(noShowMatch[1])
+        route = () => {
+          const upcoming = vendorMock.serviceBookings?.upcoming || []
+          const found =
+            upcoming.find((o) => o.id === orderId || o.backendId === orderId || o.orderNumber === orderId) ||
+            null
+          if (vendorMock.serviceBookings?.upcoming) {
+            vendorMock.serviceBookings.upcoming = upcoming.filter(
+              (o) => o.id !== orderId && o.backendId !== orderId && o.orderNumber !== orderId,
+            )
+          }
+          return {
+            ...(found && typeof found === 'object' ? found : {}),
+            id: found?.id || found?.backendId || orderId,
+            orderNumber: found?.orderNumber || found?.id || 'YJK-SVC-001',
+            orderType: 'SERVICE',
+            status: 'CANCELLED',
+            cancelReason: 'Customer no-show',
           }
         }
       }

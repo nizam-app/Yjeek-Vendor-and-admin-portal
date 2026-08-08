@@ -59,16 +59,26 @@ export function mapVendorServiceCalendarResponse(data) {
   const days = data.days
     .map((item) => {
       try {
-        return mapVendorServiceCalendarDay(item)
+        // Tolerate alternate Postman samples: { date, bookings } without count/statuses
+        const normalized = {
+          ...item,
+          count: item.count ?? item.bookings ?? 0,
+          statuses: item.statuses || {},
+        }
+        return mapVendorServiceCalendarDay(normalized)
       } catch {
         return null
       }
     })
     .filter(Boolean)
 
+  const totalBookings =
+    Number(data.totalBookings ?? data.totalBookingX ?? data.total) ||
+    days.reduce((sum, day) => sum + day.count, 0)
+
   return {
     month: data.month != null ? String(data.month) : null,
-    totalBookings: Number(data.totalBookings) || days.reduce((sum, day) => sum + day.count, 0),
+    totalBookings,
     days,
     countsByDate: Object.fromEntries(days.map((day) => [day.date, day.count])),
     daysByDate: Object.fromEntries(days.map((day) => [day.date, day])),

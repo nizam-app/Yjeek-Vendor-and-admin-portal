@@ -306,6 +306,18 @@ function emptyToNull(value) {
   return trimmed ? trimmed : null
 }
 
+/** Normalize "8:00" → "08:00" for API time fields. */
+function normalizeTimeForApi(value) {
+  const raw = emptyToNull(value)
+  if (!raw) return null
+  const match = String(raw).match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return raw
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (hour > 23 || minute > 59) return raw
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
 function toNumberOrNull(value) {
   if (value === '' || value === null || value === undefined) return null
   const numeric = Number(String(value).replace(/[^\d.-]/g, ''))
@@ -515,8 +527,8 @@ export function buildVendorCreateProductBody(
     prepTimeMin: prepTimeMin ?? 0,
     badges,
     availabilitySlots: slot ? [slot] : [],
-    availableFrom: emptyToNull(form.availableFrom),
-    availableTo: emptyToNull(form.availableTo),
+    availableFrom: normalizeTimeForApi(form.availableFrom),
+    availableTo: normalizeTimeForApi(form.availableTo),
     stockType: form.stockType || 'MADE_TO_ORDER',
     isActive: form.active !== false && form.status !== 'Inactive' && form.status !== 'Draft',
     isAvailable: form.isAvailable !== false,

@@ -30,8 +30,9 @@ function ServiceRow({ name, qty, price }) {
 }
 
 function formatPrice(price) {
-  if (!price) return 'BHD 0.000'
-  return price.includes('BHD') ? price : `BHD ${price.replace(' BHD', '')}`
+  if (price == null || price === '') return 'BHD 0.000'
+  const text = String(price)
+  return text.includes('BHD') ? text : `BHD ${text.replace(' BHD', '')}`
 }
 
 function buildServiceReceipt(order) {
@@ -44,26 +45,24 @@ function buildServiceReceipt(order) {
           qty: item.qty,
           price: formatPrice(item.price),
         }))
-      : [
-          { name: 'Haircut & styling', qty: 2, price: 'BHD 3.600' },
-          { name: 'Scalp massage', qty: 1, price: 'BHD 1.500' },
-          { name: 'Hair treatment', qty: 1, price: 'BHD 1.200' },
-        ]
+      : order.itemsPreview
+        ? [{ name: String(order.itemsPreview).replace(/^\d+x\s*/, ''), qty: order.itemCount || 1, price: formatPrice(order.total || order.price) }]
+        : [{ name: order.service || 'Service', qty: 1, price: formatPrice(order.total || order.price) }]
 
   return {
     badge: 'service booking',
-    branchName: order.branch || 'Green Kitchen — Seef',
-    branchAddress: order.branchAddress || 'Block 338, Road 3801, Seef · CR 12345',
-    bookingId: order.receiptId || order.id.replace('#', '').trim() || 'YJK-…48',
-    type: order.bookingType || `${order.category || 'Salon & Beauty'} · booking`,
-    customer: order.customer || 'Sara A.',
+    branchName: order.branch || 'Branch',
+    branchAddress: order.branchAddress || order.branchArea || '',
+    bookingId: order.receiptId || order.orderNumber || order.id,
+    type: order.bookingType || `${order.category || 'Service'} · booking`,
+    customer: order.customer || 'Customer',
     items,
-    subtotal: formatPrice(order.subtotal || 'BHD 6.300'),
-    serviceFee: formatPrice(order.serviceFee || 'BHD 1.200'),
-    vat: formatPrice(order.vat || 'BHD 0.750'),
+    subtotal: formatPrice(order.subtotal || order.total || order.price || 'BHD 0.000'),
+    serviceFee: formatPrice(order.serviceFee || 'BHD 0.000'),
+    vat: formatPrice(order.vat || 'BHD 0.000'),
     vatLabel: 'VAT (10%)',
-    total: formatPrice(order.total || 'BHD 8.250'),
-    paid: order.paid || 'Yjeek Wallet',
+    total: formatPrice(order.total || order.price || 'BHD 0.000'),
+    paid: order.paid || order.paymentMethod || '—',
   }
 }
 

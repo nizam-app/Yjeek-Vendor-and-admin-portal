@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { LayoutGrid } from 'lucide-react'
 import { CalendarDateIcon } from '../../components/CalendarDateIcon'
 import ServicesCalendarView from '../../components/ServicesCalendarView'
@@ -6,7 +6,13 @@ import ServicesCalendarDayView from '../../components/ServicesCalendarDayView'
 import ServiceBookingModal from '../../components/ServiceBookingModal'
 import ServiceRejectBookingModal from '../../components/ServiceRejectBookingModal'
 import ServiceAcceptBookingModal from '../../components/ServiceAcceptBookingModal'
+import { useApiMutation } from '../../hooks/useApiMutation'
 import { useVendorServiceOrders } from '../../hooks/vendor/useVendorServiceOrders'
+import {
+  moveServiceBookingOnBoard,
+  removeServiceBookingFromBoard,
+} from '../../mappers/vendor/mapVendorServiceOrders'
+import { orderService } from '../../services/vendor/orderService'
 
 const tagTones = {
   blue: 'bg-[#e5f0ff] text-[#2978db]',
@@ -17,7 +23,23 @@ function stopCardAction(event) {
   event.stopPropagation()
 }
 
-function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
+function orderKey(order) {
+  return String(order?.backendId || order?.id || '')
+}
+
+function BookingCard({
+  order,
+  columnKey,
+  busyId,
+  onSelect,
+  onAccept,
+  onReject,
+  onCheckIn,
+  onNoShow,
+  onComplete,
+}) {
+  const busy = busyId && busyId === orderKey(order)
+
   if (order.noShow) {
     return (
       <div
@@ -44,6 +66,9 @@ function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
       </div>
     )
   }
+
+  const primaryAction = order.actions?.[0]
+  const secondaryAction = order.actions?.[1]
 
   return (
     <div className="flex w-full flex-col gap-[7px] rounded-[10px] bg-white p-3">
@@ -86,23 +111,35 @@ function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
         <div className="flex w-full gap-2">
           <button
             type="button"
-            className="flex-1 rounded-[8px] bg-green-primary px-3 py-2 text-xs font-medium text-white"
+            disabled={Boolean(busy)}
+            className="flex-1 rounded-[8px] bg-green-primary px-3 py-2 text-xs font-medium text-white disabled:opacity-60"
             onClick={(event) => {
               stopCardAction(event)
+              if (primaryAction === 'Check-in') {
+                onCheckIn?.({ order, columnKey })
+                return
+              }
               onAccept?.({ order, columnKey })
             }}
           >
-            {order.actions[0]}
+            {busy && (primaryAction === 'Accept' || primaryAction === 'Check-in')
+              ? '…'
+              : primaryAction}
           </button>
           <button
             type="button"
-            className="flex-1 rounded-[8px] border border-border bg-white px-3 py-2 text-xs font-medium text-danger"
+            disabled={Boolean(busy)}
+            className="flex-1 rounded-[8px] border border-border bg-white px-3 py-2 text-xs font-medium text-danger disabled:opacity-60"
             onClick={(event) => {
               stopCardAction(event)
+              if (secondaryAction === 'No Show') {
+                onNoShow?.({ order, columnKey })
+                return
+              }
               onReject?.({ order, columnKey })
             }}
           >
-            {order.actions[1]}
+            {busy && secondaryAction === 'No Show' ? '…' : secondaryAction}
           </button>
         </div>
       ) : null}
@@ -110,10 +147,14 @@ function BookingCard({ order, columnKey, onSelect, onAccept, onReject }) {
       {order.buttonLabel ? (
         <button
           type="button"
-          className="h-8 w-full rounded-[8px] bg-[#2e9e4d] text-[13px] font-medium text-white"
-          onClick={stopCardAction}
+          disabled={Boolean(busy)}
+          className="h-8 w-full rounded-[8px] bg-[#2e9e4d] text-[13px] font-medium text-white disabled:opacity-60"
+          onClick={(event) => {
+            stopCardAction(event)
+            onComplete?.({ order, columnKey })
+          }}
         >
-          {order.buttonLabel}
+          {busy ? '…' : order.buttonLabel}
         </button>
       ) : null}
     </div>
@@ -127,7 +168,19 @@ export default function Services() {
   const [rejectBooking, setRejectBooking] = useState(null)
   const [acceptedBooking, setAcceptedBooking] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const { data: serviceBookings, error, isLoading, refetch } = useVendorServiceOrders()
+  const [busyId, setBusyId] = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const [rejectError, setRejectError] = useState(null)
+
+  const { data: serviceBookings, error, isLoading, refetch, setData } = useVendorServiceOrders()
+
+  const { mutate: acceptOrder } = useApiMutation((orderId) => orderService.acceptOrder(orderId))
+  const { mutate: rejectOrderMutation } = useApiMutation(({ orderId, reason, note }) =>
+    orderService.rejectOrder(orderId, { reason, note }),
+  )
+  const { mutate: checkInService } = useApiMutation((orderId) => orderService.checkInService(orderId))
+  const { mutate: markNoShow } = useApiMutation((orderId) => orderService.markNoShow(orderId))
+  const { mutate: completeOrder } = useApiMutation((orderId) => orderService.completeOrder(orderId))
 
   const columnMeta = serviceBookings
     ? {
@@ -156,6 +209,158 @@ export default function Services() {
         }),
       },
     ]),
+  )
+
+  const handleAccept = useCallback(
+    async ({ order }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      setActionError(null)
+      setBusyId(String(orderId))
+      try {
+        const result = await acceptOrder(orderId)
+        const mapped = result?.data
+        const status = String(result?.raw?.status || mapped?.backendStatus || '').toUpperCase()
+        const to = status === 'AWAITING_PAYMENT' ? 'new' : 'upcoming'
+
+        setData((current) =>
+          moveServiceBookingOnBoard(current, {
+            from: 'new',
+            to,
+            orderId,
+            updater: () =>
+              mapped
+                ? {
+                    ...mapped,
+                    ...(to === 'new'
+                      ? {
+                          slaLabel: 'Accepted-Awaiting payment',
+                          actions: [],
+                          buttonLabel: undefined,
+                        }
+                      : {
+                          slaLabel: undefined,
+                          slaValue: undefined,
+                          actions: ['Check-in', 'No Show'],
+                          buttonLabel: undefined,
+                        }),
+                  }
+                : null,
+          }),
+        )
+        setAcceptedBooking(mapped || order)
+      } catch (err) {
+        setActionError(err)
+        refetch()
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [acceptOrder, refetch, setData],
+  )
+
+  const handleReject = useCallback(
+    async ({ reason, note }) => {
+      const order = rejectBooking
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setRejectError(new Error('Order id is missing.'))
+        return
+      }
+
+      setRejectError(null)
+      setBusyId(String(orderId))
+      try {
+        await rejectOrderMutation({ orderId, reason, note })
+        setData((current) => removeServiceBookingFromBoard(current, orderId))
+        setRejectBooking(null)
+      } catch (err) {
+        setRejectError(err)
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [rejectBooking, rejectOrderMutation, setData],
+  )
+
+  const handleCheckIn = useCallback(
+    async ({ order }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      setActionError(null)
+      setBusyId(String(orderId))
+      try {
+        const result = await checkInService(orderId)
+        setData((current) =>
+          moveServiceBookingOnBoard(current, {
+            from: 'upcoming',
+            to: 'inProgress',
+            orderId,
+            updater: () => result?.data || null,
+          }),
+        )
+      } catch (err) {
+        setActionError(err)
+        refetch()
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [checkInService, refetch, setData],
+  )
+
+  const handleNoShow = useCallback(
+    async ({ order }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      setActionError(null)
+      setBusyId(String(orderId))
+      try {
+        await markNoShow(orderId)
+        setData((current) => removeServiceBookingFromBoard(current, orderId))
+      } catch (err) {
+        setActionError(err)
+        refetch()
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [markNoShow, refetch, setData],
+  )
+
+  const handleComplete = useCallback(
+    async ({ order }) => {
+      const orderId = order?.backendId || order?.id
+      if (!orderId) {
+        setActionError(new Error('Order id is missing.'))
+        return
+      }
+
+      setActionError(null)
+      setBusyId(String(orderId))
+      try {
+        await completeOrder(orderId)
+        setData((current) => removeServiceBookingFromBoard(current, orderId))
+      } catch (err) {
+        setActionError(err)
+        refetch()
+      } finally {
+        setBusyId(null)
+      }
+    },
+    [completeOrder, refetch, setData],
   )
 
   if (view === 'board' && isLoading && !serviceBookings) {
@@ -195,6 +400,14 @@ export default function Services() {
                 Refresh failed.{' '}
                 <button type="button" onClick={refetch} className="underline">
                   Retry
+                </button>
+              </p>
+            ) : null}
+            {actionError ? (
+              <p className="text-[12px] text-danger">
+                {actionError.message || 'Action failed.'}{' '}
+                <button type="button" onClick={() => setActionError(null)} className="underline">
+                  Dismiss
                 </button>
               </p>
             ) : null}
@@ -262,9 +475,16 @@ export default function Services() {
                     key={`${order.backendId || order.id}-${idx}`}
                     order={order}
                     columnKey={key}
+                    busyId={busyId}
                     onSelect={setSelectedBooking}
-                    onAccept={({ order: acceptTarget }) => setAcceptedBooking(acceptTarget)}
-                    onReject={({ order: rejectTarget }) => setRejectBooking(rejectTarget)}
+                    onAccept={handleAccept}
+                    onReject={({ order: rejectTarget }) => {
+                      setRejectError(null)
+                      setRejectBooking(rejectTarget)
+                    }}
+                    onCheckIn={handleCheckIn}
+                    onNoShow={handleNoShow}
+                    onComplete={handleComplete}
                   />
                 ))
               )}
@@ -282,8 +502,15 @@ export default function Services() {
 
       <ServiceRejectBookingModal
         open={Boolean(rejectBooking)}
-        onClose={() => setRejectBooking(null)}
+        onClose={() => {
+          if (busyId) return
+          setRejectBooking(null)
+          setRejectError(null)
+        }}
         order={rejectBooking}
+        isSubmitting={busyId === orderKey(rejectBooking)}
+        error={rejectError}
+        onConfirm={handleReject}
       />
 
       <ServiceAcceptBookingModal

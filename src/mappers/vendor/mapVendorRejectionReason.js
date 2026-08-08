@@ -36,8 +36,18 @@ export const DINE_IN_REJECT_REASONS = [
   { code: 'OTHER', label: 'Other (please specify)' },
 ]
 
+/** @type {{ code: string, label: string }[]} */
+export const SERVICE_REJECT_REASONS = [
+  { code: 'SPECIALIST_UNAVAILABLE', label: 'Specialist unavailable that day' },
+  { code: 'CLOSED_FOR_DAY', label: 'Closed at the scheduled time' },
+  { code: 'FULLY_BOOKED', label: 'Fully booked for that time slot' },
+  { code: 'CANNOT_FULFILL', label: 'Cannot fulfil at the scheduled time' },
+  { code: 'BRANCH_UNAVAILABLE', label: 'Branch unavailable that day' },
+  { code: 'OTHER', label: 'Other (please specify)' },
+]
+
 const LABEL_TO_CODE = new Map(
-  [...DELIVERY_REJECT_REASONS, ...DINE_IN_REJECT_REASONS].map((item) => [
+  [...DELIVERY_REJECT_REASONS, ...DINE_IN_REJECT_REASONS, ...SERVICE_REJECT_REASONS].map((item) => [
     item.label.toLowerCase(),
     item.code,
   ]),

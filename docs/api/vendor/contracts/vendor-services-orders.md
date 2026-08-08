@@ -105,8 +105,17 @@ Confirmed from Postman. Real IDs are redacted.
 ## Unconfirmed
 
 - Calendar day booking list (individual booking rows)
-- Accept / Reject / Check-in / No-show / Complete POSTs
-- Full service-item field list beyond board sample
+- Full service-item field list beyond board/detail sample
+
+## Mutations (wired)
+
+| Action | Method / path |
+| --- | --- |
+| Accept | `POST /vendor-panel/orders/:id/accept` |
+| Reject | `POST /vendor-panel/orders/:id/reject` |
+| Check-in | `POST /vendor-panel/orders/:id/check-in` |
+| No-show | `POST /vendor-panel/orders/:id/no-show` |
+| Mark complete | `POST /vendor-panel/orders/:id/complete` |
 
 ## Modes
 
