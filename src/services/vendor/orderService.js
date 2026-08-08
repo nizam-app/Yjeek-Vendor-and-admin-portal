@@ -9,7 +9,10 @@ import { mapVendorScheduledOrdersResponse } from '../../mappers/vendor/mapVendor
 import { mapVendorOrderDetailResponse, mapVendorOrderHistoryResponse } from '../../mappers/vendor/mapVendorOrderHistory'
 import { mapVendorOrderReceiptResponse } from '../../mappers/vendor/mapVendorOrderReceipt'
 import { mapVendorServiceCalendarResponse } from '../../mappers/vendor/mapVendorServiceCalendar'
-import { mapVendorServiceOrdersResponse } from '../../mappers/vendor/mapVendorServiceOrders'
+import {
+  mapVendorServiceOrder,
+  mapVendorServiceOrdersResponse,
+} from '../../mappers/vendor/mapVendorServiceOrders'
 import { mapVendorRejectionReason } from '../../mappers/vendor/mapVendorRejectionReason'
 
 const LIVE_TAB_BY_BOARD = {
@@ -17,9 +20,22 @@ const LIVE_TAB_BY_BOARD = {
   dinein: 'dine_in',
 }
 
+function mapOrderMutationData(raw, columnKey = 'auto') {
+  if (!raw || typeof raw !== 'object') return null
+  const orderType = String(raw.orderType || '').toUpperCase()
+  try {
+    if (orderType === 'SERVICE') return mapVendorServiceOrder(raw, columnKey)
+    if (orderType === 'DINE_IN') return mapVendorDineInOrder(raw)
+    return mapVendorLiveOrder(raw)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Vendor orders service.
- * Confirmed: live boards, scheduled, services board, services calendar, history, order detail, receipt, accept, reject, start-preparing, mark-ready, complete.
+ * Confirmed: live boards, scheduled, services board/calendar, history, detail, receipt,
+ * accept, reject, start-preparing, check-in, mark-ready, complete, no-show.
  */
 export const orderService = {
   /**
@@ -138,12 +154,11 @@ export const orderService = {
     })
 
     const raw = response?.data ?? null
-    const orderType = String(raw?.orderType || '').toUpperCase()
-    const data =
-      orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
+    const status = String(raw?.status || '').toUpperCase()
+    const columnKey = status === 'AWAITING_PAYMENT' ? 'new' : 'upcoming'
 
     return {
-      data,
+      data: mapOrderMutationData(raw, columnKey),
       meta: response?.meta ?? null,
       raw,
     }
@@ -175,19 +190,9 @@ export const orderService = {
     })
 
     const raw = response?.data ?? null
-    let data = null
-    if (raw && typeof raw === 'object') {
-      try {
-        const orderType = String(raw.orderType || '').toUpperCase()
-        data =
-          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
-      } catch {
-        data = null
-      }
-    }
 
     return {
-      data,
+      data: mapOrderMutationData(raw),
       meta: response?.meta ?? null,
       raw,
     }
@@ -210,19 +215,59 @@ export const orderService = {
     })
 
     const raw = response?.data ?? null
-    let data = null
-    if (raw && typeof raw === 'object') {
-      try {
-        const orderType = String(raw.orderType || '').toUpperCase()
-        data =
-          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
-      } catch {
-        data = null
-      }
-    }
+    const orderType = String(raw?.orderType || '').toUpperCase()
+    const columnKey = orderType === 'SERVICE' ? 'inProgress' : 'auto'
 
     return {
-      data,
+      data: mapOrderMutationData(raw, columnKey),
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/check-in
+   * Service bookings only — moves confirmed → in progress.
+   */
+  async checkInService(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.checkIn(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+
+    return {
+      data: mapOrderMutationData(raw, 'inProgress'),
+      meta: response?.meta ?? null,
+      raw,
+    }
+  },
+
+  /**
+   * POST /vendor-panel/orders/:orderId/no-show
+   * Marks a confirmed booking as customer no-show (cancelled).
+   */
+  async markNoShow(orderId, options = {}) {
+    const id = String(orderId || '').trim()
+    if (!id) {
+      throw new Error('Order id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.vendor.orders.noShow(id), {}, {
+      ...options,
+      scope: 'vendor',
+    })
+
+    const raw = response?.data ?? null
+
+    return {
+      data: mapOrderMutationData(raw, 'upcoming'),
       meta: response?.meta ?? null,
       raw,
     }
@@ -311,19 +356,9 @@ export const orderService = {
     })
 
     const raw = response?.data ?? null
-    let data = null
-    if (raw && typeof raw === 'object') {
-      try {
-        const orderType = String(raw.orderType || '').toUpperCase()
-        data =
-          orderType === 'DINE_IN' ? mapVendorDineInOrder(raw) : mapVendorLiveOrder(raw)
-      } catch {
-        data = null
-      }
-    }
 
     return {
-      data,
+      data: mapOrderMutationData(raw),
       meta: response?.meta ?? null,
       raw,
     }
