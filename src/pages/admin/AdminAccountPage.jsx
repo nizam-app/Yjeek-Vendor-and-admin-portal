@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { isAdminRealApiFeature } from '../../api/config'
 import { useAuth } from '../../context/AuthContext'
 import { cn } from '../../components/admin/cn'
+import AdminTwoFactorSettings from './AdminTwoFactorSettings'
 
 const MOCK_ACCOUNT_PROFILE = {
   initials: 'SA',
@@ -202,6 +203,21 @@ export default function AdminAccountPage() {
               <InfoItem label="User ID" value={profile.userId} />
             </div>
           </Card>
+
+          {useReal ? (
+            <Card title="Security">
+              <AdminTwoFactorSettings
+                totpEnabled={Boolean(user?.role === 'admin' && user?.totpEnabled)}
+                onChanged={async () => {
+                  try {
+                    await refreshAdminSession()
+                  } catch {
+                    // Keep page usable; status refreshes on next visit.
+                  }
+                }}
+              />
+            </Card>
+          ) : null}
 
           <div className="flex justify-end pt-1">
             <button

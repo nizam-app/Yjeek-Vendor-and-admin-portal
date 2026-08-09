@@ -174,8 +174,16 @@ export const endpoints = {
       me: '/admin/auth/me',
       /** Confirmed: POST /admin/auth/logout */
       logout: '/admin/auth/logout',
-      // Unconfirmed response samples — add only after screenshots:
-      // verify2fa: '/admin/auth/2fa/verify',
+      /** Confirmed: POST /admin/auth/2fa/verify */
+      verify2fa: '/admin/auth/2fa/verify',
+      /** Confirmed: POST /admin/auth/2fa/setup */
+      setup2fa: '/admin/auth/2fa/setup',
+      /** Confirmed: POST /admin/auth/2fa/confirm */
+      confirm2fa: '/admin/auth/2fa/confirm',
+      /** Confirmed: POST /admin/auth/2fa/disable */
+      disable2fa: '/admin/auth/2fa/disable',
+      /** Confirmed: POST /admin/auth/2fa/backup-codes */
+      backupCodes2fa: '/admin/auth/2fa/backup-codes',
     },
     dashboard: {
       /** Confirmed: GET /admin/dashboard/overview?region= */
