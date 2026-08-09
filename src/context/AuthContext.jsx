@@ -16,7 +16,6 @@ const AuthContext = createContext(null)
 /** Shared session key — stores role-aware user: { email, name, role, ... } */
 const STORAGE_KEY = 'yjeek_auth'
 const PENDING_ADMIN_KEY = 'yjeek_pending_admin'
-export const ADMIN_DEMO_CODE = '396827'
 
 export const demoAccounts = {
   vendor: {
@@ -312,9 +311,12 @@ export function AuthProvider({ children }) {
             name: demoAccounts.admin.name,
             role: 'admin',
           }
-          sessionStorage.setItem(PENDING_ADMIN_KEY, JSON.stringify(next))
-          setPendingAdmin(next)
-          return { ...next, requiresTwoFactor: true }
+          clearVendorAuth()
+          persistUser(next)
+          setAccessToken(null, 'admin')
+          setAuthError(null)
+          setUser(next)
+          return next
         }
 
         // Vendor demo login — only while Vendor mock mode is on.
@@ -346,14 +348,37 @@ export function AuthProvider({ children }) {
         setUser(session.user)
         return session.user
       },
-      verifyAdmin(code) {
-        if (!pendingAdmin || code !== ADMIN_DEMO_CODE) return false
-        clearVendorAuth()
-        persistUser(pendingAdmin)
-        sessionStorage.removeItem(PENDING_ADMIN_KEY)
-        setUser(pendingAdmin)
-        setPendingAdmin(null)
-        return true
+      async verifyAdmin(code, options = {}) {
+        if (!pendingAdmin) {
+          throw new ApiError({ message: 'No pending admin verification session.' })
+        }
+
+        const trimmedCode = String(code ?? '').trim()
+        if (!trimmedCode) {
+          throw new ApiError({ message: 'Enter the verification code.' })
+        }
+
+        // Real Admin 2FA when auth feature is on and login returned a tempToken.
+        if (isAdminRealApiFeature('auth') && pendingAdmin.tempToken) {
+          const session = await adminAuthService.verify2fa({
+            tempToken: pendingAdmin.tempToken,
+            code: trimmedCode,
+            trustDevice: Boolean(options.trustDevice),
+          })
+
+          clearVendorAuth()
+          adminAuthService.persistSession(session)
+          persistUser(session.user)
+          sessionStorage.removeItem(PENDING_ADMIN_KEY)
+          setPendingAdmin(null)
+          setAuthError(null)
+          setUser(session.user)
+          return session.user
+        }
+
+        throw new ApiError({
+          message: 'Two-factor verification is not available for this session.',
+        })
       },
       cancelAdminLogin() {
         sessionStorage.removeItem(PENDING_ADMIN_KEY)

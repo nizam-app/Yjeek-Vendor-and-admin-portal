@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { isAdminRealApiFeature } from '../api/config'
-import { demoAccounts, useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/AuthContext'
 import { loginFeatures } from '../data/mockData'
 import { adminAuthService } from '../services/admin/authService'
 import { authService } from '../services/vendor/authService'
@@ -9,8 +9,8 @@ import { authService } from '../services/vendor/authService'
 export default function Login() {
   const { user, login, isAuthInitializing } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState(demoAccounts.vendor.email)
-  const [password, setPassword] = useState('password123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -44,13 +44,6 @@ export default function Login() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  function useDemo(account) {
-    if (isLoading) return
-    setEmail(account.email)
-    setPassword(account.password)
-    setError('')
   }
 
   const fieldInputClass = `w-full h-11 border rounded-md px-[14px] text-[13px] focus:outline-2 focus:outline-solid ${
@@ -109,27 +102,6 @@ export default function Login() {
               <span>{error}</span>
             </div>
           ) : null}
-
-          <div className="grid grid-cols-2 gap-2 mb-[18px]">
-            <button
-              type="button"
-              onClick={() => useDemo(demoAccounts.vendor)}
-              disabled={isLoading}
-              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg disabled:opacity-60 disabled:pointer-events-none"
-            >
-              <span className="block text-[11px] font-medium text-green-active-text">VENDOR DEMO</span>
-              <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.vendor.email}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => useDemo(demoAccounts.admin)}
-              disabled={isLoading}
-              className="rounded-md border border-border bg-white p-3 text-left hover:border-green-primary hover:bg-green-active-bg disabled:opacity-60 disabled:pointer-events-none"
-            >
-              <span className="block text-[11px] font-medium text-green-active-text">ADMIN DEMO</span>
-              <span className="mt-1 block truncate text-xs text-ink-muted">{demoAccounts.admin.email}</span>
-            </button>
-          </div>
 
           <div className="mb-[18px]">
             <label htmlFor="email" className="block text-[13px] font-medium tracking-[0.04em] text-ink-muted mb-[6px]">
