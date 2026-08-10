@@ -13,7 +13,7 @@ export function RequireRole({ role }) {
   if (isAuthInitializing) return null
 
   if (!user) {
-    return <Navigate to={role === 'admin' ? '/admin/login' : '/login'} replace />
+    return <Navigate to={role === 'admin' ? '/login' : '/vendor/login'} replace />
   }
   if (user.role !== role) {
     return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
@@ -32,8 +32,9 @@ function RoleHome() {
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/admin/login" element={<AdminLogin />} />
+      <Route path="/login" element={<AdminLogin />} />
+      <Route path="/vendor/login" element={<Login />} />
+      <Route path="/admin/login" element={<Navigate to="/login" replace />} />
       <Route path="/admin/verify" element={<AdminTwoFactor />} />
       <Route path="/" element={<RoleHome />} />
 

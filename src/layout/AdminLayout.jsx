@@ -106,7 +106,7 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
 
   function signOut() {
     logout()
-    navigate('/admin/login')
+    navigate('/login')
   }
 
   return (

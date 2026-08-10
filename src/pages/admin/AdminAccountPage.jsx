@@ -135,7 +135,7 @@ export default function AdminAccountPage() {
 
   function signOut() {
     logout()
-    navigate('/admin/login')
+    navigate('/login')
   }
 
   return (
