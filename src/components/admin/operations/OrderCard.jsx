@@ -40,7 +40,7 @@ function resolveOrderApiId(order) {
   return order?.orderId || String(order?.id || '').replace(/^#/, '') || null
 }
 
-export function OrderCard({ order, mode }) {
+export function OrderCard({ order, mode, onOrderClick }) {
   const navigate = useNavigate()
   const actionStyles = {
     green: 'border-[#19ad5b] bg-[#19ad5b] text-white',
@@ -49,7 +49,8 @@ export function OrderCard({ order, mode }) {
     blue: 'border-[#dcecf8] bg-[#e8f3fb] text-[#35729d]',
   }
 
-  const openAssignChamp = () => {
+  const openAssignChamp = (event) => {
+    event?.stopPropagation?.()
     const orderId = resolveOrderApiId(order)
     if (!orderId || mode !== 'scheduled') return
     navigate(`/admin/scheduled/assign/${encodeURIComponent(orderId)}`)
@@ -64,8 +65,24 @@ export function OrderCard({ order, mode }) {
     || isAssignAction
     || (typeof order.action === 'string' && /reassign/i.test(order.action))
 
+  const canOpenDetails = typeof onOrderClick === 'function'
+
   return (
-    <article className="rounded-[12px] border border-[#e1e5e2] bg-white p-[11px] shadow-[0_1px_2px_rgba(20,40,28,.04)]">
+    <article
+      role={canOpenDetails ? 'button' : undefined}
+      tabIndex={canOpenDetails ? 0 : undefined}
+      onClick={canOpenDetails ? () => onOrderClick(order) : undefined}
+      onKeyDown={canOpenDetails ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOrderClick(order)
+        }
+      } : undefined}
+      className={cn(
+        'rounded-[12px] border border-[#e1e5e2] bg-white p-[11px] shadow-[0_1px_2px_rgba(20,40,28,.04)]',
+        canOpenDetails && 'cursor-pointer transition hover:border-[#c9d2cc] hover:shadow-[0_2px_8px_rgba(20,40,28,.08)]',
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <b className="text-[11px]">{order.id}</b>
         <div className="flex flex-wrap items-center justify-end gap-1">
@@ -81,7 +98,7 @@ export function OrderCard({ order, mode }) {
       {order.action ? (
         <button
           type="button"
-          onClick={opensAssignPage ? openAssignChamp : undefined}
+          onClick={opensAssignPage ? openAssignChamp : (event) => event.stopPropagation()}
           className={cn(
             'mt-2 h-[26px] w-full rounded-[8px] border text-[9px] font-medium',
             order.actionTone ? actionStyles[order.actionTone] : 'border-[#dfe4e0] bg-white text-[#4e5a52]',
@@ -99,7 +116,15 @@ export function OrderCard({ order, mode }) {
         </div>
       ) : null}
       {order.note ? <p className="mt-1 text-[9px] leading-tight text-[#8a938d]">{order.note}</p> : null}
-      {order.footer ? <button className="mt-1.5 h-[24px] w-full rounded-[8px] bg-[#ff940f] text-[9px] font-medium text-white">{order.footer}</button> : null}
+      {order.footer ? (
+        <button
+          type="button"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-1.5 h-[24px] w-full rounded-[8px] bg-[#ff940f] text-[9px] font-medium text-white"
+        >
+          {order.footer}
+        </button>
+      ) : null}
     </article>
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TotpQrCode } from '../../components/admin/TotpQrCode'
 import { adminAuthService } from '../../services/admin/authService'
 
 function Field({ id, label, type = 'text', value, onChange, placeholder, disabled, autoComplete }) {
@@ -176,14 +177,13 @@ export default function AdminTwoFactorSettings({ totpEnabled, onChanged }) {
           ) : (
             <form className="space-y-3" onSubmit={confirmSetup}>
               <div className="rounded-[10px] border border-[#eceeec] bg-[#f7faf8] p-3">
-                <p className="text-[11.5px] text-[#7c8780]">Secret key</p>
-                <p className="mt-1 break-all font-mono text-[13px] font-semibold text-[#17231c]">{setup.secret}</p>
                 {setup.otpauthUrl ? (
-                  <>
-                    <p className="mt-3 text-[11.5px] text-[#7c8780]">otpauth URL (for QR)</p>
-                    <p className="mt-1 break-all font-mono text-[11px] text-[#405047]">{setup.otpauthUrl}</p>
-                  </>
+                  <div className="mb-3">
+                    <TotpQrCode otpauthUrl={setup.otpauthUrl} />
+                  </div>
                 ) : null}
+                <p className="text-[11.5px] text-[#7c8780]">Secret key (manual entry)</p>
+                <p className="mt-1 break-all font-mono text-[13px] font-semibold text-[#17231c]">{setup.secret}</p>
                 {setup.currentCode ? (
                   <p className="mt-3 text-[12px] text-[#147940]">
                     Dev current code: <strong>{setup.currentCode}</strong>
