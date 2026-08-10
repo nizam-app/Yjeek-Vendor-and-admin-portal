@@ -1,4 +1,8 @@
 import { ApiError } from '../../api/errors'
+import {
+  resolveAdminBoardFilters,
+  resolveAdminBoardRefreshSeconds,
+} from '../../lib/adminOpsBoardFilters'
 
 const COLUMN_META = [
   { id: 'critical', apiKey: 'critical', title: 'Critical', tone: 'red' },
@@ -42,7 +46,7 @@ export function mapAdminLiveOrderItem(item) {
     vendor: vendor?.name || '—',
     vendorArea: vendor?.area ?? null,
     vendorId: vendor?.id ?? null,
-    temperature: item.category || '—',
+    temperature: item.category ? String(item.category) : null,
     timeLeft: item.timeLeftLabel || (item.elapsedMin != null ? `${item.elapsedMin}m` : '—'),
     elapsedMin: item.elapsedMin ?? null,
     state: item.statusLabel || item.status || '—',
@@ -105,10 +109,10 @@ export function mapAdminLiveOrdersResponse(data) {
 
   return {
     activeOrderCount: Number(counts.all) || items.length,
-    refreshIntervalSeconds: null,
+    refreshIntervalSeconds: resolveAdminBoardRefreshSeconds(data),
     bucket: data.bucket ?? 'all',
     sort: data.sort ?? null,
-    filters: [],
+    filters: resolveAdminBoardFilters(data.filters),
     columns: COLUMN_META.map((column) => ({
       id: column.id,
       title: column.title,

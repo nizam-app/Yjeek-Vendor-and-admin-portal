@@ -212,6 +212,50 @@ export function mapAdminOrderDetailResponse(data) {
   const itemCount = summary.itemCount != null ? Number(summary.itemCount) : items.length
   const orderValue = formatAdminMoney(summary.orderValue ?? totals.totalAmount ?? payment?.amount, currency)
   const distanceKm = data.distanceKm == null || data.distanceKm === '' ? null : Number(data.distanceKm)
+  const schedule =
+    data.schedule && typeof data.schedule === 'object' ? data.schedule : null
+  const scheduleWindow =
+    data.windowLabel
+    || data.scheduledWindowLabel
+    || schedule?.windowLabel
+    || schedule?.label
+    || null
+  const isScheduled = data.fulfillmentType === 'SCHEDULED'
+  const distanceLabel = distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`
+
+  const liveSummaryRows = [
+    ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
+    ['Order value', orderValue],
+    ['Payment', formatPayment(payment)],
+    ['Distance', distanceLabel],
+    ['Pickup', formatPickup(locations.pickup)],
+    ['Drop-off', formatDropoff(locations.dropoff)],
+  ]
+
+  const scheduledSummaryRows = [
+    ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
+    ['Order value', orderValue],
+    ['Schedule', scheduleWindow ? String(scheduleWindow) : '—'],
+    ['Payment', formatPayment(payment)],
+    ['Distance', distanceLabel],
+    ['Pickup', formatPickup(locations.pickup)],
+    ['Drop-off', formatDropoff(locations.dropoff)],
+  ]
+
+  const liveTotalsRows = [
+    ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
+    ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
+    ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
+    ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
+  ]
+
+  const scheduledTotalsRows = [
+    ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
+    ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
+    ['VAT', formatAdminMoney(totals.vatAmount, currency)],
+    ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
+    ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
+  ]
 
   return {
     id: data.orderNumber || data.id,
@@ -224,6 +268,8 @@ export function mapAdminOrderDetailResponse(data) {
     orderType: data.orderType ?? null,
     fulfillmentType: data.fulfillmentType ?? null,
     fulfillmentLabel: fulfillment,
+    isScheduled,
+    scheduleWindow: scheduleWindow ? String(scheduleWindow) : null,
     placedAt: data.placedAt ?? null,
     placedClock: formatClock(data.placedAt),
     slaBreached: Boolean(data.slaBreached),
@@ -240,22 +286,10 @@ export function mapAdminOrderDetailResponse(data) {
     })(),
     remainingRefundable: computeRemainingRefundable(data, payment),
     currency,
-    distanceLabel: distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`,
-    summaryRows: [
-      ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
-      ['Order value', orderValue],
-      ['Payment', formatPayment(payment)],
-      ['Distance', distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`],
-      ['Pickup', formatPickup(locations.pickup)],
-      ['Drop-off', formatDropoff(locations.dropoff)],
-    ],
+    distanceLabel,
+    summaryRows: isScheduled ? scheduledSummaryRows : liveSummaryRows,
     items,
-    totalsRows: [
-      ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
-      ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
-      ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
-      ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
-    ],
+    totalsRows: isScheduled ? scheduledTotalsRows : liveTotalsRows,
     timeline: mapAdminOrderTimeline(data.timeline, data.status),
     customer: {
       name: customer?.name || '—',

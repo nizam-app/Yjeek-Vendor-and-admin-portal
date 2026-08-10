@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, RefreshCw, Search, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
@@ -8,9 +8,15 @@ import {
   ADMIN_BOARD_FULL_LIMIT,
   ADMIN_BOARD_PREVIEW_LIMIT,
 } from '../../../lib/adminBoardLimits'
+import {
+  ADMIN_OPS_BOARD_FILTERS,
+  chatMatchesOpsFilter,
+  filterOpsBoardColumns,
+} from '../../../lib/adminOpsBoardFilters'
 import { ApiState } from '../ApiState'
 import { Button } from '../Button'
 import { cn } from '../cn'
+import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminChatPanel } from './AdminChatPanel'
 import { AdminOpenChats } from './AdminOpenChats'
 import { AdminOpsOrderCard } from './AdminOpsOrderCard'
@@ -166,7 +172,18 @@ export function AdminIncidentBoard({
     setSelectedOrder(null)
     setIncidentOrder(null)
     setActiveChat(null)
+    setFilter('All orders')
   }, [boardTitle])
+
+  const refreshSeconds = Number(data?.refreshIntervalSeconds) || 0
+
+  useEffect(() => {
+    if (!refreshSeconds || refreshSeconds < 1 || typeof refetch !== 'function') return undefined
+    const intervalId = window.setInterval(() => {
+      refetch()
+    }, refreshSeconds * 1000)
+    return () => window.clearInterval(intervalId)
+  }, [refreshSeconds, refetch])
 
   const feedIncidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
   const incidents = feedIncidents.length > 0
@@ -179,6 +196,29 @@ export function AdminIncidentBoard({
   const chatsActive = feedChats.length > 0
     ? (chatsData?.active ?? feedChats.length)
     : chats.length
+
+  const filters = useMemo(() => {
+    const fromData = Array.isArray(data?.filters) ? data.filters : []
+    return fromData.length > 0 ? fromData : ADMIN_OPS_BOARD_FILTERS
+  }, [data?.filters])
+
+  const columns = useMemo(
+    () => filterOpsBoardColumns(Array.isArray(data?.columns) ? data.columns : [], filter),
+    [data?.columns, filter],
+  )
+
+  const visibleChats = useMemo(
+    () => chats.filter((chat) => chatMatchesOpsFilter(chat, filter)),
+    [chats, filter],
+  )
+  const visibleChatsActive = filter === 'All orders'
+    ? chatsActive
+    : visibleChats.length
+
+  const refreshKey = useMemo(() => {
+    if (!data) return '0'
+    return `${data.activeCount}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
+  }, [data, columns, isLoading])
 
   function handleChatMarkedRead(conversationId) {
     setChatsData((current) => {
@@ -263,9 +303,6 @@ export function AdminIncidentBoard({
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
-  const filters = Array.isArray(data.filters) ? data.filters : []
-  const columns = Array.isArray(data.columns) ? data.columns : []
-
   return (
     <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
@@ -275,11 +312,10 @@ export function AdminIncidentBoard({
               <h2 className="text-[14px] font-bold text-[#17231c]">
                 {data.activeCount} {data.activeLabel}
               </h2>
-              {data.refreshIntervalSeconds ? (
-                <span className="rounded-full bg-[#e4f5e9] px-2.5 py-1 text-[10px] font-medium text-[#188248]">
-                  ● auto-refresh {data.refreshIntervalSeconds}s
-                </span>
-              ) : null}
+              <AdminAutoRefreshBadge
+                intervalSeconds={data.refreshIntervalSeconds}
+                resetKey={refreshKey}
+              />
             </div>
             <div className="flex gap-2">
               <Button className="h-[31px] px-3">All vendors ▾</Button>
@@ -289,26 +325,22 @@ export function AdminIncidentBoard({
             </div>
           </div>
 
-          {filters.length > 0 ? (
-            <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
-              <span>Filter:</span>
-              {filters.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setFilter(item)}
-                  className={cn(
-                    'h-[26px] rounded-full border px-3 font-medium',
-                    filter === item ? 'border-[#15904a] bg-white text-[#14763f]' : 'border-[#d9dfdb] bg-white text-[#657068]',
-                  )}
-                >
-                  {item !== 'All orders' ? '💬 ' : ''}{item}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="mb-3 mt-3" />
-          )}
+          <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
+            <span>Filter:</span>
+            {filters.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setFilter(item)}
+                className={cn(
+                  'h-[26px] rounded-full border px-3 font-medium',
+                  filter === item ? 'border-[#15904a] bg-white text-[#14763f]' : 'border-[#d9dfdb] bg-white text-[#657068]',
+                )}
+              >
+                {item !== 'All orders' ? '💬 ' : ''}{item}
+              </button>
+            ))}
+          </div>
 
           <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
             {columns.map((column) => {
@@ -369,7 +401,7 @@ export function AdminIncidentBoard({
         <OpsIncidentsSidebar incidents={incidents} />
       </div>
 
-      <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={setActiveChat} />
+      <AdminOpenChats chats={visibleChats} activeCount={visibleChatsActive} onChatClick={setActiveChat} />
       {modals}
     </div>
   )

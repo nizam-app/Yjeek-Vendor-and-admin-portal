@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Login from '../pages/Login'
+import AdminLogin from '../pages/admin/AdminLogin'
 import AdminTwoFactor from '../pages/admin/AdminTwoFactor'
 import { adminRoutes } from './AdminRoutes'
 import { vendorRoutes } from './VendorRoutes'
@@ -11,7 +12,9 @@ export function RequireRole({ role }) {
   // Wait for Vendor Get Me restoration so protected routes do not flash /login.
   if (isAuthInitializing) return null
 
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    return <Navigate to={role === 'admin' ? '/admin/login' : '/login'} replace />
+  }
   if (user.role !== role) {
     return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/dashboard'} replace />
   }
@@ -30,6 +33,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin/verify" element={<AdminTwoFactor />} />
       <Route path="/" element={<RoleHome />} />
 

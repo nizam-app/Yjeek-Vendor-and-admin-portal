@@ -17,6 +17,7 @@ import {
   ADMIN_BOARD_PREVIEW_LIMIT,
 } from '../../../lib/adminBoardLimits'
 import { emptyAdminScheduledCalendar } from '../../../mappers/admin/mapAdminScheduledCalendar'
+import { AdminOrderDetailModal } from './AdminLiveOrdersPage'
 
 const useAdminMocks = () => apiConfig.adminUseMockApi
 
@@ -75,6 +76,7 @@ function AdminOperationsBoard({ mode }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const viewParamRaw = searchParams.get('view')
   const viewParam = normalizeScheduledView(viewParamRaw)
+  const [selectedOrder, setSelectedOrder] = useState(null)
   const [view, setView] = useState(() => (
     mode === 'scheduled' && viewParam
       ? viewParam
@@ -164,7 +166,12 @@ function AdminOperationsBoard({ mode }) {
                   </div>
                   <div className="space-y-2">
                     {previewCards.map((order, index) => (
-                      <OrderCard key={`${column.key}-${order.id}-${index}`} order={order} mode={mode} />
+                      <OrderCard
+                        key={`${column.key}-${order.id}-${index}`}
+                        order={order}
+                        mode={mode}
+                        onOrderClick={mode === 'scheduled' ? setSelectedOrder : undefined}
+                      />
                     ))}
                     {cards.length > ADMIN_BOARD_PREVIEW_LIMIT && columnHref ? (
                       <Link
@@ -183,6 +190,13 @@ function AdminOperationsBoard({ mode }) {
         </>
       )}
       {view === 'Calendar' && mode === 'scheduled' ? null : <ChatStrip chats={chats} activeCount={chatsActive} />}
+      {selectedOrder ? (
+        <AdminOrderDetailModal
+          order={selectedOrder}
+          preference="scheduled"
+          onClose={() => setSelectedOrder(null)}
+        />
+      ) : null}
     </div>
   )
 }

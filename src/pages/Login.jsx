@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { isAdminRealApiFeature } from '../api/config'
 import { useAuth } from '../context/AuthContext'
 import { loginFeatures } from '../data/mockData'
-import { adminAuthService } from '../services/admin/authService'
 import { authService } from '../services/vendor/authService'
 
 export default function Login() {
@@ -31,16 +29,9 @@ export default function Login() {
         setError('Incorrect email or password. Please recheck and try again.')
         return
       }
-      if (nextUser.requiresTwoFactor) {
-        navigate('/admin/verify')
-        return
-      }
-      navigate(nextUser.role === 'admin' ? '/admin/dashboard' : '/dashboard')
+      navigate('/dashboard')
     } catch (err) {
-      const message = isAdminRealApiFeature('auth')
-        ? adminAuthService.getLoginErrorMessage(err)
-        : authService.getLoginErrorMessage(err)
-      setError(message)
+      setError(authService.getLoginErrorMessage(err))
     } finally {
       setIsLoading(false)
     }
@@ -64,7 +55,7 @@ export default function Login() {
               onError={(e) => { e.currentTarget.style.display = 'none' }}
             />
           </div>
-          <div className="text-[11px] font-bold text-green-soft tracking-[0.06em] mt-1">VENDOR &amp; ADMIN PORTAL</div>
+          <div className="text-[11px] font-bold text-green-soft tracking-[0.06em] mt-1">VENDOR PORTAL</div>
         </div>
         <h1 className="text-[20px] font-bold leading-[1.25] max-w-[426px]">
           Run your Store, your branches,
@@ -86,7 +77,7 @@ export default function Login() {
           <div className="flex justify-between items-start mb-[18px]">
             <div>
               <h2 className="text-xl font-bold">Welcome back</h2>
-              <p className="mt-[2px] text-[14px] font-normal text-ink-muted">Sign in to your Yjeek workspace</p>
+              <p className="mt-[2px] text-[14px] font-normal text-ink-muted">Sign in to your vendor workspace</p>
             </div>
             <button
               type="button"

@@ -22,7 +22,7 @@ export default function AdminTwoFactor() {
   const [isLoading, setIsLoading] = useState(false)
 
   if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />
-  if (!pendingAdmin) return <Navigate to="/login" replace />
+  if (!pendingAdmin) return <Navigate to="/admin/login" replace />
 
   function updateDigit(index, value) {
     const digit = value.replace(/\D/g, '').slice(-1)
@@ -82,7 +82,7 @@ export default function AdminTwoFactor() {
   function returnToLogin() {
     if (isLoading) return
     cancelAdminLogin()
-    navigate('/login', { replace: true })
+    navigate('/admin/login', { replace: true })
   }
 
   function toggleBackupMode() {

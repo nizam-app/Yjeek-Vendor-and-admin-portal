@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { UNAUTHORIZED_EVENT } from '../api/client'
 import { apiConfig, isAdminRealApiFeature } from '../api/config'
-import { ApiError, API_ERROR_TYPES } from '../api/errors'
+import { ApiError } from '../api/errors'
 import {
   clearAdminAuth,
   clearVendorAuth,
@@ -108,18 +108,6 @@ function clearAdminSessionState() {
     localStorage.removeItem(STORAGE_KEY)
   }
   sessionStorage.removeItem(PENDING_ADMIN_KEY)
-}
-
-function isCredentialAuthFailure(error) {
-  if (!(error instanceof ApiError)) return false
-  return (
-    error.status === 401 ||
-    error.status === 400 ||
-    error.status === 403 ||
-    error.type === API_ERROR_TYPES.UNAUTHORIZED ||
-    error.type === API_ERROR_TYPES.VALIDATION ||
-    error.type === API_ERROR_TYPES.FORBIDDEN
-  )
 }
 
 export function AuthProvider({ children }) {
@@ -269,56 +257,6 @@ export function AuthProvider({ children }) {
         const trimmedEmail = String(email ?? '').trim()
         const normalizedEmail = trimmedEmail.toLowerCase()
 
-        // Admin real login (feature-scoped). Falls through to Vendor on credential failure.
-        if (isAdminRealApiFeature('auth')) {
-          try {
-            const session = await adminAuthService.login({
-              email: trimmedEmail,
-              password,
-            })
-
-            if (session.requires2fa) {
-              const pending = {
-                ...(session.user || {
-                  email: trimmedEmail,
-                  name: 'Admin',
-                }),
-                role: 'admin',
-                tempToken: session.tempToken || null,
-              }
-              sessionStorage.setItem(PENDING_ADMIN_KEY, JSON.stringify(pending))
-              setPendingAdmin(pending)
-              return { ...pending, requiresTwoFactor: true }
-            }
-
-            clearVendorAuth()
-            adminAuthService.persistSession(session)
-            persistUser(session.user)
-            setAuthError(null)
-            setUser(session.user)
-            return session.user
-          } catch (error) {
-            if (!isCredentialAuthFailure(error)) throw error
-            // Credential failure → try Vendor path below (shared login form).
-          }
-        } else if (
-          normalizedEmail === demoAccounts.admin.email &&
-          password === demoAccounts.admin.password
-        ) {
-          // Admin demo login — only while Admin auth feature is not on real API.
-          const next = {
-            email: demoAccounts.admin.email,
-            name: demoAccounts.admin.name,
-            role: 'admin',
-          }
-          clearVendorAuth()
-          persistUser(next)
-          setAccessToken(null, 'admin')
-          setAuthError(null)
-          setUser(next)
-          return next
-        }
-
         // Vendor demo login — only while Vendor mock mode is on.
         if (apiConfig.vendorUseMockApi) {
           const vendorDemo = demoAccounts.vendor
@@ -348,6 +286,60 @@ export function AuthProvider({ children }) {
         setUser(session.user)
         return session.user
       },
+      async loginAdmin(email, password, options = {}) {
+        const trimmedEmail = String(email ?? '').trim()
+        const normalizedEmail = trimmedEmail.toLowerCase()
+
+        // Admin real login (feature-scoped).
+        if (isAdminRealApiFeature('auth')) {
+          const session = await adminAuthService.login({
+            email: trimmedEmail,
+            password,
+          })
+
+          if (session.requires2fa) {
+            const pending = {
+              ...(session.user || {
+                email: trimmedEmail,
+                name: 'Admin',
+              }),
+              role: 'admin',
+              tempToken: session.tempToken || null,
+              trustDevice: Boolean(options.trustDevice),
+            }
+            sessionStorage.setItem(PENDING_ADMIN_KEY, JSON.stringify(pending))
+            setPendingAdmin(pending)
+            return { ...pending, requiresTwoFactor: true }
+          }
+
+          clearVendorAuth()
+          adminAuthService.persistSession(session)
+          persistUser(session.user)
+          setAuthError(null)
+          setUser(session.user)
+          return session.user
+        }
+
+        // Admin demo login — only while Admin auth feature is not on real API.
+        if (
+          normalizedEmail === demoAccounts.admin.email
+          && password === demoAccounts.admin.password
+        ) {
+          const next = {
+            email: demoAccounts.admin.email,
+            name: demoAccounts.admin.name,
+            role: 'admin',
+          }
+          clearVendorAuth()
+          persistUser(next)
+          setAccessToken(null, 'admin')
+          setAuthError(null)
+          setUser(next)
+          return next
+        }
+
+        return null
+      },
       async verifyAdmin(code, options = {}) {
         if (!pendingAdmin) {
           throw new ApiError({ message: 'No pending admin verification session.' })
@@ -363,7 +355,9 @@ export function AuthProvider({ children }) {
           const session = await adminAuthService.verify2fa({
             tempToken: pendingAdmin.tempToken,
             code: trimmedCode,
-            trustDevice: Boolean(options.trustDevice),
+            trustDevice: options.trustDevice != null
+              ? Boolean(options.trustDevice)
+              : Boolean(pendingAdmin.trustDevice),
           })
 
           clearVendorAuth()

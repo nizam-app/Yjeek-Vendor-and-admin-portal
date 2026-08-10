@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, Clock3, RefreshCw, Search } from 'lucide-react'
-import motoBike from '../../../assets/moto_bike.png'
+import { ArrowUpRight, RefreshCw, Search } from 'lucide-react'
 import { useAdminLiveOrders } from '../../../hooks/admin/useAdminLiveOrders'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
@@ -26,102 +25,23 @@ import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal
 import { adminOrderService } from '../../../services/admin/orderService'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import { AdminOpsOrderCard } from '../../../components/admin/operations/AdminOpsOrderCard'
+import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
 import {
   ADMIN_BOARD_FULL_LIMIT,
   ADMIN_BOARD_PREVIEW_LIMIT,
 } from '../../../lib/adminBoardLimits'
+import {
+  ADMIN_OPS_BOARD_FILTERS,
+  chatMatchesOpsFilter,
+  filterOpsBoardColumns,
+} from '../../../lib/adminOpsBoardFilters'
 
 const DEFAULT_RESOLVE_OUTCOME = 'Resolved with refund'
 
-function AdminLiveOrderCard({ order, tone, onIncidentClick, onContactClick, onOrderClick }) {
-  const contactTypes =
-    Array.isArray(order.contactTypes) && order.contactTypes.length > 0
-      ? order.contactTypes
-      : order.contactType
-        ? [order.contactType]
-        : []
-
-  return (
-    <article
-      role="button"
-      tabIndex={0}
-      onClick={() => onOrderClick?.(order)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOrderClick?.(order)
-        }
-      }}
-      className="h-[112px] cursor-pointer rounded-[9px] border border-[#dde3df] bg-white p-2.5 shadow-[0_1px_2px_rgba(20,40,28,.03)] transition hover:border-[#a9cdb5] hover:shadow-[0_3px_8px_rgba(20,40,28,.08)] focus:outline-none focus:ring-2 focus:ring-[#1a9b53]/20"
-    >
-      <div className="flex items-center gap-2">
-        <strong className="min-w-0 flex-1 truncate text-[11px] font-bold">{order.id}</strong>
-        <span className={cn(
-          'shrink-0 text-[9px] font-medium',
-          order.temperature === 'Hot food'
-            ? 'rounded-full bg-[#fff0e8] px-1.5 py-0.5 text-[#ff5b2d]'
-            : 'text-[#6f7973]',
-        )}>{order.temperature}</span>
-        {order.schedule ? <span className="rounded bg-[#eee8ff] px-1 text-[9px] font-medium text-[#7055aa]">{order.schedule}</span> : null}
-        <span className={cn('flex items-center gap-0.5 text-[10px] font-medium', tone === 'red' ? 'text-[#d13f45]' : tone === 'yellow' ? 'text-[#c68618]' : 'text-[#c68618]')}>
-          <Clock3 size={11} /> {order.timeLeft}
-        </span>
-      </div>
-      <p className="mt-1.5 truncate text-[11px] font-bold">{order.vendor}</p>
-      <div className="mt-1 flex items-center gap-1.5">
-        <span className={cn(
-          'max-w-[112px] truncate rounded-md px-2 py-1 text-[9px] font-medium',
-          order.state.startsWith('Preparing') && 'bg-[#fff3d8] text-[#a97013]',
-          order.state.startsWith('Ready') && 'bg-[#e4efff] text-[#3470ae]',
-          order.state.startsWith('Picked') && 'bg-[#e4efff] text-[#3470ae]',
-          order.state.startsWith('On the way') && 'bg-[#e5f5eb] text-[#24834e]',
-          (order.state.startsWith('Accepted') || order.state.startsWith('Assigned') || order.state.startsWith('Pending')) && 'bg-[#fff3d8] text-[#a97013]',
-          order.state.toLowerCase().startsWith('placed') && 'bg-[#f0f2f0] text-[#59655e]',
-        )}>{order.state}</span>
-      </div>
-      <div className="mt-1 flex items-center gap-1.5">
-        {order.hasIncident ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onIncidentClick?.(order)
-            }}
-            className="rounded-[9px] bg-[#fdebec] px-2 py-1 text-[9px] font-medium text-[#DB2626] transition hover:bg-[#f9d9da] focus:outline-none focus:ring-2 focus:ring-danger/25"
-          >
-            Incident
-          </button>
-        ) : null}
-        {contactTypes.map((contactType) => (
-          <button
-            key={contactType}
-            type="button"
-            disabled={!order.conversationId}
-            title={order.conversationId ? `Open ${contactType} chat` : 'No conversation yet'}
-            onClick={(event) => {
-              event.stopPropagation()
-              if (!order.conversationId) return
-              onContactClick?.(order, contactType)
-            }}
-            className={cn(
-              'rounded-[9px] px-2 py-1 text-[9px] font-medium transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50',
-              contactType === 'Champ' ? 'bg-[#e5efff] text-[#3470ae]' : 'bg-[#eee8ff] text-[#7454ad]',
-            )}
-          >
-            💬 {contactType}
-          </button>
-        ))}
-      </div>
-      <p className="mt-1 flex items-center gap-1 truncate text-[9px] font-medium text-[#2f3933]">
-        <img src={motoBike} alt="" className="h-3 w-3 shrink-0 object-contain" />
-        <span className="truncate">{order.rider.name}</span>
-      </p>
-    </article>
-  )
-}
-
-export function AdminOrderDetailModal({ order, onClose }) {
+export function AdminOrderDetailModal({ order, onClose, preference = 'live' }) {
   const orderId = order?.orderId || null
+  const isScheduledPreference = preference === 'scheduled'
   const { data: detail, error, isLoading, refetch } = useAdminOrderDetail(orderId)
   const {
     data: dispatchAttempts,
@@ -151,6 +71,35 @@ export function AdminOrderDetailModal({ order, onClose }) {
     )
   }
 
+  const scheduleWindow =
+    detail?.scheduleWindow
+    || order?.slot
+    || order?.windowLabel
+    || order?.window
+    || null
+
+  const summaryRows = (() => {
+    if (!detail) return []
+    if (!isScheduledPreference) return detail.summaryRows
+
+    const withWindow = detail.summaryRows.map(([label, value]) => (
+      label === 'Schedule' && (!value || value === '—') && scheduleWindow
+        ? [label, scheduleWindow]
+        : [label, value]
+    ))
+
+    if (withWindow.some(([label]) => label === 'Schedule')) return withWindow
+
+    const rows = [...withWindow]
+    const insertAt = Math.max(0, rows.findIndex(([label]) => label === 'Order value') + 1)
+    rows.splice(insertAt, 0, ['Schedule', scheduleWindow || '—'])
+    return rows
+  })()
+
+  const fulfillmentLine = isScheduledPreference
+    ? (detail?.fulfillmentLabel || 'scheduled')
+    : detail?.fulfillmentLabel
+
   return (
     <div
       className="fixed inset-0 z-110 flex items-center justify-center overflow-y-auto bg-[rgba(20,25,22,.47)] p-4"
@@ -176,12 +125,13 @@ export function AdminOrderDetailModal({ order, onClose }) {
               <header className="relative pr-8">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 id="admin-order-title" className="text-[13px] font-bold">Order #{detail.orderNumber || detail.id}</h2>
-                  <Badge tone="yellow">{detail.statusLabel}</Badge>
+                  <Badge tone={isScheduledPreference ? 'blue' : 'yellow'}>{detail.statusLabel}</Badge>
                   {detail.category ? <span className="rounded-full bg-[#fff0e8] px-2 py-1 text-[9px] font-medium text-[#e36831]">{detail.category}</span> : null}
                 </div>
                 <p className="mt-1 text-[9px] text-[#818a84]">
                   {detail.vendor.name}
-                  {detail.fulfillmentLabel ? ` · ${detail.fulfillmentLabel}` : ''}
+                  {fulfillmentLine ? ` · ${fulfillmentLine}` : ''}
+                  {isScheduledPreference && scheduleWindow ? ` · ${scheduleWindow}` : ''}
                   {detail.placedClock && detail.placedClock !== '—' ? ` · placed ${detail.placedClock}` : ''}
                 </p>
                 <button type="button" onClick={onClose} aria-label="Close order details" className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full text-[19px] font-light text-[#77817b] hover:bg-[#f1f3f1]">×</button>
@@ -189,14 +139,18 @@ export function AdminOrderDetailModal({ order, onClose }) {
 
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge tone="blue">Stage: {detail.stageLabel}</Badge>
-                {order.timeLeft ? <Badge tone="yellow">ETA {order.timeLeft}</Badge> : null}
+                {isScheduledPreference ? (
+                  scheduleWindow ? <Badge tone="yellow">Window {scheduleWindow}</Badge> : null
+                ) : (
+                  order.timeLeft ? <Badge tone="yellow">ETA {order.timeLeft}</Badge> : null
+                )}
               </div>
 
               <div className="mt-2 grid grid-cols-2 gap-2 max-[520px]:grid-cols-1">
                 <section className="rounded-md border border-[#dfe4e0] p-2.5">
                   <h3 className="text-[10px] font-bold">Order details</h3>
                   <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-[9px]">
-                    {detail.summaryRows.map(([label, value]) => (
+                    {summaryRows.map(([label, value]) => (
                       <div key={label}><p className="text-[#7d8781]">{label}</p><p className="font-medium">{value}</p></div>
                     ))}
                   </div>
@@ -711,7 +665,7 @@ function AdminLiveOrdersFullView({ column, chats, chatsActive, onBack, onInciden
 
       <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
         {orders.map((order) => (
-          <AdminLiveOrderCard
+          <AdminOpsOrderCard
             key={order.orderId || order.id}
             order={order}
             tone={column.tone}
@@ -760,6 +714,15 @@ export default function AdminLiveOrdersPage() {
   }
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+
+  const filters = Array.isArray(data.filters) && data.filters.length > 0
+    ? data.filters
+    : ADMIN_OPS_BOARD_FILTERS
+
+  const columns = filterOpsBoardColumns(data.columns, filter)
+  const visibleChats = chats.filter((chat) => chatMatchesOpsFilter(chat, filter))
+  const visibleChatsActive = filter === 'All orders' ? chatsActive : visibleChats.length
+  const refreshKey = `${data.activeOrderCount}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
 
   const openOrderChat = (order, preferredRole) => {
     const conversationId = order?.conversationId
@@ -823,11 +786,10 @@ export default function AdminLiveOrdersPage() {
           <div className="flex h-[32px] items-start justify-between">
             <div className="flex items-center gap-2.5">
               <h2 className="text-[14px] font-bold">{data.activeOrderCount} active orders</h2>
-              {data.refreshIntervalSeconds ? (
-                <span className="rounded-full bg-[#e4f5e9] px-2 py-1 text-[10px] font-medium text-[#188248]">
-                  ● auto-refresh {data.refreshIntervalSeconds}s
-                </span>
-              ) : null}
+              <AdminAutoRefreshBadge
+                intervalSeconds={data.refreshIntervalSeconds}
+                resetKey={refreshKey}
+              />
             </div>
             <div className="flex gap-3">
               <Button className="h-[31px] px-3">All vendors⌄</Button>
@@ -839,9 +801,10 @@ export default function AdminLiveOrdersPage() {
 
           <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
             <span>Filter:</span>
-            {data.filters.map((item) => (
+            {filters.map((item) => (
               <button
                 key={item}
+                type="button"
                 onClick={() => setFilter(item)}
                 className={cn(
                   'h-[26px] rounded-full border px-3 font-medium',
@@ -854,7 +817,7 @@ export default function AdminLiveOrdersPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">
-            {data.columns.map((column) => (
+            {columns.map((column) => (
               <section key={column.title} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
                 <div className="flex h-[22px] items-center gap-2">
                   <span className={cn(
@@ -876,7 +839,7 @@ export default function AdminLiveOrdersPage() {
                 </div>
                 <div className="mt-2 space-y-2.5">
                   {column.orders.slice(0, ADMIN_BOARD_PREVIEW_LIMIT).map((order, index) => (
-                    <AdminLiveOrderCard
+                    <AdminOpsOrderCard
                       key={`${column.title}-${order.id}-${index}`}
                       order={order}
                       tone={column.tone}
@@ -903,7 +866,7 @@ export default function AdminLiveOrdersPage() {
         <OpsIncidentsSidebar incidents={incidents} />
       </div>
 
-      <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={setActiveChat} />
+      <AdminOpenChats chats={visibleChats} activeCount={visibleChatsActive} onChatClick={setActiveChat} />
       {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
       {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
       {activeChat ? (

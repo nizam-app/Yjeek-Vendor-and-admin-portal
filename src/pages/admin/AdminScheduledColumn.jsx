@@ -4,6 +4,7 @@ import { ArrowLeft, Bell, Check, Search, Zap } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
 import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
 import { ApiState } from '../../components/admin/ApiState'
+import { AdminOrderDetailModal } from './operations/AdminLiveOrdersPage'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -59,7 +60,7 @@ function statusBadge(order) {
   return { label: 'Awaiting', tone: 'bg-[#fff3d6] text-[#9a6d12]' }
 }
 
-function ColumnOrderCard({ order, onAssign }) {
+function ColumnOrderCard({ order, onAssign, onOrderClick }) {
   const status = statusBadge(order)
   const typeTag = order.tags?.find((tag) => !tag.includes('Special') && tag !== 'Normal' && tag !== 'Incident' && tag !== 'Champ')
     || order.deliverySpeedLabel
@@ -72,9 +73,24 @@ function ColumnOrderCard({ order, onAssign }) {
   const showReassign = actionCode === 'REASSIGN_CHAMP'
   const showBanner = Boolean(order.timer)
   const showForcePickup = Boolean(order.footer)
+  const canOpenDetails = typeof onOrderClick === 'function'
 
   return (
-    <article className="rounded-[12px] border border-[#e4e8e4] bg-white p-4 shadow-[0_1px_3px_rgba(20,40,28,.05)]">
+    <article
+      role={canOpenDetails ? 'button' : undefined}
+      tabIndex={canOpenDetails ? 0 : undefined}
+      onClick={canOpenDetails ? () => onOrderClick(order) : undefined}
+      onKeyDown={canOpenDetails ? (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOrderClick(order)
+        }
+      } : undefined}
+      className={cn(
+        'rounded-[12px] border border-[#e4e8e4] bg-white p-4 shadow-[0_1px_3px_rgba(20,40,28,.05)]',
+        canOpenDetails && 'cursor-pointer transition hover:border-[#c9d2cc] hover:shadow-[0_2px_8px_rgba(20,40,28,.08)]',
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <b className="text-[13px] font-bold text-[#17231c]">{order.id}</b>
         <span className={cn('rounded-[6px] px-2 py-0.5 text-[10px] font-medium', status.tone)}>{status.label}</span>
@@ -119,7 +135,11 @@ function ColumnOrderCard({ order, onAssign }) {
       </p>
 
       {showRemind ? (
-        <button type="button" className="mt-3.5 flex h-[32px] w-full items-center justify-center gap-1.5 rounded-[8px] border border-[#dfe4e0] bg-white text-[11px] font-medium text-[#17231c]">
+        <button
+          type="button"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-3.5 flex h-[32px] w-full items-center justify-center gap-1.5 rounded-[8px] border border-[#dfe4e0] bg-white text-[11px] font-medium text-[#17231c]"
+        >
           <Bell size={13} className="text-[#e0a020]" /> Remind champ
         </button>
       ) : null}
@@ -127,7 +147,10 @@ function ColumnOrderCard({ order, onAssign }) {
       {showReassign ? (
         <button
           type="button"
-          onClick={() => onAssign?.(order)}
+          onClick={(event) => {
+            event.stopPropagation()
+            onAssign?.(order)
+          }}
           className="mt-3.5 h-[32px] w-full rounded-[8px] bg-[#e12e32] text-[11px] font-medium text-white hover:brightness-[0.97]"
         >
           Reassign champ
@@ -137,7 +160,10 @@ function ColumnOrderCard({ order, onAssign }) {
       {showAssign && order.action ? (
         <button
           type="button"
-          onClick={() => onAssign?.(order)}
+          onClick={(event) => {
+            event.stopPropagation()
+            onAssign?.(order)
+          }}
           className={cn(
             'mt-3.5 h-[32px] w-full rounded-[8px] text-[11px] font-medium',
             order.actionTone === 'green' && 'bg-[#19ad5b] text-white',
@@ -159,7 +185,11 @@ function ColumnOrderCard({ order, onAssign }) {
       ) : null}
 
       {showForcePickup ? (
-        <button type="button" className="mt-2 h-[30px] w-full rounded-[8px] bg-[#ff940f] text-[11px] font-medium text-white">
+        <button
+          type="button"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-2 h-[30px] w-full rounded-[8px] bg-[#ff940f] text-[11px] font-medium text-white"
+        >
           {order.footer}
         </button>
       ) : null}
@@ -171,6 +201,7 @@ export function AdminScheduledColumn() {
   const { columnKey } = useParams()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [selectedOrder, setSelectedOrder] = useState(null)
   const { data, error, isLoading, refetch } = useAdminScheduledBoard({
     sort: 'time_left',
     limit: 50,
@@ -279,10 +310,19 @@ export function AdminScheduledColumn() {
               key={`${order.id}-${index}`}
               order={order}
               onAssign={openAssignChamp}
+              onOrderClick={setSelectedOrder}
             />
           ))}
         </div>
       )}
+
+      {selectedOrder ? (
+        <AdminOrderDetailModal
+          order={selectedOrder}
+          preference="scheduled"
+          onClose={() => setSelectedOrder(null)}
+        />
+      ) : null}
     </div>
   )
 }
