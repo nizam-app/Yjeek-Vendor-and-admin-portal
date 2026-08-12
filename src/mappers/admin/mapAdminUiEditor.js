@@ -27,6 +27,35 @@ function asString(value, fallback = '') {
   return String(value)
 }
 
+/**
+ * Pick a displayable media URL from common Admin banner / upload shapes.
+ * Handles string fields and nested `{ url }` objects (asString alone drops `.url`).
+ */
+function pickMediaUrl(...candidates) {
+  for (const value of candidates) {
+    if (value == null || value === '') continue
+    if (typeof value === 'string') {
+      const trimmed = value.trim()
+      if (trimmed && !trimmed.startsWith('[object')) return trimmed
+      continue
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      const nested =
+        value.url ||
+        value.imageUrl ||
+        value.image_url ||
+        value.src ||
+        value.href ||
+        value.path ||
+        value.publicUrl ||
+        value.cdnUrl ||
+        value.mediaUrl
+      if (typeof nested === 'string' && nested.trim()) return nested.trim()
+    }
+  }
+  return null
+}
+
 function asNumber(value, fallback = 0) {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
@@ -113,7 +142,7 @@ function mapPlacementSlot(item) {
         title: asString(banner.title || banner.name || 'Banner'),
         bannerType: mapBannerType(banner.bannerType || banner.type),
         isActive: Boolean(banner.isActive),
-        imageUrl: asString(banner.imageUrl || '').trim() || null,
+        imageUrl: pickMediaUrl(banner.imageUrl, banner.image_url, banner.image, banner.mediaUrl, banner.media),
         raw: banner,
       }
     })
@@ -247,7 +276,18 @@ export function mapAdminUiEditorBanners(data) {
           item.slotKey ||
           '',
       ).trim()
-      const imageUrl = asString(item.imageUrl || item.image || item.mediaUrl || '').trim() || null
+      const imageUrl = pickMediaUrl(
+        item.imageUrl,
+        item.image_url,
+        item.image,
+        item.mediaUrl,
+        item.media_url,
+        item.thumbnailUrl,
+        item.thumbnail,
+        item.coverUrl,
+        item.url,
+        item.media,
+      )
       const status = mapBannerStatus(item.status || item.statusKey || item.state)
 
       return {
@@ -633,7 +673,18 @@ export function mapAdminUiEditorBannerDetail(data) {
     type: mapBannerTypeToUiId(src.bannerType || src.type),
     title: asString(src.title || src.name || ''),
     subtitle: asString(src.subtitle || src.cta || ''),
-    imageUrl: asString(src.imageUrl || src.image || src.mediaUrl || '').trim() || null,
+    imageUrl: pickMediaUrl(
+      src.imageUrl,
+      src.image_url,
+      src.image,
+      src.mediaUrl,
+      src.media_url,
+      src.thumbnailUrl,
+      src.thumbnail,
+      src.coverUrl,
+      src.url,
+      src.media,
+    ),
     tapAction: TAP_ACTION_API_TO_UI[asString(src.tapAction).toUpperCase()] || 'Open store',
     tapActionKey: asString(src.tapAction || 'OPEN_STORE').toUpperCase(),
     target: asString(src.targetLabel || src.targetName || src.targetId || src.target || ''),
@@ -671,7 +722,7 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
     publishImmediately: Boolean(src.active),
   }
 
-  const imageUrl = asString(src.imageUrl).trim()
+  const imageUrl = pickMediaUrl(src.imageUrl, src.image_url, src.image)
   if (imageUrl && !imageUrl.startsWith('blob:') && !imageUrl.startsWith('data:')) {
     body.imageUrl = imageUrl
   }

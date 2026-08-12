@@ -39,7 +39,27 @@ export function resolveAdminMediaUrl(url) {
  */
 export function mapAdminUploadImageResponse(data) {
   const src = data && typeof data === 'object' && !Array.isArray(data) ? data : {}
-  const rawUrl = String(src.url || src.imageUrl || src.cdnUrl || src.publicUrl || '').trim()
+  const nested =
+    src.file && typeof src.file === 'object'
+      ? src.file
+      : src.image && typeof src.image === 'object'
+        ? src.image
+        : src.media && typeof src.media === 'object'
+          ? src.media
+          : null
+
+  const rawUrl = String(
+    src.url ||
+      src.imageUrl ||
+      src.image_url ||
+      src.cdnUrl ||
+      src.publicUrl ||
+      src.path ||
+      nested?.url ||
+      nested?.imageUrl ||
+      nested?.path ||
+      '',
+  ).trim()
   if (!rawUrl || rawUrl.startsWith('blob:') || rawUrl.startsWith('data:')) {
     return { url: null, displayUrl: null, raw: src }
   }
