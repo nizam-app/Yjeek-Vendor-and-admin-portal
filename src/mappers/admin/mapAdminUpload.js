@@ -6,6 +6,36 @@
  * <img> loads from the Vite app origin. Rewrite to `/uploads/...` so the
  * Vite (or reverse-proxy) `/uploads` proxy can serve them same-origin.
  */
+
+function apiOriginFromEnv() {
+  const base = String(import.meta.env?.VITE_API_BASE_URL || '').trim()
+  if (!base) return null
+  try {
+    const withoutApi = base.replace(/\/api\/v\d+\/?$/i, '')
+    return new URL(withoutApi || base).origin
+  } catch {
+    try {
+      return new URL(base).origin
+    } catch {
+      return null
+    }
+  }
+}
+
+function uploadsPathFromUrl(parsed) {
+  const pathname = String(parsed?.pathname || '')
+  const uploadsIndex = pathname.indexOf('/uploads/')
+  if (uploadsIndex >= 0) {
+    return `${pathname.slice(uploadsIndex)}${parsed.search || ''}`
+  }
+  // Some backends return /api/v1/uploads/...
+  const apiUploads = pathname.match(/\/api\/v\d+(\/uploads\/.*)$/i)
+  if (apiUploads?.[1]) {
+    return `${apiUploads[1]}${parsed.search || ''}`
+  }
+  return null
+}
+
 export function resolveAdminMediaUrl(url) {
   const raw = String(url || '').trim()
   if (!raw) return null
@@ -14,10 +44,16 @@ export function resolveAdminMediaUrl(url) {
   try {
     if (/^https?:\/\//i.test(raw)) {
       const parsed = new URL(raw)
-      const uploadsIndex = parsed.pathname.indexOf('/uploads/')
-      if (uploadsIndex >= 0) {
-        return `${parsed.pathname.slice(uploadsIndex)}${parsed.search || ''}`
+      const uploadsPath = uploadsPathFromUrl(parsed)
+      if (uploadsPath) return uploadsPath
+
+      // Same host as API but not under /uploads — still proxy via Vite media bridge
+      // so CORP: same-origin from the API host cannot block the admin SPA.
+      const apiOrigin = apiOriginFromEnv()
+      if (apiOrigin && parsed.origin === apiOrigin) {
+        return `/__admin_media${parsed.pathname}${parsed.search || ''}`
       }
+
       return raw
     }
   } catch {
@@ -29,6 +65,11 @@ export function resolveAdminMediaUrl(url) {
     return raw.slice(uploadsIndex)
   }
 
+  if (/^uploads\//i.test(raw)) {
+    return `/${raw}`
+  }
+
+  if (raw.startsWith('/__admin_media')) return raw
   if (raw.startsWith('/')) return raw
   return `/${raw}`
 }

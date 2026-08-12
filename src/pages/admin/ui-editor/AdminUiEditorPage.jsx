@@ -69,76 +69,178 @@ const STATUS_STYLE = {
 const CUSTOMER_SCREENS = [
   {
     id: 'home',
-    name: 'Home',
+    name: 'Home Screen',
     iconSrc: iconHouse,
     slots: [
-      { id: 'home_top', banners: 3, type: 'Scroll' },
-      { id: 'home_mid', banners: 1, type: 'Static' },
-      { id: 'home_below_picks', banners: 0, type: 'Static' },
+      {
+        id: 'home_top',
+        label: 'Home top - scroll banner',
+        banners: 3,
+        type: 'Scroll',
+        displayType: 'Scroll',
+      },
+      {
+        id: 'home_mid',
+        label: 'Between sections',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+      {
+        id: 'home_below_picks',
+        label: 'Below a section',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
     ],
   },
   {
     id: 'search',
-    name: 'Search',
+    name: 'Search Screen',
     Icon: Search,
-    slots: [{ id: 'search_top', banners: 0, type: 'Static' }],
+    slots: [
+      {
+        id: 'search_top',
+        label: 'Search top',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'store',
     name: 'Store page',
     Icon: Store,
     slots: [
-      { id: 'store_top', banners: 1, type: 'Static' },
-      { id: 'store_mid', banners: 0, type: 'Static' },
+      {
+        id: 'store_top',
+        label: 'Store page top',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+      {
+        id: 'store_mid',
+        label: 'Store mid section',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
     ],
   },
   {
     id: 'category',
     name: 'Category page',
     Icon: LayoutGrid,
-    slots: [{ id: 'category_top', banners: 1, type: 'Scroll' }],
+    slots: [
+      {
+        id: 'category_top',
+        label: 'Category top · scroll',
+        banners: 1,
+        type: 'Scroll',
+        displayType: 'Scroll',
+      },
+    ],
   },
   {
     id: 'cart',
     name: 'Cart',
     Icon: ShoppingCart,
-    slots: [{ id: 'cart_banner', banners: 1, type: 'Static' }],
+    slots: [
+      {
+        id: 'cart_banner',
+        label: 'Cart banner',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'checkout',
     name: 'Checkout',
     Icon: CreditCard,
-    slots: [{ id: 'checkout_banner', banners: 0, type: 'Static' }],
+    slots: [
+      {
+        id: 'checkout_banner',
+        label: 'Checkout banner',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'orders',
     name: 'Orders',
     Icon: Package,
-    slots: [{ id: 'orders_banner', banners: 1, type: 'Static' }],
+    slots: [
+      {
+        id: 'orders_banner',
+        label: 'Orders banner',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'tracking',
     name: 'Tracking',
     Icon: MapPin,
-    slots: [{ id: 'tracking_banner', banners: 0, type: 'Static' }],
+    slots: [
+      {
+        id: 'tracking_banner',
+        label: 'Tracking banner',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'wallet',
     name: 'Wallet',
     Icon: Wallet,
-    slots: [{ id: 'wallet_top', banners: 1, type: 'Scroll' }],
+    slots: [
+      {
+        id: 'wallet_top',
+        label: 'Wallet top · scroll',
+        banners: 1,
+        type: 'Scroll',
+        displayType: 'Scroll',
+      },
+    ],
   },
   {
     id: 'account',
     name: 'Account',
     Icon: UserRound,
-    slots: [{ id: 'account_promo', banners: 1, type: 'Static' }],
+    slots: [
+      {
+        id: 'account_promo',
+        label: 'Account promo',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'global',
     name: 'Global',
     Icon: Globe2,
-    slots: [{ id: 'app_open_popup', banners: 1, type: 'Pop-up' }],
+    slots: [
+      {
+        id: 'app_open_popup',
+        label: 'Pop-up ad (on open)',
+        banners: 1,
+        type: 'Pop-up',
+        displayType: 'Pop-up',
+      },
+    ],
   },
 ]
 
@@ -148,33 +250,77 @@ const CHAMP_SCREENS = [
     name: 'Champ home',
     iconSrc: iconHouse,
     slots: [
-      { id: 'champ_home_top', banners: 2, type: 'Scroll' },
-      { id: 'champ_home_mid', banners: 0, type: 'Static' },
+      {
+        id: 'champ_home_top',
+        label: 'Champ home top · scroll',
+        banners: 2,
+        type: 'Scroll',
+        displayType: 'Scroll',
+      },
+      {
+        id: 'champ_home_mid',
+        label: 'Champ home mid',
+        banners: 0,
+        type: 'Static',
+        displayType: 'Static',
+      },
     ],
   },
   {
     id: 'champ-orders',
     name: 'Active orders',
     Icon: Package,
-    slots: [{ id: 'champ_orders_banner', banners: 1, type: 'Static' }],
+    slots: [
+      {
+        id: 'champ_orders_banner',
+        label: 'Active orders banner',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'champ-earnings',
     name: 'Earnings',
     Icon: Wallet,
-    slots: [{ id: 'champ_earnings_top', banners: 0, type: 'Scroll' }],
+    slots: [
+      {
+        id: 'champ_earnings_top',
+        label: 'Earnings top · scroll',
+        banners: 0,
+        type: 'Scroll',
+        displayType: 'Scroll',
+      },
+    ],
   },
   {
     id: 'champ-account',
     name: 'Account',
     Icon: UserRound,
-    slots: [{ id: 'champ_account_promo', banners: 1, type: 'Static' }],
+    slots: [
+      {
+        id: 'champ_account_promo',
+        label: 'Account promo',
+        banners: 1,
+        type: 'Static',
+        displayType: 'Static',
+      },
+    ],
   },
   {
     id: 'champ-global',
     name: 'Global',
     Icon: Globe2,
-    slots: [{ id: 'champ_app_open_popup', banners: 1, type: 'Pop-up' }],
+    slots: [
+      {
+        id: 'champ_app_open_popup',
+        label: 'Pop-up ad (on open)',
+        banners: 1,
+        type: 'Pop-up',
+        displayType: 'Pop-up',
+      },
+    ],
   },
 ]
 
@@ -314,6 +460,82 @@ const HOME_CATEGORIES = [
   { id: 'cat-services', name: 'Services', emoji: '🧰' },
 ]
 
+function humanizeKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim()
+}
+
+function slotDisplayLabel(slot) {
+  const raw = String(slot?.label || slot?.id || '').trim()
+  if (!raw) return 'Slot'
+  if (raw === slot?.id || /^[a-z0-9_-]+$/i.test(raw)) return humanizeKey(raw)
+  return raw
+}
+
+function slotBannerCount(slot) {
+  return Number(slot?.bannerCount ?? slot?.banners ?? slot?.slotBanners?.length ?? 0)
+}
+
+function slotActiveCount(slot) {
+  if (slot?.activeCount != null || slot?.active != null) {
+    return Number(slot.activeCount ?? slot.active ?? 0)
+  }
+  const nested = Array.isArray(slot?.slotBanners) ? slot.slotBanners : []
+  return nested.filter((banner) => banner?.isActive).length
+}
+
+function resolveBannerStatus(banner) {
+  const raw =
+    banner?.status ||
+    banner?.statusKey ||
+    banner?.state ||
+    banner?.raw?.status ||
+    banner?.raw?.statusKey ||
+    banner?.raw?.state ||
+    ''
+  const normalized = String(raw).trim().toLowerCase()
+  if (normalized === 'active' || normalized === 'live' || normalized === 'published') return 'Active'
+  if (normalized === 'scheduled') return 'Scheduled'
+  if (normalized === 'draft') return 'Draft'
+  if (normalized === 'expired') return 'Expired'
+  if (normalized === 'inactive' || normalized === 'paused' || normalized === 'disabled') {
+    return 'Inactive'
+  }
+  if (raw && typeof raw === 'string' && /^[A-Z][a-z]+/.test(raw.trim())) {
+    return raw.trim()
+  }
+  if (banner?.isActive === true) return 'Active'
+  if (banner?.isActive === false) return 'Expired'
+  return 'Draft'
+}
+
+function statusDotClass(status) {
+  if (status === 'Active' || status === 'Live') return 'bg-[#1aa054]'
+  if (status === 'Expired') return 'bg-[#ef5350]'
+  if (status === 'Scheduled') return 'bg-[#fb8c00]'
+  if (status === 'Draft' || status === 'Inactive') return 'bg-[#9e9e9e]'
+  return 'bg-[#9e9e9e]'
+}
+
+function toEditableBanner(banner, slot) {
+  if (!banner?.id) return null
+  const status = resolveBannerStatus(banner)
+  return {
+    id: banner.id,
+    name: banner.title || banner.name || 'Banner',
+    type: banner.bannerType || banner.type || slot?.displayType || slot?.type,
+    imageUrl: banner.imageUrl || '',
+    placement: slotDisplayLabel(slot),
+    placementKey: slot?.id || banner.placementKey || '',
+    isActive: status === 'Active',
+    status,
+    raw: banner.raw || banner,
+  }
+}
+
 function screenSummary(screen) {
   const slots =
     screen.slotCount != null
@@ -325,10 +547,7 @@ function screenSummary(screen) {
     screen.bannerTotal != null
       ? Number(screen.bannerTotal)
       : Array.isArray(screen.slots)
-        ? screen.slots.reduce(
-            (sum, slot) => sum + (slot.bannerCount ?? slot.banners ?? 0),
-            0,
-          )
+        ? screen.slots.reduce((sum, slot) => sum + slotBannerCount(slot), 0)
         : 0
   return `${slots} slot${slots === 1 ? '' : 's'} · ${banners} banner${banners === 1 ? '' : 's'}`
 }
@@ -458,11 +677,210 @@ function PreviewModal({ open, onClose, preview, error }) {
   )
 }
 
-function ScreenCard({ screen, onAdd, onPreview, previewLoading }) {
-  const [open, setOpen] = useState(true)
+function SlotActionMenu({ menuId, setMenuId, itemId, label, canEdit, canDelete, onEdit, onDelete }) {
+  const open = menuId === itemId
 
   return (
-    <section className="rounded-[14px] border border-[#eceeec] bg-white">
+    <div className="relative">
+      <button
+        type="button"
+        aria-label={`${label} options`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation()
+          setMenuId(open ? null : itemId)
+        }}
+        className="grid h-[30px] w-[28px] place-items-center rounded-full text-[#9e9e9e] hover:bg-[#f5f5f5] hover:text-[#616161]"
+      >
+        <MoreVertical size={16} />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute top-[calc(100%+4px)] right-0 z-30 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canEdit}
+            className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => {
+              setMenuId(null)
+              if (canEdit) onEdit?.()
+            }}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!canDelete}
+            className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#c91a24] hover:bg-[#fff5f5] disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={() => {
+              setMenuId(null)
+              if (canDelete) onDelete?.()
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function CollapseChevron({ open }) {
+  return (
+    <span
+      className={cn(
+        'inline-block h-0 w-0 shrink-0 border-x-[4.5px] border-x-transparent border-t-[6px] border-t-[#5f6b64] transition-transform duration-150',
+        open ? 'rotate-0' : '-rotate-90',
+      )}
+      aria-hidden
+    />
+  )
+}
+
+function normalizePlacementKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[—–-]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .trim()
+}
+
+function enrichScreensWithBanners(screens, banners = []) {
+  const list = Array.isArray(banners) ? banners : []
+
+  return (screens || []).map((screen) => {
+    const slots = (screen.slots || []).map((slot) => {
+      const fromNested = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
+      const slotKey = normalizePlacementKey(slot.id)
+      const slotLabelKey = normalizePlacementKey(slot.label || slotDisplayLabel(slot))
+
+      const fromList = list.filter((banner) => {
+        const placementKey = normalizePlacementKey(banner.placementKey || banner.raw?.placementKey)
+        const placement = normalizePlacementKey(banner.placement)
+        return (
+          placementKey === slotKey ||
+          placement === slotKey ||
+          placement === slotLabelKey ||
+          placementKey === slotLabelKey
+        )
+      })
+
+      const byId = new Map()
+      for (const banner of fromNested) {
+        if (!banner?.id) continue
+        const status = resolveBannerStatus(banner)
+        byId.set(banner.id, {
+          id: banner.id,
+          title: banner.title || banner.name || 'Banner',
+          bannerType: banner.bannerType || banner.type || slot.displayType || slot.type || 'Static',
+          status,
+          isActive: status === 'Active',
+          imageUrl: banner.imageUrl || '',
+          raw: banner.raw || banner,
+        })
+      }
+      for (const banner of fromList) {
+        if (!banner?.id) continue
+        const prev = byId.get(banner.id)
+        const status = resolveBannerStatus({
+          ...prev,
+          ...banner,
+          status: banner.status || prev?.status,
+          statusKey: banner.statusKey || banner.raw?.statusKey,
+          isActive: banner.isActive,
+        })
+        byId.set(banner.id, {
+          id: banner.id,
+          title: banner.name || banner.title || prev?.title || 'Banner',
+          bannerType: banner.type || prev?.bannerType || slot.displayType || slot.type || 'Static',
+          status,
+          isActive: status === 'Active',
+          imageUrl: banner.imageUrl || prev?.imageUrl || '',
+          raw: banner.raw || banner,
+        })
+      }
+
+      const slotBanners = [...byId.values()]
+      const bannerCount = Math.max(slotBannerCount(slot), slotBanners.length)
+      const activeCount = Math.max(
+        slotActiveCount(slot),
+        slotBanners.filter((item) => item.status === 'Active').length,
+      )
+
+      return {
+        ...slot,
+        label: slotDisplayLabel(slot),
+        slotBanners,
+        banners: bannerCount,
+        bannerCount,
+        active: activeCount,
+        activeCount,
+      }
+    })
+
+    const bannerTotal = slots.reduce((sum, slot) => sum + slotBannerCount(slot), 0)
+    return {
+      ...screen,
+      slots,
+      slotCount: screen.slotCount ?? slots.length,
+      bannerTotal: Math.max(Number(screen.bannerTotal || 0), bannerTotal),
+    }
+  })
+}
+
+function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading }) {
+  const [open, setOpen] = useState(true)
+  const [openSlots, setOpenSlots] = useState(() => {
+    const initial = {}
+    for (const slot of screen.slots || []) {
+      initial[slot.id] = true
+    }
+    return initial
+  })
+  const [menuId, setMenuId] = useState(null)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    setOpenSlots((prev) => {
+      const next = { ...prev }
+      for (const slot of screen.slots || []) {
+        if (next[slot.id] == null) next[slot.id] = true
+      }
+      return next
+    })
+  }, [screen.slots])
+
+  useEffect(() => {
+    if (!menuId) return undefined
+    const onPointerDown = (event) => {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setMenuId(null)
+      }
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setMenuId(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [menuId])
+
+  const toggleSlot = (slotId) => {
+    setOpenSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }))
+  }
+
+  return (
+    <section ref={rootRef} className="rounded-[14px] border border-[#eceeec] bg-white">
       <div className="flex items-center gap-2 px-3.5 py-3">
         <button
           type="button"
@@ -470,13 +888,7 @@ function ScreenCard({ screen, onAdd, onPreview, previewLoading }) {
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
           aria-expanded={open}
         >
-          <span
-            className={cn(
-              'inline-block h-0 w-0 shrink-0 border-x-[4.5px] border-x-transparent border-t-[6px] border-t-[#5f6b64] transition-transform duration-150',
-              open ? 'rotate-0' : '-rotate-90',
-            )}
-            aria-hidden
-          />
+          <CollapseChevron open={open} />
           <div className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-[9px] bg-[#e8f5e9]">
             <ScreenIcon screen={screen} />
           </div>
@@ -493,55 +905,127 @@ function ScreenCard({ screen, onAdd, onPreview, previewLoading }) {
       </div>
 
       {open ? (
-        <div className="relative ml-[19px] pb-3 pr-3.5">
-          <span className="absolute bottom-4 left-0 top-0 w-[2px] rounded-full bg-[#c8e6c9]" aria-hidden />
-          <div className="space-y-2 pl-5">
-            {(screen.slots || []).map((slot) => (
-              <div
-                key={slot.id}
-                className="relative flex items-center gap-2 rounded-[12px] border border-[#e7ebe8] bg-white px-3.5 py-2.5"
-              >
-                <span
-                  className="absolute -left-[23px] top-1/2 h-[7px] w-[7px] -translate-y-1/2 rounded-full bg-[#9e9e9e]"
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13px] font-bold leading-tight text-[#1a1a1a]">
-                    {slot.label || slot.id}
-                  </p>
-                  <p className="mt-[3px] text-[12px] leading-none text-[#707070]">
-                    {slot.bannerCount ?? slot.banners ?? 0} banner
-                    {(slot.bannerCount ?? slot.banners ?? 0) === 1 ? '' : 's'}
-                    {(slot.activeCount ?? slot.active ?? 0) > 0
-                      ? ` · ${slot.activeCount ?? slot.active} active`
-                      : ''}
-                  </p>
+        <div className="relative ml-5 pb-3 pr-3.5">
+          <span
+            className="absolute bottom-3 left-[7px] top-0 w-px bg-[#d5ddd7]"
+            aria-hidden
+          />
+          <div className="space-y-1">
+            {(screen.slots || []).map((slot) => {
+              const nestedBanners = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
+              const count = slotBannerCount(slot)
+              const active = slotActiveCount(slot)
+              const primaryBanner = toEditableBanner(nestedBanners[0], slot)
+              const slotLabel = slotDisplayLabel(slot)
+              const slotMenuKey = `slot:${slot.id}`
+              const slotOpen = openSlots[slot.id] !== false
+
+              return (
+                <div key={slot.id} className="relative">
+                  <div className="flex items-center gap-2 py-2 pl-1 pr-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleSlot(slot.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      aria-expanded={slotOpen}
+                    >
+                      <CollapseChevron open={slotOpen} />
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-bold leading-tight text-[#1a1a1a]">
+                          {slotLabel}
+                        </p>
+                        <p className="mt-[3px] text-[12px] leading-none text-[#707070]">
+                          {count} banner{count === 1 ? '' : 's'}
+                          {active > 0 ? ` · ${active} active` : ''}
+                        </p>
+                      </div>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <SlotTypeBadge type={slot.displayType || slot.type} />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAdd?.({
+                            placement: slotLabel,
+                            placementKey: slot.id,
+                          })
+                        }
+                        className="inline-flex h-[30px] items-center gap-1 rounded-full bg-[#e8f5e9] px-3 text-[12px] font-bold text-[#2e7d32] hover:bg-[#dcedc8]"
+                      >
+                        <Plus size={13} strokeWidth={2.8} />
+                        Add
+                      </button>
+                      <SlotActionMenu
+                        menuId={menuId}
+                        setMenuId={setMenuId}
+                        itemId={slotMenuKey}
+                        label={slotLabel}
+                        canEdit={Boolean(primaryBanner)}
+                        canDelete={Boolean(primaryBanner)}
+                        onEdit={() => onEdit?.(primaryBanner)}
+                        onDelete={() => onDelete?.(primaryBanner)}
+                      />
+                    </div>
+                  </div>
+
+                  {slotOpen && nestedBanners.length > 0 ? (
+                    <div className="relative ml-[11px] space-y-0.5 border-l border-[#d5ddd7] pb-1 pl-4">
+                      {nestedBanners.map((banner) => {
+                        const editable = toEditableBanner(banner, slot)
+                        const bannerMenuKey = `banner:${banner.id}`
+                        const typeLabel =
+                          banner.bannerType || slot.displayType || slot.type || 'Static'
+                        const status = resolveBannerStatus(banner)
+                        return (
+                          <div
+                            key={banner.id}
+                            className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-2 hover:bg-[#f7f9f7]"
+                          >
+                            <span
+                              className={cn(
+                                'h-[7px] w-[7px] shrink-0 rounded-full',
+                                statusDotClass(status),
+                              )}
+                              aria-hidden
+                            />
+                            {banner.imageUrl ? (
+                              <AdminMediaImage
+                                src={banner.imageUrl}
+                                className="h-9 w-9 shrink-0 rounded-[8px] object-cover"
+                                fallbackClassName="h-9 w-9 shrink-0 rounded-[8px] bg-[#eceeec]"
+                                iconSize={14}
+                              />
+                            ) : (
+                              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[#eceeec]">
+                                <ImageIcon size={14} className="text-[#9e9e9e]" />
+                              </span>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-[13px] font-semibold text-[#17231c]">
+                                {banner.title || banner.name || 'Banner'}
+                              </p>
+                              <p className="mt-0.5 text-[11.5px] text-[#8a948e]">
+                                {typeLabel} · {status}
+                              </p>
+                            </div>
+                            <SlotActionMenu
+                              menuId={menuId}
+                              setMenuId={setMenuId}
+                              itemId={bannerMenuKey}
+                              label={banner.title || banner.name || 'Banner'}
+                              canEdit={Boolean(editable)}
+                              canDelete={Boolean(editable)}
+                              onEdit={() => onEdit?.(editable)}
+                              onDelete={() => onDelete?.(editable)}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <SlotTypeBadge type={slot.displayType || slot.type} />
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onAdd?.({
-                        placement: slot.label || slot.id,
-                        placementKey: slot.id,
-                      })
-                    }
-                    className="inline-flex h-[30px] items-center gap-1 rounded-full bg-[#e8f5e9] px-3 text-[12px] font-bold text-[#2e7d32] hover:bg-[#dcedc8]"
-                  >
-                    <Plus size={13} strokeWidth={2.8} />
-                    Add
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`${slot.label || slot.id} options`}
-                    className="grid h-[30px] w-[28px] place-items-center rounded-full text-[#9e9e9e] hover:bg-[#f5f5f5] hover:text-[#616161]"
-                  >
-                    <MoreVertical size={16} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ) : null}
@@ -706,6 +1190,7 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
 function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChange, bannersRefreshKey = 0 }) {
   const [screenId, setScreenId] = useState('home')
   const [menuId, setMenuId] = useState(null)
+  const [openSlots, setOpenSlots] = useState({})
   const {
     slots: apiSlots,
     screens: apiScreens,
@@ -769,18 +1254,53 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
       const matched = banners.filter(
         (banner) =>
           banner.placementKey === slot.id ||
+          normalizePlacementKey(banner.placementKey) === normalizePlacementKey(slot.id) ||
           (banner.placement &&
             slot.label &&
             normalizePlacement(banner.placement) === normalizePlacement(slot.label)),
       )
-      const count = matched.length
+      const slotBanners = matched.map((banner) => {
+        const status = resolveBannerStatus(banner)
+        return {
+          id: banner.id,
+          title: banner.name || banner.title || 'Banner',
+          name: banner.name || banner.title || 'Banner',
+          bannerType: banner.type || slot.displayType || slot.type || 'Static',
+          type: banner.type || slot.displayType || slot.type || 'Static',
+          status,
+          isActive: status === 'Active',
+          imageUrl: banner.imageUrl || '',
+          placement: banner.placement || slot.label || slot.id,
+          placementKey: banner.placementKey || slot.id,
+          raw: banner.raw || banner,
+        }
+      })
+      const activeCount = slotBanners.filter((item) => item.status === 'Active').length
+      const count = slotBanners.length
       return {
         ...slot,
-        active: count > 0 ? count : slot.active,
+        slotBanners,
+        active: count > 0 ? activeCount : slot.active || 0,
+        activeCount: count > 0 ? activeCount : slot.activeCount || 0,
         banners: count > 0 ? count : slot.banners,
+        bannerCount: count > 0 ? count : slot.bannerCount || slot.banners || 0,
       }
     })
   }, [slots, banners])
+
+  useEffect(() => {
+    setOpenSlots((prev) => {
+      const next = { ...prev }
+      for (const slot of slotsWithBanners) {
+        if (next[slot.id] == null) next[slot.id] = true
+      }
+      return next
+    })
+  }, [slotsWithBanners])
+
+  const toggleSlot = (slotId) => {
+    setOpenSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }))
+  }
 
   return (
     <div className="space-y-3">
@@ -844,36 +1364,121 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
             </div>
 
             <h4 className="mb-2 text-[13px] font-bold text-[#17231c]">Slots on this screen</h4>
-            <div className="space-y-2">
-              {slotsWithBanners.map((slot) => (
-                <div
-                  key={slot.id}
-                  className="flex items-center gap-2.5 rounded-[12px] border border-[#e7ebe8] bg-white px-3 py-2.5"
-                >
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#eef2ef] text-[#637068]">
-                    <ImageIcon size={16} strokeWidth={2} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-bold text-[#17231c]">{slot.label}</p>
-                    <p className="mt-0.5 text-[12px] text-[#7c8780]">
-                      {slot.active > 0 ? `${slot.active} active` : '0'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onAdd?.({
-                        placement: slot.label || slot.id,
-                        placementKey: slot.id,
-                      })
-                    }
-                    className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
+            <div className="space-y-1.5">
+              {slotsWithBanners.map((slot) => {
+                const nestedBanners = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
+                const slotOpen = openSlots[slot.id] !== false
+                const count = Number(slot.bannerCount ?? slot.banners ?? nestedBanners.length ?? 0)
+                const active = Number(slot.activeCount ?? slot.active ?? 0)
+                const primaryBanner = nestedBanners[0] || null
+                const slotLabel = slot.label || slotDisplayLabel(slot)
+                const slotMenuKey = `ads-slot:${slot.id}`
+
+                return (
+                  <div
+                    key={slot.id}
+                    className="overflow-hidden rounded-[12px] border border-[#e7ebe8] bg-white"
                   >
-                    <Plus size={13} strokeWidth={2.8} />
-                    Add
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2 px-2.5 py-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSlot(slot.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                        aria-expanded={slotOpen}
+                      >
+                        <CollapseChevron open={slotOpen} />
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#eef2ef] text-[#637068]">
+                          <ImageIcon size={16} strokeWidth={2} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[13px] font-bold text-[#17231c]">{slotLabel}</p>
+                          <p className="mt-0.5 text-[12px] text-[#7c8780]">
+                            {count} banner{count === 1 ? '' : 's'}
+                            {active > 0 ? ` · ${active} active` : ''}
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onAdd?.({
+                            placement: slotLabel,
+                            placementKey: slot.id,
+                          })
+                        }
+                        className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
+                      >
+                        <Plus size={13} strokeWidth={2.8} />
+                        Add
+                      </button>
+                      <SlotActionMenu
+                        menuId={menuId}
+                        setMenuId={setMenuId}
+                        itemId={slotMenuKey}
+                        label={slotLabel}
+                        canEdit={Boolean(primaryBanner)}
+                        canDelete={Boolean(primaryBanner)}
+                        onEdit={() => onEdit?.(primaryBanner)}
+                        onDelete={() => onDelete?.(primaryBanner)}
+                      />
+                    </div>
+
+                    {slotOpen && nestedBanners.length > 0 ? (
+                      <div className="space-y-0.5 border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-1.5">
+                        {nestedBanners.map((banner) => {
+                          const status = resolveBannerStatus(banner)
+                          const typeLabel = banner.bannerType || banner.type || 'Static'
+                          const bannerMenuKey = `ads-banner:${banner.id}`
+                          return (
+                            <div
+                              key={banner.id}
+                              className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-2 hover:bg-white"
+                            >
+                              <span
+                                className={cn(
+                                  'h-[7px] w-[7px] shrink-0 rounded-full',
+                                  statusDotClass(status),
+                                )}
+                                aria-hidden
+                              />
+                              {banner.imageUrl ? (
+                                <AdminMediaImage
+                                  src={banner.imageUrl}
+                                  className="h-9 w-9 shrink-0 rounded-[8px] object-cover"
+                                  fallbackClassName="h-9 w-9 shrink-0 rounded-[8px] bg-[#eceeec]"
+                                  iconSize={14}
+                                />
+                              ) : (
+                                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[#eceeec]">
+                                  <ImageIcon size={14} className="text-[#9e9e9e]" />
+                                </span>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-[13px] font-semibold text-[#17231c]">
+                                  {banner.title || banner.name || 'Banner'}
+                                </p>
+                                <p className="mt-0.5 text-[11.5px] text-[#8a948e]">
+                                  {typeLabel} · {status}
+                                </p>
+                              </div>
+                              <SlotActionMenu
+                                menuId={menuId}
+                                setMenuId={setMenuId}
+                                itemId={bannerMenuKey}
+                                label={banner.title || banner.name || 'Banner'}
+                                canEdit
+                                canDelete
+                                onEdit={() => onEdit?.(banner)}
+                                onDelete={() => onDelete?.(banner)}
+                              />
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="mt-3 flex items-start gap-2 rounded-[10px] border border-[#f3e0a8] bg-[#fff8e1] px-3 py-2.5 text-[12px] text-[#9a6510]">
@@ -1311,7 +1916,11 @@ export default function AdminUiEditorPage() {
     error: screenMapError,
     refetch: refetchScreenMap,
   } = useAdminUiEditorScreenMap(appKey)
-  const { meta: bannersMeta } = useAdminUiEditorBanners(appKey)
+  const {
+    meta: bannersMeta,
+    banners: allBanners,
+    refetch: refetchBanners,
+  } = useAdminUiEditorBanners(appKey)
 
   const { mutate: previewScreen, isLoading: previewLoading } = useApiMutation(
     ({ app, screen }) => adminUiEditorService.getPreview(app, screen),
@@ -1335,8 +1944,15 @@ export default function AdminUiEditorPage() {
     return adminUiEditorService.createBanner(form, { appTarget: app, placements })
   })
 
-  const fallbackScreens = platform === 'customer' ? CUSTOMER_SCREENS : CHAMP_SCREENS
-  const screens = apiScreens.length > 0 ? apiScreens : fallbackScreens
+  const screens = useMemo(() => {
+    const base =
+      apiScreens.length > 0
+        ? apiScreens
+        : platform === 'customer'
+          ? CUSTOMER_SCREENS
+          : CHAMP_SCREENS
+    return enrichScreensWithBanners(base, allBanners)
+  }, [apiScreens, platform, allBanners])
 
   const modalPlacements = useMemo(() => {
     const fromMeta = bannersMeta?.placements || []
@@ -1489,6 +2105,8 @@ export default function AdminUiEditorPage() {
         placements: modalPlacements,
       })
       setBannersRefreshKey((key) => key + 1)
+      refetchScreenMap()
+      refetchBanners()
       setActionMessage(
         bannerModal.mode === 'edit' ? 'Banner updated.' : 'Banner created.',
       )
@@ -1513,6 +2131,8 @@ export default function AdminUiEditorPage() {
     try {
       await adminUiEditorService.deleteBanner(banner.id)
       setBannersRefreshKey((key) => key + 1)
+      refetchScreenMap()
+      refetchBanners()
       setActionMessage('Banner deleted.')
     } catch (err) {
       setActionMessage(err?.message || 'Unable to delete banner.')
@@ -1679,6 +2299,8 @@ export default function AdminUiEditorPage() {
                 key={screen.id}
                 screen={screen}
                 onAdd={openBannerModal}
+                onEdit={openEditBannerModal}
+                onDelete={handleDeleteBanner}
                 onPreview={handlePreview}
                 previewLoading={
                   (previewState.loading || previewLoading) && previewState.screen === screen.id

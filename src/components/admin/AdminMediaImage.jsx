@@ -15,11 +15,16 @@ export default function AdminMediaImage({
   iconSize = 15,
 }) {
   const [failed, setFailed] = useState(false)
-  const displaySrc = resolveAdminMediaUrl(src)
+  const [useRawFallback, setUseRawFallback] = useState(false)
+  const resolved = resolveAdminMediaUrl(src)
+  const raw = String(src || '').trim() || null
+  const displaySrc =
+    useRawFallback && raw && raw !== resolved && /^https?:\/\//i.test(raw) ? raw : resolved
 
   useEffect(() => {
     setFailed(false)
-  }, [displaySrc])
+    setUseRawFallback(false)
+  }, [resolved, raw])
 
   if (!displaySrc || failed) {
     return (
@@ -39,7 +44,15 @@ export default function AdminMediaImage({
       src={displaySrc}
       alt={alt}
       className={className}
-      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        // Proxied /uploads path failed — try the original absolute URL once.
+        if (!useRawFallback && raw && raw !== displaySrc && /^https?:\/\//i.test(raw)) {
+          setUseRawFallback(true)
+          return
+        }
+        setFailed(true)
+      }}
     />
   )
 }

@@ -137,11 +137,14 @@ function mapPlacementSlot(item) {
       if (!banner || typeof banner !== 'object') return null
       const bannerId = asString(banner.id || banner.bannerId).trim()
       if (!bannerId) return null
+      const status = mapBannerStatus(banner.status || banner.statusKey || banner.state)
       return {
         id: bannerId,
         title: asString(banner.title || banner.name || 'Banner'),
         bannerType: mapBannerType(banner.bannerType || banner.type),
-        isActive: Boolean(banner.isActive),
+        status,
+        isActive:
+          banner.isActive != null ? Boolean(banner.isActive) : status === 'Active',
         imageUrl: pickMediaUrl(banner.imageUrl, banner.image_url, banner.image, banner.mediaUrl, banner.media),
         raw: banner,
       }
