@@ -52,7 +52,7 @@ export function getAdminDeviceName() {
 /**
  * Admin authentication service.
  *
- * Confirmed: login, 2FA verify/setup/confirm/disable/backup-codes, get me, logout.
+ * Confirmed: login, 2FA verify/setup/confirm/disable/backup-codes, get me, update me, logout.
  */
 export const adminAuthService = {
   /**
@@ -223,6 +223,39 @@ export const adminAuthService = {
     })
 
     return mapAdminMeResponse(response?.data)
+  },
+
+  /**
+   * PATCH /admin/auth/me — Update me (Account) / Edit profile.
+   * Confirmed body: { firstName, lastName, jobTitle, phone }
+   * Response shape treated like Get Me (user at data root) when present.
+   * @param {{ firstName?: string, lastName?: string, jobTitle?: string, phone?: string }} profile
+   * @returns {Promise<object>} normalized Admin user
+   */
+  async updateMe(profile = {}, options = {}) {
+    const body = {}
+    if (profile.firstName !== undefined) body.firstName = String(profile.firstName ?? '').trim()
+    if (profile.lastName !== undefined) body.lastName = String(profile.lastName ?? '').trim()
+    if (profile.jobTitle !== undefined) body.jobTitle = String(profile.jobTitle ?? '').trim()
+    if (profile.phone !== undefined) body.phone = String(profile.phone ?? '').trim()
+
+    if (!Object.keys(body).length) {
+      throw new ApiError({ message: 'No profile fields to update.' })
+    }
+
+    const response = await apiClient.patch(endpoints.admin.auth.me, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'auth',
+    })
+
+    const data = response?.data
+    // Some backends return the user at root; others wrap or return only a message.
+    if (data && typeof data === 'object' && (data.id || data.email || data.fullName || data.firstName)) {
+      return mapAdminMeResponse(data)
+    }
+
+    return this.getCurrentUser(options)
   },
 
   /**

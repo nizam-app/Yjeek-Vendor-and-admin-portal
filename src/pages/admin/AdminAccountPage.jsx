@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { isAdminRealApiFeature } from '../../api/config'
 import { useAuth } from '../../context/AuthContext'
 import { cn } from '../../components/admin/cn'
+import AdminEditProfileModal from '../../components/admin/AdminEditProfileModal'
+import { adminAuthService } from '../../services/admin/authService'
 import AdminTwoFactorSettings from './AdminTwoFactorSettings'
 
 const MOCK_ACCOUNT_PROFILE = {
@@ -105,6 +107,9 @@ export default function AdminAccountPage() {
   const useReal = isAdminRealApiFeature('auth')
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [loadError, setLoadError] = useState(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   useEffect(() => {
     if (!useReal) return undefined
@@ -138,6 +143,26 @@ export default function AdminAccountPage() {
     navigate('/login')
   }
 
+  async function handleSaveProfile(fields) {
+    setSavingProfile(true)
+    setSaveError(null)
+    try {
+      const updated = await adminAuthService.updateMe(fields)
+      adminAuthService.persistSession({ user: updated })
+      await refreshAdminSession()
+      setEditOpen(false)
+    } catch (error) {
+      const message = adminAuthService.getLoginErrorMessage(
+        error,
+        'Could not update profile. Please try again.',
+      )
+      setSaveError(message)
+      throw new Error(message)
+    } finally {
+      setSavingProfile(false)
+    }
+  }
+
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div>
@@ -165,12 +190,32 @@ export default function AdminAccountPage() {
 
           <button
             type="button"
-            className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+            disabled={!useReal}
+            onClick={() => {
+              setSaveError(null)
+              setEditOpen(true)
+            }}
+            className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Pencil size={13.5} strokeWidth={2.2} />
             Edit profile
           </button>
         </div>
+
+        {useReal ? (
+          <AdminEditProfileModal
+            open={editOpen}
+            user={user?.role === 'admin' ? user : null}
+            onClose={() => {
+              if (savingProfile) return
+              setEditOpen(false)
+              setSaveError(null)
+            }}
+            onSave={handleSaveProfile}
+            saving={savingProfile}
+            error={saveError}
+          />
+        ) : null}
 
         {useReal && isRefreshing ? (
           <p className="mb-3 text-[12px] text-[#7c8780]">Refreshing account…</p>

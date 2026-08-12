@@ -223,6 +223,8 @@ With the feature flag off, the previous Admin demo + 2FA flow remains unchanged.
 ## Unconfirmed (do not invent)
 
 - Exact invalid-credentials error body
-- `POST /admin/auth/2fa/verify` success/error bodies
-- `PATCH /admin/auth/me` (Edit profile) response
 - Refresh-token endpoint and rotation
+
+## Wired (response shape may still vary)
+
+- `PATCH /admin/auth/me` (Edit profile) — request body confirmed; UI refreshes via Get Me after save

@@ -23,7 +23,7 @@ export const endpoints = {
     auth: {
       /** Confirmed: POST /admin/auth/login */
       login: '/admin/auth/login',
-      /** Confirmed: GET /admin/auth/me */
+      /** Confirmed: GET /admin/auth/me · PATCH /admin/auth/me (Update me / Account) */
       me: '/admin/auth/me',
       /** Confirmed: POST /admin/auth/logout */
       logout: '/admin/auth/logout',

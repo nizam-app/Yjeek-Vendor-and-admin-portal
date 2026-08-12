@@ -5,7 +5,7 @@
  * Do not reuse Vendor mappers for Admin payloads.
  */
 
-export { mapAdminAuthUser, mapAdminLoginResponse } from './authMapper'
+export { mapAdminAuthUser, mapAdminLoginResponse, mapAdminMeResponse } from './authMapper'
 export { mapAdminDashboardOverviewResponse } from './mapAdminDashboardOverview'
 export {
   ADMIN_DASHBOARD_MAP_API_LAYERS,
