@@ -336,6 +336,14 @@ export default function AdminNewBannerModal({
 
   const handleSubmit = async () => {
     if (isSubmitting || isUploading) return
+    if (localPreviewUrl && !form.imageUrl) {
+      setUploadError(
+        Object.assign(new Error('Image upload did not finish. Please retry before saving.'), {
+          message: 'Image upload did not finish. Please retry before saving.',
+        }),
+      )
+      return
+    }
     await onSubmit?.(form)
   }
 
@@ -353,7 +361,7 @@ export default function AdminNewBannerModal({
     submitLabel || (mode === 'edit' ? 'Save banner' : 'Create banner')
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[120] flex items-end justify-center p-0 sm:items-center sm:p-4">
       <button
         type="button"
         aria-label="Close modal backdrop"
@@ -365,9 +373,9 @@ export default function AdminNewBannerModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="admin-new-banner-title"
-        className="relative flex h-[699px] w-[560px] max-w-[calc(100vw-2rem)] flex-col items-start gap-4 overflow-hidden rounded-[16px] bg-white p-[22px] shadow-[0px_18px_44px_rgba(0,0,0,0.3)]"
+        className="relative flex max-h-[min(699px,100dvh)] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[16px] bg-white shadow-[0px_18px_44px_rgba(0,0,0,0.3)] sm:max-h-[calc(100dvh-2rem)] sm:rounded-[16px]"
       >
-        <div className="flex w-full items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3 border-b border-[#EEF1EE] px-4 py-4 sm:px-[22px] sm:pt-[22px] sm:pb-4">
           <div className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-[#E3F2EB] text-[16px] leading-none text-[#127338]">
             🖼
           </div>
@@ -375,7 +383,7 @@ export default function AdminNewBannerModal({
             <h2 id="admin-new-banner-title" className="text-[16.5px] font-bold leading-5 text-[#1C211F]">
               {resolvedTitle}
             </h2>
-            <p className="truncate text-[12px] font-normal leading-[15px] text-[#6B736E]">
+            <p className="text-[12px] font-normal leading-[15px] text-[#6B736E] sm:truncate">
               {resolvedDescription}
             </p>
           </div>
@@ -390,218 +398,220 @@ export default function AdminNewBannerModal({
           </button>
         </div>
 
-        <div className="flex w-full flex-col items-start gap-1.5">
-          <FieldLabel>Type</FieldLabel>
-          <div className="flex w-full items-start rounded-[10px] bg-[#EDF0ED] p-[3px]">
-            {DEFAULT_BANNER_TYPES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                disabled={busy}
-                onClick={() => setField('type', item.id)}
-                className={cn(
-                  'flex h-[31px] flex-1 items-start justify-center rounded-[8px] px-3 py-2 text-[12px] leading-[15px] transition',
-                  form.type === item.id
-                    ? 'bg-white font-semibold text-[#1C211F]'
-                    : 'font-medium text-[#737A75]',
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-[22px]">
+          <div className="flex w-full flex-col items-start gap-1.5">
+            <FieldLabel>Type</FieldLabel>
+            <div className="flex w-full flex-col rounded-[10px] bg-[#EDF0ED] p-[3px] min-[480px]:flex-row min-[480px]:items-stretch">
+              {DEFAULT_BANNER_TYPES.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setField('type', item.id)}
+                  className={cn(
+                    'flex min-h-[31px] flex-1 items-center justify-center rounded-[8px] px-2 py-2 text-center text-[12px] leading-[15px] transition sm:px-3',
+                    form.type === item.id
+                      ? 'bg-white font-semibold text-[#1C211F]'
+                      : 'font-medium text-[#737A75]',
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="flex w-full flex-col items-start gap-1.5">
-          <FieldLabel>Image</FieldLabel>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
-            className="hidden"
-            onChange={handleFileChange}
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={handlePickImage}
-            className={cn(
-              'relative flex h-[77px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border-[1.2px] border-dashed border-[#E3E6E3] bg-[#F7FAF7] hover:bg-[#f0f4f0] disabled:opacity-60',
-              displayImage && 'border-solid',
-            )}
-          >
-            {displayImage ? (
-              <>
-                <img
-                  src={displayImage}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                  onLoad={() => {
-                    // If we are showing the remote URL, drop any leftover blob.
-                    if (!localPreviewUrl || displayImage === remoteDisplayUrl) {
-                      handleRemoteImageLoad()
-                    } else if (remoteDisplayUrl && displayImage === localPreviewUrl) {
-                      // Warm the remote URL; revoke blob once it loads.
-                      const probe = new Image()
-                      probe.onload = handleRemoteImageLoad
-                      probe.onerror = handleRemoteImageError
-                      probe.src = remoteDisplayUrl
-                    }
-                  }}
-                  onError={handleRemoteImageError}
-                />
-                <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1.5 text-[12px] font-medium leading-[15px] text-[#6B736E]">
-                  {isUploading ? 'Uploading…' : 'Change image'}
-                </span>
-              </>
-            ) : (
-              <>
-                <Upload size={18} strokeWidth={2} className="text-[#6B736E]" />
-                <span className="text-[12px] font-medium leading-[15px] text-[#6B736E]">
-                  {isUploading ? 'Uploading…' : 'Upload image (1200×400 recommended)'}
-                </span>
-              </>
-            )}
-          </button>
-          {uploadError ? (
-            <p className="w-full text-[12px] font-medium text-[#c91a24]">
-              {formatApiErrorMessage(uploadError, 'Unable to upload image.')}{' '}
-              <button
-                type="button"
-                className="underline"
+          <div className="flex w-full flex-col items-start gap-1.5">
+            <FieldLabel>Image</FieldLabel>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handlePickImage}
+              className={cn(
+                'relative flex h-[77px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border-[1.2px] border-dashed border-[#E3E6E3] bg-[#F7FAF7] hover:bg-[#f0f4f0] disabled:opacity-60',
+                displayImage && 'border-solid',
+              )}
+            >
+              {displayImage ? (
+                <>
+                  <img
+                    src={displayImage}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onLoad={() => {
+                      // If we are showing the remote URL, drop any leftover blob.
+                      if (!localPreviewUrl || displayImage === remoteDisplayUrl) {
+                        handleRemoteImageLoad()
+                      } else if (remoteDisplayUrl && displayImage === localPreviewUrl) {
+                        // Warm the remote URL; revoke blob once it loads.
+                        const probe = new Image()
+                        probe.onload = handleRemoteImageLoad
+                        probe.onerror = handleRemoteImageError
+                        probe.src = remoteDisplayUrl
+                      }
+                    }}
+                    onError={handleRemoteImageError}
+                  />
+                  <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1.5 text-[12px] font-medium leading-[15px] text-[#6B736E]">
+                    {isUploading ? 'Uploading…' : 'Change image'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Upload size={18} strokeWidth={2} className="text-[#6B736E]" />
+                  <span className="px-3 text-center text-[12px] font-medium leading-[15px] text-[#6B736E]">
+                    {isUploading ? 'Uploading…' : 'Upload image (1200×400 recommended)'}
+                  </span>
+                </>
+              )}
+            </button>
+            {uploadError ? (
+              <p className="w-full text-[12px] font-medium text-[#c91a24]">
+                {formatApiErrorMessage(uploadError, 'Unable to upload image.')}{' '}
+                <button
+                  type="button"
+                  className="underline"
+                  disabled={busy}
+                  onClick={handlePickImage}
+                >
+                  Retry
+                </button>
+              </p>
+            ) : null}
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Title</FieldLabel>
+              <TextInput
+                value={form.title}
                 disabled={busy}
-                onClick={handlePickImage}
-              >
-                Retry
-              </button>
+                onChange={(value) => setField('title', value)}
+              />
+            </label>
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Subtitle / CTA</FieldLabel>
+              <TextInput
+                value={form.subtitle}
+                disabled={busy}
+                onChange={(value) => setField('subtitle', value)}
+              />
+            </label>
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Tap action</FieldLabel>
+              <SelectField
+                value={form.tapAction}
+                disabled={busy}
+                onChange={handleTapActionChange}
+                options={tapActions.length ? tapActions : DEFAULT_TAP_ACTIONS}
+              />
+            </label>
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Target{targetsLoading ? '…' : ''}</FieldLabel>
+              <SelectField
+                value={form.targetId || form.target}
+                disabled={busy || targetsLoading}
+                onChange={handleTargetChange}
+                options={targetOptions}
+              />
+            </label>
+          </div>
+
+          <label className="flex w-full max-w-full flex-col items-start gap-1.5 min-[520px]:w-[188px]">
+            <FieldLabel>Placement</FieldLabel>
+            <SelectField
+              value={form.placement}
+              disabled={busy}
+              onChange={handlePlacementChange}
+              options={placementOptions}
+            />
+          </label>
+
+          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Start</FieldLabel>
+              <DateField
+                value={form.start}
+                disabled={busy}
+                onChange={(value) => setField('start', value)}
+              />
+            </label>
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>End</FieldLabel>
+              <DateField
+                value={form.end}
+                disabled={busy}
+                onChange={(value) => setField('end', value)}
+              />
+            </label>
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+            <label className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Audience</FieldLabel>
+              <SelectField
+                value={form.audience}
+                disabled={busy}
+                onChange={(value) => setField('audience', value)}
+                options={audiences.length ? audiences : DEFAULT_AUDIENCES}
+              />
+            </label>
+            <div className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>Active</FieldLabel>
+              <div className="flex min-h-[38px] w-full items-center gap-2.5 rounded-[10px] bg-[#F7FAF7] px-3 py-[9px]">
+                <span className="text-[13px] font-semibold leading-4 text-[#1C211F]">
+                  Publish immediately
+                </span>
+                <div className="flex-1" />
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.active}
+                  disabled={busy}
+                  onClick={() => setField('active', !form.active)}
+                  className={cn(
+                    'relative flex h-[26px] w-[44px] shrink-0 items-center rounded-xl px-1 transition',
+                    form.active ? 'justify-end bg-[#2E9E4D]' : 'justify-start bg-[#cfd6d1]',
+                  )}
+                >
+                  <span className="h-[18px] w-[18px] rounded-full bg-white" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {error ? (
+            <p className="w-full text-[12.5px] font-medium text-[#c91a24]">
+              {formatApiErrorMessage(error, 'Unable to save banner.')}
             </p>
           ) : null}
         </div>
 
-        <div className="flex w-full items-start gap-4">
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Title</FieldLabel>
-            <TextInput
-              value={form.title}
-              disabled={busy}
-              onChange={(value) => setField('title', value)}
-            />
-          </label>
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Subtitle / CTA</FieldLabel>
-            <TextInput
-              value={form.subtitle}
-              disabled={busy}
-              onChange={(value) => setField('subtitle', value)}
-            />
-          </label>
-        </div>
-
-        <div className="flex w-full items-start gap-4">
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Tap action</FieldLabel>
-            <SelectField
-              value={form.tapAction}
-              disabled={busy}
-              onChange={handleTapActionChange}
-              options={tapActions.length ? tapActions : DEFAULT_TAP_ACTIONS}
-            />
-          </label>
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Target{targetsLoading ? '…' : ''}</FieldLabel>
-            <SelectField
-              value={form.targetId || form.target}
-              disabled={busy || targetsLoading}
-              onChange={handleTargetChange}
-              options={targetOptions}
-            />
-          </label>
-        </div>
-
-        <label className="flex w-[188px] max-w-full flex-col items-start gap-1.5">
-          <FieldLabel>Placement</FieldLabel>
-          <SelectField
-            value={form.placement}
-            disabled={busy}
-            onChange={handlePlacementChange}
-            options={placementOptions}
-          />
-        </label>
-
-        <div className="flex w-full items-start gap-4">
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Start</FieldLabel>
-            <DateField
-              value={form.start}
-              disabled={busy}
-              onChange={(value) => setField('start', value)}
-            />
-          </label>
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>End</FieldLabel>
-            <DateField
-              value={form.end}
-              disabled={busy}
-              onChange={(value) => setField('end', value)}
-            />
-          </label>
-        </div>
-
-        <div className="flex w-full items-start gap-4">
-          <label className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Audience</FieldLabel>
-            <SelectField
-              value={form.audience}
-              disabled={busy}
-              onChange={(value) => setField('audience', value)}
-              options={audiences.length ? audiences : DEFAULT_AUDIENCES}
-            />
-          </label>
-          <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-            <FieldLabel>Active</FieldLabel>
-            <div className="flex h-[38px] w-full items-center gap-2.5 rounded-[10px] bg-[#F7FAF7] px-3 py-[9px]">
-              <span className="text-[13px] font-semibold leading-4 text-[#1C211F]">
-                Publish immediately
-              </span>
-              <div className="flex-1" />
-              <button
-                type="button"
-                role="switch"
-                aria-checked={form.active}
-                disabled={busy}
-                onClick={() => setField('active', !form.active)}
-                className={cn(
-                  'relative flex h-[26px] w-[44px] shrink-0 items-center rounded-xl px-1 transition',
-                  form.active ? 'justify-end bg-[#2E9E4D]' : 'justify-start bg-[#cfd6d1]',
-                )}
-              >
-                <span className="h-[18px] w-[18px] rounded-full bg-white" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {error ? (
-          <p className="w-full text-[12.5px] font-medium text-[#c91a24]">
-            {formatApiErrorMessage(error, 'Unable to save banner.')}
-          </p>
-        ) : null}
-
-        <div className="mt-auto flex w-full items-center gap-2.5">
+        <div className="flex shrink-0 items-center gap-2.5 border-t border-[#EEF1EE] px-4 py-4 sm:px-[22px] sm:pb-[22px]">
           <button
             type="button"
             disabled={busy}
             onClick={onClose}
-            className="inline-flex h-[38px] items-center justify-center rounded-[20px] border-[1.2px] border-[#E3E6E3] bg-white px-[18px] text-[13px] font-semibold leading-4 text-[#1C211F] hover:bg-[#F7FAF7] disabled:opacity-60"
+            className="inline-flex h-[38px] flex-1 items-center justify-center rounded-[20px] border-[1.2px] border-[#E3E6E3] bg-white px-[18px] text-[13px] font-semibold leading-4 text-[#1C211F] hover:bg-[#F7FAF7] disabled:opacity-60 sm:flex-none"
           >
             Cancel
           </button>
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
           <button
             type="button"
             disabled={busy}
             onClick={handleSubmit}
-            className="inline-flex h-[38px] items-center justify-center rounded-[20px] bg-[#2E9E4D] px-[18px] text-[13px] font-semibold leading-4 text-white hover:bg-[#278a43] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-[38px] flex-1 items-center justify-center rounded-[20px] bg-[#2E9E4D] px-[18px] text-[13px] font-semibold leading-4 text-white hover:bg-[#278a43] disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
           >
             {isUploading ? 'Uploading…' : isSubmitting ? 'Saving…' : resolvedSubmit}
           </button>

@@ -186,8 +186,15 @@ export const adminUiEditorService = {
       body,
       requestOptions(options),
     )
+    const mapped =
+      mapAdminUiEditorBannerDetail(response?.data) ||
+      mapAdminUiEditorBannerDetail({ ...body, id: response?.data?.id })
+    // Keep the uploaded imageUrl even if the create response omits it.
+    if (mapped && !mapped.imageUrl && body.imageUrl) {
+      mapped.imageUrl = body.imageUrl
+    }
     return {
-      data: mapAdminUiEditorBannerDetail(response?.data) || mapAdminUiEditorBannerDetail({ ...body, id: response?.data?.id }),
+      data: mapped,
       meta: response?.meta ?? null,
       raw: response?.data ?? null,
     }
@@ -206,10 +213,14 @@ export const adminUiEditorService = {
       body,
       requestOptions(options),
     )
+    const mapped =
+      mapAdminUiEditorBannerDetail(response?.data) ||
+      mapAdminUiEditorBannerDetail({ ...body, id })
+    if (mapped && !mapped.imageUrl && body.imageUrl) {
+      mapped.imageUrl = body.imageUrl
+    }
     return {
-      data:
-        mapAdminUiEditorBannerDetail(response?.data) ||
-        mapAdminUiEditorBannerDetail({ ...body, id }),
+      data: mapped,
       meta: response?.meta ?? null,
       raw: response?.data ?? null,
     }

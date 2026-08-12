@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
 import { resolveAdminMediaUrl } from '../../mappers/admin/mapAdminUpload'
 import { cn } from './cn'
@@ -16,6 +16,10 @@ export default function AdminMediaImage({
 }) {
   const [failed, setFailed] = useState(false)
   const displaySrc = resolveAdminMediaUrl(src)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [displaySrc])
 
   if (!displaySrc || failed) {
     return (

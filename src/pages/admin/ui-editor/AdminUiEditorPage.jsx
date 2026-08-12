@@ -558,7 +558,11 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
       onClick={() => onAdd?.({ placement: label, placementKey: placementKey || '' })}
       className={cn(
         'relative flex w-full flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-[#81c784] text-center hover:bg-[#e8f5e9]',
-        hasBanner ? 'min-h-[72px] border-solid bg-[#e8f5e9]' : 'bg-[#e8f5e9]/70 px-2 py-3',
+        hasBanner
+          ? banner?.imageUrl
+            ? 'min-h-[112px] border-solid bg-[#e8f5e9]'
+            : 'min-h-[72px] border-solid bg-[#e8f5e9]'
+          : 'bg-[#e8f5e9]/70 px-2 py-3',
       )}
     >
       {banner?.imageUrl ? (
@@ -573,7 +577,7 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
         <span
           className={cn(
             'relative z-[1] flex w-full flex-col items-center gap-0.5 px-2 py-2',
-            banner?.imageUrl && 'bg-gradient-to-t from-black/55 via-black/20 to-transparent pt-8',
+            banner?.imageUrl && 'bg-gradient-to-t from-black/55 via-black/20 to-transparent pt-10',
           )}
         >
           <span
@@ -618,16 +622,17 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
 
   const bannerForSlot = (slot) => {
     if (!slot?.id) return null
-    return (
-      banners.find((banner) => banner.placementKey === slot.id) ||
-      banners.find(
-        (banner) =>
-          banner.placement &&
+    const matches = banners.filter(
+      (banner) =>
+        banner.placementKey === slot.id ||
+        (banner.placement &&
           slot.label &&
-          String(banner.placement).toLowerCase() === String(slot.label).toLowerCase(),
-      ) ||
-      null
+          String(banner.placement).toLowerCase().replace(/[—–-]/g, '·') ===
+            String(slot.label).toLowerCase().replace(/[—–-]/g, '·')),
     )
+    if (!matches.length) return null
+    // Prefer a banner that has an image so the live preview reflects uploaded creatives.
+    return matches.find((banner) => banner.imageUrl) || matches[0]
   }
 
   return (
@@ -753,13 +758,20 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
   const banners = bannersEnabled ? apiBanners : apiBanners.length > 0 ? apiBanners : ALL_BANNERS
 
   const slotsWithBanners = useMemo(() => {
+    const normalizePlacement = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/[—–-]/g, '·')
+        .replace(/\s+/g, ' ')
+        .trim()
+
     return slots.map((slot) => {
       const matched = banners.filter(
         (banner) =>
           banner.placementKey === slot.id ||
           (banner.placement &&
             slot.label &&
-            String(banner.placement).toLowerCase() === String(slot.label).toLowerCase()),
+            normalizePlacement(banner.placement) === normalizePlacement(slot.label)),
       )
       const count = matched.length
       return {
