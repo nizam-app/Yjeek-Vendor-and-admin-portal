@@ -63,16 +63,14 @@ function handleUnauthorized(scope) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent(UNAUTHORIZED_EVENT, {
-        detail: { role: scope === 'admin' ? 'admin' : 'vendor' },
+        detail: { role: 'admin' },
       }),
     )
   }
 }
 
 /**
- * Role-neutral HTTP client.
- * Vendor and future Admin services both call this same client:
- *   apiClient.get(endpoints.vendor.dashboard)
+ * Shared HTTP client for Admin services:
  *   apiClient.get(endpoints.admin.dashboard)
  */
 async function httpRequest({
@@ -224,40 +222,6 @@ export const apiClient = {
   patch: createMethod('PATCH'),
   delete: createMethod('DELETE'),
 }
-
-/**
- * Development-only URL resolution check.
- * Does not send a network request and does not log credentials or tokens.
- */
-function verifyVendorLoginUrlResolution() {
-  if (!import.meta.env.DEV) return
-  if (!API_BASE_URL) return
-
-  const fromEndpoint = buildApiUrl(endpoints.vendor.auth.login)
-  const withLeadingSlash = buildApiUrl('/vendor-panel/auth/login')
-  const withoutLeadingSlash = buildApiUrl('vendor-panel/auth/login')
-  const expected = `${API_BASE_URL}/vendor-panel/auth/login`
-
-  const ok =
-    fromEndpoint === expected &&
-    withLeadingSlash === expected &&
-    withoutLeadingSlash === expected &&
-    !fromEndpoint.includes('/api/v1//') &&
-    !fromEndpoint.includes('v1vendor-panel')
-
-  if (ok) {
-    console.info('[yjeek:api] Vendor login URL resolved:', fromEndpoint)
-  } else {
-    console.error('[yjeek:api] Vendor login URL resolution failed.', {
-      fromEndpoint,
-      withLeadingSlash,
-      withoutLeadingSlash,
-      expected,
-    })
-  }
-}
-
-verifyVendorLoginUrlResolution()
 
 /**
  * Development-only Admin login URL resolution check.

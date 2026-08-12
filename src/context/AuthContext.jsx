@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { UNAUTHORIZED_EVENT } from '../api/client'
-import { apiConfig, isAdminRealApiFeature } from '../api/config'
+import { isAdminRealApiFeature } from '../api/config'
 import { ApiError } from '../api/errors'
 import {
   clearAdminAuth,
@@ -10,7 +10,6 @@ import {
   setAccessToken,
 } from '../api/token'
 import { adminAuthService } from '../services/admin/authService'
-import { authService } from '../services/vendor/authService'
 
 const AuthContext = createContext(null)
 /** Shared session key — stores role-aware user: { email, name, role, ... } */
@@ -18,12 +17,6 @@ const STORAGE_KEY = 'yjeek_auth'
 const PENDING_ADMIN_KEY = 'yjeek_pending_admin'
 
 export const demoAccounts = {
-  vendor: {
-    email: 'vendor@greenkitchen.bh',
-    password: 'password123',
-    name: 'Green Kitchen Admin',
-    role: 'vendor',
-  },
   admin: {
     email: 'admin@gmail.com',
     password: 'admin123',
@@ -37,7 +30,7 @@ function readStoredUser() {
   if (!saved) return null
   try {
     const parsed = JSON.parse(saved)
-    if (!parsed || (parsed.role !== 'vendor' && parsed.role !== 'admin')) {
+    if (!parsed || parsed.role !== 'admin') {
       localStorage.removeItem(STORAGE_KEY)
       return null
     }
@@ -54,50 +47,18 @@ function persistUser(nextUser) {
     return
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser))
-  if (nextUser.role === 'vendor') {
-    setAuthPayload(nextUser, 'vendor')
-  }
   if (nextUser.role === 'admin') {
     setAuthPayload(nextUser, 'admin')
   }
 }
 
-function clearVendorSessionState() {
-  clearVendorAuth()
-  const current = readStoredUser()
-  if (!current || current.role === 'vendor') {
-    localStorage.removeItem(STORAGE_KEY)
-  }
-}
-
 /**
- * Restore Vendor session via Get Me when a Vendor access token exists
- * and the active (or empty) session is not an Admin user.
- */
-function shouldRestoreVendorSession(storedUser) {
-  if (apiConfig.vendorUseMockApi) return false
-  if (!getAccessToken('vendor')) return false
-  if (storedUser?.role === 'admin') return false
-  // Only prefer Admin when there is no active Vendor session to restore.
-  // Otherwise Live Orders keeps a stale serviceModes (e.g. dineIn: false).
-  if (
-    !storedUser &&
-    isAdminRealApiFeature('auth') &&
-    getAccessToken('admin')
-  ) {
-    return false
-  }
-  return true
-}
-
-/**
- * Restore Admin session via Get Me when an Admin access token exists
- * and the active (or empty) session is not a Vendor user.
+ * Restore Admin session via Get Me when an Admin access token exists.
  */
 function shouldRestoreAdminSession(storedUser) {
   if (!isAdminRealApiFeature('auth')) return false
   if (!getAccessToken('admin')) return false
-  if (storedUser?.role === 'vendor') return false
+  if (storedUser && storedUser.role !== 'admin') return false
   return true
 }
 
@@ -115,7 +76,7 @@ export function AuthProvider({ children }) {
   const [authError, setAuthError] = useState(null)
   const [isAuthInitializing, setIsAuthInitializing] = useState(() => {
     const stored = readStoredUser()
-    return shouldRestoreVendorSession(stored) || shouldRestoreAdminSession(stored)
+    return shouldRestoreAdminSession(stored)
   })
   const [pendingAdmin, setPendingAdmin] = useState(() => {
     const saved = sessionStorage.getItem(PENDING_ADMIN_KEY)
@@ -132,19 +93,6 @@ export function AuthProvider({ children }) {
     function onUnauthorized(event) {
       const role = event?.detail?.role
 
-      // Vendor API 401: clear Vendor auth only. Admin session stays intact.
-      if (role === 'vendor' || role == null) {
-        clearVendorAuth()
-        setAuthError(null)
-        setUser((current) => {
-          if (current?.role !== 'vendor') return current
-          localStorage.removeItem(STORAGE_KEY)
-          return null
-        })
-        return
-      }
-
-      // Admin API 401: clear Admin auth only. Vendor session stays intact.
       if (role === 'admin') {
         clearAdminAuth()
         setUser((current) => {
@@ -164,9 +112,8 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const storedUser = readStoredUser()
     const restoreAdmin = shouldRestoreAdminSession(storedUser)
-    const restoreVendor = shouldRestoreVendorSession(storedUser)
 
-    if (!restoreAdmin && !restoreVendor) {
+    if (!restoreAdmin) {
       setIsAuthInitializing(false)
       return undefined
     }
@@ -178,16 +125,7 @@ export function AuthProvider({ children }) {
       setAuthError(null)
 
       try {
-        if (restoreAdmin) {
-          const nextUser = await adminAuthService.getCurrentUser()
-          if (cancelled) return
-          persistUser(nextUser)
-          setUser(nextUser)
-          setAuthError(null)
-          return
-        }
-
-        const nextUser = await authService.getCurrentUser()
+        const nextUser = await adminAuthService.getCurrentUser()
         if (cancelled) return
         persistUser(nextUser)
         setUser(nextUser)
@@ -195,21 +133,14 @@ export function AuthProvider({ children }) {
       } catch (error) {
         if (cancelled) return
 
-        // 401 is handled by apiClient → UNAUTHORIZED_EVENT.
         if (error?.isUnauthorized || error?.status === 401) {
-          if (restoreAdmin) {
-            clearAdminSessionState()
-            setPendingAdmin(null)
-            setUser((current) => (current?.role === 'admin' ? null : current))
-          } else {
-            clearVendorSessionState()
-            setUser((current) => (current?.role === 'vendor' ? null : current))
-          }
+          clearAdminSessionState()
+          setPendingAdmin(null)
+          setUser((current) => (current?.role === 'admin' ? null : current))
           setAuthError(null)
           return
         }
 
-        // Network / server errors: keep token + stored user; expose recoverable error.
         setAuthError(error)
       } finally {
         if (!cancelled) setIsAuthInitializing(false)
@@ -234,17 +165,6 @@ export function AuthProvider({ children }) {
     return nextUser
   }, [])
 
-  const refreshVendorSession = useCallback(async () => {
-    if (apiConfig.vendorUseMockApi || !getAccessToken('vendor')) {
-      return null
-    }
-    const nextUser = await authService.getCurrentUser()
-    persistUser(nextUser)
-    setUser(nextUser)
-    setAuthError(null)
-    return nextUser
-  }, [])
-
   const value = useMemo(
     () => ({
       user,
@@ -252,40 +172,6 @@ export function AuthProvider({ children }) {
       isAuthInitializing,
       authError,
       refreshAdminSession,
-      refreshVendorSession,
-      async login(email, password) {
-        const trimmedEmail = String(email ?? '').trim()
-        const normalizedEmail = trimmedEmail.toLowerCase()
-
-        // Vendor demo login — only while Vendor mock mode is on.
-        if (apiConfig.vendorUseMockApi) {
-          const vendorDemo = demoAccounts.vendor
-          if (normalizedEmail === vendorDemo.email && password === vendorDemo.password) {
-            const next = {
-              email: vendorDemo.email,
-              name: vendorDemo.name,
-              role: 'vendor',
-            }
-            persistUser(next)
-            setAccessToken(null, 'vendor')
-            setAuthError(null)
-            setUser(next)
-            return next
-          }
-          return null
-        }
-
-        // Real Vendor login via confirmed API. Does not clear or modify Admin auth.
-        const session = await authService.login({
-          email: trimmedEmail,
-          password,
-        })
-        authService.persistSession(session)
-        persistUser(session.user)
-        setAuthError(null)
-        setUser(session.user)
-        return session.user
-      },
       async loginAdmin(email, password, options = {}) {
         const trimmedEmail = String(email ?? '').trim()
         const normalizedEmail = trimmedEmail.toLowerCase()
@@ -381,26 +267,8 @@ export function AuthProvider({ children }) {
       async logout() {
         const currentRole = user?.role
 
-        // Vendor Sign out — call confirmed Logout API in real mode, then always
-        // clear Vendor session locally. Does not clear Admin auth/storage.
-        if (currentRole === 'vendor') {
-          if (!apiConfig.vendorUseMockApi && getAccessToken('vendor')) {
-            try {
-              await authService.logout()
-            } catch {
-              // Sign out must always complete locally even if the API fails.
-            }
-          }
-
-          clearVendorAuth()
-          localStorage.removeItem(STORAGE_KEY)
-          setAuthError(null)
-          setUser(null)
-          return
-        }
-
         // Admin Sign out — call confirmed Logout API when auth feature is on,
-        // then always clear Admin session locally. Does not clear Vendor auth.
+        // then always clear Admin session locally.
         if (currentRole === 'admin') {
           if (isAdminRealApiFeature('auth') && getAccessToken('admin')) {
             try {
@@ -428,7 +296,7 @@ export function AuthProvider({ children }) {
         setUser(null)
       },
     }),
-    [authError, isAuthInitializing, pendingAdmin, refreshAdminSession, refreshVendorSession, user],
+    [authError, isAuthInitializing, pendingAdmin, refreshAdminSession, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

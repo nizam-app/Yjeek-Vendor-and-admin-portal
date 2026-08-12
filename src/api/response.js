@@ -1,9 +1,8 @@
 /**
  * Shared response helpers.
  *
- * Does not assume backend field names. When a real Vendor/Admin response sample
+ * Does not assume backend field names. When a real Admin response sample
  * is available, add role-specific mappers under:
- *   src/mappers/vendor/
  *   src/mappers/admin/
  */
 

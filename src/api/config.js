@@ -1,7 +1,7 @@
 /**
  * Shared API configuration (role-neutral).
  *
- * Change only VITE_API_BASE_URL to point every Vendor (and future Admin) request
+ * Change only VITE_API_BASE_URL to point every Admin request
  * at a different backend. Never hardcode origins, ports, or `/api/v1` elsewhere.
  */
 
@@ -22,22 +22,8 @@ function normalizeApiBaseUrl(rawValue) {
   return String(rawValue).trim().replace(/\/+$/, '')
 }
 
-const legacyUseMockApi = readBooleanEnv(import.meta.env.VITE_USE_MOCK_API, undefined)
-
 /** Normalized backend API base (includes `/api/v1` when provided via env). */
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL)
-
-/**
- * Vendor mock mode.
- * - Explicit VITE_VENDOR_USE_MOCK_API wins.
- * - Legacy VITE_USE_MOCK_API applies to Vendor only (never Admin).
- * - Default true: keep existing mock UI until a real Vendor API is wired.
- * - Set VITE_VENDOR_USE_MOCK_API=false only after connecting confirmed endpoints.
- */
-const vendorUseMockApi = readBooleanEnv(
-  import.meta.env.VITE_VENDOR_USE_MOCK_API,
-  legacyUseMockApi !== undefined ? legacyUseMockApi : true,
-)
 
 /**
  * Admin mock mode.
@@ -67,11 +53,11 @@ const adminRealApiFeatures = parseAdminRealApiFeatures(
 
 const timeoutMs = Number(import.meta.env.VITE_API_TIMEOUT_MS) || 30000
 
-const needsApiBaseUrl = !vendorUseMockApi || adminRealApiFeatures.length > 0 || !adminUseMockApi
+const needsApiBaseUrl = adminRealApiFeatures.length > 0 || !adminUseMockApi
 
 if (needsApiBaseUrl && !API_BASE_URL) {
   const message =
-    '[yjeek:api] VITE_API_BASE_URL is required when real Vendor/Admin API mode is on. ' +
+    '[yjeek:api] VITE_API_BASE_URL is required when real Admin API mode is on. ' +
     'Set it in `.env`, e.g. VITE_API_BASE_URL=http://host:port/api/v1'
   if (import.meta.env.DEV) {
     console.error(message)
@@ -90,7 +76,6 @@ export const apiConfig = {
   /** @deprecated Prefer API_BASE_URL — kept for existing imports. */
   baseUrl: API_BASE_URL,
   timeoutMs,
-  vendorUseMockApi,
   adminUseMockApi,
   /** Lowercased feature names from VITE_ADMIN_REAL_API_FEATURES. */
   adminRealApiFeatures,
@@ -110,10 +95,10 @@ export function isAdminRealApiFeature(feature) {
 
 /**
  * Resolve whether a request should use the mock client.
- * @param {'vendor' | 'admin' | 'shared'} scope
+ * @param {'admin' | 'shared'} scope
  * @param {{ feature?: string, forceReal?: boolean }} [options]
  */
-export function shouldUseMockApi(scope = 'vendor', options = {}) {
+export function shouldUseMockApi(scope = 'admin', options = {}) {
   if (options.forceReal) return false
 
   if (scope === 'admin') {
@@ -121,27 +106,28 @@ export function shouldUseMockApi(scope = 'vendor', options = {}) {
     return apiConfig.adminUseMockApi
   }
 
-  return apiConfig.vendorUseMockApi
+  // Shared / unknown scopes stay on real API when base URL is configured.
+  return false
 }
 
 /**
  * Infer portal scope from a relative endpoint path.
- * Admin real-API paths will live under endpoints.admin when integrated.
+ * Admin real-API paths live under endpoints.admin.
  * Existing Admin mock paths start with `/admin`.
  */
 export function resolveRequestScope(url = '') {
   const path = String(url).split('?')[0]
   if (path === '/admin' || path.startsWith('/admin/')) return 'admin'
-  return 'vendor'
+  return 'admin'
 }
 
 /**
  * Join the normalized API base URL with a relative endpoint path.
  *
  * Accepts:
- *   "vendor-panel/auth/login"
- *   "/vendor-panel/auth/login"
- * Both become: `${API_BASE_URL}/vendor-panel/auth/login`
+ *   "admin/auth/login"
+ *   "/admin/auth/login"
+ * Both become: `${API_BASE_URL}/admin/auth/login`
  *
  * Preserves query strings on the endpoint. Rejects absolute http(s) URLs in
  * development so callers cannot accidentally bypass VITE_API_BASE_URL.
