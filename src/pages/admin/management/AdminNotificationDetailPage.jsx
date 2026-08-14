@@ -7,6 +7,7 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+import AdminDeleteNotificationModal from '../../../components/admin/AdminDeleteNotificationModal'
 
 const statTone = {
   ink: 'text-[#17231c]',
@@ -53,6 +54,7 @@ export default function AdminNotificationDetailPage() {
   const [actionBusy, setActionBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => {
@@ -88,21 +90,25 @@ export default function AdminNotificationDetailPage() {
     }
   }
 
-  async function handleDelete() {
+  function handleDelete() {
     if (!useReal || !notificationId || actionBusy) return
-    const confirmed = window.confirm('Delete this notification? This cannot be undone.')
-    if (!confirmed) return
-
     setActionError('')
     setActionSuccess('')
-    setActionBusy('delete')
+    setDeleteOpen(true)
+  }
+
+  async function handleConfirmDelete() {
+    if (!useReal || !notificationId) {
+      throw new Error('This notification cannot be deleted right now.')
+    }
+
     try {
       await adminService.deleteAdminMarketingNotification(notificationId)
-      navigate('/admin/marketing')
     } catch (err) {
-      setActionError(formatApiErrorMessage(err, 'Failed to delete notification.'))
-      setActionBusy('')
+      throw new Error(formatApiErrorMessage(err, 'Failed to delete notification.'))
     }
+    setDeleteOpen(false)
+    navigate('/admin/marketing')
   }
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
@@ -176,7 +182,7 @@ export default function AdminNotificationDetailPage() {
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#f0d4d2] bg-white px-3.5 text-[12.5px] font-bold text-[#d6453d] hover:bg-[#fdf6f5] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Trash2 size={14} strokeWidth={2.2} />
-            {actionBusy === 'delete' ? 'Deleting…' : 'Delete'}
+            Delete
           </button>
         </div>
       </div>
@@ -304,6 +310,13 @@ export default function AdminNotificationDetailPage() {
           </div>
         </div>
       </Card>
+
+      <AdminDeleteNotificationModal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        notificationTitle={detail.title || ''}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

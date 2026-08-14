@@ -20,14 +20,32 @@ function formatMoney(value) {
 }
 
 function formatJoinedDate(value) {
-  if (!value) return '—'
+  if (value == null || value === '') return '—'
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    return formatJoinedDate(
+      value.placedAt || value.createdAt || value.date || value.orderedAt || null,
+    )
+  }
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return String(value)
+  if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
   })
+}
+
+function formatLastOrder(value) {
+  if (value == null || value === '') return '—'
+  if (typeof value === 'object' && !(value instanceof Date)) {
+    const dateLabel = formatJoinedDate(value)
+    const orderNumber = value.orderNumber ? String(value.orderNumber).trim() : ''
+    if (dateLabel !== '—' && orderNumber) return `${dateLabel} · ${orderNumber}`
+    if (dateLabel !== '—') return dateLabel
+    if (orderNumber) return orderNumber
+    return '—'
+  }
+  return formatJoinedDate(value)
 }
 
 function formatGender(value) {
@@ -208,7 +226,7 @@ export function mapAdminCustomerDetail(data) {
     const date = profile.joinedAt ? new Date(profile.joinedAt) : null
     return date && !Number.isNaN(date.getTime()) ? String(date.getFullYear()) : '—'
   })()
-  const lastOrder = profile.lastOrder ? formatJoinedDate(profile.lastOrder) : '—'
+  const lastOrder = formatLastOrder(profile.lastOrder)
   const accountActive =
     controls.accountActive === true ||
     (controls.accountActive !== false && status !== 'Suspended')
