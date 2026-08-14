@@ -252,13 +252,15 @@ export const adminVendorService = {
     })
 
     const raw = response?.data
-    const list = Array.isArray(raw?.items)
-      ? raw.items
-      : Array.isArray(raw?.slaModels)
-        ? raw.slaModels
-        : Array.isArray(raw)
-          ? raw
-          : []
+    const list = Array.isArray(raw?.models)
+      ? raw.models
+      : Array.isArray(raw?.items)
+        ? raw.items
+        : Array.isArray(raw?.slaModels)
+          ? raw.slaModels
+          : Array.isArray(raw)
+            ? raw
+            : []
 
     const slaModels = list
       .filter((item) => item && (item.id || item.slaModelId))

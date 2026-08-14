@@ -308,6 +308,7 @@ export function mapAdminUiEditorBanners(data) {
         appTarget: asString(item.appTarget || item.app || 'CUSTOMER').toUpperCase() || 'CUSTOMER',
         tapAction: asString(item.tapAction || ''),
         targetId: asString(item.targetId || '').trim() || null,
+        ctaUrl: asString(item.ctaUrl || '').trim() || null,
         thumb: thumbForType(type),
         raw: item,
       }
@@ -322,6 +323,7 @@ export function mapAdminUiEditorBanners(data) {
 
 /**
  * GET /admin/ui-editor/home/categories
+ * Backend presentCategory: { id, name, slug, iconUrl, iconEmoji, sortOrder, isActive, isFeatured, publishStatus }
  */
 export function mapAdminUiEditorHomeCategories(data) {
   const src = asObject(data) || {}
@@ -339,10 +341,32 @@ export function mapAdminUiEditorHomeCategories(data) {
       const isHidden = Boolean(
         item.isHidden || item.hidden || item.isActive === false,
       )
+      const iconUrlRaw = pickMediaUrl(
+        item.iconUrl,
+        item.icon_url,
+        item.imageUrl,
+        item.image_url,
+      )
+      const iconUrl =
+        iconUrlRaw &&
+        (/^https?:\/\//i.test(iconUrlRaw) ||
+          iconUrlRaw.startsWith('/') ||
+          iconUrlRaw.includes('/uploads/'))
+          ? iconUrlRaw
+          : null
+      // icon may be a URL string — don't treat URLs as emoji
+      const emojiRaw = asString(item.iconEmoji || item.emoji || '').trim()
+      const emoji =
+        emojiRaw && !/^https?:\/\//i.test(emojiRaw) && !emojiRaw.includes('/')
+          ? emojiRaw
+          : iconUrl
+            ? ''
+            : '📦'
       return {
         id,
         name: asString(item.name || item.label || 'Category'),
-        emoji: asString(item.iconEmoji || item.emoji || item.icon || '📦'),
+        emoji,
+        iconUrl: iconUrl || null,
         sortOrder: asNumber(item.sortOrder ?? item.order ?? index, index),
         isFeatured: item.isFeatured != null ? Boolean(item.isFeatured) : true,
         isHidden,
@@ -358,20 +382,29 @@ export function mapAdminUiEditorHomeCategories(data) {
 
 /**
  * POST /admin/ui-editor/home/categories body
- * Confirmed: { name, isFeatured, iconEmoji }
+ * Backend: { name, slug?, iconUrl?, iconEmoji?, sortOrder?, isFeatured?, isActive? }
  */
 export function mapAdminCreateHomeCategoryRequest(input = {}) {
   const src = asObject(input) || {}
-  return {
+  const body = {
     name: asString(src.name || 'New Category').trim() || 'New Category',
     isFeatured: src.isFeatured != null ? Boolean(src.isFeatured) : true,
-    iconEmoji: asString(src.iconEmoji || src.emoji || '✨').trim() || '✨',
   }
+  const iconUrl = pickMediaUrl(src.iconUrl, src.icon_url, src.imageUrl)
+  if (iconUrl && !iconUrl.startsWith('blob:') && !iconUrl.startsWith('data:')) {
+    body.iconUrl = iconUrl
+  }
+  const emoji = asString(src.iconEmoji || src.emoji).trim()
+  if (emoji) body.iconEmoji = emoji
+  else if (!body.iconUrl) body.iconEmoji = '✨'
+  if (src.isActive != null) body.isActive = Boolean(src.isActive)
+  if (src.sortOrder != null) body.sortOrder = asNumber(src.sortOrder, 0)
+  return body
 }
 
 /**
  * PATCH /admin/ui-editor/home/categories/:id body
- * Confirmed: { name, isFeatured, sortOrder, isActive }
+ * Backend: { name?, slug?, iconUrl?, iconEmoji?, isFeatured?, sortOrder?, isActive?, publishStatus? }
  */
 export function mapAdminPatchHomeCategoryRequest(input = {}) {
   const src = asObject(input) || {}
@@ -383,6 +416,14 @@ export function mapAdminPatchHomeCategoryRequest(input = {}) {
   else if (src.isHidden != null) body.isActive = !Boolean(src.isHidden)
   if (src.iconEmoji != null || src.emoji != null) {
     body.iconEmoji = asString(src.iconEmoji || src.emoji).trim()
+  }
+  if (src.iconUrl !== undefined || src.icon_url !== undefined || src.imageUrl !== undefined) {
+    const iconUrl = pickMediaUrl(src.iconUrl, src.icon_url, src.imageUrl)
+    if (iconUrl === null || iconUrl === '') {
+      body.iconUrl = null
+    } else if (!iconUrl.startsWith('blob:') && !iconUrl.startsWith('data:')) {
+      body.iconUrl = iconUrl
+    }
   }
   return body
 }
@@ -558,10 +599,12 @@ export function mapAdminUiEditorBannersMeta(data) {
 const TAP_ACTION_UI_TO_API = {
   'Open store': 'OPEN_STORE',
   'Open category': 'OPEN_CATEGORY',
+  'Open offer': 'OPEN_OFFER',
   'Open URL': 'OPEN_URL',
   'No action': 'NONE',
   OPEN_STORE: 'OPEN_STORE',
   OPEN_CATEGORY: 'OPEN_CATEGORY',
+  OPEN_OFFER: 'OPEN_OFFER',
   OPEN_URL: 'OPEN_URL',
   NONE: 'NONE',
   NO_ACTION: 'NONE',
@@ -570,6 +613,7 @@ const TAP_ACTION_UI_TO_API = {
 const TAP_ACTION_API_TO_UI = {
   OPEN_STORE: 'Open store',
   OPEN_CATEGORY: 'Open category',
+  OPEN_OFFER: 'Open offer',
   OPEN_URL: 'Open URL',
   NONE: 'No action',
   NO_ACTION: 'No action',
@@ -577,19 +621,27 @@ const TAP_ACTION_API_TO_UI = {
 
 const AUDIENCE_UI_TO_API = {
   'All customers': 'ALL',
-  'New customers': 'NEW',
-  'Returning customers': 'RETURNING',
-  VIP: 'VIP',
+  'New customers': 'NEW_CUSTOMERS',
+  'Returning customers': 'INACTIVE',
+  'Inactive customers': 'INACTIVE',
+  Vendors: 'VENDORS',
+  VIP: 'ALL',
   ALL: 'ALL',
-  NEW: 'NEW',
-  RETURNING: 'RETURNING',
+  NEW_CUSTOMERS: 'NEW_CUSTOMERS',
+  NEW: 'NEW_CUSTOMERS',
+  INACTIVE: 'INACTIVE',
+  RETURNING: 'INACTIVE',
+  VENDORS: 'VENDORS',
 }
 
 const AUDIENCE_API_TO_UI = {
   ALL: 'All customers',
+  NEW_CUSTOMERS: 'New customers',
   NEW: 'New customers',
-  RETURNING: 'Returning customers',
-  VIP: 'VIP',
+  INACTIVE: 'Inactive customers',
+  RETURNING: 'Inactive customers',
+  VENDORS: 'Vendors',
+  VIP: 'All customers',
 }
 
 const BANNER_TYPE_UI_TO_API = {
@@ -676,6 +728,7 @@ export function mapAdminUiEditorBannerDetail(data) {
     type: mapBannerTypeToUiId(src.bannerType || src.type),
     title: asString(src.title || src.name || ''),
     subtitle: asString(src.subtitle || src.cta || ''),
+    // Do not use src.url here — that can be a CTA link, not the banner image.
     imageUrl: pickMediaUrl(
       src.imageUrl,
       src.image_url,
@@ -685,13 +738,13 @@ export function mapAdminUiEditorBannerDetail(data) {
       src.thumbnailUrl,
       src.thumbnail,
       src.coverUrl,
-      src.url,
       src.media,
     ),
     tapAction: TAP_ACTION_API_TO_UI[asString(src.tapAction).toUpperCase()] || 'Open store',
     tapActionKey: asString(src.tapAction || 'OPEN_STORE').toUpperCase(),
     target: asString(src.targetLabel || src.targetName || src.targetId || src.target || ''),
-    targetId: asString(src.targetId || src.storeId || src.target || ''),
+    targetId: asString(src.targetId || src.storeId || src.vendorId || src.target || ''),
+    ctaUrl: asString(src.ctaUrl || ''),
     placement: placementLabel || placementKey,
     placementKey,
     start: toDateInputValue(src.startsAt || src.startAt || src.start),
@@ -714,15 +767,21 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
     resolvePlacementKey(src.placement, placements) ||
     'home_top'
 
+  const tapAction =
+    TAP_ACTION_UI_TO_API[src.tapAction] ||
+    TAP_ACTION_UI_TO_API[src.tapActionKey] ||
+    'OPEN_STORE'
+
   const body = {
     title: asString(src.title).trim(),
     subtitle: asString(src.subtitle).trim(),
     bannerType: BANNER_TYPE_UI_TO_API[src.type] || 'STATIC',
     placementKey,
     appTarget: String(appTarget || 'CUSTOMER').toUpperCase(),
-    tapAction: TAP_ACTION_UI_TO_API[src.tapAction] || TAP_ACTION_UI_TO_API[src.tapActionKey] || 'OPEN_STORE',
+    tapAction,
     audience: AUDIENCE_UI_TO_API[src.audience] || 'ALL',
     publishImmediately: Boolean(src.active),
+    isActive: Boolean(src.active),
   }
 
   const imageUrl = pickMediaUrl(src.imageUrl, src.image_url, src.image)
@@ -736,7 +795,25 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   if (endsAt) body.endsAt = endsAt
 
   const targetId = asString(src.targetId || src.target).trim()
-  if (targetId && body.tapAction === 'OPEN_STORE') {
+  const ctaUrl = asString(src.ctaUrl || src.url).trim()
+
+  if (tapAction === 'NONE') {
+    body.targetId = null
+    body.vendorId = null
+    body.ctaUrl = null
+  } else if (tapAction === 'OPEN_URL') {
+    body.targetId = null
+    body.vendorId = null
+    body.ctaUrl = ctaUrl || null
+  } else if (tapAction === 'OPEN_STORE') {
+    body.targetId = targetId || null
+    body.vendorId = targetId || null
+    body.ctaUrl = null
+  } else if (tapAction === 'OPEN_CATEGORY' || tapAction === 'OPEN_OFFER') {
+    body.targetId = targetId || null
+    body.vendorId = null
+    body.ctaUrl = null
+  } else if (targetId) {
     body.targetId = targetId
   }
 

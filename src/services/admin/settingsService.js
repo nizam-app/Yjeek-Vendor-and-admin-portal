@@ -3,11 +3,13 @@ import { apiConfig, isAdminRealApiFeature } from '../../api/config'
 import { endpoints } from '../../api/endpoints'
 import {
   mapAdminPatchGeneralRequest,
+  mapAdminPatchIntegrationsRequest,
   mapAdminPatchLocalizationRequest,
   mapAdminPatchNotificationsRequest,
   mapAdminPatchSecurityRequest,
   mapAdminSettingsAll,
   mapAdminSettingsGeneral,
+  mapAdminSettingsIntegrations,
   mapAdminSettingsLocalization,
   mapAdminSettingsNotifications,
   mapAdminSettingsPageState,
@@ -36,6 +38,7 @@ function settingsRequestOptions(options = {}) {
  *   GET/PATCH /admin/settings/localization
  *   GET/PATCH /admin/settings/notifications
  *   GET/PATCH /admin/settings/security
+ *   GET/PATCH /admin/settings/integrations
  *
  * Feature flag: `settings` (also on when VITE_ADMIN_USE_MOCK_API=false)
  */
@@ -72,14 +75,21 @@ export const adminSettingsService = {
     if (!useRealSettingsApi()) return { data: null, meta: null }
 
     const requestOpts = settingsRequestOptions(options)
-    const [allResponse, generalResponse, localizationResponse, notificationsResponse, securityResponse] =
-      await Promise.all([
-        apiClient.get(endpoints.admin.settings.root, requestOpts),
-        apiClient.get(endpoints.admin.settings.general, requestOpts),
-        apiClient.get(endpoints.admin.settings.localization, requestOpts),
-        apiClient.get(endpoints.admin.settings.notifications, requestOpts),
-        apiClient.get(endpoints.admin.settings.security, requestOpts),
-      ])
+    const [
+      allResponse,
+      generalResponse,
+      localizationResponse,
+      notificationsResponse,
+      securityResponse,
+      integrationsResponse,
+    ] = await Promise.all([
+      apiClient.get(endpoints.admin.settings.root, requestOpts),
+      apiClient.get(endpoints.admin.settings.general, requestOpts),
+      apiClient.get(endpoints.admin.settings.localization, requestOpts),
+      apiClient.get(endpoints.admin.settings.notifications, requestOpts),
+      apiClient.get(endpoints.admin.settings.security, requestOpts),
+      apiClient.get(endpoints.admin.settings.integrations, requestOpts),
+    ])
 
     return {
       data: mapAdminSettingsPageState(
@@ -89,6 +99,7 @@ export const adminSettingsService = {
         notificationsResponse?.data,
         securityResponse?.data,
         options.defaults,
+        integrationsResponse?.data,
       ),
       meta: allResponse?.meta ?? null,
     }
@@ -170,9 +181,43 @@ export const adminSettingsService = {
     }
   },
 
+  async getIntegrations(options = {}) {
+    if (!useRealSettingsApi()) return { data: null, meta: null }
+
+    const response = await apiClient.get(
+      endpoints.admin.settings.integrations,
+      settingsRequestOptions(options),
+    )
+    return {
+      data: mapAdminSettingsIntegrations(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async patchIntegrations(services, options = {}) {
+    if (!useRealSettingsApi()) {
+      throw new Error('Settings API is not enabled.')
+    }
+
+    const body = mapAdminPatchIntegrationsRequest(services)
+    const response = await apiClient.patch(
+      endpoints.admin.settings.integrations,
+      body,
+      settingsRequestOptions(options),
+    )
+
+    const mapped = mapAdminSettingsIntegrations(response?.data)
+    return {
+      data: mapped.length ? mapped : mapAdminSettingsIntegrations(body),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
   /**
    * Save the active settings tab.
-   * @param {'general'|'localization'|'notifications'|'security'} tabId
+   * @param {'general'|'localization'|'notifications'|'security'|'integrations'} tabId
    * @param {object} form
    */
   async saveTab(tabId, form, options = {}) {
@@ -181,6 +226,7 @@ export const adminSettingsService = {
     if (tab === 'localization') return this.patchLocalization(form, options)
     if (tab === 'notifications') return this.patchNotifications(form, options)
     if (tab === 'security') return this.patchSecurity(form, options)
+    if (tab === 'integrations') return this.patchIntegrations(form, options)
     throw new Error('This settings tab cannot be saved yet.')
   },
 }

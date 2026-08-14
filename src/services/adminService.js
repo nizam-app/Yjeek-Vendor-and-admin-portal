@@ -8,6 +8,7 @@ import { adminStoreTypeService } from './admin/storeTypeService'
 import { adminCustomerService } from './admin/customerService'
 import { adminMarketingService } from './admin/marketingService'
 import { adminReportService } from './admin/reportService'
+import { adminSlaModelsService } from './admin/slaModelsService'
 
 export const adminService = {
   getDashboard(options) {
@@ -198,6 +199,12 @@ export const adminService = {
   },
   listSlaModels(options = {}) {
     return adminVendorService.listSlaModels(options)
+  },
+  getSlaModelsPage(options = {}) {
+    return adminSlaModelsService.getForPage(options)
+  },
+  saveSlaModelsForm(payload, options = {}) {
+    return adminSlaModelsService.saveForm(payload, options)
   },
   updateVendor(vendorId, form, options = {}) {
     return adminVendorService.updateVendor(vendorId, form, options)

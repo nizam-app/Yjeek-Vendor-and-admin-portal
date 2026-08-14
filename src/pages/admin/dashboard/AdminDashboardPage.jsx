@@ -3,8 +3,20 @@ import { useAdminDashboard } from '../../../hooks/admin/useAdminDashboard'
 import { useAdminDashboardMap } from '../../../hooks/admin/useAdminDashboardMap'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { AdminLiveMap } from '../../../components/admin/AdminLiveMap'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, SkeletonBar } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+
+const KPI_PLACEHOLDERS = [
+  'Live',
+  'Placed',
+  'Accepted',
+  'Preparing',
+  'Pickup',
+  'On way',
+  'Arrived',
+  'Completed',
+  'Issues',
+]
 
 function DashboardKpiStrip({ items }) {
   return (
@@ -17,9 +29,13 @@ function DashboardKpiStrip({ items }) {
           key={label}
           className="relative flex min-w-0 flex-col items-center justify-center px-1"
         >
-          <strong className={cn('text-[20px] font-bold leading-5', tone === 'red' ? 'text-[#df4a4e]' : 'text-[#17231c]')}>
-            {value}
-          </strong>
+          {value == null ? (
+            <SkeletonBar className="h-5 w-8" />
+          ) : (
+            <strong className={cn('text-[20px] font-bold leading-5', tone === 'red' ? 'text-[#df4a4e]' : 'text-[#17231c]')}>
+              {value}
+            </strong>
+          )}
           <span className="max-w-full truncate text-[11px] font-medium leading-3 text-[#717c75]">{label}</span>
           {index < items.length - 1 ? (
             <ChevronRight
@@ -36,7 +52,7 @@ function DashboardKpiStrip({ items }) {
 }
 
 export default function AdminDashboardPage() {
-  const { data, error, isLoading, refetch } = useAdminDashboard({ region: 'BH' })
+  const { data, error, refetch } = useAdminDashboard({ region: 'BH' })
   const {
     data: mapData,
     error: mapError,
@@ -50,12 +66,15 @@ export default function AdminDashboardPage() {
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
-
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  const kpiItems = data?.summary?.length
+    ? data.summary
+    : KPI_PLACEHOLDERS.map((label) => ({ label, value: null }))
+  const slaColumns = data?.slaColumns?.length ? data.slaColumns : []
 
   return (
     <div className="px-4 pb-5 pt-2 max-[700px]:px-3">
-      <DashboardKpiStrip items={data.summary} />
+      <ApiErrorBanner error={error} onRetry={refetch} />
+      <DashboardKpiStrip items={kpiItems} />
 
       <div className="mt-4 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <AdminLiveMap
@@ -95,7 +114,14 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="mt-[18px] grid grid-cols-3 gap-8 max-[700px]:grid-cols-1">
-        {data.slaColumns.map((column) => (
+        {(slaColumns.length
+          ? slaColumns
+          : [
+              { title: 'At risk', count: '—', tone: 'red', orders: [] },
+              { title: 'Watch', count: '—', tone: 'yellow', orders: [] },
+              { title: 'On track', count: '—', tone: 'green', orders: [] },
+            ]
+        ).map((column) => (
           <section key={column.title} className="min-w-0">
             <div className="flex h-[25px] items-center gap-1.5 px-2 text-[11px] font-medium">
               <div className={cn(

@@ -4,10 +4,34 @@ import { Plus, Search } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
+
+const CUSTOMER_TABS = ['All', 'Active', 'New', 'Suspended']
+const CUSTOMER_COLUMNS = [
+  'Customer',
+  'Contact',
+  'Email',
+  'Gender',
+  'Age',
+  'Orders',
+  'Spent',
+  'Wallet',
+  'Refund',
+  'Refund amount',
+  'Joined',
+  'Status',
+]
+const CUSTOMER_STAT_PLACEHOLDERS = [
+  'Total customers',
+  'Active (30d)',
+  'New (30d)',
+  'Refunded amount',
+  'Wallet balance',
+  'Suspended',
+]
 
 const AGE_OPTIONS = [
   { value: '', label: 'All' },
@@ -94,7 +118,14 @@ export default function AdminCustomersPage() {
     })
   }, [data, tab, query, useReal, ageFilter, genderFilter])
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  const title = data?.title || 'Customers'
+  const subtitle =
+    data?.subtitle || 'All app customers — profiles, orders, wallet, segments & support.'
+  const action = data?.action || 'Add'
+  const tabs = data?.tabs?.length ? data.tabs : CUSTOMER_TABS
+  const columns = data?.columns?.length ? data.columns : CUSTOMER_COLUMNS
+  const stats = data?.stats?.length ? data.stats : null
+  const showTableSkeleton = isLoading && rows.length === 0 && !error
 
   const openCustomer = (customerId) => {
     navigate(`/admin/customers/${encodeURIComponent(customerId)}`)
@@ -111,9 +142,9 @@ export default function AdminCustomersPage() {
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{data.title}</h2>
+          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{title}</h2>
           <p className="mt-1 max-w-[560px] text-[12.5px] leading-[18px] text-[#7c8780]">
-            {data.subtitle}
+            {subtitle}
           </p>
         </div>
         <button
@@ -122,12 +153,15 @@ export default function AdminCustomersPage() {
           className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
         >
           <Plus size={14} strokeWidth={2.2} />
-          {data.action}
+          {action}
         </button>
       </div>
 
+      <ApiErrorBanner error={error} onRetry={refetch} />
+
+      {stats ? (
       <div className="mb-4 grid grid-cols-6 gap-3 max-[1200px]:grid-cols-3 max-[700px]:grid-cols-2 max-[480px]:grid-cols-1">
-        {data.stats.map(({ label, value, tone }) => (
+        {stats.map(({ label, value, tone }) => (
           <div
             key={label}
             className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
@@ -139,10 +173,13 @@ export default function AdminCustomersPage() {
           </div>
         ))}
       </div>
+      ) : (
+        <StatCardsSkeleton count={CUSTOMER_STAT_PLACEHOLDERS.length} />
+      )}
 
       <div className="mb-3 flex flex-wrap items-end gap-2">
         <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
-          {data.tabs.map((item) => (
+          {tabs.map((item) => (
             <button
               key={item}
               type="button"
@@ -202,7 +239,7 @@ export default function AdminCustomersPage() {
           <table className="w-full min-w-[1180px] border-collapse text-left">
             <thead>
               <tr className="border-b border-[#edf0ee] bg-[#fafbfa]">
-                {data.columns.map((column) => (
+                {columns.map((column) => (
                   <th
                     key={column}
                     className="whitespace-nowrap px-4 py-3 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -213,6 +250,10 @@ export default function AdminCustomersPage() {
               </tr>
             </thead>
             <tbody>
+              {showTableSkeleton ? (
+                <TableBodySkeleton columns={columns.length} rows={6} />
+              ) : (
+                <>
               {rows.map((row) => (
                 <tr
                   key={row.id}
@@ -256,13 +297,15 @@ export default function AdminCustomersPage() {
               {!rows.length ? (
                 <tr>
                   <td
-                    colSpan={data.columns.length}
+                    colSpan={columns.length}
                     className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                   >
                     No customers found.
                   </td>
                 </tr>
               ) : null}
+                </>
+              )}
             </tbody>
           </table>
         </div>

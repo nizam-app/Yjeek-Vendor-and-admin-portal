@@ -284,11 +284,26 @@ export const endpoints = {
         `/admin/store-types/${encodeURIComponent(storeTypeId)}/badges/${encodeURIComponent(badgeId)}`,
     },
     /**
-     * Confirmed: GET /admin/sla-models
-     * Used by Add vendor SLA model picker.
+     * Confirmed SLA models (Postman folder 07).
+     * Used by SLA Models page and Add vendor picker.
      */
     slaModels: {
       list: '/admin/sla-models',
+      template: '/admin/sla-models/template',
+      /**
+       * @param {string} slaModelId
+       */
+      detail: (slaModelId) => `/admin/sla-models/${encodeURIComponent(slaModelId)}`,
+      /**
+       * @param {string} slaModelId
+       */
+      publish: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/publish`,
+      /**
+       * @param {string} slaModelId
+       */
+      setDefault: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/set-default`,
     },
     /**
      * Confirmed Customers — Postman folder 08.
@@ -536,7 +551,7 @@ export const endpoints = {
       notifications: '/admin/settings/notifications',
       /** Confirmed: GET + PATCH /admin/settings/security */
       security: '/admin/settings/security',
-      /** Confirmed: GET /admin/settings/integrations */
+      /** Confirmed: GET + PATCH /admin/settings/integrations */
       integrations: '/admin/settings/integrations',
       /** Confirmed: GET /admin/settings/meta */
       meta: '/admin/settings/meta',

@@ -7,7 +7,7 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
@@ -48,6 +48,18 @@ function mapTierMatch(rowTier, filter) {
   if (/^AT_RISK$/i.test(filter)) return String(rowTier).toLowerCase() === 'at risk'
   return String(rowTier).toUpperCase() === String(filter).toUpperCase()
 }
+
+const FLEET_COLUMNS = [
+  'Champ',
+  'Vehicle',
+  'Supplier',
+  'Contact',
+  'Status',
+  'Tier',
+  'Jobs',
+  'Rating',
+  '',
+]
 
 function VehicleIcon({ type }) {
   if (type === 'Bike') {
@@ -205,7 +217,8 @@ export default function AdminFleetPage() {
     }
   }, [menuId])
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  const columns = data?.columns?.length ? data.columns : FLEET_COLUMNS
+  const showTableSkeleton = isLoading && rows.length === 0 && !error
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -260,13 +273,13 @@ export default function AdminFleetPage() {
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
           >
             <Plus size={14} strokeWidth={2.2} />
-            {data.action}
+            {data?.action || 'Add champ'}
           </button>
         </div>
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1">
-        {(data.viewTabs || ['Champs', 'Suppliers']).map((item) => (
+        {(data?.viewTabs || ['Champs', 'Suppliers']).map((item) => (
           <button
             key={item}
             type="button"
@@ -285,6 +298,9 @@ export default function AdminFleetPage() {
         ))}
       </div>
 
+      <ApiErrorBanner error={error} onRetry={refetch} />
+
+      {stats.length ? (
       <div className="mb-4 grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-[700px]:grid-cols-2 max-[480px]:grid-cols-1">
         {stats.map(({ label, value, tone, star }) => (
           <div
@@ -304,10 +320,16 @@ export default function AdminFleetPage() {
           </div>
         ))}
       </div>
+      ) : (
+        <StatCardsSkeleton
+          count={5}
+          className="mb-4 grid grid-cols-5 gap-3 max-[1100px]:grid-cols-3 max-[700px]:grid-cols-2 max-[480px]:grid-cols-1"
+        />
+      )}
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
-          {(data.statusTabs || ['All', 'Online', 'On delivery', 'Offline', 'Suspended']).map((item) => (
+          {(data?.statusTabs || ['All', 'Online', 'On delivery', 'Offline', 'Suspended']).map((item) => (
             <button
               key={item}
               type="button"
@@ -366,7 +388,7 @@ export default function AdminFleetPage() {
               <table className="w-full min-w-[1180px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-[#edf0ee] bg-[#fafbfa]">
-                    {(data.columns || []).map((column) => (
+                    {columns.map((column) => (
                       <th
                         key={column || 'actions'}
                         className="whitespace-nowrap px-4 py-3 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -377,10 +399,12 @@ export default function AdminFleetPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 ? (
+                  {showTableSkeleton ? (
+                    <TableBodySkeleton columns={columns.length} rows={6} />
+                  ) : rows.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={(data.columns || []).length || 11}
+                        colSpan={columns.length || 11}
                         className="px-4 py-8 text-center text-[13px] text-[#7c8780]"
                       >
                         No champs found.

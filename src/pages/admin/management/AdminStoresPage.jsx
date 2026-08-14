@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MoreVertical, Plus } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminService } from '../../../services/adminService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { CatalogStoreIcon } from '../../../components/CatalogStoreIcons'
 import { cn } from '../../../components/admin/cn'
@@ -49,6 +49,12 @@ export default function AdminStoresPage() {
     }
   }, [menuId])
 
+  const title = data?.title || 'Store types'
+  const subtitle = data?.subtitle || 'Catalog store types shown in the customer app.'
+  const action = data?.action || 'Add store type'
+  const stats = data?.stats?.length ? data.stats : null
+  const showTableSkeleton = isLoading && rows.length === 0 && !error
+
   const handleToggleVisibility = async (row) => {
     if (!row?.id || visibilityBusyId) return
     setMenuId(null)
@@ -68,15 +74,13 @@ export default function AdminStoresPage() {
     }
   }
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
-
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{data.title}</h2>
+          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{title}</h2>
           <p className="mt-1 max-w-[560px] text-[12.5px] leading-[18px] text-[#7c8780]">
-            {data.subtitle}
+            {subtitle}
           </p>
         </div>
         <button
@@ -85,7 +89,7 @@ export default function AdminStoresPage() {
           className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
         >
           <Plus size={14} strokeWidth={2.2} />
-          {data.action}
+          {action}
         </button>
       </div>
 
@@ -95,8 +99,11 @@ export default function AdminStoresPage() {
         </p>
       ) : null}
 
+      <ApiErrorBanner error={error} onRetry={refetch} />
+
+      {stats ? (
       <div className="mb-4 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
-        {data.stats.map(({ label, value, tone }) => (
+        {stats.map(({ label, value, tone }) => (
           <div
             key={label}
             className="rounded-[14px] border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
@@ -108,6 +115,12 @@ export default function AdminStoresPage() {
           </div>
         ))}
       </div>
+      ) : (
+        <StatCardsSkeleton
+          count={4}
+          className="mb-4 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1"
+        />
+      )}
 
       <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -125,7 +138,10 @@ export default function AdminStoresPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
+              {showTableSkeleton ? (
+                <TableBodySkeleton columns={6} rows={5} />
+              ) : (
+              rows.map((row) => {
                 const menuOpen = menuId === row.id
 
                 return (
@@ -214,7 +230,8 @@ export default function AdminStoresPage() {
                     </td>
                   </tr>
                 )
-              })}
+              })
+              )}
             </tbody>
           </table>
         </div>

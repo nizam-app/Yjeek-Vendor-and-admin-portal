@@ -5,7 +5,7 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
@@ -311,22 +311,29 @@ export default function AdminUsersPage() {
     }
   }
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
-
-  const rolesData = data.roles
-  const activityData = data.activityLog
-  const filterRoles = data.filters?.roles || ['All roles']
-  const filterCountries = data.filters?.countries || ['All countries']
-  const filterStatuses = data.filters?.statuses || ['All status']
+  const rolesData = data?.roles
+  const activityData = data?.activityLog
+  const filterRoles = data?.filters?.roles || ['All roles']
+  const filterCountries = data?.filters?.countries || ['All countries']
+  const filterStatuses = data?.filters?.statuses || ['All status']
+  const userColumns = data?.columns?.length
+    ? data.columns
+    : ['User', 'Email', 'Role', 'Scope', 'Last login', 'Status']
+  const showUserTableSkeleton = isLoading && rows.length === 0 && tab === 'Users'
 
   const header =
     tab === 'Roles' && rolesData
       ? { title: rolesData.title, subtitle: rolesData.subtitle, action: rolesData.action, to: '/admin/users/roles/new' }
       : tab === 'Activity log' && activityData
         ? { title: activityData.title, subtitle: activityData.subtitle, action: activityData.action }
-        : { title: data.title, subtitle: data.subtitle, action: data.action, to: '/admin/users/new' }
+        : {
+            title: data?.title || 'Users',
+            subtitle: data?.subtitle || 'Admin users, roles & activity.',
+            action: data?.action || 'Create user',
+            to: '/admin/users/new',
+          }
 
-  const viewTabs = data.viewTabs || ['Users', 'Roles', 'Activity log']
+  const viewTabs = data?.viewTabs || ['Users', 'Roles', 'Activity log']
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -382,6 +389,7 @@ export default function AdminUsersPage() {
 
       {tab === 'Users' ? (
         <>
+          {(data?.stats || []).length ? (
           <div className="mb-4 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[520px]:grid-cols-1">
             {(data.stats || []).map(({ label, value, tone }) => (
               <div
@@ -400,6 +408,12 @@ export default function AdminUsersPage() {
               </div>
             ))}
           </div>
+          ) : (
+            <StatCardsSkeleton
+              count={4}
+              className="mb-4 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[520px]:grid-cols-1"
+            />
+          )}
 
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-sm border border-[#eceeec]">
             <div className="flex flex-wrap items-center gap-2">
@@ -450,7 +464,7 @@ export default function AdminUsersPage() {
                 <table className="w-full min-w-[760px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
-                      {(data.columns || []).map((column) => (
+                      {userColumns.map((column) => (
                         <th
                           key={column}
                           className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -461,16 +475,12 @@ export default function AdminUsersPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={(data.columns || []).length || 6} className="px-4 py-6 text-[13px] text-[#7c8780]">
-                          Loading users…
-                        </td>
-                      </tr>
+                    {showUserTableSkeleton ? (
+                      <TableBodySkeleton columns={userColumns.length} rows={6} />
                     ) : null}
-                    {!isLoading && rows.length === 0 ? (
+                    {!showUserTableSkeleton && rows.length === 0 ? (
                       <tr>
-                        <td colSpan={(data.columns || []).length || 6} className="px-4 py-6 text-[13px] text-[#7c8780]">
+                        <td colSpan={userColumns.length || 6} className="px-4 py-6 text-[13px] text-[#7c8780]">
                           No users found.
                         </td>
                       </tr>

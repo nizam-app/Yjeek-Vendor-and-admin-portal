@@ -455,7 +455,7 @@ function SecurityTab({ form, setField }) {
   )
 }
 
-function IntegrationsTab({ services }) {
+function IntegrationsTab({ services, onToggleStatus }) {
   return (
     <SectionCard title="Connected services">
       <div className="space-y-2">
@@ -468,7 +468,9 @@ function IntegrationsTab({ services }) {
               <p className="text-[13.5px] font-bold text-[#17231c]">{service.title}</p>
               <p className="mt-0.5 text-[12px] text-[#8a948e]">{service.subtitle}</p>
             </div>
-            <span
+            <button
+              type="button"
+              onClick={() => onToggleStatus?.(service.id)}
               className={cn(
                 'inline-flex shrink-0 rounded-full px-2.5 py-[3px] text-[11px] font-bold',
                 service.status === 'Connected'
@@ -477,7 +479,7 @@ function IntegrationsTab({ services }) {
               )}
             >
               {service.status}
-            </span>
+            </button>
           </div>
         ))}
       </div>
@@ -509,6 +511,7 @@ export default function AdminSettingsPage() {
         ? { ...prev.notifications, ...pageData.notifications }
         : prev.notifications,
       security: pageData.security ? { ...prev.security, ...pageData.security } : prev.security,
+      integrations: Array.isArray(pageData.integrations) ? pageData.integrations : prev.integrations,
     }))
   }, [pageData])
 
@@ -520,7 +523,7 @@ export default function AdminSettingsPage() {
     return filtered.length > 0 ? filtered : TABS
   }, [pageData])
 
-  const canSave = activeTab.id !== 'integrations'
+  const canSave = true
 
   const setTabField = (section, key, value) => {
     setState((prev) => ({
@@ -557,7 +560,9 @@ export default function AdminSettingsPage() {
 
     try {
       const result = await saveSettings({ tabId: sectionKey, form })
-      if (result?.data && typeof result.data === 'object') {
+      if (sectionKey === 'integrations' && Array.isArray(result?.data)) {
+        setState((prev) => ({ ...prev, integrations: result.data }))
+      } else if (result?.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
         setState((prev) => ({
           ...prev,
           [sectionKey]: {
@@ -607,7 +612,24 @@ export default function AdminSettingsPage() {
         />
       )
     }
-    return <IntegrationsTab services={state.integrations} />
+    return (
+      <IntegrationsTab
+        services={state.integrations}
+        onToggleStatus={(id) => {
+          setState((prev) => ({
+            ...prev,
+            integrations: prev.integrations.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    status: item.status === 'Connected' ? 'Not connected' : 'Connected',
+                  }
+                : item,
+            ),
+          }))
+        }}
+      />
+    )
   }, [activeTab.id, state])
 
   return (

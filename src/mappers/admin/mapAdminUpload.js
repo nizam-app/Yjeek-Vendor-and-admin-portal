@@ -70,6 +70,12 @@ export function resolveAdminMediaUrl(url) {
   }
 
   if (raw.startsWith('/__admin_media')) return raw
+
+  // Relative API-host paths (not /uploads) — bridge via Vite so CORP cannot block <img>.
+  if (raw.startsWith('/api/') || raw.startsWith('/files/') || raw.startsWith('/media/')) {
+    return `/__admin_media${raw}`
+  }
+
   if (raw.startsWith('/')) return raw
   return `/${raw}`
 }

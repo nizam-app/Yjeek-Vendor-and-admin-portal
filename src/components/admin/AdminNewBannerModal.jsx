@@ -8,6 +8,7 @@ import {
   adminUploadService,
   validateAdminImageFile,
 } from '../../services/admin/uploadService'
+import AdminMediaImage from './AdminMediaImage'
 import { cn } from './cn'
 
 const DEFAULT_BANNER_TYPES = [
@@ -16,7 +17,13 @@ const DEFAULT_BANNER_TYPES = [
   { id: 'popup', label: 'Pop-up ad' },
 ]
 
-const DEFAULT_TAP_ACTIONS = ['Open store', 'Open category', 'Open URL', 'No action']
+const DEFAULT_TAP_ACTIONS = [
+  'Open store',
+  'Open category',
+  'Open offer',
+  'Open URL',
+  'No action',
+]
 const DEFAULT_TARGETS = ['Green Kitchen', 'All stores', 'Pharmacy near you', 'Custom']
 export const BANNER_PLACEMENTS = [
   'Home top · scroll banner',
@@ -26,14 +33,22 @@ export const BANNER_PLACEMENTS = [
   'Store page top',
   'Category top · scroll',
 ]
-const DEFAULT_AUDIENCES = ['All customers', 'New customers', 'Returning customers', 'VIP']
+const DEFAULT_AUDIENCES = [
+  'All customers',
+  'New customers',
+  'Inactive customers',
+  'Vendors',
+]
 
 const TAP_ACTION_TO_API = {
   'Open store': 'OPEN_STORE',
   'Open category': 'OPEN_CATEGORY',
+  'Open offer': 'OPEN_OFFER',
   'Open URL': 'OPEN_URL',
   'No action': 'NONE',
 }
+
+const TAP_ACTIONS_NEEDING_TARGET = new Set(['Open store', 'Open category', 'Open offer'])
 
 const labelClass = 'block text-[12px] font-semibold leading-[15px] text-[#6B736E]'
 const inputClass =
@@ -127,6 +142,7 @@ function buildBannerForm({
       tapAction: initial.tapAction || DEFAULT_TAP_ACTIONS[0],
       target: initial.target || '',
       targetId: initial.targetId || '',
+      ctaUrl: initial.ctaUrl || '',
       placement: normalizePlacement(initial.placement || placement, placementLabels),
       placementKey: initial.placementKey || placementKey || '',
       start: initial.start || '2026-03-22',
@@ -144,6 +160,7 @@ function buildBannerForm({
     tapAction: DEFAULT_TAP_ACTIONS[0],
     target: '',
     targetId: '',
+    ctaUrl: '',
     placement: normalizePlacement(placement, placementLabels),
     placementKey: placementKey || '',
     start: '2026-03-22',
@@ -237,16 +254,25 @@ export default function AdminNewBannerModal({
     return labels
   }, [placements, form.placement])
 
+  const needsTarget = TAP_ACTIONS_NEEDING_TARGET.has(form.tapAction)
+  const needsUrl = form.tapAction === 'Open URL'
+
   const targetOptions = useMemo(() => {
     const list = (targets || []).map((item) =>
       typeof item === 'string'
         ? { value: item, label: item }
         : { value: item.id || item.value || item.label, label: item.label || item.id },
     )
+    if (
+      form.targetId &&
+      !list.some((item) => item.value === form.targetId || item.label === form.target)
+    ) {
+      return [{ value: form.targetId, label: form.target || form.targetId }, ...list]
+    }
     if (form.target && !list.some((item) => item.value === form.target || item.label === form.target)) {
       return [{ value: form.targetId || form.target, label: form.target }, ...list]
     }
-    return list.length > 0 ? list : DEFAULT_TARGETS.map((item) => ({ value: item, label: item }))
+    return list
   }, [targets, form.target, form.targetId])
 
   if (!open) return null
@@ -256,7 +282,13 @@ export default function AdminNewBannerModal({
   }
 
   const handleTapActionChange = (value) => {
-    setField('tapAction', value)
+    setForm((prev) => ({
+      ...prev,
+      tapAction: value,
+      target: TAP_ACTIONS_NEEDING_TARGET.has(value) ? prev.target : '',
+      targetId: TAP_ACTIONS_NEEDING_TARGET.has(value) ? prev.targetId : '',
+      ctaUrl: value === 'Open URL' ? prev.ctaUrl : '',
+    }))
     onTapActionChange?.(TAP_ACTION_TO_API[value] || value)
   }
 
@@ -330,10 +362,6 @@ export default function AdminNewBannerModal({
     }
   }
 
-  const handleRemoteImageError = () => {
-    // Keep blob preview visible if the remote URL fails to render.
-  }
-
   const handleSubmit = async () => {
     if (isSubmitting || isUploading) return
     if (localPreviewUrl && !form.imageUrl) {
@@ -348,8 +376,7 @@ export default function AdminNewBannerModal({
   }
 
   const busy = isSubmitting || isUploading
-  const remoteDisplayUrl = resolveAdminMediaUrl(form.imageUrl)
-  const displayImage = localPreviewUrl || remoteDisplayUrl || ''
+  const hasImage = Boolean(localPreviewUrl || form.imageUrl)
   const resolvedTitle =
     title || (mode === 'edit' ? 'Edit banner / ad' : 'New banner / ad')
   const resolvedDescription =
@@ -436,33 +463,37 @@ export default function AdminNewBannerModal({
               onClick={handlePickImage}
               className={cn(
                 'relative flex h-[77px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[10px] border-[1.2px] border-dashed border-[#E3E6E3] bg-[#F7FAF7] hover:bg-[#f0f4f0] disabled:opacity-60',
-                displayImage && 'border-solid',
+                hasImage && 'border-solid',
               )}
             >
-              {displayImage ? (
-                <>
-                  <img
-                    src={displayImage}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    onLoad={() => {
-                      // If we are showing the remote URL, drop any leftover blob.
-                      if (!localPreviewUrl || displayImage === remoteDisplayUrl) {
-                        handleRemoteImageLoad()
-                      } else if (remoteDisplayUrl && displayImage === localPreviewUrl) {
-                        // Warm the remote URL; revoke blob once it loads.
-                        const probe = new Image()
-                        probe.onload = handleRemoteImageLoad
-                        probe.onerror = handleRemoteImageError
-                        probe.src = remoteDisplayUrl
-                      }
-                    }}
-                    onError={handleRemoteImageError}
-                  />
-                  <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1.5 text-[12px] font-medium leading-[15px] text-[#6B736E]">
-                    {isUploading ? 'Uploading…' : 'Change image'}
-                  </span>
-                </>
+              {localPreviewUrl ? (
+                <img
+                  src={localPreviewUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  onLoad={() => {
+                    const remote = resolveAdminMediaUrl(form.imageUrl)
+                    if (remote && form.imageUrl && !String(form.imageUrl).startsWith('blob:')) {
+                      const probe = new Image()
+                      probe.onload = handleRemoteImageLoad
+                      probe.src = remote
+                    }
+                  }}
+                />
+              ) : form.imageUrl ? (
+                <AdminMediaImage
+                  src={form.imageUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                  fallbackClassName="absolute inset-0 h-full w-full bg-[#EDF0ED]"
+                  iconSize={22}
+                />
+              ) : null}
+
+              {hasImage ? (
+                <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1.5 text-[12px] font-medium leading-[15px] text-[#6B736E]">
+                  {isUploading ? 'Uploading…' : 'Change image'}
+                </span>
               ) : (
                 <>
                   <Upload size={18} strokeWidth={2} className="text-[#6B736E]" />
@@ -516,15 +547,37 @@ export default function AdminNewBannerModal({
                 options={tapActions.length ? tapActions : DEFAULT_TAP_ACTIONS}
               />
             </label>
-            <label className="flex min-w-0 flex-col items-start gap-1.5">
-              <FieldLabel>Target{targetsLoading ? '…' : ''}</FieldLabel>
-              <SelectField
-                value={form.targetId || form.target}
-                disabled={busy || targetsLoading}
-                onChange={handleTargetChange}
-                options={targetOptions}
-              />
-            </label>
+            {needsUrl ? (
+              <label className="flex min-w-0 flex-col items-start gap-1.5">
+                <FieldLabel>URL</FieldLabel>
+                <TextInput
+                  value={form.ctaUrl || ''}
+                  disabled={busy}
+                  onChange={(value) => setField('ctaUrl', value)}
+                />
+              </label>
+            ) : needsTarget ? (
+              <label className="flex min-w-0 flex-col items-start gap-1.5">
+                <FieldLabel>Target{targetsLoading ? '…' : ''}</FieldLabel>
+                <SelectField
+                  value={form.targetId || form.target}
+                  disabled={busy || targetsLoading || targetOptions.length === 0}
+                  onChange={handleTargetChange}
+                  options={
+                    targetOptions.length > 0
+                      ? targetOptions
+                      : [{ value: '', label: targetsLoading ? 'Loading…' : 'No targets' }]
+                  }
+                />
+              </label>
+            ) : (
+              <div className="flex min-w-0 flex-col items-start gap-1.5">
+                <FieldLabel>Target</FieldLabel>
+                <p className="flex min-h-[38px] w-full items-center text-[13px] font-medium text-[#6B736E]">
+                  No target needed
+                </p>
+              </div>
+            )}
           </div>
 
           <label className="flex w-full max-w-full flex-col items-start gap-1.5 min-[520px]:w-[188px]">

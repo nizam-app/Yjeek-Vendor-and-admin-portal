@@ -4,12 +4,14 @@ import { Copy, MoreVertical, Plus, Search } from 'lucide-react'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminVendorService } from '../../../services/admin/vendorService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
 
 const PAGE_SIZE = 20
+const VENDOR_TABS = ['All', 'Active', 'Pending', 'Suspended']
+const VENDOR_COLUMNS = ['Vendor', 'Category', 'Orders', 'GMV', 'Commission', 'Status']
 
 function pageNumbers(current, total) {
   if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
@@ -97,7 +99,12 @@ export default function AdminVendorsPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [data])
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+  const title = data?.title || 'Vendors'
+  const action = data?.action || 'Add vendor'
+  const tabs = data?.tabs?.length ? data.tabs : VENDOR_TABS
+  const columns = data?.columns?.length ? data.columns : VENDOR_COLUMNS
+  const stats = data?.stats?.length ? data.stats : null
+  const showTableSkeleton = isLoading && rows.length === 0 && !error
 
   const openVendor = (vendorId) => {
     navigate(`/admin/vendors/${encodeURIComponent(vendorId)}`)
@@ -122,18 +129,21 @@ export default function AdminVendorsPage() {
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{data.title}</h2>
+        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{title}</h2>
         <button
           type="button"
           onClick={() => navigate('/admin/vendors/new')}
           className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
         >
-          <Plus size={14} strokeWidth={2.2} /> {data.action}
+          <Plus size={14} strokeWidth={2.2} /> {action}
         </button>
       </div>
 
+      <ApiErrorBanner error={error} onRetry={refetch} />
+
+      {stats ? (
       <div className="mb-3.5 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
-        {data.stats.map(({ label, value, tone }) => (
+        {stats.map(({ label, value, tone }) => (
           <div
             key={label}
             className="rounded-xl border border-[#eceeec] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(20,40,28,.03)]"
@@ -143,10 +153,16 @@ export default function AdminVendorsPage() {
           </div>
         ))}
       </div>
+      ) : (
+        <StatCardsSkeleton
+          count={4}
+          className="mb-3.5 grid grid-cols-4 gap-3 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1"
+        />
+      )}
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
-          {data.tabs.map((item) => (
+          {tabs.map((item) => (
             <button
               key={item}
               type="button"
@@ -189,7 +205,7 @@ export default function AdminVendorsPage() {
           <table className="w-full min-w-[900px] border-collapse text-left">
             <thead>
               <tr className="border-b border-[#edf0ee]">
-                {data.columns.map((column) => (
+                {columns.map((column) => (
                   <th
                     key={column}
                     className="whitespace-nowrap px-4 py-3 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -201,13 +217,15 @@ export default function AdminVendorsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {showTableSkeleton ? (
+                <TableBodySkeleton columns={columns.length + 1} rows={6} />
+              ) : rows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={data.columns.length + 1}
+                    colSpan={columns.length + 1}
                     className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                   >
-                    {isLoading ? 'Loading vendors…' : 'No vendors found.'}
+                    No vendors found.
                   </td>
                 </tr>
               ) : (

@@ -23,6 +23,7 @@ import {
   Smartphone,
   Sparkles,
   Store,
+  Upload,
   UserRound,
   UtensilsCrossed,
   Wallet,
@@ -33,6 +34,7 @@ import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import AdminNewBannerModal, {
   BANNER_PLACEMENTS,
 } from '../../../components/admin/AdminNewBannerModal'
+import { formatApiErrorMessage } from '../../../api/errors'
 import {
   useAdminUiEditorApps,
   useAdminUiEditorBanners,
@@ -41,6 +43,12 @@ import {
   useAdminUiEditorScreenMap,
 } from '../../../hooks/admin/useAdminUiEditor'
 import { useApiMutation } from '../../../hooks/useApiMutation'
+import {
+  ADMIN_IMAGE_UPLOAD_ACCEPT,
+  ADMIN_IMAGE_UPLOAD_MAX_BYTES,
+  adminUploadService,
+  validateAdminImageFile,
+} from '../../../services/admin/uploadService'
 import { adminUiEditorService } from '../../../services/admin/uiEditorService'
 import iconHouse from '../../../assets/icon-house.png'
 import motoBike from '../../../assets/moto_bike.png'
@@ -1041,12 +1049,12 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
       type="button"
       onClick={() => onAdd?.({ placement: label, placementKey: placementKey || '' })}
       className={cn(
-        'relative flex w-full flex-col items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-[#81c784] text-center hover:bg-[#e8f5e9]',
+        'relative flex w-full flex-col items-center overflow-hidden rounded-[10px] border border-dashed border-[#81c784] text-center hover:bg-[#e8f5e9]',
         hasBanner
           ? banner?.imageUrl
-            ? 'min-h-[112px] border-solid bg-[#e8f5e9]'
-            : 'min-h-[72px] border-solid bg-[#e8f5e9]'
-          : 'bg-[#e8f5e9]/70 px-2 py-3',
+            ? 'min-h-[112px] justify-end border-solid bg-[#e8f5e9]'
+            : 'min-h-[72px] justify-center border-solid bg-[#e8f5e9]'
+          : 'justify-center bg-[#e8f5e9]/70 px-2 py-3',
       )}
     >
       {banner?.imageUrl ? (
@@ -1061,13 +1069,13 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
         <span
           className={cn(
             'relative z-[1] flex w-full flex-col items-center gap-0.5 px-2 py-2',
-            banner?.imageUrl && 'bg-gradient-to-t from-black/55 via-black/20 to-transparent pt-10',
+            banner?.imageUrl && 'mt-auto bg-gradient-to-t from-black/25 to-transparent pt-6',
           )}
         >
           <span
             className={cn(
               'line-clamp-1 text-[11px] font-bold',
-              banner?.imageUrl ? 'text-white' : 'text-[#137333]',
+              banner?.imageUrl ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]' : 'text-[#137333]',
             )}
           >
             {banner.name}
@@ -1076,7 +1084,7 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
             <span
               className={cn(
                 'line-clamp-1 text-[9px]',
-                banner?.imageUrl ? 'text-white/90' : 'text-[#66a06a]',
+                banner?.imageUrl ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]' : 'text-[#66a06a]',
               )}
             >
               {banner.subtitle}
@@ -1085,7 +1093,7 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
           <span
             className={cn(
               'mt-0.5 text-[9px] font-semibold',
-              banner?.imageUrl ? 'text-white/85' : 'text-[#2e7d32]',
+              banner?.imageUrl ? 'text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]' : 'text-[#2e7d32]',
             )}
           >
             + Add another
@@ -1622,6 +1630,272 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
   )
 }
 
+function CategoryIconButton({
+  category,
+  onUploaded,
+  disabled = false,
+  uploading = false,
+  size = 32,
+}) {
+  const inputRef = useRef(null)
+  return (
+    <>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0]
+          event.target.value = ''
+          if (file) onUploaded?.(file)
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled || uploading}
+        title="Change icon"
+        aria-label={`Change icon for ${category?.name || 'category'}`}
+        onClick={() => inputRef.current?.click()}
+        className="relative grid shrink-0 place-items-center overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white hover:border-[#1aa054] disabled:opacity-60"
+        style={{ width: size, height: size }}
+      >
+        {category?.iconUrl ? (
+          <AdminMediaImage
+            src={category.iconUrl}
+            className="h-full w-full object-cover"
+            fallbackClassName="h-full w-full bg-[#e8f5e9]"
+            iconSize={14}
+          />
+        ) : (
+          <span className="text-[16px] leading-none">{category?.emoji || '📦'}</span>
+        )}
+        <span className="absolute inset-x-0 bottom-0 bg-black/45 py-[1px] text-center text-[8px] font-bold text-white">
+          {uploading ? '…' : 'Edit'}
+        </span>
+      </button>
+    </>
+  )
+}
+
+function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
+  const [name, setName] = useState('')
+  const [iconUrl, setIconUrl] = useState('')
+  const [emoji, setEmoji] = useState('📦')
+  const [localPreview, setLocalPreview] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState(null)
+  const fileInputRef = useRef(null)
+  const previewRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    setName('')
+    setIconUrl('')
+    setEmoji('📦')
+    setError(null)
+    setUploading(false)
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current)
+      previewRef.current = null
+    }
+    setLocalPreview('')
+  }, [open])
+
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    },
+    [],
+  )
+
+  if (!open) return null
+
+  const busy = isSubmitting || uploading
+
+  const handleFile = async (file) => {
+    setError(null)
+    try {
+      validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
+    } catch (err) {
+      setError(err)
+      return
+    }
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current)
+    const objectUrl = URL.createObjectURL(file)
+    previewRef.current = objectUrl
+    setLocalPreview(objectUrl)
+    setUploading(true)
+    try {
+      const result = await adminUploadService.uploadImage(file, { feature: 'ui-editor' })
+      const url = result?.data?.url
+      if (!url) throw new Error('Upload succeeded but no image URL was returned.')
+      setIconUrl(url)
+    } catch (err) {
+      setError(err)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    const trimmed = String(name || '').trim()
+    if (!trimmed) {
+      setError(Object.assign(new Error('Name is required.'), { message: 'Name is required.' }))
+      return
+    }
+    if (uploading) {
+      setError(
+        Object.assign(new Error('Wait for icon upload to finish.'), {
+          message: 'Wait for icon upload to finish.',
+        }),
+      )
+      return
+    }
+    try {
+      await onSubmit?.({
+        name: trimmed,
+        iconUrl: iconUrl || null,
+        iconEmoji: iconUrl ? undefined : emoji || '📦',
+      })
+    } catch (err) {
+      setError(err)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0 bg-black/40"
+        disabled={busy}
+        onClick={() => !busy && onClose?.()}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-[420px] rounded-t-[16px] bg-white p-5 shadow-[0_18px_44px_rgba(0,0,0,0.28)] sm:rounded-[16px]"
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-[16px] font-bold text-[#17231c]">Create category</h3>
+            <p className="mt-0.5 text-[12.5px] text-[#7c8780]">Name + optional icon image</p>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="grid h-8 w-8 place-items-center rounded-[8px] text-[#8a948e] hover:bg-[#f7f9f7]"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
+            Name
+          </span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={busy}
+            placeholder="e.g. Electronics"
+            className="h-[40px] w-full rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
+          />
+        </label>
+
+        <div className="mb-4">
+          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
+            Icon
+          </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) handleFile(file)
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              'relative flex h-[88px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[12px] border border-dashed border-[#d5dbd6] bg-[#f7faf7] hover:bg-[#f0f4f0] disabled:opacity-60',
+              (localPreview || iconUrl) && 'border-solid',
+            )}
+          >
+            {localPreview ? (
+              <img src={localPreview} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            ) : iconUrl ? (
+              <AdminMediaImage
+                src={iconUrl}
+                className="absolute inset-0 h-full w-full object-cover"
+                fallbackClassName="absolute inset-0 h-full w-full bg-[#e8f5e9]"
+                iconSize={20}
+              />
+            ) : (
+              <>
+                <Upload size={18} className="text-[#6B736E]" />
+                <span className="text-[12px] font-medium text-[#6B736E]">
+                  Upload icon (PNG / JPG / WebP)
+                </span>
+              </>
+            )}
+            {localPreview || iconUrl ? (
+              <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1 text-[12px] font-medium text-[#6B736E]">
+                {uploading ? 'Uploading…' : 'Change icon'}
+              </span>
+            ) : null}
+          </button>
+          {!iconUrl ? (
+            <label className="mt-2 block">
+              <span className="mb-1 block text-[11px] text-[#8a948e]">Or emoji fallback</span>
+              <input
+                value={emoji}
+                onChange={(e) => setEmoji(e.target.value)}
+                disabled={busy}
+                maxLength={8}
+                className="h-[36px] w-full rounded-[10px] border border-[#e4e8e4] px-3 text-[14px] outline-none focus:border-[#1aa054]"
+              />
+            </label>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p className="mb-3 text-[12.5px] text-[#c91a24]">
+            {formatApiErrorMessage(error, 'Unable to create category.')}
+          </p>
+        ) : null}
+
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onClose}
+            className="inline-flex h-[36px] items-center rounded-full border border-[#d5dbd6] px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={handleCreate}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+          >
+            {isSubmitting ? 'Creating…' : uploading ? 'Uploading…' : 'Create'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CategoriesTab({ onMessage }) {
   const { categories: apiCategories, isLoading, error, refetch, enabled } =
     useAdminUiEditorHomeCategories()
@@ -1629,6 +1903,8 @@ function CategoriesTab({ onMessage }) {
   const categoriesRef = useRef(categories)
   const [dragIndex, setDragIndex] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [uploadingId, setUploadingId] = useState(null)
+  const [createOpen, setCreateOpen] = useState(false)
   const [localError, setLocalError] = useState(null)
 
   useEffect(() => {
@@ -1660,6 +1936,8 @@ function CategoriesTab({ onMessage }) {
         isFeatured: category.isFeatured !== false,
         sortOrder: category.sortOrder ?? 0,
         isActive: !category.isHidden,
+        iconUrl: category.iconUrl ?? undefined,
+        iconEmoji: category.emoji || undefined,
       })
       await refetch()
     } catch (err) {
@@ -1667,31 +1945,80 @@ function CategoriesTab({ onMessage }) {
     }
   }
 
-  const createCategory = async () => {
+  const uploadCategoryIcon = async (category, file) => {
+    if (!category?.id || !file) return
+    setLocalError(null)
+    try {
+      validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
+    } catch (err) {
+      setLocalError(err)
+      return
+    }
+
+    setUploadingId(category.id)
+    try {
+      const result = await adminUploadService.uploadImage(file, { feature: 'ui-editor' })
+      const url = result?.data?.url
+      if (!url) throw new Error('Upload succeeded but no image URL was returned.')
+
+      setCategories((prev) =>
+        prev.map((item) =>
+          item.id === category.id ? { ...item, iconUrl: url, emoji: item.emoji || '' } : item,
+        ),
+      )
+
+      if (enabled) {
+        await adminUiEditorService.patchHomeCategory(category.id, {
+          iconUrl: url,
+          name: category.name,
+          isFeatured: category.isFeatured !== false,
+          sortOrder: category.sortOrder ?? 0,
+          isActive: !category.isHidden,
+        })
+        await refetch()
+      }
+      onMessage?.('Category icon updated.')
+    } catch (err) {
+      setLocalError(err)
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  const handleCreateSubmit = async (payload) => {
     setLocalError(null)
     if (!enabled) {
-      const next = categories.length + 1
       setCategories((prev) => [
         ...prev,
-        { id: `cat-new-${Date.now()}`, name: `Category ${next}`, emoji: '📦', isHidden: false },
+        {
+          id: `cat-new-${Date.now()}`,
+          name: payload.name,
+          emoji: payload.iconEmoji || '📦',
+          iconUrl: payload.iconUrl || null,
+          isHidden: false,
+        },
       ])
+      setCreateOpen(false)
       return
     }
 
     setBusy(true)
     try {
       const created = await adminUiEditorService.createHomeCategory({
-        name: `Category ${categories.length + 1}`,
+        name: payload.name,
         isFeatured: true,
-        iconEmoji: '📦',
+        iconUrl: payload.iconUrl || null,
+        iconEmoji: payload.iconEmoji || (payload.iconUrl ? undefined : '📦'),
       })
       if (created?.data) {
         setCategories((prev) => [...prev, created.data])
       }
       await refetch()
+      setCreateOpen(false)
       onMessage?.('Category created.')
     } catch (err) {
       setLocalError(err)
+      throw err
     } finally {
       setBusy(false)
     }
@@ -1712,6 +2039,7 @@ function CategoriesTab({ onMessage }) {
         isFeatured: category.isFeatured !== false,
         sortOrder: category.sortOrder ?? 0,
         isActive: !nextHidden,
+        iconUrl: category.iconUrl ?? undefined,
       })
       await refetch()
     } catch (err) {
@@ -1764,17 +2092,17 @@ function CategoriesTab({ onMessage }) {
           <div className="min-w-0">
             <h3 className="text-[16px] font-bold text-[#17231c]">Home categories</h3>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Drag to reorder · rename · hide. Order here = order on the app home grid.
+              Drag to reorder · rename · change icon · hide. Order here = order on the app home grid.
             </p>
           </div>
           <button
             type="button"
             disabled={busy}
-            onClick={createCategory}
+            onClick={() => setCreateOpen(true)}
             className="inline-flex h-[36px] shrink-0 items-center gap-1 rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.12)] hover:bg-[#158a47] disabled:opacity-60"
           >
             <Plus size={14} strokeWidth={2.8} />
-            {busy ? 'Creating…' : 'Create category'}
+            Create category
           </button>
         </div>
 
@@ -1783,7 +2111,7 @@ function CategoriesTab({ onMessage }) {
         ) : null}
         {enabled && (error || localError) ? (
           <p className="mb-3 text-[13px] text-[#c91a24]">
-            {(localError || error)?.message || 'Unable to load categories.'}{' '}
+            {formatApiErrorMessage(localError || error, 'Unable to load categories.')}{' '}
             <button type="button" className="underline" onClick={refetch}>
               Retry
             </button>
@@ -1799,7 +2127,7 @@ function CategoriesTab({ onMessage }) {
               onDragOver={(event) => onDragOver(event, index)}
               onDragEnd={onDragEnd}
               className={cn(
-                'flex items-center gap-2 rounded-[12px] bg-[#f3f5f4] px-2.5 py-2 w-fit',
+                'flex items-center gap-2 rounded-[12px] bg-[#f3f5f4] px-2.5 py-2 w-fit max-w-full',
                 dragIndex === index && 'ring-1 ring-[#1aa054] bg-[#eaf6ee]',
                 category.isHidden && 'opacity-55',
               )}
@@ -1812,9 +2140,13 @@ function CategoriesTab({ onMessage }) {
                 <GripVertical size={16} strokeWidth={2.2} />
               </button>
               <span className="w-7 shrink-0 text-[12px] font-bold text-[#8a948e]">#{index + 1}</span>
-              <span className="grid h-8 w-8 shrink-0 place-items-center text-[18px] leading-none">
-                {category.emoji}
-              </span>
+              <CategoryIconButton
+                category={category}
+                size={36}
+                uploading={uploadingId === category.id}
+                disabled={busy || uploadingId === category.id}
+                onUploaded={(file) => uploadCategoryIcon(category, file)}
+              />
               <input
                 value={category.name}
                 onChange={(event) => renameCategoryLocal(category.id, event.target.value)}
@@ -1822,7 +2154,7 @@ function CategoriesTab({ onMessage }) {
                   const current = categories.find((item) => item.id === category.id) || category
                   persistRename(current)
                 }}
-                className="h-[38px] min-w-0 flex-1 rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
+                className="h-[38px] min-w-[140px] flex-1 rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
               />
               <button
                 type="button"
@@ -1839,7 +2171,7 @@ function CategoriesTab({ onMessage }) {
         <button
           type="button"
           disabled={busy}
-          onClick={createCategory}
+          onClick={() => setCreateOpen(true)}
           className="mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-[12px] border border-[#1aa054] bg-white text-[13px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
         >
           <Plus size={15} strokeWidth={2.6} />
@@ -1866,7 +2198,16 @@ function CategoriesTab({ onMessage }) {
                       key={`preview-${category.id}`}
                       className="flex aspect-square min-w-0 flex-col items-center justify-center gap-1 rounded-[12px] bg-[#f3f5f4] px-1 py-1"
                     >
-                      <span className="text-[18px] leading-none">{category.emoji}</span>
+                      {category.iconUrl ? (
+                        <AdminMediaImage
+                          src={category.iconUrl}
+                          className="h-7 w-7 rounded-[8px] object-cover"
+                          fallbackClassName="h-7 w-7 rounded-[8px] bg-[#e8f5e9]"
+                          iconSize={12}
+                        />
+                      ) : (
+                        <span className="text-[18px] leading-none">{category.emoji || '📦'}</span>
+                      )}
                       <span className="w-full truncate text-center text-[9.5px] font-semibold leading-tight text-[#17231c]">
                         {category.name}
                       </span>
@@ -1877,6 +2218,13 @@ function CategoriesTab({ onMessage }) {
           </div>
         </div>
       </div>
+
+      <CreateCategoryModal
+        open={createOpen}
+        onClose={() => !busy && setCreateOpen(false)}
+        isSubmitting={busy}
+        onSubmit={handleCreateSubmit}
+      />
     </div>
   )
 }
@@ -2047,32 +2395,53 @@ export default function AdminUiEditorPage() {
         title: banner.name || '',
         subtitle: banner.subtitle || '',
         imageUrl: banner.imageUrl || '',
-        tapAction: 'Open store',
-        target: '',
+        tapAction: (() => {
+          const raw = String(banner.tapAction || banner.raw?.tapAction || '').trim()
+          const map = {
+            OPEN_STORE: 'Open store',
+            OPEN_CATEGORY: 'Open category',
+            OPEN_OFFER: 'Open offer',
+            OPEN_URL: 'Open URL',
+            NONE: 'No action',
+            NO_ACTION: 'No action',
+          }
+          return map[raw.toUpperCase()] || raw || 'Open store'
+        })(),
+        target: banner.target || '',
         targetId: banner.targetId || '',
+        ctaUrl: banner.ctaUrl || banner.raw?.ctaUrl || '',
         placement: banner.placement || '',
         placementKey: banner.placementKey || banner.raw?.placementKey || '',
-        start: '2026-03-22',
-        end: '2026-03-30',
-        audience: 'All customers',
+        start: banner.start || '2026-03-22',
+        end: banner.end || '2026-03-30',
+        audience: banner.audience || 'All customers',
         active: banner.status === 'Active' || banner.isActive === true,
       },
     })
-    loadBannerTargets('OPEN_STORE')
+    loadBannerTargets(
+      String(banner.tapActionKey || banner.raw?.tapAction || 'OPEN_STORE').toUpperCase(),
+    )
     try {
       const result = await adminUiEditorService.getBanner(banner.id)
       if (result?.data) {
+        const detail = result.data
         setBannerModal((prev) => ({
           ...prev,
           open: true,
           mode: 'edit',
           bannerId: banner.id,
-          placement: result.data.placement || prev.placement,
-          placementKey: result.data.placementKey || prev.placementKey,
-          initialBanner: result.data,
+          placement: detail.placement || prev.placement,
+          placementKey: detail.placementKey || prev.placementKey,
+          // Keep list thumbnail URL if detail omits / returns empty imageUrl
+          initialBanner: {
+            ...detail,
+            imageUrl: detail.imageUrl || banner.imageUrl || prev.initialBanner?.imageUrl || '',
+            ctaUrl: detail.ctaUrl || banner.ctaUrl || prev.initialBanner?.ctaUrl || '',
+            targetId: detail.targetId || banner.targetId || prev.initialBanner?.targetId || '',
+          },
         }))
-        if (result.data.tapActionKey) {
-          loadBannerTargets(result.data.tapActionKey)
+        if (detail.tapActionKey) {
+          loadBannerTargets(detail.tapActionKey)
         }
       }
     } catch (err) {

@@ -11,6 +11,124 @@ import {
   buildAdminChampDetail,
 } from '../mocks/admin.mock'
 
+const MOCK_SLA_CONFIG = {
+  schemaVersion: 2,
+  acceptanceCutoffMin: 2,
+  prepTimeHotFoodMin: 18,
+  readyOnTimeTargetPct: 90,
+  handoverToChampMin: 4,
+  vpiWeights: { accuracy: 20, packing: 5, prepTime: 25, reliability: 50 },
+  vendor: {
+    hotFoodOnDemand: {
+      acceptanceTimeSec: 120,
+      champCollectionTimeSec: 600,
+      earlyOnlineHoursSec: 3600,
+      fullDeliveryWindowStart: '00:00:00',
+      fullDeliveryWindowEnd: '23:59:59',
+      prepTimeLimitSec: 1080,
+      customerIssueResponseSec: 7200,
+      orderAccuracyPct: 100,
+      orderRatingPct: 90,
+      vpeWeights: {
+        accuracyWeight: 20,
+        ratingWeight: 5,
+        prepTimeWeight: 25,
+        metricTypeWeight: 50,
+      },
+      foodSafetyInvestigationSec: 900,
+    },
+  },
+  champ: {
+    acceptanceTimeByMode: {
+      hotFood: 90,
+      sameDay: 300,
+      nextDay: 600,
+      standard: 900,
+      economy: 1200,
+      food: 90,
+      groceryPharmacy: 180,
+      flowers: 180,
+      electronics: 300,
+    },
+    performance: {
+      doubleConfirmationSec: 30,
+      onTimeDeliveryPct: 90,
+      workingHoursDailySec: 28800,
+      peakHoursStart: '16:00:00',
+      peakHoursEnd: '20:00:00',
+      customerRating: 4.5,
+    },
+    tiers: {
+      elite: { min: 90, max: 100 },
+      gold: { min: 80, max: 89 },
+      silver: { min: 70, max: 79 },
+      bronze: { min: 60, max: 69 },
+      atRisk: { min: 0, max: 59 },
+    },
+  },
+  dispatcher: {
+    assignmentTimeByMode: {
+      sameDay: 120,
+      nextDay: 300,
+      standard: 600,
+      economy: 900,
+    },
+    incidentAckSecByPriority: { P1: 300, P2: 300, P3: 120, P4: 1800 },
+    incidentResolveSecByPriority: { P1: 1800, P2: 1800, P3: 300, P4: 86400 },
+    coverageTargetPct: 95,
+    chatFirstResponseSec: 45,
+    champResponseSec: 600,
+  },
+}
+
+function presentMockSlaModel(model) {
+  return {
+    ...model,
+    config: model.draftConfig || model.config,
+    publishedConfig: model.config,
+    hasUnpublishedChanges: Boolean(model.draftConfig),
+  }
+}
+
+function getMockSlaTemplate() {
+  return {
+    name: '',
+    categoryLabel: 'Food & Beverage',
+    description: '',
+    status: 'DRAFT',
+    isDefault: false,
+    isActive: true,
+    tabs: [
+      { key: 'vendor', label: 'Vendor SLA' },
+      { key: 'champ', label: 'Champ SLA' },
+      { key: 'dispatcher', label: 'Dispatcher SLA' },
+    ],
+    config: structuredClone(MOCK_SLA_CONFIG),
+  }
+}
+
+const mockSlaStore = {
+  models: [
+    {
+      id: 'sla-platform-default',
+      name: 'Platform default SLA',
+      categoryLabel: 'Food & Beverage',
+      description: 'Default platform SLA model',
+      status: 'PUBLISHED',
+      isDefault: true,
+      isActive: true,
+      currentVersion: 1,
+      hasUnpublishedChanges: false,
+      config: structuredClone(MOCK_SLA_CONFIG),
+      draftConfig: null,
+    },
+  ],
+}
+
+function findMockSlaModel(id) {
+  return mockSlaStore.models.find((item) => item.id === id) || null
+}
+
 const mockRoutes = {
   'GET /admin/dashboard': () => adminDashboardMock,
   'GET /admin/live-orders': () => adminLiveOrdersMock,
@@ -37,6 +155,24 @@ const mockRoutes = {
     champWaitSlaMin: 4,
     updatedAt: new Date().toISOString(),
     tabs: ['general', 'localization', 'notifications', 'security', 'integrations'],
+    integrations: {
+      maps: { provider: 'Google Maps', connected: true },
+      sms: { provider: 'Twilio', connected: true },
+      payment: { provider: 'Benefit Pay / Apple Pay', connected: true },
+      analytics: { provider: 'GA4 + Mixpanel', connected: true },
+      pos: { provider: 'Foodics / Square', connected: true },
+      webhooks: { provider: 'Custom endpoints', connected: false },
+      erp: { provider: 'Odoo / Oracle NetSuite', connected: false },
+      services: [
+        { key: 'maps', title: 'Maps & geocoding', provider: 'Google Maps', status: 'Connected', connected: true },
+        { key: 'sms', title: 'SMS provider', provider: 'Twilio', status: 'Connected', connected: true },
+        { key: 'payment', title: 'Payment gateway', provider: 'Benefit Pay / Apple Pay', status: 'Connected', connected: true },
+        { key: 'analytics', title: 'Analytics', provider: 'GA4 + Mixpanel', status: 'Connected', connected: true },
+        { key: 'pos', title: 'POS (Point of Sale)', provider: 'Foodics / Square', status: 'Connected', connected: true },
+        { key: 'webhooks', title: 'Webhooks', provider: 'Custom endpoints', status: 'Not connected', connected: false },
+        { key: 'erp', title: 'ERP', provider: 'Odoo / Oracle NetSuite', status: 'Not connected', connected: false },
+      ],
+    },
   }),
   'GET /admin/settings/general': () => ({
     companyName: 'Yjeek',
@@ -72,6 +208,25 @@ const mockRoutes = {
     auditLogRetentionMonths: 12,
     ipAllowlist: 'disabled',
     loginAlerts: true,
+  }),
+  'GET /admin/settings/integrations': () => ({
+    section: 'integrations',
+    maps: { provider: 'Google Maps', connected: true },
+    sms: { provider: 'Twilio', connected: true },
+    payment: { provider: 'Benefit Pay / Apple Pay', connected: true },
+    analytics: { provider: 'GA4 + Mixpanel', connected: true },
+    pos: { provider: 'Foodics / Square', connected: true },
+    webhooks: { provider: 'Custom endpoints', connected: false },
+    erp: { provider: 'Odoo / Oracle NetSuite', connected: false },
+    services: [
+      { key: 'maps', title: 'Maps & geocoding', provider: 'Google Maps', status: 'Connected', connected: true },
+      { key: 'sms', title: 'SMS provider', provider: 'Twilio', status: 'Connected', connected: true },
+      { key: 'payment', title: 'Payment gateway', provider: 'Benefit Pay / Apple Pay', status: 'Connected', connected: true },
+      { key: 'analytics', title: 'Analytics', provider: 'GA4 + Mixpanel', status: 'Connected', connected: true },
+      { key: 'pos', title: 'POS (Point of Sale)', provider: 'Foodics / Square', status: 'Connected', connected: true },
+      { key: 'webhooks', title: 'Webhooks', provider: 'Custom endpoints', status: 'Not connected', connected: false },
+      { key: 'erp', title: 'ERP', provider: 'Odoo / Oracle NetSuite', status: 'Not connected', connected: false },
+    ],
   }),
   'GET /admin/ui-editor/apps': () => ({
     apps: [
@@ -258,14 +413,39 @@ const mockRoutes = {
       { key: 'DRAFT', label: 'Draft' },
     ],
   }),
-  'GET /admin/ui-editor/banners/targets': ({ params }) => ({
-    tapAction: params?.tapAction || 'OPEN_STORE',
-    targets: [
-      { id: 'store-green-kitchen', name: 'Green Kitchen' },
-      { id: 'store-all', name: 'All stores' },
-      { id: 'store-pharmacy', name: 'Pharmacy near you' },
-    ],
-  }),
+  'GET /admin/ui-editor/banners/targets': ({ params }) => {
+    const tapAction = String(params?.tapAction || 'OPEN_STORE').toUpperCase()
+    if (tapAction === 'OPEN_CATEGORY') {
+      return {
+        tapAction,
+        targets: [
+          { id: 'cat-food', name: 'Food' },
+          { id: 'cat-grocery', name: 'Grocery' },
+          { id: 'cat-pharmacy', name: 'Pharmacy' },
+        ],
+      }
+    }
+    if (tapAction === 'OPEN_OFFER') {
+      return {
+        tapAction,
+        targets: [
+          { id: 'offer-ramadan', name: 'Ramadan deals' },
+          { id: 'offer-free-delivery', name: 'Free delivery' },
+        ],
+      }
+    }
+    if (tapAction === 'OPEN_URL' || tapAction === 'NONE') {
+      return { tapAction, targets: [] }
+    }
+    return {
+      tapAction,
+      targets: [
+        { id: 'store-green-kitchen', name: 'Green Kitchen' },
+        { id: 'store-all', name: 'All stores' },
+        { id: 'store-pharmacy', name: 'Pharmacy near you' },
+      ],
+    }
+  },
   'POST /admin/ui-editor/banners': ({ body }) => ({
     id: `bnr-mock-${Date.now()}`,
     ...(body && typeof body === 'object' ? body : {}),
@@ -315,7 +495,8 @@ const mockRoutes = {
   'POST /admin/ui-editor/home/categories': ({ body }) => ({
     id: `cat-mock-${Date.now()}`,
     name: body?.name || 'New Category',
-    iconEmoji: body?.iconEmoji || '✨',
+    iconEmoji: body?.iconEmoji || (body?.iconUrl ? null : '✨'),
+    iconUrl: body?.iconUrl || null,
     isFeatured: body?.isFeatured !== false,
     sortOrder: 99,
     isActive: true,
@@ -374,6 +555,31 @@ const mockRoutes = {
   }),
   'POST /admin/ui-editor/pages/help/publish': () => ({ published: true }),
   'POST /admin/ui-editor/pages/help/unpublish': () => ({ published: false }),
+  'GET /admin/sla-models/template': () => getMockSlaTemplate(),
+  'GET /admin/sla-models': () => ({
+    total: mockSlaStore.models.length,
+    page: 1,
+    limit: 50,
+    totalPages: 1,
+    models: mockSlaStore.models.map(presentMockSlaModel),
+  }),
+  'POST /admin/sla-models': ({ body }) => {
+    const created = {
+      id: `sla-${Date.now().toString(36)}`,
+      name: body?.name || 'Platform default SLA',
+      categoryLabel: body?.categoryLabel || 'Food & Beverage',
+      description: body?.description || '',
+      status: 'DRAFT',
+      isDefault: false,
+      isActive: body?.isActive !== false,
+      currentVersion: 0,
+      hasUnpublishedChanges: true,
+      config: { ...MOCK_SLA_CONFIG, ...(body?.config && typeof body.config === 'object' ? body.config : {}) },
+      draftConfig: body?.config || null,
+    }
+    mockSlaStore.models = [created, ...mockSlaStore.models.filter((item) => item.id !== created.id)]
+    return presentMockSlaModel(created)
+  },
   'PATCH /admin/settings/general': ({ body }) => ({
     companyName: body?.companyName ?? 'Yjeek',
     supportEmail: body?.supportEmail ?? 'support@yjeek.com',
@@ -384,6 +590,10 @@ const mockRoutes = {
   'PATCH /admin/settings/localization': ({ body }) => body || {},
   'PATCH /admin/settings/notifications': ({ body }) => body || {},
   'PATCH /admin/settings/security': ({ body }) => body || {},
+  'PATCH /admin/settings/integrations': ({ body }) => ({
+    section: 'integrations',
+    ...(body && typeof body === 'object' ? body : {}),
+  }),
 }
 
 const clone = (value) => structuredClone(value)
@@ -460,11 +670,99 @@ export const mockClient = {
           route = ({ body: patchBody }) => ({
             id: categoryId,
             name: patchBody?.name || 'Food',
-            iconEmoji: patchBody?.iconEmoji || '🍔',
+            iconEmoji: patchBody?.iconEmoji || (patchBody?.iconUrl ? null : '🍔'),
+            iconUrl: patchBody?.iconUrl !== undefined ? patchBody.iconUrl : null,
             sortOrder: patchBody?.sortOrder ?? 0,
             isFeatured: patchBody?.isFeatured !== false,
             isActive: patchBody?.isActive !== false,
           })
+        }
+      }
+    }
+
+    // Dynamic SLA model detail / update / publish / set-default
+    if (!route) {
+      const slaMatch = String(url).match(/^\/admin\/sla-models\/([^/?]+)(?:\/(publish|set-default))?$/)
+      if (slaMatch && slaMatch[1] !== 'template') {
+        const slaModelId = decodeURIComponent(slaMatch[1])
+        const action = slaMatch[2] || null
+        const existing = findMockSlaModel(slaModelId)
+        const methodName = method.toUpperCase()
+
+        if (!action && methodName === 'GET') {
+          route = () => presentMockSlaModel(existing || {
+            id: slaModelId,
+            name: 'Platform default SLA',
+            status: 'PUBLISHED',
+            isDefault: true,
+            isActive: true,
+            currentVersion: 1,
+            config: structuredClone(MOCK_SLA_CONFIG),
+            draftConfig: null,
+          })
+        } else if (!action && methodName === 'PATCH') {
+          route = ({ body: patchBody }) => {
+            const current = existing || {
+              id: slaModelId,
+              name: 'Platform default SLA',
+              categoryLabel: 'Food & Beverage',
+              description: '',
+              status: 'DRAFT',
+              isDefault: false,
+              isActive: true,
+              currentVersion: 0,
+              config: structuredClone(MOCK_SLA_CONFIG),
+            }
+            const updated = {
+              ...current,
+              ...patchBody,
+              id: slaModelId,
+              draftConfig: patchBody?.config || current.draftConfig,
+              config: current.config,
+              hasUnpublishedChanges: true,
+            }
+            mockSlaStore.models = [
+              updated,
+              ...mockSlaStore.models.filter((item) => item.id !== slaModelId),
+            ]
+            return presentMockSlaModel(updated)
+          }
+        } else if (action === 'publish' && methodName === 'POST') {
+          route = () => {
+            const current = existing || {
+              id: slaModelId,
+              name: 'Platform default SLA',
+              config: structuredClone(MOCK_SLA_CONFIG),
+            }
+            const published = {
+              ...current,
+              status: 'PUBLISHED',
+              isActive: true,
+              currentVersion: (current.currentVersion || 0) + 1,
+              config: current.draftConfig || current.config || structuredClone(MOCK_SLA_CONFIG),
+              draftConfig: null,
+              hasUnpublishedChanges: false,
+            }
+            mockSlaStore.models = [
+              published,
+              ...mockSlaStore.models.filter((item) => item.id !== slaModelId),
+            ]
+            return presentMockSlaModel(published)
+          }
+        } else if (action === 'set-default' && methodName === 'POST') {
+          route = () => {
+            mockSlaStore.models = mockSlaStore.models.map((item) => ({
+              ...item,
+              isDefault: item.id === slaModelId,
+            }))
+            const current = findMockSlaModel(slaModelId) || {
+              id: slaModelId,
+              name: 'Platform default SLA',
+              isDefault: true,
+              config: structuredClone(MOCK_SLA_CONFIG),
+            }
+            return presentMockSlaModel({ ...current, isDefault: true })
+          }
         }
       }
     }

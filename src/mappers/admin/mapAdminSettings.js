@@ -7,7 +7,18 @@
  *   /admin/settings/localization
  *   /admin/settings/notifications
  *   /admin/settings/security
+ *   /admin/settings/integrations
  */
+
+const INTEGRATION_KEYS = [
+  { id: 'maps', apiKey: 'maps', title: 'Maps & geocoding' },
+  { id: 'sms', apiKey: 'sms', title: 'SMS provider' },
+  { id: 'payments', apiKey: 'payment', title: 'Payment gateway' },
+  { id: 'analytics', apiKey: 'analytics', title: 'Analytics' },
+  { id: 'pos', apiKey: 'pos', title: 'POS' },
+  { id: 'webhooks', apiKey: 'webhooks', title: 'Webhooks' },
+  { id: 'erp', apiKey: 'erp', title: 'ERP' },
+]
 
 function asObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : null
@@ -404,8 +415,69 @@ export function mapAdminSettingsAll(data) {
     localization: mapAdminSettingsLocalization(src.localization),
     notifications: mapAdminSettingsNotifications(src.notifications),
     security: mapAdminSettingsSecurity(src.security),
-    integrations: Array.isArray(src.integrations) ? src.integrations : asObject(src.integrations),
+    integrations: mapAdminSettingsIntegrations(src.integrations),
   }
+}
+
+/**
+ * GET /admin/settings/integrations → UI list
+ * { id, title, subtitle, status }
+ */
+export function mapAdminSettingsIntegrations(data) {
+  const nested = asObject(data)?.integrations
+  const src = asObject(nested) || asObject(data) || {}
+  const services = Array.isArray(src.services)
+    ? src.services
+    : Array.isArray(data)
+      ? data
+      : []
+
+  if (services.length > 0) {
+    return services
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const apiKey = asString(item.key || item.id).trim()
+        const def = INTEGRATION_KEYS.find((row) => row.apiKey === apiKey || row.id === apiKey)
+        const connected =
+          typeof item.connected === 'boolean'
+            ? item.connected
+            : asString(item.status).toLowerCase() === 'connected'
+        return {
+          id: def?.id || apiKey || asString(item.id),
+          title: asString(item.title || def?.title || apiKey),
+          subtitle: asString(item.provider || item.subtitle || ''),
+          status: connected ? 'Connected' : 'Not connected',
+        }
+      })
+      .filter((item) => item?.id)
+  }
+
+  return INTEGRATION_KEYS.map((row) => {
+    const block = asObject(src[row.apiKey]) || {}
+    const connected = asBool(block.connected, false)
+    return {
+      id: row.id,
+      title: row.title,
+      subtitle: asString(block.provider || ''),
+      status: connected ? 'Connected' : 'Not connected',
+    }
+  })
+}
+
+/** PATCH /admin/settings/integrations body */
+export function mapAdminPatchIntegrationsRequest(services) {
+  const list = Array.isArray(services) ? services : []
+  const body = {}
+
+  for (const row of INTEGRATION_KEYS) {
+    const item = list.find((entry) => entry?.id === row.id || entry?.id === row.apiKey)
+    body[row.apiKey] = {
+      provider: asString(item?.subtitle || item?.provider || ''),
+      connected: asString(item?.status).toLowerCase() === 'connected' || item?.connected === true,
+    }
+  }
+
+  return body
 }
 
 /**
@@ -418,6 +490,7 @@ export function mapAdminSettingsPageState(
   notificationsData,
   securityData,
   defaults = {},
+  integrationsData = null,
 ) {
   const all = mapAdminSettingsAll(allData)
   const general = {
@@ -429,6 +502,11 @@ export function mapAdminSettingsPageState(
     const version = all?.minCustomerAppVersion || all?.minDriverAppVersion
     if (version) general.appVersion = mapAppVersion(version)
   }
+
+  const defaultIntegrations = Array.isArray(defaults.integrations) ? defaults.integrations : []
+  const fromSection = integrationsData ? mapAdminSettingsIntegrations(integrationsData) : []
+  const fromAll = Array.isArray(all?.integrations) ? all.integrations : []
+  const integrations = fromSection.length > 0 ? fromSection : fromAll.length > 0 ? fromAll : defaultIntegrations
 
   return {
     all,
@@ -448,6 +526,7 @@ export function mapAdminSettingsPageState(
       ...(all?.security || {}),
       ...(mapAdminSettingsSecurity(securityData) || {}),
     },
+    integrations,
     tabs: all?.tabs?.length ? all.tabs : null,
   }
 }

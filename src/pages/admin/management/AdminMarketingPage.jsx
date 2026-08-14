@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
-import { ApiState } from '../../../components/admin/ApiState'
+import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
@@ -21,6 +21,20 @@ const codeToneClass = {
 }
 
 const VIEW_TABS = ['Notifications', 'Promo codes']
+const DEFAULT_CHANNELS = [
+  {
+    id: 'customers',
+    title: 'Customer notifications',
+    description: 'Send announcements, offers & order updates to customers.',
+  },
+  {
+    id: 'vendors',
+    title: 'Vendor notifications',
+    description: 'Notify vendors about policy, payouts & performance.',
+  },
+]
+const NOTIFICATION_COLUMNS = ['Target', 'Title', 'Channel', 'Date / time', 'Status']
+const PROMO_COLUMNS = ['Code', 'Description', 'Type', 'Max disc', 'Used / limit', 'Status', 'Expiry']
 
 function useRealMarketing() {
   return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
@@ -111,28 +125,27 @@ export default function AdminMarketingPage() {
   const notifications = isNotificationsModel(data?.notifications) ? data.notifications : null
   const viewTabs = Array.isArray(data?.viewTabs) && data.viewTabs.length ? data.viewTabs : VIEW_TABS
   const header = isPromo ? promoCodes : notifications
-  const ready = isPromo ? Boolean(promoCodes) : Boolean(notifications)
-
-  if (!ready) {
-    // While switching Notifications ↔ Promo codes, previous tab data is ignored until
-    // the matching payload arrives (avoids crashing on .stats/.rows of the wrong shape).
-    return (
-      <ApiState
-        isLoading={isLoading || !error}
-        error={error}
-        onRetry={refetch}
-      />
-    )
-  }
+  const title = header?.title || (isPromo ? 'Promo codes' : 'Notifications')
+  const subtitle =
+    header?.subtitle ||
+    (isPromo
+      ? 'Create and manage discount codes.'
+      : 'Send push / SMS to customers & vendors.')
+  const channels = notifications?.channels?.length ? notifications.channels : DEFAULT_CHANNELS
+  const notificationColumns = notifications?.columns?.length
+    ? notifications.columns
+    : NOTIFICATION_COLUMNS
+  const promoColumns = promoCodes?.columns?.length ? promoCodes.columns : PROMO_COLUMNS
+  const showTableSkeleton = isLoading && !error && (isPromo ? !promoCodes : !notifications)
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
-            {header.title}
+            {title}
           </h2>
-          <p className="mt-0.5 text-[12.5px] text-[#7c8780]">{header.subtitle}</p>
+          <p className="mt-0.5 text-[12.5px] text-[#7c8780]">{subtitle}</p>
         </div>
         {isPromo ? (
           <button
@@ -141,7 +154,7 @@ export default function AdminMarketingPage() {
             className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
           >
             <Plus size={14} strokeWidth={2.2} />
-            {promoCodes.action || 'New promo code'}
+            {promoCodes?.action || 'New promo code'}
           </button>
         ) : null}
       </div>
@@ -166,8 +179,11 @@ export default function AdminMarketingPage() {
         ))}
       </div>
 
+      <ApiErrorBanner error={error} onRetry={refetch} />
+
       {isPromo ? (
         <>
+          {promoCodes?.stats?.length ? (
           <div className="mb-4 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[520px]:grid-cols-1">
             {promoCodes.stats.map(({ label, value, tone }) => (
               <div
@@ -186,6 +202,12 @@ export default function AdminMarketingPage() {
               </div>
             ))}
           </div>
+          ) : (
+            <StatCardsSkeleton
+              count={4}
+              className="mb-4 grid grid-cols-4 gap-3 max-[1100px]:grid-cols-2 max-[520px]:grid-cols-1"
+            />
+          )}
 
           <Card title="All promo codes">
             <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
@@ -193,7 +215,7 @@ export default function AdminMarketingPage() {
                 <table className="w-full min-w-[760px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
-                      {promoCodes.columns.map((column) => (
+                      {promoColumns.map((column) => (
                         <th
                           key={column}
                           className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -204,7 +226,9 @@ export default function AdminMarketingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {promoCodes.rows.length ? (
+                    {showTableSkeleton ? (
+                      <TableBodySkeleton columns={promoColumns.length} rows={5} />
+                    ) : promoCodes?.rows?.length ? (
                       promoCodes.rows.map((row) => (
                         <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
                           <td className="whitespace-nowrap px-4 py-3.5">
@@ -240,7 +264,7 @@ export default function AdminMarketingPage() {
                     ) : (
                       <tr>
                         <td
-                          colSpan={promoCodes.columns.length}
+                          colSpan={promoColumns.length}
                           className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                         >
                           No promo codes yet.
@@ -256,7 +280,7 @@ export default function AdminMarketingPage() {
       ) : (
         <>
           <div className="mb-4 grid grid-cols-2 gap-4 max-[900px]:grid-cols-1">
-            {notifications.channels.map((channel) => (
+            {channels.map((channel) => (
               <Card key={channel.id}>
                 <h3 className="text-[15px] font-bold text-[#17231c]">{channel.title}</h3>
                 <p className="mt-1.5 text-[12.5px] leading-[18px] text-[#7c8780]">
@@ -280,7 +304,7 @@ export default function AdminMarketingPage() {
                 <table className="w-full min-w-[640px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
-                      {notifications.columns.map((column) => (
+                      {notificationColumns.map((column) => (
                         <th
                           key={column}
                           className="whitespace-nowrap px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
@@ -291,7 +315,9 @@ export default function AdminMarketingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {notifications.rows.length ? (
+                    {showTableSkeleton ? (
+                      <TableBodySkeleton columns={notificationColumns.length} rows={5} />
+                    ) : notifications?.rows?.length ? (
                       notifications.rows.map((row) => (
                         <tr
                           key={row.id}
@@ -326,7 +352,7 @@ export default function AdminMarketingPage() {
                     ) : (
                       <tr>
                         <td
-                          colSpan={notifications.columns.length}
+                          colSpan={notificationColumns.length}
                           className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                         >
                           No notifications yet.

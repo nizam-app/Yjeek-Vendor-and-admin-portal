@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   AdminVendorSlaTemplate,
@@ -7,7 +7,11 @@ import {
   DISPATCHER_SLA_SECTIONS,
   buildSlaDefaults,
 } from '../../../components/admin/management/AdminVendorSlaTemplate'
+import { ApiErrorBanner } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+import { useAdminSlaModels } from '../../../hooks/admin/useAdminSlaModels'
+import { useApiMutation } from '../../../hooks/useApiMutation'
+import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
 
 const TABS = [
   { id: 'vendor', label: 'Vendor SLA', path: '/admin/sla-models' },
@@ -36,6 +40,10 @@ const TAB_COPY = {
   },
 }
 
+function cloneValues(value) {
+  return structuredClone(value)
+}
+
 export default function AdminSlaModelsPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -45,22 +53,117 @@ export default function AdminSlaModelsPage() {
   const vendorDefaults = useMemo(() => buildSlaDefaults(VENDOR_SLA_SECTIONS), [])
   const champDefaults = useMemo(() => buildSlaDefaults(CHAMP_SLA_SECTIONS), [])
   const dispatcherDefaults = useMemo(() => buildSlaDefaults(DISPATCHER_SLA_SECTIONS), [])
+
+  const { pageData, error, isLoading, enabled, refetch } = useAdminSlaModels()
+  const { mutate: saveForm, isLoading: isSaving, error: saveError, reset: resetSave } = useApiMutation(
+    (payload) => adminSlaModelsService.saveForm(payload),
+  )
+
   const [vendorValues, setVendorValues] = useState(vendorDefaults)
   const [champValues, setChampValues] = useState(champDefaults)
   const [dispatcherValues, setDispatcherValues] = useState(dispatcherDefaults)
+  const [snapshot, setSnapshot] = useState({
+    vendor: vendorDefaults,
+    champ: champDefaults,
+    dispatcher: dispatcherDefaults,
+  })
+  const [model, setModel] = useState(null)
+  const [template, setTemplate] = useState(null)
+  const [config, setConfig] = useState({})
+  const [saveMessage, setSaveMessage] = useState(null)
+
+  useEffect(() => {
+    if (!pageData?.form) return
+    const nextVendor = pageData.form.vendorValues || vendorDefaults
+    const nextChamp = pageData.form.champValues || champDefaults
+    const nextDispatcher = pageData.form.dispatcherValues || dispatcherDefaults
+    setVendorValues(cloneValues(nextVendor))
+    setChampValues(cloneValues(nextChamp))
+    setDispatcherValues(cloneValues(nextDispatcher))
+    setSnapshot({
+      vendor: cloneValues(nextVendor),
+      champ: cloneValues(nextChamp),
+      dispatcher: cloneValues(nextDispatcher),
+    })
+    setModel(pageData.model || null)
+    setTemplate(pageData.template || null)
+    setConfig(pageData.config || {})
+  }, [pageData, vendorDefaults, champDefaults, dispatcherDefaults])
 
   function handleReset() {
-    if (tab === 'vendor') setVendorValues(buildSlaDefaults(VENDOR_SLA_SECTIONS))
-    if (tab === 'champ') setChampValues(buildSlaDefaults(CHAMP_SLA_SECTIONS))
-    if (tab === 'dispatcher') setDispatcherValues(buildSlaDefaults(DISPATCHER_SLA_SECTIONS))
+    setSaveMessage(null)
+    resetSave()
+    if (tab === 'vendor') setVendorValues(cloneValues(snapshot.vendor))
+    if (tab === 'champ') setChampValues(cloneValues(snapshot.champ))
+    if (tab === 'dispatcher') setDispatcherValues(cloneValues(snapshot.dispatcher))
   }
+
+  async function handleSave() {
+    setSaveMessage(null)
+    resetSave()
+    try {
+      const result = await saveForm({
+        model,
+        template,
+        vendorValues,
+        champValues,
+        dispatcherValues,
+        config,
+      })
+      const next = result?.data
+      if (next?.form) {
+        setVendorValues(cloneValues(next.form.vendorValues))
+        setChampValues(cloneValues(next.form.champValues))
+        setDispatcherValues(cloneValues(next.form.dispatcherValues))
+        setSnapshot({
+          vendor: cloneValues(next.form.vendorValues),
+          champ: cloneValues(next.form.champValues),
+          dispatcher: cloneValues(next.form.dispatcherValues),
+        })
+      }
+      if (next?.model) setModel(next.model)
+      if (next?.config) setConfig(next.config)
+      setSaveMessage(next?.model?.status === 'PUBLISHED' ? 'SLA saved and published.' : 'SLA saved.')
+    } catch (error) {
+      if (error?.savedModel) {
+        setModel(error.savedModel)
+        if (error.savedModel.config) setConfig(error.savedModel.config)
+      }
+    }
+  }
+
+  const saveErrorMessage = saveError
+    ? saveError.draftSaved
+      ? `Draft saved, but publish failed${saveError.message ? `: ${saveError.message}` : '.'}`
+      : saveError.message || 'Unable to save SLA.'
+    : null
 
   return (
     <div className="px-5 py-4 pb-24 max-[700px]:px-3">
       <div className="mb-3.5">
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">{copy.title}</h2>
         <p className="mt-0.5 text-[12.5px] text-[#7c8780]">{copy.subtitle}</p>
+        {model?.name ? (
+          <p className="mt-1 text-[12px] text-[#69756d]">
+            {model.name}
+            {model.status ? ` · ${model.status}` : ''}
+            {model.isDefault ? ' · Default' : ''}
+            {isLoading ? ' · Loading…' : ''}
+          </p>
+        ) : isLoading ? (
+          <p className="mt-1 text-[12px] text-[#69756d]">Loading SLA model…</p>
+        ) : enabled && !model ? (
+          <p className="mt-1 text-[12px] text-[#69756d]">No saved model yet — Save will create one.</p>
+        ) : null}
       </div>
+
+      <ApiErrorBanner error={error} onRetry={refetch} />
+      {saveErrorMessage ? (
+        <div className="mb-3 rounded-[10px] border border-[#f2cccc] bg-[#fff5f5] px-3 py-2 text-[12.5px] text-[#a93e42]">
+          {saveErrorMessage}
+        </div>
+      ) : null}
+      {saveMessage ? <p className="mb-3 text-[13px] text-[#147940]">{saveMessage}</p> : null}
 
       <div className="mb-4 inline-flex flex-wrap items-center gap-1">
         {TABS.map((item) => (
@@ -109,15 +212,18 @@ export default function AdminSlaModelsPage() {
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f8faf8]"
+            disabled={isSaving}
+            className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f8faf8] disabled:opacity-60"
           >
             Reset
           </button>
           <button
             type="button"
-            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+            onClick={handleSave}
+            disabled={isSaving || isLoading}
+            className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:opacity-60"
           >
-            Save SLA
+            {isSaving ? 'Saving…' : 'Save SLA'}
           </button>
         </div>
       </div>

@@ -713,16 +713,23 @@ export default function AdminLiveOrdersPage() {
     refetchChats()
   }
 
-  if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
-
-  const filters = Array.isArray(data.filters) && data.filters.length > 0
+  const filters = Array.isArray(data?.filters) && data.filters.length > 0
     ? data.filters
     : ADMIN_OPS_BOARD_FILTERS
 
-  const columns = filterOpsBoardColumns(data.columns, filter)
+  const columns = filterOpsBoardColumns(
+    Array.isArray(data?.columns) && data.columns.length
+      ? data.columns
+      : [
+          { title: 'At risk', count: 0, tone: 'red', orders: [] },
+          { title: 'Watch', count: 0, tone: 'yellow', orders: [] },
+          { title: 'On track', count: 0, tone: 'green', orders: [] },
+        ],
+    filter,
+  )
   const visibleChats = chats.filter((chat) => chatMatchesOpsFilter(chat, filter))
   const visibleChatsActive = filter === 'All orders' ? chatsActive : visibleChats.length
-  const refreshKey = `${data.activeOrderCount}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
+  const refreshKey = `${data?.activeOrderCount ?? 0}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
 
   const openOrderChat = (order, preferredRole) => {
     const conversationId = order?.conversationId
@@ -785,9 +792,9 @@ export default function AdminLiveOrdersPage() {
         <div className="min-w-0">
           <div className="flex h-[32px] items-start justify-between">
             <div className="flex items-center gap-2.5">
-              <h2 className="text-[14px] font-bold">{data.activeOrderCount} active orders</h2>
+              <h2 className="text-[14px] font-bold">{data?.activeOrderCount ?? '—'} active orders</h2>
               <AdminAutoRefreshBadge
-                intervalSeconds={data.refreshIntervalSeconds}
+                intervalSeconds={data?.refreshIntervalSeconds}
                 resetKey={refreshKey}
               />
             </div>
