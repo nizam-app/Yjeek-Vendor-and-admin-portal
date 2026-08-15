@@ -706,7 +706,7 @@ function SlotActionMenu({ menuId, setMenuId, itemId, label, canEdit, canDelete, 
       {open ? (
         <div
           role="menu"
-          className="absolute top-[calc(100%+4px)] right-0 z-30 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
+          className="absolute top-[calc(100%+4px)] right-0 z-50 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
           onClick={(event) => event.stopPropagation()}
         >
           <button
@@ -1381,11 +1381,17 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
                 const primaryBanner = nestedBanners[0] || null
                 const slotLabel = slot.label || slotDisplayLabel(slot)
                 const slotMenuKey = `ads-slot:${slot.id}`
+                const slotMenuOpen =
+                  menuId === slotMenuKey ||
+                  nestedBanners.some((banner) => menuId === `ads-banner:${banner.id}`)
 
                 return (
                   <div
                     key={slot.id}
-                    className="overflow-hidden rounded-[12px] border border-[#e7ebe8] bg-white"
+                    className={cn(
+                      'rounded-[12px] border border-[#e7ebe8] bg-white',
+                      slotMenuOpen ? 'relative z-40 overflow-visible' : 'overflow-hidden',
+                    )}
                   >
                     <div className="flex items-center gap-2 px-2.5 py-2">
                       <button
@@ -1591,7 +1597,7 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
                         {menuId === banner.id ? (
                           <div
                             role="menu"
-                            className="absolute top-[calc(100%-6px)] right-4 z-30 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
+                            className="absolute top-[calc(100%-6px)] right-4 z-50 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
                           >
                             <button
                               type="button"
