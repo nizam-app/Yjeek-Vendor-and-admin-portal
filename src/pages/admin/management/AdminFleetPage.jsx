@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Car, MoreVertical, Plus, Search, Star } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
@@ -68,6 +69,171 @@ function VehicleIcon({ type }) {
   return <Car fill="#C91A24" className="h-4 w-4" />
 }
 
+function ChampRowMenu({
+  open,
+  row,
+  actionBusy,
+  onToggle,
+  onClose,
+  onView,
+  onSuspend,
+  onUnsuspend,
+  onTerminate,
+}) {
+  const triggerRef = useRef(null)
+  const menuRef = useRef(null)
+  const [coords, setCoords] = useState(null)
+  const status = String(row.status).toLowerCase()
+  const isTerminated = status === 'terminated'
+  const isSuspended = status === 'suspended'
+
+  useLayoutEffect(() => {
+    if (!open) return undefined
+
+    const place = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const width = menuRef.current?.offsetWidth || 160
+      const height = menuRef.current?.offsetHeight || 140
+      const gap = 4
+      const left = Math.min(
+        Math.max(8, rect.right - width),
+        window.innerWidth - width - 8,
+      )
+      const openUp =
+        rect.bottom + gap + height > window.innerHeight - 8 &&
+        rect.top - gap - height > 8
+      const top = openUp ? rect.top - height - gap : rect.bottom + gap
+      setCoords({ top, left })
+    }
+
+    place()
+    const raf = requestAnimationFrame(place)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event) => {
+      if (
+        triggerRef.current?.contains(event.target) ||
+        menuRef.current?.contains(event.target)
+      ) {
+        return
+      }
+      onClose()
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onClose])
+
+  return (
+    <div className="inline-block" ref={triggerRef}>
+      <button
+        type="button"
+        className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`More actions for ${row.name}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle()
+        }}
+      >
+        <MoreVertical size={15} />
+      </button>
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              className="fixed z-[200] w-[160px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
+              style={
+                coords
+                  ? { top: coords.top, left: coords.left }
+                  : { top: 0, left: 0, visibility: 'hidden' }
+              }
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onClose()
+                  onView()
+                }}
+              >
+                <img src={eyeIcon} alt="" className="h-3.5 w-3.5 object-contain opacity-70" />
+                View champ
+              </button>
+              <div className="my-1 border-t border-[#edf0ee]" />
+              {isSuspended ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={actionBusy === `unsuspend:${row.id}`}
+                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose()
+                    onUnsuspend()
+                  }}
+                >
+                  {actionBusy === `unsuspend:${row.id}` ? 'Unsuspending…' : 'Unsuspend'}
+                </button>
+              ) : !isTerminated ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#c4841a] hover:bg-[#fff8eb]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose()
+                    onSuspend()
+                  }}
+                >
+                  Suspend
+                </button>
+              ) : null}
+              {!isTerminated ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose()
+                    onTerminate()
+                  }}
+                >
+                  Terminate
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
+
 export default function AdminFleetPage() {
   const navigate = useNavigate()
   // Prefer real fleet APIs when feature flagged OR when admin mocks are fully off
@@ -79,7 +245,6 @@ export default function AdminFleetPage() {
   const [tierFilter, setTierFilter] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [menuId, setMenuId] = useState(null)
-  const menuRef = useRef(null)
   const [actionChamp, setActionChamp] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
@@ -196,26 +361,6 @@ export default function AdminFleetPage() {
       setActionBusy('')
     }
   }
-
-  useEffect(() => {
-    if (!menuId) return undefined
-
-    const handlePointerDown = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuId(null)
-      }
-    }
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setMenuId(null)
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [menuId])
 
   const columns = data?.columns?.length ? data.columns : FLEET_COLUMNS
   const showTableSkeleton = isLoading && rows.length === 0 && !error
@@ -466,87 +611,18 @@ export default function AdminFleetPage() {
                         <td className="whitespace-nowrap px-4 py-3.5">
                           <Badge tone={tierTone(row.tier)}>{row.tier}</Badge>
                         </td>
-                        <td className="relative whitespace-nowrap px-4 py-3.5 text-right">
-                          <div className="inline-block" ref={menuOpen ? menuRef : null}>
-                            <button
-                              type="button"
-                              className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
-                              aria-haspopup="menu"
-                              aria-expanded={menuOpen}
-                              aria-label={`More actions for ${row.name}`}
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                setMenuId(menuOpen ? null : row.id)
-                              }}
-                            >
-                              <MoreVertical size={15} />
-                            </button>
-                            {menuOpen ? (
-                              <div
-                                role="menu"
-                                className="absolute top-[calc(100%-6px)] right-4 z-30 w-[160px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
-                              >
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    setMenuId(null)
-                                    openChamp(row.id)
-                                  }}
-                                >
-                                  <img src={eyeIcon} alt="" className="h-3.5 w-3.5 object-contain opacity-70" />
-                                  View champ
-                                </button>
-                                <div className="my-1 border-t border-[#edf0ee]" />
-                                {String(row.status).toLowerCase() === 'suspended' ? (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    disabled={actionBusy === `unsuspend:${row.id}`}
-                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#1aa054] hover:bg-[#f3faf5] disabled:opacity-60"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      setMenuId(null)
-                                      handleUnsuspend(row)
-                                    }}
-                                  >
-                                    {actionBusy === `unsuspend:${row.id}`
-                                      ? 'Unsuspending…'
-                                      : 'Unsuspend'}
-                                  </button>
-                                ) : String(row.status).toLowerCase() !== 'terminated' ? (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#c4841a] hover:bg-[#fff8eb]"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      setMenuId(null)
-                                      openSuspend(row)
-                                    }}
-                                  >
-                                    Suspend
-                                  </button>
-                                ) : null}
-                                {String(row.status).toLowerCase() !== 'terminated' ? (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
-                                    onClick={(event) => {
-                                      event.stopPropagation()
-                                      setMenuId(null)
-                                      openTerminate(row)
-                                    }}
-                                  >
-                                    Terminate
-                                  </button>
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                          <ChampRowMenu
+                            open={menuOpen}
+                            row={row}
+                            actionBusy={actionBusy}
+                            onToggle={() => setMenuId(menuOpen ? null : row.id)}
+                            onClose={() => setMenuId(null)}
+                            onView={() => openChamp(row.id)}
+                            onSuspend={() => openSuspend(row)}
+                            onUnsuspend={() => handleUnsuspend(row)}
+                            onTerminate={() => openTerminate(row)}
+                          />
                         </td>
                       </tr>
                     )
