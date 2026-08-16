@@ -231,6 +231,39 @@ export const adminUserService = {
   },
 
   /**
+   * Public: POST /admin/invitations/accept
+   * Sets the invitee's permanent password from the email token.
+   */
+  async acceptInvite({ token, password } = {}, options = {}) {
+    const inviteToken = String(token || '').trim()
+    const nextPassword = String(password || '')
+    if (inviteToken.length < 32) {
+      throw new Error('This invitation link is invalid or incomplete.')
+    }
+    if (!nextPassword) {
+      throw new Error('Password is required.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.invitations.accept,
+      { token: inviteToken, password: nextPassword },
+      {
+        ...options,
+        skipAuth: true,
+        scope: 'admin',
+        feature: 'users',
+        forceReal: true,
+      },
+    )
+
+    const data = response?.data && typeof response.data === 'object' ? response.data : {}
+    return {
+      accepted: Boolean(data.accepted ?? true),
+      email: data.email ? String(data.email) : '',
+    }
+  },
+
+  /**
    * Suspend user. Confirmed 400 for PENDING invitations.
    */
   async suspendUser(userId, options = {}) {

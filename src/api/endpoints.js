@@ -341,9 +341,13 @@ export const endpoints = {
       activate: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/activate`,
     },
     /**
-     * Confirmed Users & Roles — admin panel staff accounts.
+     * Public invite accept + Users & Roles staff accounts.
      * Postman folder: 02. Users & Roles
      */
+    invitations: {
+      /** Confirmed: POST /admin/invitations/accept (public) */
+      accept: '/admin/invitations/accept',
+    },
     users: {
       /** Confirmed: GET /admin/users/summary */
       summary: '/admin/users/summary',

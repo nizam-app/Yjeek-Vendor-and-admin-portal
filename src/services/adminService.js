@@ -155,6 +155,9 @@ export const adminService = {
   resendAdminUserInvite(userId, options = {}) {
     return adminUserService.resendUserInvite(userId, options)
   },
+  acceptAdminInvite(payload, options = {}) {
+    return adminUserService.acceptInvite(payload, options)
+  },
   suspendAdminUser(userId, options = {}) {
     return adminUserService.suspendUser(userId, options)
   },
