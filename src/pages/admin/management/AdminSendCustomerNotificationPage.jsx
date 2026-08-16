@@ -9,6 +9,7 @@ import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySe
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
+import { formatMarketingNotifySendSuccess } from '../../../mappers/admin/mapAdminMarketingNotifications'
 
 const AUDIENCE_OPTIONS = ['All customers', 'By segment', 'By city', 'Selected']
 const MESSAGE_TYPES = ['Promo', 'Info', 'Order', 'Wallet']
@@ -211,8 +212,13 @@ export default function AdminSendCustomerNotificationPage() {
         scheduledAt: buildScheduledAt(date, time),
       })
       const createdTitle = response?.data?.title || title
-      setActionSuccess(`Sent: ${createdTitle}`)
-      navigate('/admin/customers')
+      setActionSuccess(
+        formatMarketingNotifySendSuccess(createdTitle, {
+          email,
+          emailDelivery: response?.data?.emailDelivery,
+        }),
+      )
+      await refetchHistory()
     } catch (err) {
       setActionError(formatApiErrorMessage(err, 'Failed to send notification.'))
     } finally {

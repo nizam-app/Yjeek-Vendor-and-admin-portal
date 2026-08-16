@@ -260,17 +260,18 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
 
   const scheduleUi = String(form.schedule || 'Send now').trim().toLowerCase()
   let schedule = 'now'
+  let scheduledAt
   if (scheduleUi === 'send now' || scheduleUi === 'now') {
     schedule = 'now'
   } else if (scheduleUi === 'schedule later' || scheduleUi === 'later') {
-    // Not confirmed beyond "now" — send ISO when date/time provided.
     const when = String(form.scheduledAt || '').trim()
     if (!when) {
       throw new ApiError({
         message: 'Pick a date & time for Schedule later, or choose Send now.',
       })
     }
-    schedule = when
+    schedule = 'later'
+    scheduledAt = when
   } else if (scheduleUi) {
     schedule = scheduleUi
   }
@@ -286,6 +287,7 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
     sms: form.sms === true || form.sms === 'true',
     schedule,
   }
+  if (scheduledAt) payload.scheduledAt = scheduledAt
 
   if (audience === 'by_segment') {
     payload.segmentIds = segmentIds
@@ -359,6 +361,7 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
 
   const scheduleUi = String(form.schedule || 'Send now').trim().toLowerCase()
   let schedule = 'now'
+  let scheduledAt
   if (scheduleUi === 'send now' || scheduleUi === 'now') {
     schedule = 'now'
   } else if (scheduleUi === 'schedule later' || scheduleUi === 'later') {
@@ -368,7 +371,8 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
         message: 'Pick a date & time for Schedule later, or choose Send now.',
       })
     }
-    schedule = when
+    schedule = 'later'
+    scheduledAt = when
   } else if (scheduleUi) {
     schedule = scheduleUi
   }
@@ -381,8 +385,10 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
     body: bodyText,
     push: form.push !== false && form.push !== 'false',
     email: form.email === true || form.email === 'true',
+    sms: form.sms === true || form.sms === 'true',
     schedule,
   }
+  if (scheduledAt) payload.scheduledAt = scheduledAt
 
   if (audience === 'selected') {
     payload.vendorIds = vendorIds
@@ -424,4 +430,18 @@ export function mapAdminVendorNotificationHistoryRow(item) {
     })(),
     time: timeLabel,
   }
+}
+
+export function formatMarketingNotifySendSuccess(title, options = {}) {
+  const heading = `Sent: ${title || 'Notification'}`
+  if (options.email !== true) return heading
+
+  const delivery = options.emailDelivery || {}
+  const delivered = Number(delivery.delivered || 0)
+  const failed = Number(delivery.failed || 0)
+  const skipped = Number(delivery.skippedNoEmail || 0)
+  const parts = [`email ${delivered} delivered`]
+  if (skipped) parts.push(`${skipped} skipped (no email)`)
+  if (failed) parts.push(`${failed} failed`)
+  return `${heading} · ${parts.join(', ')}`
 }
