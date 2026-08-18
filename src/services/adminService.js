@@ -122,6 +122,9 @@ export const adminService = {
   setAdminFleetChampOnline(champId, online, options = {}) {
     return adminFleetService.setChampOnline(champId, online, options)
   },
+  reconcileAdminFleetChampPod(champId, form, options = {}) {
+    return adminFleetService.reconcileChampPod(champId, form, options)
+  },
   estimateAdminFleetNotify(form, options = {}) {
     return adminFleetService.estimateNotify(form, options)
   },

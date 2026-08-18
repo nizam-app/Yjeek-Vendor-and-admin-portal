@@ -246,6 +246,52 @@ export const adminFleetService = {
   },
 
   /**
+   * Clear outstanding POD / COD cash so the champ can go online from the driver app.
+   * Confirmed: POST /admin/fleet/champs/:champId/reconcile-pod
+   * Body: { note?, amount? }
+   */
+  async reconcileChampPod(champId, form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to reconcile champ POD cash.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const body = {}
+    const note = String(form.note || '').trim()
+    if (note) body.note = note
+    if (form.amount != null && form.amount !== '') {
+      const amount = Number(form.amount)
+      if (!Number.isNaN(amount) && amount >= 0) body.amount = amount
+    }
+
+    const response = await apiClient.post(endpoints.admin.fleet.champReconcilePod(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    const payload = response?.data
+    let data = payload ?? null
+    if (payload && typeof payload === 'object') {
+      try {
+        data = mapAdminChampDetailResponse(payload)
+      } catch {
+        data = payload
+      }
+    }
+
+    return {
+      data,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * Set champ online / offline.
    * Confirmed: POST /admin/fleet/champs/:champId/online
    * Body: { online: boolean }

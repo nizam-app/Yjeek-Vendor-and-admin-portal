@@ -13,6 +13,7 @@ import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
 import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
+import AdminReconcilePodModal from '../../../components/admin/AdminReconcilePodModal'
 import { AdminChampEarnings } from '../../../components/admin/management/AdminChampEarnings'
 import { cn } from '../../../components/admin/cn'
 
@@ -22,6 +23,17 @@ function tierTone(tier) {
   if (tier === 'At Risk') return 'red'
   if (tier === 'Bronze') return 'bronze'
   return 'gray'
+}
+
+function isPodCashOutstandingError(error) {
+  const code =
+    error?.raw?.error?.code ||
+    error?.raw?.code ||
+    error?.details?.code ||
+    null
+  if (String(code || '').toUpperCase() === 'POD_CASH_OUTSTANDING') return true
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('reconcile outstanding pod') || message.includes('pod cash')
 }
 
 function VehicleLabel({ type }) {
@@ -49,6 +61,7 @@ export default function AdminChampDetailPage() {
   const [online, setOnline] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
+  const [reconcileOpen, setReconcileOpen] = useState(false)
   const [actionBusy, setActionBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
@@ -96,6 +109,13 @@ export default function AdminChampDetailPage() {
     await refetch()
   }
 
+  const handleReconcileSuccess = async () => {
+    setActionError('')
+    setActionSuccess('POD cash reconciled. Ask the champ to go online from the driver app.')
+    setOnline(null)
+    await refetch()
+  }
+
   const handleUnsuspend = async () => {
     setActionBusy('unsuspend')
     setActionError('')
@@ -132,12 +152,18 @@ export default function AdminChampDetailPage() {
       // Prefer server overview after refresh.
       setOnline(null)
     } catch (err) {
-      setActionError(
-        formatApiErrorMessage(
-          err,
-          nextOnline ? 'Failed to set champ online.' : 'Failed to set champ offline.',
-        ),
-      )
+      if (nextOnline && isPodCashOutstandingError(err)) {
+        setActionError(
+          `Outstanding POD cash (${data.cod}). Reconcile POD cash below, then ask the champ to go online from the driver app.`,
+        )
+      } else {
+        setActionError(
+          formatApiErrorMessage(
+            err,
+            nextOnline ? 'Failed to set champ online.' : 'Failed to set champ offline.',
+          ),
+        )
+      }
     } finally {
       setActionBusy('')
     }
@@ -158,6 +184,15 @@ export default function AdminChampDetailPage() {
         champId={champId || resolvedChampId}
         defaultCod={data.cod || 'BHD 0.000'}
         onSuccess={handleTerminateSuccess}
+      />
+      <AdminReconcilePodModal
+        open={reconcileOpen}
+        onClose={() => setReconcileOpen(false)}
+        champId={champId || resolvedChampId}
+        champName={data.name}
+        codAmount={data.cod || 'BHD 0.000'}
+        podCashBalance={data.podCashBalance}
+        onSuccess={handleReconcileSuccess}
       />
 
       {actionError ? (
@@ -368,10 +403,44 @@ export default function AdminChampDetailPage() {
                 <span className="text-right text-[13px] font-bold text-[#17231c]">{data.zoneDetail}</span>
               </div>
 
-              <div className="mt-3.5 flex items-center justify-between gap-3">
+              <div className="mt-3.5 flex items-center justify-between gap-3 border-b border-[#f0f2f0] pb-3.5">
                 <span className="text-[13px] text-[#7c8780]">COD</span>
-                <span className="text-right text-[13px] font-bold text-[#17231c]">{data.cod}</span>
+                <span
+                  className={cn(
+                    'text-right text-[13px] font-bold',
+                    data.hasOutstandingPod ? 'text-[#c4841a]' : 'text-[#17231c]',
+                  )}
+                >
+                  {data.cod}
+                </span>
               </div>
+
+              {data.hasOutstandingPod ? (
+                <div className="mt-3.5 rounded-[10px] border border-[#f3e0b8] bg-[#fff8ec] px-3.5 py-3">
+                  <p className="text-[12px] leading-[16px] font-medium text-[#9a6b12]">
+                    Outstanding POD cash is blocking go-online. Reconcile after banking collected cash.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setReconcileOpen(true)}
+                    disabled={Boolean(actionBusy)}
+                    className="mt-3 inline-flex h-[36px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#168f49] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Reconcile POD cash
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3.5">
+                  <button
+                    type="button"
+                    onClick={() => setReconcileOpen(true)}
+                    disabled={Boolean(actionBusy)}
+                    className="inline-flex h-[36px] items-center justify-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Reconcile POD cash
+                  </button>
+                </div>
+              )}
 
               <div className="mt-5 flex flex-col gap-2.5">
                 {isTerminated ? (

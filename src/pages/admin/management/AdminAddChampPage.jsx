@@ -16,7 +16,7 @@ import {
   CHAMP_DOC_SLOT_META,
   mapAdminChampDetailToForm,
 } from '../../../mappers/admin/mapAdminFleet'
-import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
+import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import { adminService } from '../../../services/adminService'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
@@ -121,12 +121,6 @@ function UploadBox({ label, variant = 'file', imageUrl = '', category = 'documen
     [],
   )
 
-  useEffect(() => {
-    if (imageUrl && !String(imageUrl).startsWith('blob:') && localPreviewRef.current) {
-      revokeLocalPreview()
-    }
-  }, [imageUrl])
-
   const handlePick = () => {
     if (isUploading) return
     inputRef.current?.click()
@@ -169,8 +163,9 @@ function UploadBox({ label, variant = 'file', imageUrl = '', category = 'documen
     }
   }
 
-  const displayUrl = localPreviewUrl || resolveAdminMediaUrl(imageUrl) || imageUrl || ''
-  const hasImage = Boolean(displayUrl)
+  const hasLocalPreview = Boolean(localPreviewUrl)
+  const hasRemoteImage = Boolean(String(imageUrl || '').trim())
+  const hasImage = hasLocalPreview || hasRemoteImage
 
   return (
     <div className="flex w-[140px] shrink-0 flex-col gap-1">
@@ -190,8 +185,15 @@ function UploadBox({ label, variant = 'file', imageUrl = '', category = 'documen
           isUploading && 'cursor-wait opacity-80',
         )}
       >
-        {hasImage ? (
-          <img src={displayUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {hasLocalPreview ? (
+          <img src={localPreviewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : hasRemoteImage ? (
+          <AdminMediaImage
+            src={imageUrl}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+            fallbackClassName="absolute inset-0 h-full w-full"
+          />
         ) : null}
         <span
           className={cn(

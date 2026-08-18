@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Image as ImageIcon } from 'lucide-react'
-import { resolveAdminMediaUrl } from '../../mappers/admin/mapAdminUpload'
+import { adminMediaSameOriginPath, resolveAdminMediaUrl } from '../../mappers/admin/mapAdminUpload'
 import { cn } from './cn'
 
 /**
- * Renders admin upload/media URLs via same-origin /uploads proxy when needed.
- * Falls back to a placeholder if the image fails to load.
+ * Renders admin upload/media URLs.
+ * - Dev: same-origin /uploads proxy via Vite
+ * - Prod: absolute API URL; falls back to /uploads proxy path or raw URL on error
  */
 export default function AdminMediaImage({
   src,
@@ -15,16 +16,21 @@ export default function AdminMediaImage({
   iconSize = 15,
 }) {
   const [failed, setFailed] = useState(false)
-  const [useRawFallback, setUseRawFallback] = useState(false)
+  const [fallbackMode, setFallbackMode] = useState('primary')
   const resolved = resolveAdminMediaUrl(src)
   const raw = String(src || '').trim() || null
-  const displaySrc =
-    useRawFallback && raw && raw !== resolved && /^https?:\/\//i.test(raw) ? raw : resolved
+  const proxyPath = useMemo(() => adminMediaSameOriginPath(src), [src])
+
+  const displaySrc = useMemo(() => {
+    if (fallbackMode === 'proxy' && proxyPath) return proxyPath
+    if (fallbackMode === 'raw' && raw && /^https?:\/\//i.test(raw)) return raw
+    return resolved
+  }, [fallbackMode, proxyPath, raw, resolved])
 
   useEffect(() => {
     setFailed(false)
-    setUseRawFallback(false)
-  }, [resolved, raw])
+    setFallbackMode('primary')
+  }, [resolved, raw, proxyPath])
 
   if (!displaySrc || failed) {
     return (
@@ -46,9 +52,22 @@ export default function AdminMediaImage({
       className={className}
       referrerPolicy="no-referrer"
       onError={() => {
-        // Proxied /uploads path failed — try the original absolute URL once.
-        if (!useRawFallback && raw && raw !== displaySrc && /^https?:\/\//i.test(raw)) {
-          setUseRawFallback(true)
+        if (
+          fallbackMode === 'primary' &&
+          proxyPath &&
+          proxyPath !== resolved &&
+          proxyPath !== displaySrc
+        ) {
+          setFallbackMode('proxy')
+          return
+        }
+        if (
+          fallbackMode !== 'raw' &&
+          raw &&
+          /^https?:\/\//i.test(raw) &&
+          raw !== displaySrc
+        ) {
+          setFallbackMode('raw')
           return
         }
         setFailed(true)

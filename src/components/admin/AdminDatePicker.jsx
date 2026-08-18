@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from './cn'
 
-const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+const WEEKDAYS = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA']
 const MONTHS = [
   'January',
   'February',
@@ -16,6 +16,11 @@ const MONTHS = [
   'October',
   'November',
   'December',
+]
+
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
 export function todayLocalIsoDate() {
@@ -61,11 +66,7 @@ function toIsoDate(date) {
 function formatDisplay(value) {
   const date = parseIsoDate(value)
   if (!date) return ''
-  return date.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
 }
 
 function startOfDay(date) {
@@ -76,13 +77,15 @@ function startOfDay(date) {
  * Styled calendar date picker — click opens a calendar.
  * - `min` omitted → defaults to today (promo / schedule fields)
  * - `min={null}` → no lower bound (birth dates, already-expired docs)
+ *
+ * Click the month/year header to switch to month grid, then year grid for fast navigation.
  */
 export function AdminDatePicker({
   value,
   onChange,
   min,
   max,
-  placeholder = 'Pick a date',
+  placeholder = 'DD/MM/YYYY',
   disabled = false,
   className,
 }) {
@@ -96,10 +99,13 @@ export function AdminDatePicker({
   const selected = useMemo(() => parseIsoDate(value), [value])
   const [open, setOpen] = useState(false)
   const [view, setView] = useState(() => selected || minDate || new Date())
+  // 'days' | 'months' | 'years'
+  const [mode, setMode] = useState('days')
 
   useEffect(() => {
     if (!open) return
     setView(selected || minDate || new Date())
+    setMode('days')
   }, [open, selected, minDate])
 
   useEffect(() => {
@@ -119,21 +125,52 @@ export function AdminDatePicker({
 
   const year = view.getFullYear()
   const month = view.getMonth()
-  const firstWeekday = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells = []
-  for (let i = 0; i < firstWeekday; i += 1) cells.push(null)
-  for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, month, day))
 
   function canGoPrev() {
+    if (mode === 'years') {
+      if (!minDate) return true
+      return year - 12 >= minDate.getFullYear() - 12
+    }
+    if (mode === 'months') {
+      if (!minDate) return true
+      return year - 1 >= (minDate?.getFullYear() ?? 1900)
+    }
     const prevMonthEnd = new Date(year, month, 0)
     return !minDate || startOfDay(prevMonthEnd) >= startOfDay(minDate)
   }
 
   function canGoNext() {
+    if (mode === 'years') {
+      if (!maxDate) return true
+      return year + 12 <= maxDate.getFullYear() + 12
+    }
+    if (mode === 'months') {
+      if (!maxDate) return true
+      return year + 1 <= (maxDate?.getFullYear() ?? 2100)
+    }
     if (!maxDate) return true
     const nextMonthStart = new Date(year, month + 1, 1)
     return startOfDay(nextMonthStart) <= startOfDay(maxDate)
+  }
+
+  function goPrev() {
+    if (mode === 'years') {
+      setView(new Date(year - 12, month, 1))
+    } else if (mode === 'months') {
+      setView(new Date(year - 1, month, 1))
+    } else {
+      setView(new Date(year, month - 1, 1))
+    }
+  }
+
+  function goNext() {
+    if (mode === 'years') {
+      setView(new Date(year + 12, month, 1))
+    } else if (mode === 'months') {
+      setView(new Date(year + 1, month, 1))
+    } else {
+      setView(new Date(year, month + 1, 1))
+    }
   }
 
   function isDisabledDay(date) {
@@ -149,7 +186,40 @@ export function AdminDatePicker({
     setOpen(false)
   }
 
+  function pickMonth(m) {
+    setView(new Date(year, m, 1))
+    setMode('days')
+  }
+
+  function pickYear(y) {
+    setView(new Date(y, month, 1))
+    setMode('months')
+  }
+
+  function handleHeaderClick() {
+    if (mode === 'days') setMode('months')
+    else if (mode === 'months') setMode('years')
+  }
+
   const today = startOfDay(new Date())
+
+  // Days grid
+  const firstWeekday = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < firstWeekday; i += 1) cells.push(null)
+  for (let day = 1; day <= daysInMonth; day += 1) cells.push(new Date(year, month, day))
+
+  // Years range (12 years centered around current)
+  const yearStart = year - 5
+  const yearEnd = year + 6
+
+  const headerLabel =
+    mode === 'years'
+      ? `${yearStart} – ${yearEnd}`
+      : mode === 'months'
+        ? `${year}`
+        : `${MONTHS[month]} ${year}`
 
   return (
     <div ref={rootRef} className={cn('relative', className)}>
@@ -168,69 +238,142 @@ export function AdminDatePicker({
 
       {open ? (
         <div className="absolute left-0 top-[calc(100%+6px)] z-30 w-[292px] overflow-hidden rounded-[14px] border border-[#e4e8e4] bg-white p-3 shadow-[0_12px_32px_rgba(20,40,28,.14)]">
+          {/* Header: prev / month-year / next */}
           <div className="mb-2 flex items-center justify-between gap-2">
             <button
               type="button"
-              aria-label="Previous month"
+              aria-label="Previous"
               disabled={!canGoPrev()}
-              onClick={() => setView(new Date(year, month - 1, 1))}
+              onClick={goPrev}
               className="grid h-8 w-8 place-items-center rounded-full text-[#455249] hover:bg-[#f3f5f3] disabled:opacity-30"
             >
               <ChevronLeft size={16} strokeWidth={2.2} />
             </button>
-            <p className="text-[13px] font-bold text-[#17231c]">
-              {MONTHS[month]} {year}
-            </p>
             <button
               type="button"
-              aria-label="Next month"
+              onClick={handleHeaderClick}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[13px] font-bold text-[#17231c] hover:bg-[#f3f5f3]"
+            >
+              {headerLabel}
+              {mode !== 'years' ? (
+                <ChevronDown size={12} strokeWidth={2.5} className="text-[#7c8780]" />
+              ) : null}
+            </button>
+            <button
+              type="button"
+              aria-label="Next"
               disabled={!canGoNext()}
-              onClick={() => setView(new Date(year, month + 1, 1))}
+              onClick={goNext}
               className="grid h-8 w-8 place-items-center rounded-full text-[#455249] hover:bg-[#f3f5f3] disabled:opacity-30"
             >
               <ChevronRight size={16} strokeWidth={2.2} />
             </button>
           </div>
 
-          <div className="mb-1 grid grid-cols-7 gap-0.5">
-            {WEEKDAYS.map((day) => (
-              <div
-                key={day}
-                className="grid h-8 place-items-center text-[10px] font-bold uppercase tracking-[0.04em] text-[#8a948e]"
-              >
-                {day}
-              </div>
-            ))}
-          </div>
+          {/* Years grid */}
+          {mode === 'years' ? (
+            <div className="grid grid-cols-4 gap-1">
+              {Array.from({ length: 12 }, (_, i) => yearStart + i).map((y) => {
+                const isDisabled =
+                  (minDate && y < minDate.getFullYear()) ||
+                  (maxDate && y > maxDate.getFullYear())
+                const isCurrent = y === new Date().getFullYear()
+                const isSelected = y === year
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => pickYear(y)}
+                    className={cn(
+                      'grid h-10 place-items-center rounded-lg text-[13px] font-medium transition',
+                      isDisabled && 'cursor-not-allowed text-[#c5cbc6]',
+                      !isDisabled && !isSelected && 'text-[#17231c] hover:bg-[#e8f7ed] hover:text-[#147940]',
+                      isSelected && 'bg-[#1aa054] font-bold text-white hover:bg-[#158a47]',
+                      !isSelected && isCurrent && !isDisabled && 'ring-1 ring-[#1aa054]/40',
+                    )}
+                  >
+                    {y}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
 
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((date, index) => {
-              if (!date) {
-                return <div key={`empty-${index}`} className="h-9" />
-              }
-              const iso = toIsoDate(date)
-              const disabledDay = isDisabledDay(date)
-              const isSelected = selected && toIsoDate(selected) === iso
-              const isToday = startOfDay(date).getTime() === today.getTime()
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  disabled={disabledDay}
-                  onClick={() => pick(date)}
-                  className={cn(
-                    'grid h-9 place-items-center rounded-full text-[12.5px] font-medium transition',
-                    disabledDay && 'cursor-not-allowed text-[#c5cbc6]',
-                    !disabledDay && !isSelected && 'text-[#17231c] hover:bg-[#e8f7ed] hover:text-[#147940]',
-                    isSelected && 'bg-[#1aa054] font-bold text-white hover:bg-[#158a47]',
-                    !isSelected && isToday && !disabledDay && 'ring-1 ring-[#1aa054]/40',
-                  )}
-                >
-                  {date.getDate()}
-                </button>
-              )
-            })}
-          </div>
+          {/* Months grid */}
+          {mode === 'months' ? (
+            <div className="grid grid-cols-3 gap-1">
+              {MONTHS_SHORT.map((mName, i) => {
+                const isDisabled =
+                  (minDate && (year < minDate.getFullYear() || (year === minDate.getFullYear() && i < minDate.getMonth()))) ||
+                  (maxDate && (year > maxDate.getFullYear() || (year === maxDate.getFullYear() && i > maxDate.getMonth())))
+                const isCurrent = i === new Date().getMonth() && year === new Date().getFullYear()
+                const isSelected = i === month
+                return (
+                  <button
+                    key={mName}
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={() => pickMonth(i)}
+                    className={cn(
+                      'grid h-10 place-items-center rounded-lg text-[13px] font-medium transition',
+                      isDisabled && 'cursor-not-allowed text-[#c5cbc6]',
+                      !isDisabled && !isSelected && 'text-[#17231c] hover:bg-[#e8f7ed] hover:text-[#147940]',
+                      isSelected && 'bg-[#1aa054] font-bold text-white hover:bg-[#158a47]',
+                      !isSelected && isCurrent && !isDisabled && 'ring-1 ring-[#1aa054]/40',
+                    )}
+                  >
+                    {mName}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+
+          {/* Days grid */}
+          {mode === 'days' ? (
+            <>
+              <div className="mb-1 grid grid-cols-7 gap-0.5">
+                {WEEKDAYS.map((day) => (
+                  <div
+                    key={day}
+                    className="grid h-8 place-items-center text-[10px] font-bold uppercase tracking-[0.04em] text-[#8a948e]"
+                  >
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-0.5">
+                {cells.map((date, index) => {
+                  if (!date) {
+                    return <div key={`empty-${index}`} className="h-9" />
+                  }
+                  const iso = toIsoDate(date)
+                  const disabledDay = isDisabledDay(date)
+                  const isSelected = selected && toIsoDate(selected) === iso
+                  const isToday = startOfDay(date).getTime() === today.getTime()
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      disabled={disabledDay}
+                      onClick={() => pick(date)}
+                      className={cn(
+                        'grid h-9 place-items-center rounded-full text-[12.5px] font-medium transition',
+                        disabledDay && 'cursor-not-allowed text-[#c5cbc6]',
+                        !disabledDay && !isSelected && 'text-[#17231c] hover:bg-[#e8f7ed] hover:text-[#147940]',
+                        isSelected && 'bg-[#1aa054] font-bold text-white hover:bg-[#158a47]',
+                        !isSelected && isToday && !disabledDay && 'ring-1 ring-[#1aa054]/40',
+                      )}
+                    >
+                      {date.getDate()}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          ) : null}
 
           <div className="mt-2 flex items-center justify-between border-t border-[#edf0ee] pt-2">
             <button

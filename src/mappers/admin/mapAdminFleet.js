@@ -46,6 +46,15 @@ function formatMoney(value, currency = 'BHD') {
   return `${currency} ${numeric.toFixed(3)}`
 }
 
+function moneyAmount(value) {
+  const numeric = Number(value)
+  return Number.isNaN(numeric) ? 0 : numeric
+}
+
+function hasOutstandingPodCash({ podCashBalance, codOutstanding, codAmount }) {
+  return [podCashBalance, codOutstanding, codAmount].some((value) => moneyAmount(value) > 0)
+}
+
 function titleCaseWords(value) {
   return String(value || '')
     .replace(/_/g, ' ')
@@ -1265,6 +1274,15 @@ export function mapAdminChampDetailResponse(data) {
   const phone = header.phone || '—'
   const cpr = profile.cprNumber || '—'
   const avgRating = kpis.avgRating ?? 0
+  const podObj = profile.pod && typeof profile.pod === 'object' ? profile.pod : null
+  const podCashBalance = moneyAmount(podObj?.currentCashBalance)
+  const codOutstandingAmount = moneyAmount(profile.codOutstanding)
+  const codAmountValue = moneyAmount(controls.codAmount ?? profile.codOutstanding)
+  const hasOutstandingPod = hasOutstandingPodCash({
+    podCashBalance,
+    codOutstanding: codOutstandingAmount,
+    codAmount: codAmountValue,
+  })
 
   return {
     id,
@@ -1286,7 +1304,9 @@ export function mapAdminChampDetailResponse(data) {
     phone,
     cpr,
     cashLimit,
-    cod: formatMoney(controls.codAmount ?? profile.codOutstanding, 'BHD'),
+    cod: formatMoney(codAmountValue, 'BHD'),
+    podCashBalance: formatMoney(podCashBalance, 'BHD'),
+    hasOutstandingPod,
     online,
     onlineHint: 'Receiving orders now',
     offlineHint: 'Not receiving orders',

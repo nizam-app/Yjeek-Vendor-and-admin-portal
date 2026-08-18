@@ -14,7 +14,7 @@ import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddV
 import { AdminVendorSlaConfigs, SERVICE_MODE_OPTIONS } from '../../../components/admin/AdminVendorSlaConfigs'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
-import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
+import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import {
   flattenAdminMenuCategoryOptions,
   matchAdminStoreTypeId,
@@ -313,13 +313,6 @@ function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
     }
   }, [])
 
-  // Remote URL replaced the blob — drop temporary preview.
-  useEffect(() => {
-    if (imageUrl && !String(imageUrl).startsWith('blob:') && localPreviewRef.current) {
-      revokeLocalPreview()
-    }
-  }, [imageUrl])
-
   const handlePick = () => {
     if (isUploading) return
     inputRef.current?.click()
@@ -360,8 +353,9 @@ function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
     }
   }
 
-  const displayUrl = localPreviewUrl || resolveAdminMediaUrl(imageUrl) || imageUrl || ''
-  const hasImage = Boolean(displayUrl)
+  const hasLocalPreview = Boolean(localPreviewUrl)
+  const hasRemoteImage = Boolean(String(imageUrl || '').trim())
+  const hasImage = hasLocalPreview || hasRemoteImage
 
   return (
     <VendorField label={label}>
@@ -381,16 +375,14 @@ function VendorUploadBox({ label, imageUrl = '', onUrlChange }) {
           isUploading && 'cursor-wait opacity-80',
         )}
       >
-        {hasImage ? (
-          <img
-            src={displayUrl}
+        {hasLocalPreview ? (
+          <img src={localPreviewUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : hasRemoteImage ? (
+          <AdminMediaImage
+            src={imageUrl}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
-            onLoad={() => {
-              if (imageUrl && localPreviewRef.current && !String(imageUrl).startsWith('blob:')) {
-                revokeLocalPreview()
-              }
-            }}
+            fallbackClassName="absolute inset-0 h-full w-full"
           />
         ) : null}
         <span
