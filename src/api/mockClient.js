@@ -6,6 +6,9 @@ import {
   adminPickupMock,
   adminDineInMock,
   adminServicesMock,
+  adminHomeCatalogMock,
+  adminHomeCategoriesMock,
+  buildAdminStoreTypesListMock,
   buildAdminVendorDetail,
   buildAdminCustomerDetail,
   buildAdminChampDetail,
@@ -137,6 +140,16 @@ const mockRoutes = {
   'GET /admin/services': () => adminServicesMock,
   'GET /admin/operations': () => adminOperationsMock,
   'GET /admin/management': ({ params }) => adminManagementMock[params?.type] || adminManagementMock.vendors,
+  'GET /admin/store-types': () => buildAdminStoreTypesListMock(),
+  'GET /admin/store-types/summary': () => {
+    const list = buildAdminStoreTypesListMock()
+    return {
+      totalStoreTypes: list.totalStoreTypes,
+      visibleCount: list.visibleCount,
+      hiddenCount: list.hiddenCount,
+      totalVendors: list.totalVendors,
+    }
+  },
   'GET /admin/vendors/detail': ({ params }) => buildAdminVendorDetail(params?.id),
   'GET /admin/customers/detail': ({ params }) => buildAdminCustomerDetail(params?.id),
   'GET /admin/champs/detail': ({ params }) => buildAdminChampDetail(params?.id),
@@ -419,9 +432,11 @@ const mockRoutes = {
       return {
         tapAction,
         targets: [
-          { id: 'cat-food', name: 'Food' },
-          { id: 'cat-grocery', name: 'Grocery' },
-          { id: 'cat-pharmacy', name: 'Pharmacy' },
+          { id: 'st-food', name: 'Food', kind: 'STORE_TYPE', slug: 'food' },
+          { id: 'om-dine-in', name: 'Dine In', kind: 'ORDER_MODE', slug: 'dine_in' },
+          { id: 'om-pickup', name: 'Pickup', kind: 'ORDER_MODE', slug: 'pickup' },
+          { id: 'st-grocery', name: 'Grocery', kind: 'STORE_TYPE', slug: 'grocery' },
+          { id: 'st-pharmacy', name: 'Pharmacy', kind: 'STORE_TYPE', slug: 'pharmacy' },
         ],
       }
     }
@@ -480,32 +495,41 @@ const mockRoutes = {
   }),
   'GET /admin/ui-editor/home': () => ({
     title: 'Home',
-    categories: [
-      { id: 'cat-food', name: 'Food', iconEmoji: '🍔', sortOrder: 0, isFeatured: true },
-      { id: 'cat-grocery', name: 'Groceries', iconEmoji: '🛒', sortOrder: 1, isFeatured: true },
-    ],
+    categories: adminHomeCategoriesMock.categories.slice(0, 2),
   }),
-  'GET /admin/ui-editor/home/categories': () => ({
-    categories: [
-      { id: 'cat-food', name: 'Food', iconEmoji: '🍔', sortOrder: 0, isFeatured: true, isActive: true },
-      { id: 'cat-grocery', name: 'Groceries', iconEmoji: '🛒', sortOrder: 1, isFeatured: true, isActive: true },
-      { id: 'cat-pharmacy', name: 'Pharmacy', iconEmoji: '💊', sortOrder: 2, isFeatured: false, isActive: true },
-    ],
-  }),
-  'POST /admin/ui-editor/home/categories': ({ body }) => ({
-    id: `cat-mock-${Date.now()}`,
-    name: body?.name || 'New Category',
-    iconEmoji: body?.iconEmoji || (body?.iconUrl ? null : '✨'),
-    iconUrl: body?.iconUrl || null,
-    isFeatured: body?.isFeatured !== false,
-    sortOrder: 99,
-    isActive: true,
-  }),
+  'GET /admin/ui-editor/home/catalog': () => adminHomeCatalogMock,
+  'GET /admin/ui-editor/home/categories': () => adminHomeCategoriesMock,
+  'POST /admin/ui-editor/home/categories': ({ body }) => {
+    const kind = String(body?.kind || '').trim()
+    const refId = String(body?.refId || body?.ref_id || '').trim()
+    if (!kind || !refId) {
+      throw new Error('Home entries require kind and refId from Store Management.')
+    }
+    const catalogItem = [...adminHomeCatalogMock.storeTypes, ...adminHomeCatalogMock.orderModes].find(
+      (item) => item.refId === refId || item.id === refId,
+    )
+    return {
+      id: `he-mock-${Date.now()}`,
+      kind,
+      refId,
+      code: catalogItem?.code || null,
+      name: body?.name || catalogItem?.name || 'Category',
+      slug: catalogItem?.slug || refId,
+      iconUrl: body?.iconUrl || catalogItem?.iconUrl || null,
+      isFeatured: body?.isFeatured !== false,
+      sortOrder: body?.sortOrder ?? 99,
+      isActive: body?.isActive !== false,
+      structure: catalogItem?.structure || 'SINGLE',
+      children: [],
+    }
+  },
   'PATCH /admin/ui-editor/home/categories/reorder': ({ body }) => ({
     categories: (body?.items || []).map((item, index) => ({
       id: item.id,
+      kind: item.kind || 'STORE_TYPE',
+      refId: item.refId || item.id,
       name: item.name || `Category ${index + 1}`,
-      iconEmoji: item.iconEmoji || '📦',
+      iconUrl: item.iconUrl || null,
       sortOrder: item.sortOrder ?? index,
       isFeatured: item.isFeatured !== false,
       isActive: true,
@@ -669,8 +693,9 @@ export const mockClient = {
         if (categoryId !== 'reorder') {
           route = ({ body: patchBody }) => ({
             id: categoryId,
+            kind: patchBody?.kind || 'STORE_TYPE',
+            refId: patchBody?.refId || categoryId,
             name: patchBody?.name || 'Food',
-            iconEmoji: patchBody?.iconEmoji || (patchBody?.iconUrl ? null : '🍔'),
             iconUrl: patchBody?.iconUrl !== undefined ? patchBody.iconUrl : null,
             sortOrder: patchBody?.sortOrder ?? 0,
             isFeatured: patchBody?.isFeatured !== false,

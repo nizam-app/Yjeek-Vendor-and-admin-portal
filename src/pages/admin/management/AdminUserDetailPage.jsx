@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Check, ChevronDown, ChevronLeft } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, Copy, Eye, EyeOff, KeyRound } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
@@ -235,6 +235,8 @@ export default function AdminUserDetailPage() {
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
   const [tempPassword, setTempPassword] = useState(null)
+  const [showTempPassword, setShowTempPassword] = useState(false)
+  const [copiedPassword, setCopiedPassword] = useState(false)
 
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getAdminUserDetail(userId),
@@ -273,6 +275,8 @@ export default function AdminUserDetailPage() {
     setActionError('')
     setActionSuccess('')
     setTempPassword(null)
+    setShowTempPassword(false)
+    setCopiedPassword(false)
   }, [userId])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
@@ -418,24 +422,43 @@ export default function AdminUserDetailPage() {
   }
 
   const handleResetPassword = async () => {
+    const confirmed = window.confirm(
+      'Generate a new password for this user? They can log in with it immediately. Share it securely.',
+    )
+    if (!confirmed) return
+
     setActionBusy('reset')
     setActionError('')
     setActionSuccess('')
     setTempPassword(null)
+    setShowTempPassword(true)
+    setCopiedPassword(false)
     try {
       const result = await adminService.resetAdminUserPassword(userId)
       const password = result?.data?.temporaryPassword || null
+      if (!password) {
+        throw new Error('Server did not return a generated password.')
+      }
       setTempPassword(password)
-      setActionSuccess(
-        password
-          ? 'Password reset. Copy the temporary password below.'
-          : 'Password reset successfully.',
-      )
+      setActionSuccess('New password generated. Copy it and share it with the user securely.')
       await refetch()
     } catch (err) {
       setActionError(formatApiErrorMessage(err, 'Failed to reset password.'))
     } finally {
       setActionBusy('')
+    }
+  }
+
+  const handleCopyPassword = async () => {
+    if (!tempPassword) return
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(tempPassword)
+      }
+      setCopiedPassword(true)
+      window.setTimeout(() => setCopiedPassword(false), 2000)
+    } catch {
+      setCopiedPassword(false)
     }
   }
 
@@ -601,7 +624,8 @@ export default function AdminUserDetailPage() {
               onClick={handleResetPassword}
               className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[12.5px] font-bold text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:opacity-60"
             >
-              {actionBusy === 'reset' ? 'Resetting…' : 'Reset password'}
+              <KeyRound size={14} strokeWidth={2.2} />
+              {actionBusy === 'reset' ? 'Generating…' : 'Reset password'}
             </button>
           )}
           <button
@@ -640,21 +664,35 @@ export default function AdminUserDetailPage() {
         <div className="mb-4 rounded-[12px] border border-[#c6e8d2] bg-[#f1faf4] px-4 py-3 text-[13px] text-[#147940]">
           {actionSuccess}
           {tempPassword ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="rounded-[8px] bg-white px-2.5 py-1 text-[13px] font-bold text-[#17231c] ring-1 ring-[#d7ebe0]">
-                {tempPassword}
-              </code>
-              <button
-                type="button"
-                onClick={() => {
-                  if (navigator?.clipboard?.writeText) {
-                    navigator.clipboard.writeText(tempPassword)
-                  }
-                }}
-                className="text-[12px] font-bold text-[#1aa054] hover:underline"
-              >
-                Copy
-              </button>
+            <div className="mt-3 rounded-[10px] border border-[#c6e8d2] bg-white p-3">
+              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-[0.04em] text-[#7c8780]">
+                Generated password
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="min-w-0 flex-1 rounded-[8px] bg-[#f6f8f6] px-3 py-2 text-[14px] font-bold tracking-wide text-[#17231c]">
+                  {showTempPassword ? tempPassword : '••••••••••••'}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setShowTempPassword((prev) => !prev)}
+                  aria-label={showTempPassword ? 'Hide password' : 'Show password'}
+                  className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3 text-[12px] font-bold text-[#455249] hover:bg-[#f6f8f6]"
+                >
+                  {showTempPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {showTempPassword ? 'Hide' : 'Show'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyPassword}
+                  className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-3 text-[12px] font-bold text-white hover:bg-[#158a47]"
+                >
+                  <Copy size={13} />
+                  {copiedPassword ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-[#7c8780]">
+                This password is shown once. The user can log in with it immediately.
+              </p>
             </div>
           ) : null}
         </div>

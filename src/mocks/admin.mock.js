@@ -111,8 +111,14 @@ const adminIncidentBoardShared = {
   filters: ['All orders', 'All chats', 'Chat · Champ', 'Chat · Customer'],
 }
 
+/** Ops board for Pickup order mode (OM-2002) — not a store type. */
 export const adminPickupMock = {
   ...adminIncidentBoardShared,
+  board: 'pickup',
+  orderMode: 'pickup',
+  orderModeCode: 'OM-2002',
+  orderType: 'PICKUP',
+  kind: 'ORDER_MODE',
   activeCount: 26,
   activeLabel: 'active pickups',
   columns: [
@@ -122,12 +128,12 @@ export const adminPickupMock = {
       count: 34,
       tone: 'red',
       orders: [
-        { id: 'YJK…2YKZ9VF', vendor: 'Green Kitchen', timeLeft: '41m', detail: 'Ready · Ahmed K.', hasIncident: true },
-        { id: 'YJK…7VZSSWC5', vendor: 'Lulu Express', timeLeft: '38m', detail: 'Ready · Sara M.', hasIncident: true },
-        { id: 'YJK…0YBIGQHT', vendor: 'Sharaf DG', timeLeft: '12m', detail: 'Preparing · Omar F.', hasIncident: true },
-        { id: 'YJK…KXEQWHMP', vendor: 'VEERA', timeLeft: '9m', detail: 'Ready · Unassigned', hasIncident: true },
-        { id: 'YJK…9QTBM', vendor: 'Marine & Co.', timeLeft: '22m', detail: 'Preparing · Mariam', hasIncident: true },
-        { id: 'YJK…4PLX82', vendor: 'Burger Lab', timeLeft: '17m', detail: 'Ready · Unassigned', hasIncident: true },
+        { id: 'YJK…2YKZ9VF', vendor: 'Green Kitchen', storeType: 'Food', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '41m', detail: 'Ready · Ahmed K.', hasIncident: true },
+        { id: 'YJK…7VZSSWC5', vendor: 'Lulu Express', storeType: 'Groceries', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '38m', detail: 'Ready · Sara M.', hasIncident: true },
+        { id: 'YJK…0YBIGQHT', vendor: 'Sharaf DG', storeType: 'Electronics', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '12m', detail: 'Preparing · Omar F.', hasIncident: true },
+        { id: 'YJK…KXEQWHMP', vendor: 'VEERA', storeType: 'Fashion', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '9m', detail: 'Ready · Unassigned', hasIncident: true },
+        { id: 'YJK…9QTBM', vendor: 'Marine & Co.', storeType: 'Food', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '22m', detail: 'Preparing · Mariam', hasIncident: true },
+        { id: 'YJK…4PLX82', vendor: 'Burger Lab', storeType: 'Food', orderType: 'PICKUP', orderMode: 'pickup', timeLeft: '17m', detail: 'Ready · Unassigned', hasIncident: true },
       ],
     },
     {
@@ -149,8 +155,14 @@ export const adminPickupMock = {
   chats: adminChatsMock,
 }
 
+/** Ops board for Dine In order mode (OM-2003) — not a store type. */
 export const adminDineInMock = {
   ...adminIncidentBoardShared,
+  board: 'dine_in',
+  orderMode: 'dine_in',
+  orderModeCode: 'OM-2003',
+  orderType: 'DINE_IN',
+  kind: 'ORDER_MODE',
   activeCount: 18,
   activeLabel: 'active dine-in',
   columns: [
@@ -160,10 +172,10 @@ export const adminDineInMock = {
       count: 12,
       tone: 'red',
       orders: [
-        { id: 'YJK…DIN8A2K', vendor: 'Cafe Lilou', timeLeft: '28m', detail: 'Seated · Table 4', hasIncident: true },
-        { id: 'YJK…DIN3F9P', vendor: 'Bait Al Lulu', timeLeft: '19m', detail: 'Waiting · Table 12', hasIncident: true },
-        { id: 'YJK…DIN7M1Q', vendor: 'Villa Mamas', timeLeft: '14m', detail: 'Order delayed · Unassigned', hasIncident: true },
-        { id: 'YJK…DIN2R5T', vendor: 'Ishtiraq', timeLeft: '7m', detail: 'No-show risk · Host desk', hasIncident: true },
+        { id: 'YJK…DIN8A2K', vendor: 'Cafe Lilou', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '28m', detail: 'Seated · Table 4', hasIncident: true },
+        { id: 'YJK…DIN3F9P', vendor: 'Bait Al Lulu', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '19m', detail: 'Waiting · Table 12', hasIncident: true },
+        { id: 'YJK…DIN7M1Q', vendor: 'Villa Mamas', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '14m', detail: 'Order delayed · Unassigned', hasIncident: true },
+        { id: 'YJK…DIN2R5T', vendor: 'Ishtiraq', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '7m', detail: 'No-show risk · Host desk', hasIncident: true },
       ],
     },
     {
@@ -172,8 +184,8 @@ export const adminDineInMock = {
       count: 6,
       tone: 'green',
       orders: [
-        { id: 'YJK…DIN9K4W', vendor: 'The Grove', timeLeft: '35m', detail: 'Seated · Table 2', hasIncident: false },
-        { id: 'YJK…DIN6H8C', vendor: 'Fusions', timeLeft: '42m', detail: 'Preparing · Table 8', hasIncident: false },
+        { id: 'YJK…DIN9K4W', vendor: 'The Grove', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '35m', detail: 'Seated · Table 2', hasIncident: false },
+        { id: 'YJK…DIN6H8C', vendor: 'Fusions', storeType: 'Food', orderType: 'DINE_IN', orderMode: 'dine_in', timeLeft: '42m', detail: 'Preparing · Table 8', hasIncident: false },
       ],
     },
   ],
@@ -191,8 +203,14 @@ export const adminDineInMock = {
   ],
 }
 
+/** Ops board for Services order type — bookable service jobs (not store-type identity). */
 export const adminServicesMock = {
   ...adminIncidentBoardShared,
+  board: 'services',
+  orderMode: 'order-mode-services',
+  orderModeCode: 'OM-2005',
+  orderType: 'SERVICE',
+  kind: 'ORDER_MODE',
   activeCount: 9,
   activeLabel: 'active services',
   columns: [
@@ -202,9 +220,9 @@ export const adminServicesMock = {
       count: 5,
       tone: 'red',
       orders: [
-        { id: 'YJK…SVC1A9D', vendor: 'Home Cleaning Pro', timeLeft: '55m', detail: 'En route · Late', hasIncident: true },
-        { id: 'YJK…SVC4B2E', vendor: 'AC Fix Bahrain', timeLeft: '33m', detail: 'Parts missing · Unassigned', hasIncident: true },
-        { id: 'YJK…SVC8C7F', vendor: 'Sparkle Laundry', timeLeft: '21m', detail: 'Pickup missed · Ali R.', hasIncident: true },
+        { id: 'YJK…SVC1A9D', vendor: 'Home Cleaning Pro', storeType: 'Services', orderType: 'SERVICE', orderMode: 'order-mode-services', timeLeft: '55m', detail: 'En route · Late', hasIncident: true },
+        { id: 'YJK…SVC4B2E', vendor: 'AC Fix Bahrain', storeType: 'Services', orderType: 'SERVICE', orderMode: 'order-mode-services', timeLeft: '33m', detail: 'Parts missing · Unassigned', hasIncident: true },
+        { id: 'YJK…SVC8C7F', vendor: 'Sparkle Laundry', storeType: 'Services', orderType: 'SERVICE', orderMode: 'order-mode-services', timeLeft: '21m', detail: 'Pickup missed · Ali R.', hasIncident: true },
       ],
     },
     {
@@ -213,8 +231,8 @@ export const adminServicesMock = {
       count: 4,
       tone: 'green',
       orders: [
-        { id: 'YJK…SVC2D5G', vendor: 'Pet Care Plus', timeLeft: '48m', detail: 'In progress · Sara N.', hasIncident: false },
-        { id: 'YJK…SVC6E3H', vendor: 'Move & Pack', timeLeft: '1h 10m', detail: 'Confirmed · Khalid A.', hasIncident: false },
+        { id: 'YJK…SVC2D5G', vendor: 'Pet Care Plus', storeType: 'Services', orderType: 'SERVICE', orderMode: 'order-mode-services', timeLeft: '48m', detail: 'In progress · Sara N.', hasIncident: false },
+        { id: 'YJK…SVC6E3H', vendor: 'Move & Pack', storeType: 'Services', orderType: 'SERVICE', orderMode: 'order-mode-services', timeLeft: '1h 10m', detail: 'Confirmed · Khalid A.', hasIncident: false },
       ],
     },
   ],
@@ -379,7 +397,7 @@ export const adminManagementMock = {
       { label: 'Pending approval', value: '6', tone: 'orange' },
       { label: 'Suspended', value: '3', tone: 'red' },
     ],
-    tabs: ['All', 'Active', 'Pending', 'Suspended'],
+    tabs: ['All', 'Active', 'Pending', 'Drafts', 'Suspended'],
     columns: ['Vendor', 'Vendor ID', 'Category', 'Orders', 'Branches', 'Users', 'Rating', 'Status'],
     rows: [
       { name: 'Green Kitchen', id: 'VND-1024', category: 'Hot food', orders: '1,240', branches: '3', users: '12', rating: '4.7', status: 'Active' },
@@ -397,24 +415,22 @@ export const adminManagementMock = {
     subtitle: 'Platform types that power the customer-app home, vendor onboarding & per-type taxonomy.',
     action: 'Create store type',
     stats: [
-      { label: 'Store types', value: '12', tone: 'ink' },
+      { label: 'Store types', value: '10', tone: 'ink' },
       { label: 'Visible in app', value: '10', tone: 'green' },
-      { label: 'Hidden', value: '2', tone: 'orange' },
+      { label: 'Hidden', value: '0', tone: 'orange' },
       { label: 'Total vendors', value: '48', tone: 'ink' },
     ],
+    // Store types only — Dine In / Pickup / Delivery are ORDER_MODE (see adminHomeCatalogMock).
     rows: [
-      { id: 'food', name: 'Food', slug: 'food', iconBg: '#fff3e0', orderModes: 'On-Demand Delivery · Pickup', categories: 42, vendors: 12, visible: true },
-      { id: 'dine-in', name: 'Dine In', slug: 'dine_in', iconBg: '#e8f5e9', orderModes: 'Dine-in · Table service', categories: 18, vendors: 9, visible: true },
-      { id: 'groceries', name: 'Groceries', slug: 'grocery', iconBg: '#e3f2fd', orderModes: 'On-Demand Delivery · Scheduled', categories: 36, vendors: 8, visible: true },
-      { id: 'pharmacy', name: 'Pharmacy', slug: 'pharmacy', iconBg: '#fce4ec', orderModes: 'On-Demand Delivery · Pickup', categories: 14, vendors: 4, visible: true },
-      { id: 'cosmetics', name: 'Cosmetics', slug: 'cosmetics', iconBg: '#f3e5f5', orderModes: 'On-Demand Delivery', categories: 22, vendors: 5, visible: true },
-      { id: 'fashion', name: 'Fashion', slug: 'fashion', iconBg: '#ede7f6', orderModes: 'On-Demand Delivery · Scheduled', categories: 28, vendors: 6, visible: true },
-      { id: 'electronics', name: 'Electronics', slug: 'electronics', iconBg: '#e0f7fa', orderModes: 'Scheduled Delivery · Pickup', categories: 19, vendors: 3, visible: true },
-      { id: 'gifts', name: 'Gifts', slug: 'gifts', iconBg: '#fff8e1', orderModes: 'On-Demand Delivery · Scheduled', categories: 11, vendors: 3, visible: true },
-      { id: 'vape', name: 'Vape', slug: 'vape', iconBg: '#efebe9', orderModes: 'Scheduled Delivery', categories: 7, vendors: 2, visible: false },
-      { id: 'jewelry', name: 'Jewelry', slug: 'jewelry', iconBg: '#fce4ec', orderModes: 'On-Demand Delivery · Scheduled', categories: 9, vendors: 2, visible: true },
-      { id: 'pickup', name: 'Pickup', slug: 'pickup', iconBg: '#e8f5e9', orderModes: 'Pickup only', categories: 8, vendors: 1, visible: true },
-      { id: 'all', name: 'All categories', slug: 'all', iconBg: '#e3f2fd', orderModes: 'Mixed modes', categories: 6, vendors: 1, visible: false },
+      { id: 'st-food', name: 'Food', slug: 'food', code: 'ST-1001', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#fff3e0', orderModes: 'On-Demand Delivery · Pickup · Dine-in · Services', supportedOrderModes: ['delivery', 'pickup', 'dine_in', 'services'], categories: 42, vendors: 12, visible: true },
+      { id: 'st-grocery', name: 'Groceries', slug: 'grocery', code: 'ST-1003', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#e3f2fd', orderModes: 'On-Demand Delivery · Scheduled · Pickup', supportedOrderModes: ['delivery', 'pickup', 'scheduled'], categories: 36, vendors: 8, visible: true },
+      { id: 'st-pharmacy', name: 'Pharmacy', slug: 'pharmacy', code: 'ST-1004', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#fce4ec', orderModes: 'On-Demand Delivery · Pickup', supportedOrderModes: ['delivery', 'pickup'], categories: 14, vendors: 4, visible: true },
+      { id: 'st-cosmetics', name: 'Cosmetics', slug: 'cosmetics', code: 'ST-1002', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#f3e5f5', orderModes: 'On-Demand Delivery · Pickup', supportedOrderModes: ['delivery', 'pickup'], categories: 22, vendors: 5, visible: true },
+      { id: 'st-fashion', name: 'Fashion', slug: 'fashion', code: 'ST-1006', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#ede7f6', orderModes: 'On-Demand Delivery · Scheduled', supportedOrderModes: ['delivery', 'scheduled'], categories: 28, vendors: 6, visible: true },
+      { id: 'st-electronics', name: 'Electronics', slug: 'electronics', code: 'ST-1007', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#e0f7fa', orderModes: 'Scheduled Delivery · Pickup', supportedOrderModes: ['scheduled', 'pickup'], categories: 19, vendors: 3, visible: true },
+      { id: 'st-gifts', name: 'Gifts', slug: 'gifts', code: 'ST-1008', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#fff8e1', orderModes: 'On-Demand Delivery · Scheduled', supportedOrderModes: ['delivery', 'scheduled'], categories: 11, vendors: 3, visible: true },
+      { id: 'st-jewelry', name: 'Jewelry', slug: 'jewelry', code: 'ST-1009', kind: 'STORE_TYPE', structure: 'SINGLE', iconBg: '#fce4ec', orderModes: 'On-Demand Delivery · Scheduled', supportedOrderModes: ['delivery', 'scheduled'], categories: 9, vendors: 2, visible: true },
+      { id: 'st-services', name: 'Services', slug: 'services', code: 'ST-1005', kind: 'STORE_TYPE', structure: 'TWO_LEVEL', iconBg: '#e8f5e9', orderModes: 'Services', supportedOrderModes: ['services'], categories: 4, vendors: 5, visible: true },
     ],
   },
   fleet: {
@@ -453,7 +469,7 @@ export const adminManagementMock = {
         contact: '+973 3601 2233',
         cpr: '890101234',
         vehicle: 'Bike',
-        categories: ['Food', 'Groceries'],
+        categories: ['food', 'grocery'],
         extraCategories: 1,
         cashLimit: 'BHD 50.000',
         status: 'Online',
@@ -469,7 +485,7 @@ export const adminManagementMock = {
         contact: '+973 3990 1122',
         cpr: '920512345',
         vehicle: 'Car',
-        categories: ['Food', 'Pharmacy'],
+        categories: ['food', 'pharmacy'],
         extraCategories: 0,
         cashLimit: 'BHD 80.000',
         status: 'On delivery',
@@ -485,7 +501,7 @@ export const adminManagementMock = {
         contact: '+973 3612 8890',
         cpr: '880312456',
         vehicle: 'Bike',
-        categories: ['Food'],
+        categories: ['food'],
         extraCategories: 0,
         cashLimit: 'BHD 40.000',
         status: 'Offline',
@@ -501,7 +517,7 @@ export const adminManagementMock = {
         contact: '+973 3771 0044',
         cpr: '950723789',
         vehicle: 'Car',
-        categories: ['Groceries', 'Pharmacy'],
+        categories: ['grocery', 'pharmacy'],
         extraCategories: 2,
         cashLimit: 'BHD 100.000',
         status: 'Online',
@@ -517,7 +533,7 @@ export const adminManagementMock = {
         contact: '+973 3502 7766',
         cpr: '870145678',
         vehicle: 'Bike',
-        categories: ['Food', 'Groceries'],
+        categories: ['food', 'grocery'],
         extraCategories: 0,
         cashLimit: 'BHD 30.000',
         status: 'Suspended',
@@ -533,7 +549,7 @@ export const adminManagementMock = {
         contact: '+973 3888 2211',
         cpr: '910834567',
         vehicle: 'Bike',
-        categories: ['Food', 'Pharmacy'],
+        categories: ['food', 'pharmacy'],
         extraCategories: 1,
         cashLimit: 'BHD 50.000',
         status: 'Online',
@@ -1532,6 +1548,302 @@ export const adminManagementMock = {
   },
 }
 
+/**
+ * UI Editor "Add to home" picker catalog (mirrors GET /admin/ui-editor/home/catalog).
+ * STORE_TYPE vs ORDER_MODE are separate lists — Dine In / Pickup are never store types.
+ */
+export const adminHomeCatalogMock = {
+  storeTypes: [
+    {
+      id: 'st-food',
+      refId: 'st-food',
+      kind: 'STORE_TYPE',
+      code: 'ST-1001',
+      name: 'Food',
+      slug: 'food',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 0,
+      onHome: true,
+      supportedOrderModes: ['delivery', 'pickup', 'dine_in', 'services'],
+      subTypes: [],
+    },
+    {
+      id: 'st-cosmetics',
+      refId: 'st-cosmetics',
+      kind: 'STORE_TYPE',
+      code: 'ST-1002',
+      name: 'Cosmetics',
+      slug: 'cosmetics',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 1,
+      onHome: true,
+      supportedOrderModes: ['delivery', 'pickup'],
+      subTypes: [],
+    },
+    {
+      id: 'st-grocery',
+      refId: 'st-grocery',
+      kind: 'STORE_TYPE',
+      code: 'ST-1003',
+      name: 'Groceries',
+      slug: 'grocery',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 2,
+      onHome: true,
+      supportedOrderModes: ['delivery', 'pickup', 'scheduled'],
+      subTypes: [],
+    },
+    {
+      id: 'st-services',
+      refId: 'st-services',
+      kind: 'STORE_TYPE',
+      code: 'ST-1005',
+      name: 'Services',
+      slug: 'services',
+      structure: 'TWO_LEVEL',
+      iconUrl: null,
+      sortOrder: 3,
+      onHome: true,
+      supportedOrderModes: ['services'],
+      subTypes: [
+        {
+          id: 'sb-salon',
+          refId: 'sb-salon',
+          kind: 'SUB_TYPE',
+          code: 'SB-3001',
+          name: 'Salon & Beauty',
+          slug: 'salon',
+          structure: 'SINGLE',
+          iconUrl: null,
+          sortOrder: 0,
+          onHome: true,
+        },
+        {
+          id: 'sb-catering',
+          refId: 'sb-catering',
+          kind: 'SUB_TYPE',
+          code: 'SB-3002',
+          name: 'Catering',
+          slug: 'catering',
+          structure: 'SINGLE',
+          iconUrl: null,
+          sortOrder: 1,
+          onHome: false,
+        },
+      ],
+    },
+    {
+      id: 'st-gifts',
+      refId: 'st-gifts',
+      kind: 'STORE_TYPE',
+      code: 'ST-1008',
+      name: 'Gifts',
+      slug: 'gifts',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 4,
+      onHome: false,
+      supportedOrderModes: ['delivery', 'scheduled'],
+      subTypes: [],
+    },
+  ],
+  orderModes: [
+    {
+      id: 'om-delivery',
+      refId: 'om-delivery',
+      kind: 'ORDER_MODE',
+      code: 'OM-2001',
+      name: 'Delivery',
+      slug: 'delivery',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 90,
+      onHome: false,
+    },
+    {
+      id: 'om-pickup',
+      refId: 'om-pickup',
+      kind: 'ORDER_MODE',
+      code: 'OM-2002',
+      name: 'Pickup',
+      slug: 'pickup',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 91,
+      onHome: true,
+    },
+    {
+      id: 'om-dine-in',
+      refId: 'om-dine-in',
+      kind: 'ORDER_MODE',
+      code: 'OM-2003',
+      name: 'Dine In',
+      slug: 'dine_in',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 92,
+      onHome: true,
+    },
+    {
+      id: 'om-scheduled',
+      refId: 'om-scheduled',
+      kind: 'ORDER_MODE',
+      code: 'OM-2004',
+      name: 'Scheduled',
+      slug: 'scheduled',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 93,
+      onHome: false,
+    },
+    {
+      id: 'om-services',
+      refId: 'om-services',
+      kind: 'ORDER_MODE',
+      code: 'OM-2005',
+      name: 'Services',
+      slug: 'order-mode-services',
+      structure: 'SINGLE',
+      iconUrl: null,
+      sortOrder: 94,
+      onHome: false,
+    },
+  ],
+}
+
+/**
+ * Mock home grid entries (mirrors GET /admin/ui-editor/home/categories).
+ * No Vape/TEST free-text tiles — every row has kind + refId.
+ */
+export const adminHomeCategoriesMock = {
+  count: 5,
+  featuredCount: 5,
+  categories: [
+    {
+      id: 'he-food',
+      kind: 'STORE_TYPE',
+      refId: 'st-food',
+      code: 'ST-1001',
+      name: 'Food',
+      slug: 'food',
+      iconUrl: null,
+      sortOrder: 0,
+      isFeatured: true,
+      isActive: true,
+      structure: 'SINGLE',
+      children: [],
+    },
+    {
+      id: 'he-dine-in',
+      kind: 'ORDER_MODE',
+      refId: 'om-dine-in',
+      code: 'OM-2003',
+      name: 'Dine In',
+      slug: 'dine_in',
+      iconUrl: null,
+      sortOrder: 1,
+      isFeatured: true,
+      isActive: true,
+      structure: 'SINGLE',
+      children: [],
+    },
+    {
+      id: 'he-pickup',
+      kind: 'ORDER_MODE',
+      refId: 'om-pickup',
+      code: 'OM-2002',
+      name: 'Pickup',
+      slug: 'pickup',
+      iconUrl: null,
+      sortOrder: 2,
+      isFeatured: true,
+      isActive: true,
+      structure: 'SINGLE',
+      children: [],
+    },
+    {
+      id: 'he-services',
+      kind: 'STORE_TYPE',
+      refId: 'st-services',
+      code: 'ST-1005',
+      name: 'Services',
+      slug: 'services',
+      iconUrl: null,
+      sortOrder: 3,
+      isFeatured: true,
+      isActive: true,
+      structure: 'TWO_LEVEL',
+      children: [
+        {
+          id: 'he-salon',
+          kind: 'SUB_TYPE',
+          refId: 'sb-salon',
+          code: 'SB-3001',
+          name: 'Salon & Beauty',
+          slug: 'salon',
+          iconUrl: null,
+          sortOrder: 0,
+          isFeatured: true,
+          isActive: true,
+          structure: 'SINGLE',
+        },
+      ],
+    },
+    {
+      id: 'he-cosmetics',
+      kind: 'STORE_TYPE',
+      refId: 'st-cosmetics',
+      code: 'ST-1002',
+      name: 'Cosmetics',
+      slug: 'cosmetics',
+      iconUrl: null,
+      sortOrder: 4,
+      isFeatured: true,
+      isActive: true,
+      structure: 'SINGLE',
+      children: [],
+    },
+  ],
+}
+
+/**
+ * Store-types list payload for mock API (GET /admin/store-types).
+ * Excludes order-mode slugs (dine_in, pickup) and invalid test types (vape).
+ */
+export function buildAdminStoreTypesListMock() {
+  const rows = adminManagementMock.stores.rows
+  return {
+    totalStoreTypes: rows.length,
+    visibleCount: rows.filter((row) => row.visible).length,
+    hiddenCount: rows.filter((row) => !row.visible).length,
+    totalVendors: rows.reduce((sum, row) => sum + (Number(row.vendors) || 0), 0),
+    storeTypes: rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      code: row.code || null,
+      kind: row.kind || 'STORE_TYPE',
+      structure: row.structure || 'SINGLE',
+      iconBg: row.iconBg,
+      iconUrl: null,
+      orderModes: String(row.orderModes || '')
+        .split('·')
+        .map((part) => part.trim())
+        .filter(Boolean),
+      supportedOrderModes: Array.isArray(row.supportedOrderModes) ? row.supportedOrderModes : [],
+      categoryCount: row.categories,
+      vendorCount: row.vendors,
+      visible: row.visible !== false,
+      isActive: row.visible !== false,
+      sortOrder: 0,
+      publishStatus: 'PUBLISHED',
+    })),
+  }
+}
+
 function vendorInitials(name) {
   return String(name || '')
     .split(/\s+/)
@@ -2086,8 +2398,8 @@ export function buildAdminChampDetail(champId) {
     || adminManagementMock.fleet.rows[0]
   const isOnline = row.status === 'Online' || row.status === 'On delivery'
   const allowedCategories = row.id === 'DRV-2201'
-    ? ['Food', 'Groceries', 'Flowers']
-    : [...row.categories, ...(row.extraCategories ? ['Other'] : [])]
+    ? ['food', 'grocery', 'gifts']
+    : [...row.categories, ...(row.extraCategories ? ['cosmetics'] : [])]
 
   return {
     id: row.id,

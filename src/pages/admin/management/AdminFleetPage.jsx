@@ -285,12 +285,7 @@ export default function AdminFleetPage() {
       { value: 'BRONZE', label: 'Bronze' },
       { value: 'AT_RISK', label: 'At Risk' },
     ],
-    categories: [
-      { value: '', label: 'Categories' },
-      { value: 'Food', label: 'Food' },
-      { value: 'Groceries', label: 'Groceries' },
-      { value: 'Pharmacy', label: 'Pharmacy' },
-    ],
+    categories: [{ value: '', label: 'Categories' }],
   }
 
   const rows = useMemo(() => {

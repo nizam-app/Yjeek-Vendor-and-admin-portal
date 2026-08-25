@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, ChevronDown, RefreshCw, Search } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
+import { ArrowUpRight, RefreshCw } from 'lucide-react'
 import { useAdminLiveOrders } from '../../../hooks/admin/useAdminLiveOrders'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
@@ -15,6 +16,7 @@ import { cn } from '../../../components/admin/cn'
 import { AdminChatPanel } from '../../../components/admin/operations/AdminChatPanel'
 import { AdminOpenChats } from '../../../components/admin/operations/AdminOpenChats'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
+import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { AdminOrderTakeActionPanel } from '../../../components/admin/operations/AdminOrderTakeActionPanel'
 import AdminReassignChampModal from '../../../components/admin/AdminReassignChampModal'
 import AdminRedispatchOrderModal from '../../../components/admin/AdminRedispatchOrderModal'
@@ -25,12 +27,10 @@ import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal
 import { adminOrderService } from '../../../services/admin/orderService'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
-import { AdminOpsOrderCard } from '../../../components/admin/operations/AdminOpsOrderCard'
 import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
-import {
-  ADMIN_BOARD_FULL_LIMIT,
-  ADMIN_BOARD_PREVIEW_LIMIT,
-} from '../../../lib/adminBoardLimits'
+import { AdminOpsOrderCard } from '../../../components/admin/operations/AdminOpsOrderCard'
+import { AdminLiveOrderFilterBar } from '../../../components/admin/operations/AdminLiveOrderFilterBar'
+import { ADMIN_BOARD_FULL_LIMIT } from '../../../lib/adminBoardLimits'
 import {
   ADMIN_OPS_BOARD_FILTERS,
   buildOpsBoardChats,
@@ -39,6 +39,14 @@ import {
   isOpsChatFilter,
   orderMatchesOpsFilter,
 } from '../../../lib/adminOpsBoardFilters'
+import {
+  EMPTY_LIVE_ORDER_QUERY,
+  applyLiveOrderQuery,
+  filterOpsBoardLiveQuery,
+  liveOrderQueryIsActive,
+  parseLiveOrderQuery,
+  writeLiveOrderQuery,
+} from '../../../lib/adminLiveOrderQuery'
 
 const DEFAULT_RESOLVE_OUTCOME = 'Resolved with refund'
 
@@ -596,7 +604,19 @@ function humanizeBucket(bucket) {
   return String(bucket)
 }
 
-function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClick, onContactClick, onOrderClick, onChatClick }) {
+function AdminLiveOrdersFullView({
+  column,
+  filter,
+  chats,
+  query,
+  onQueryChange,
+  onQueryClear,
+  onBack,
+  onIncidentClick,
+  onContactClick,
+  onOrderClick,
+  onChatClick,
+}) {
   const bucket = adminLiveOrdersBucketForColumnId(column.id)
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket,
@@ -609,16 +629,18 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
     data?.columns?.find((item) => item.tone === column.tone)
 
   const rawOrders = bucketColumn?.orders || []
-  const orders = isOpsChatFilter(filter)
+  const chatOrders = isOpsChatFilter(filter)
     ? rawOrders.filter((order) => orderMatchesOpsFilter(order, filter))
     : rawOrders
+  const orders = applyLiveOrderQuery(chatOrders, query)
   const count = orders.length
+  const filtersActive = liveOrderQueryIsActive(query)
   const visibleChats = buildOpsBoardChats(chats, rawOrders, filter)
   const visibleChatsActive = visibleChats.length
 
   return (
-    <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
-      <div className="flex items-start gap-3">
+    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+      <div className="flex shrink-0 items-start gap-3">
         <button onClick={onBack} className="h-[27px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#536158]">‹ Live orders</button>
         <div>
           <h2 className="flex items-center gap-1.5 text-[18px] font-bold">
@@ -626,7 +648,7 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
             {column.title} orders — full view
           </h2>
           <p className="mt-0.5 text-[10px] text-[#7a847e]">
-            {isLoading && !data ? 'Loading…' : `${count} orders in this status`}
+            {isLoading && !data ? 'Loading…' : `${count} order${count === 1 ? '' : 's'} in this status`}
           </p>
         </div>
         <button
@@ -639,18 +661,17 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
         </button>
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center gap-2">
-        <label className="flex h-[31px] w-[225px] items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3">
-          <Search size={12} className="text-[#7b867f]" />
-          <input className="min-w-0 flex-1 border-0 bg-transparent text-[10px] outline-none" placeholder="Search order, vendor, champ, customer..." />
-        </label>
-        {['Vendor  · All ▾', 'Type · All ▾', 'Champ · All ▾'].map((filter) => (
-          <button key={filter} className="h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]">{filter}</button>
-        ))}
-        <button className="ml-auto h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]">Sort · <b>Time left</b>▾</button>
+      <div className="mt-6 shrink-0">
+        <AdminLiveOrderFilterBar
+          query={query}
+          onChange={onQueryChange}
+          onClear={onQueryClear}
+          orders={chatOrders}
+        />
       </div>
 
-      {error && !orders.length ? (
+      <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+        {error && !chatOrders.length ? (
         <div className="mt-8 rounded-lg border border-[#f0d5d5] bg-[#fff7f7] px-4 py-6 text-center text-[12px] text-[#a15b58]">
           <p>Unable to load {column.title.toLowerCase()} orders.</p>
           <button
@@ -663,14 +684,30 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
         </div>
       ) : null}
 
-      {isLoading && !orders.length && !error ? (
+      {isLoading && !chatOrders.length && !error ? (
         <p className="mt-8 text-[12px] font-medium text-[#7a857e]">Loading {column.title.toLowerCase()} orders…</p>
       ) : null}
 
-      {!isLoading && !error && !orders.length ? (
+      {!isLoading && !error && !chatOrders.length ? (
         <p className="mt-8 text-[12px] font-medium text-[#8a938c]">No {column.title.toLowerCase()} orders.</p>
       ) : null}
 
+      {!isLoading && chatOrders.length > 0 && orders.length === 0 ? (
+        <div className="mt-8 rounded-lg border border-dashed border-[#dfe4e0] bg-white px-4 py-10 text-center">
+          <p className="text-[12px] font-medium text-[#536158]">No orders match</p>
+          {filtersActive ? (
+            <button
+              type="button"
+              onClick={onQueryClear}
+              className="mt-2 text-[11px] font-medium text-[#16854a] hover:underline"
+            >
+              Clear all
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {orders.length > 0 ? (
       <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
         {orders.map((order) => (
           <AdminOpsOrderCard
@@ -683,10 +720,13 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
           />
         ))}
       </div>
+      ) : null}
+      </div>
 
       <AdminOpenChats
         chats={visibleChats}
         activeCount={visibleChatsActive}
+        unreadCount={visibleChats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)}
         onChatClick={onChatClick}
         groupByRole={isOpsChatFilter(filter)}
       />
@@ -695,34 +735,68 @@ function AdminLiveOrdersFullView({ column, filter, chats, onBack, onIncidentClic
 }
 
 export default function AdminLiveOrdersPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('All orders')
   const [fullView, setFullView] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [incidentOrder, setIncidentOrder] = useState(null)
+  const [selectedIncident, setSelectedIncident] = useState(null)
   const [activeChat, setActiveChat] = useState(null)
+  const boardQuery = useMemo(() => parseLiveOrderQuery(searchParams), [searchParams])
+
+  function patchBoardQuery(nextQuery) {
+    setSearchParams((prev) => writeLiveOrderQuery(prev, nextQuery), { replace: true })
+  }
+
+  function clearBoardQuery() {
+    patchBoardQuery(EMPTY_LIVE_ORDER_QUERY)
+  }
+
+  function openFullView(column) {
+    setFullView(column)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('bucket', adminLiveOrdersBucketForColumnId(column.id))
+      return next
+    }, { replace: true })
+  }
+
+  function closeFullView() {
+    setFullView(null)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('bucket')
+      return next
+    }, { replace: true })
+  }
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket: 'all',
     sort: 'time_left',
-    // Load the full bucket pool so chat filters can find Champ/Customer orders
-    // beyond the 5-card preview. Preview still slices to ADMIN_BOARD_PREVIEW_LIMIT.
+    // Load the full bucket pool so each column can scroll independently.
     limit: ADMIN_BOARD_FULL_LIMIT,
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
-  const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats()
+  const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats({
+    refreshSeconds: data?.refreshIntervalSeconds,
+  })
   const chats = Array.isArray(chatsData?.items) ? chatsData.items : []
   const chatsActive = chatsData?.active ?? chats.length
+  const chatsUnread = chatsData?.unreadTotal
+    ?? chats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
 
   function handleChatMarkedRead(conversationId) {
     setChatsData((current) => {
       if (!current?.items) return current
+      const items = current.items.map((item) =>
+        item.conversationId === conversationId || item.id === conversationId
+          ? { ...item, unreadCount: 0 }
+          : item,
+      )
       return {
         ...current,
-        items: current.items.map((item) =>
-          item.conversationId === conversationId || item.id === conversationId
-            ? { ...item, unreadCount: 0 }
-            : item,
-        ),
+        items,
+        unreadTotal: items.reduce((sum, item) => sum + (Number(item.unreadCount) || 0), 0),
       }
     })
     refetchChats()
@@ -742,10 +816,10 @@ export default function AdminLiveOrdersPage() {
         ]
   ), [data?.columns])
 
-  const columns = useMemo(
-    () => filterOpsBoardColumns(rawColumns, filter),
-    [rawColumns, filter],
-  )
+  const columns = useMemo(() => {
+    const byChat = filterOpsBoardColumns(rawColumns, filter)
+    return filterOpsBoardLiveQuery(byChat, boardQuery)
+  }, [rawColumns, filter, boardQuery])
   const boardOrders = useMemo(() => flattenOpsBoardOrders(rawColumns), [rawColumns])
   const visibleChats = useMemo(
     () => buildOpsBoardChats(chats, boardOrders, filter),
@@ -753,8 +827,19 @@ export default function AdminLiveOrdersPage() {
   )
   const visibleChatsActive = isOpsChatFilter(filter) ? visibleChats.length : chatsActive
   const filteredOrderCount = columns.reduce((sum, column) => sum + (Number(column.count) || 0), 0)
-  const headerOrderCount = isOpsChatFilter(filter) ? filteredOrderCount : (data?.activeOrderCount ?? '—')
+  const headerOrderCount = (isOpsChatFilter(filter) || liveOrderQueryIsActive(boardQuery))
+    ? filteredOrderCount
+    : (data?.activeOrderCount ?? '—')
   const refreshKey = `${headerOrderCount}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
+
+  useEffect(() => {
+    const bucket = searchParams.get('bucket')
+    if (!bucket || !Array.isArray(data?.columns)) return
+    const column = data.columns.find(
+      (item) => adminLiveOrdersBucketForColumnId(item.id) === bucket || item.title?.toLowerCase().replace(/\s+/g, '_') === bucket,
+    )
+    if (column) setFullView(column)
+  }, [searchParams, data?.columns])
 
   const openOrderChat = (order, preferredRole) => {
     const conversationId = order?.conversationId
@@ -791,7 +876,10 @@ export default function AdminLiveOrdersPage() {
           column={fullView}
           filter={filter}
           chats={chats}
-          onBack={() => setFullView(null)}
+          query={boardQuery}
+          onQueryChange={patchBoardQuery}
+          onQueryClear={clearBoardQuery}
+          onBack={closeFullView}
           onIncidentClick={setIncidentOrder}
           onContactClick={openOrderChat}
           onOrderClick={setSelectedOrder}
@@ -799,6 +887,16 @@ export default function AdminLiveOrdersPage() {
         />
         {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
         {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
+        {selectedIncident ? (
+          <AdminIncidentDetailModal
+            incident={selectedIncident}
+            onClose={() => setSelectedIncident(null)}
+            onOpenOrder={(order) => {
+              setSelectedIncident(null)
+              setSelectedOrder(order)
+            }}
+          />
+        ) : null}
         {activeChat ? (
           <AdminChatPanel
             key={`${activeChat.id}-${activeChat.orderId || ''}`}
@@ -812,10 +910,10 @@ export default function AdminLiveOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
-      <div className="grid grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
-        <div className="min-w-0">
-          <div className="flex h-[32px] items-start justify-between">
+    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="flex h-[32px] shrink-0 items-start justify-between">
             <div className="flex items-center gap-2.5">
               <h2 className="text-[14px] font-bold">{headerOrderCount} active orders</h2>
               <AdminAutoRefreshBadge
@@ -824,17 +922,13 @@ export default function AdminLiveOrdersPage() {
               />
             </div>
             <div className="flex gap-3">
-              <Button className="h-[31px] px-3">
-                All vendors
-                <ChevronDown size={12} strokeWidth={2.2} className="shrink-0" aria-hidden />
-              </Button>
               <Button className="h-[31px] px-4" onClick={() => refetch()} disabled={isLoading}>
                 <RefreshCw size={11} /> Refresh
               </Button>
             </div>
           </div>
 
-          <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
+          <div className="mb-3 mt-3 flex shrink-0 flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
             <span>Filter:</span>
             {filters.map((item) => (
               <button
@@ -851,10 +945,19 @@ export default function AdminLiveOrdersPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 max-[800px]:grid-cols-1">
+          <div className="mb-3 shrink-0">
+            <AdminLiveOrderFilterBar
+              query={boardQuery}
+              onChange={patchBoardQuery}
+              onClear={clearBoardQuery}
+              orders={boardOrders}
+            />
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-3 gap-3 max-[800px]:grid-cols-1">
             {columns.map((column) => (
-              <section key={column.title} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
-                <div className="flex h-[22px] items-center gap-2">
+              <section key={column.title} className="flex min-h-0 flex-col overflow-hidden rounded-[10px] bg-[#f1f4f1] p-2.5">
+                <div className="flex h-[22px] shrink-0 items-center gap-2">
                   <span className={cn(
                     'rounded-md px-2 py-1 text-[10px] font-medium',
                     column.tone === 'red' && 'bg-[#fff0ed] text-[#d33f44]',
@@ -865,15 +968,15 @@ export default function AdminLiveOrdersPage() {
                   </span>
                   <strong className={cn('text-[12px]', column.tone === 'red' ? 'text-[#d33f44]' : column.tone === 'yellow' ? 'text-[#b87c13]' : 'text-[#247c4b]')}>{column.count}</strong>
                   <button
-                    onClick={() => setFullView(column)}
+                    onClick={() => openFullView(column)}
                     className="ml-auto grid h-[22px] w-[22px] place-items-center rounded-md border border-[#dfe4e0] bg-white text-[#748078] hover:text-[#118446]"
                     aria-label={`Open ${column.title} orders full view`}
                   >
                     <ArrowUpRight size={12} />
                   </button>
                 </div>
-                <div className="mt-2 space-y-2.5">
-                  {column.orders.slice(0, ADMIN_BOARD_PREVIEW_LIMIT).map((order, index) => (
+                <div className="mt-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
+                  {(column.orders || []).map((order, index) => (
                     <AdminOpsOrderCard
                       key={`${column.title}-${order.id}-${index}`}
                       order={order}
@@ -883,19 +986,25 @@ export default function AdminLiveOrdersPage() {
                       onOrderClick={setSelectedOrder}
                     />
                   ))}
-                  {column.orders.length === 0 ? (
-                    <p className="px-1 py-8 text-center text-[10px] text-[#8a938c]">
-                      {isOpsChatFilter(filter) ? 'No matching chat orders' : 'No orders'}
-                    </p>
-                  ) : null}
-                  {column.count > ADMIN_BOARD_PREVIEW_LIMIT ? (
-                    <button
-                      type="button"
-                      onClick={() => setFullView(column)}
-                      className="w-full rounded-[9px] border border-dashed border-[#cfd7d1] bg-white px-2 py-2 text-[10px] font-medium text-[#3d7a55] hover:border-[#1a9b53] hover:text-[#14763f]"
-                    >
-                      View all {column.count} {column.title.toLowerCase()} orders ↗
-                    </button>
+                  {(column.orders || []).length === 0 ? (
+                    <div className="px-1 py-8 text-center">
+                      <p className="text-[10px] text-[#8a938c]">
+                        {liveOrderQueryIsActive(boardQuery)
+                          ? 'No orders match'
+                          : isOpsChatFilter(filter)
+                            ? 'No matching chat orders'
+                            : 'No orders'}
+                      </p>
+                      {liveOrderQueryIsActive(boardQuery) ? (
+                        <button
+                          type="button"
+                          onClick={clearBoardQuery}
+                          className="mt-1 text-[10px] font-medium text-[#16854a] hover:underline"
+                        >
+                          Clear all
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
               </section>
@@ -903,17 +1012,34 @@ export default function AdminLiveOrdersPage() {
           </div>
         </div>
 
-        <OpsIncidentsSidebar incidents={incidents} />
+        <OpsIncidentsSidebar
+          fillHeight
+          incidents={incidents}
+          onIncidentClick={setSelectedIncident}
+        />
       </div>
 
       <AdminOpenChats
         chats={visibleChats}
         activeCount={visibleChatsActive}
+        unreadCount={isOpsChatFilter(filter)
+          ? visibleChats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
+          : chatsUnread}
         onChatClick={setActiveChat}
         groupByRole={isOpsChatFilter(filter)}
       />
       {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
       {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
+      {selectedIncident ? (
+        <AdminIncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onOpenOrder={(order) => {
+            setSelectedIncident(null)
+            setSelectedOrder(order)
+          }}
+        />
+      ) : null}
       {activeChat ? (
         <AdminChatPanel
           key={`${activeChat.id}-${activeChat.orderId || ''}`}

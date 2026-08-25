@@ -19,6 +19,7 @@ export function IncidentLog({
   countLabel,
   previewLimit = ADMIN_BOARD_PREVIEW_LIMIT,
   title = 'Incident log — scheduled',
+  onIncidentClick,
 }) {
   const [showAll, setShowAll] = useState(false)
   const list = Array.isArray(incidents) ? incidents : []
@@ -54,28 +55,30 @@ export function IncidentLog({
       {list.length === 0 ? (
         <div className="px-4 py-6 text-center text-[10px] text-[#78837c]">No incidents</div>
       ) : (
-        visible.map(({ id, priority, name, title: rowTitle, detail, status, time }) => {
-          const labelText = name || rowTitle || 'Incident'
+        visible.map((incident) => {
+          const labelText = incident.name || incident.title || 'Incident'
           return (
-            <div
-              key={id || `${priority}-${labelText}-${detail}`}
-              className="flex h-10 items-center border-b border-[#f0f2f0] px-4 last:border-0"
+            <button
+              key={incident.id || `${incident.priority}-${labelText}-${incident.detail}`}
+              type="button"
+              onClick={() => onIncidentClick?.(incident)}
+              className="flex h-10 w-full items-center border-b border-[#f0f2f0] px-4 text-left last:border-0 hover:bg-[#f6f8f6]"
             >
               <span
                 className={cn(
                   'mr-3 grid h-[18px] min-w-[22px] place-items-center rounded-[6px] px-1.5 text-[9px] font-medium',
-                  priorityTone[priority] || priorityTone.P4,
+                  priorityTone[incident.priority] || priorityTone.P4,
                 )}
               >
-                {priority}
+                {incident.priority}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[9px] font-medium">{labelText}</p>
-                <p className="truncate text-[9px] text-[#99a09b]">{detail}</p>
+                <p className="truncate text-[9px] text-[#99a09b]">{incident.detail}</p>
               </div>
-              {status ? <Badge tone={statusBadgeTone(status)}>{status}</Badge> : null}
-              <span className="ml-6 w-10 text-right text-[9px] text-[#929a95]">{time || ''}</span>
-            </div>
+              {incident.status ? <Badge tone={statusBadgeTone(incident.status)}>{incident.status}</Badge> : null}
+              <span className="ml-6 w-10 text-right text-[9px] text-[#929a95]">{incident.time || ''}</span>
+            </button>
           )
         })
       )}

@@ -94,8 +94,19 @@ export const endpoints = {
        * Confirmed: GET /admin/incidents?status=&priority=&limit=
        */
       list: '/admin/incidents',
+      /**
+       * Confirmed: GET /admin/incidents/:incidentId
+       * @param {string} incidentId
+       */
+      detail: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}`,
       /** Confirmed: POST /admin/incidents/:incidentId/resolve */
       resolve: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/resolve`,
+    },
+    search: {
+      /** Confirmed: GET /admin/search?q=&limit= */
+      global: '/admin/search',
+      /** Confirmed: GET /admin/search/notifications */
+      notifications: '/admin/search/notifications',
     },
     chats: {
       /**
@@ -138,6 +149,13 @@ export const endpoints = {
        */
       activate: (vendorId) =>
         `/admin/vendors/${encodeURIComponent(vendorId)}/activate`,
+      /**
+       * Confirmed: PATCH /admin/vendors/:vendorId/controls
+       * Body: { isOnline?, dispatchMode? }
+       * @param {string} vendorId
+       */
+      controls: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/controls`,
       /**
        * Confirmed: POST /admin/vendors/:vendorId/force-close
        * Body: { scope: "whole_store", reason, to }
@@ -240,6 +258,7 @@ export const endpoints = {
       summary: '/admin/store-types/summary',
       /** Confirmed: GET /admin/store-types · POST /admin/store-types */
       list: '/admin/store-types',
+      catalog: '/admin/store-types/catalog',
       /**
        * Confirmed: GET + PATCH /admin/store-types/:storeTypeId
        * @param {string} storeTypeId
@@ -492,6 +511,20 @@ export const endpoints = {
       supplier: (supplierId) =>
         `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`,
       /**
+       * Confirmed: POST /admin/fleet/suppliers/:supplierId/deactivate
+       * Also cascades suspend to active champs under the supplier.
+       * @param {string} supplierId
+       */
+      supplierDeactivate: (supplierId) =>
+        `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}/deactivate`,
+      /**
+       * Confirmed: POST /admin/fleet/suppliers/:supplierId/activate
+       * Restores champs suspended due to supplier deactivation.
+       * @param {string} supplierId
+       */
+      supplierActivate: (supplierId) =>
+        `/admin/fleet/suppliers/${encodeURIComponent(supplierId)}/activate`,
+      /**
        * Confirmed: POST /admin/fleet/notify — send/schedule champ notification
        * Body: { audience, type, title, body, push, sms, schedule, ... }
        */
@@ -519,6 +552,8 @@ export const endpoints = {
           `/admin/marketing/notifications/${encodeURIComponent(notificationId)}`,
         /** Confirmed: POST /admin/marketing/notifications — Send customer/vendor notification */
         send: '/admin/marketing/notifications',
+        /** Confirmed: GET /admin/marketing/notifications/meta */
+        meta: '/admin/marketing/notifications/meta',
         /** Confirmed: POST /admin/marketing/notifications/estimate */
         estimate: '/admin/marketing/notifications/estimate',
         /**
@@ -623,6 +658,7 @@ export const endpoints = {
         preview: '/admin/ui-editor/home',
         /** Confirmed: GET + POST /admin/ui-editor/home/categories */
         categories: '/admin/ui-editor/home/categories',
+        catalog: '/admin/ui-editor/home/catalog',
         /** Confirmed: PATCH /admin/ui-editor/home/categories/reorder */
         categoriesReorder: '/admin/ui-editor/home/categories/reorder',
         /**

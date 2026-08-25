@@ -23,6 +23,7 @@ import {
   mapAdminCreateBannerRequest,
   mapAdminUpsertHelpPageRequest,
 } from '../../mappers/admin/mapAdminUiEditor'
+import { adminHomeCatalogMock } from '../../mocks/admin.mock'
 
 function useRealUiEditorApi() {
   return isAdminRealApiFeature('ui-editor') || !apiConfig.adminUseMockApi
@@ -271,6 +272,23 @@ export const adminUiEditorService = {
       data: mapAdminUiEditorHomePreview(response?.data),
       meta: response?.meta ?? null,
     }
+  },
+
+  async getHomeCatalog(options = {}) {
+    if (!useRealUiEditorApi()) {
+      return {
+        data: {
+          storeTypes: adminHomeCatalogMock.storeTypes,
+          orderModes: adminHomeCatalogMock.orderModes,
+        },
+        meta: null,
+      }
+    }
+    const response = await apiClient.get(
+      endpoints.admin.uiEditor.home.catalog,
+      requestOptions(options),
+    )
+    return { data: response?.data || { storeTypes: [], orderModes: [] }, meta: response?.meta ?? null }
   },
 
   async getHomeCategories(options = {}) {

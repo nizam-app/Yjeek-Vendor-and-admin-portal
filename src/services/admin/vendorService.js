@@ -197,10 +197,13 @@ export const adminVendorService = {
   },
 
   /**
-   * Activate draft vendor.
-   * Confirmed: POST /admin/vendors/:vendorId/activate { activate: true }
+   * Activate or deactivate a vendor account.
+   * Confirmed: POST /admin/vendors/:vendorId/activate { activate: boolean }
    */
-  async activateVendor(vendorId, options = {}) {
+  async activateVendor(
+    vendorId,
+    { activate, submitForApproval, isCustomerVisible, isOnline, ...options } = {},
+  ) {
     const id = String(vendorId || '').trim()
     if (!id) {
       throw new Error('Vendor id is required.')
@@ -210,9 +213,16 @@ export const adminVendorService = {
       throw new Error('Real vendors API is required to activate a vendor.')
     }
 
+    const body = {}
+    if (submitForApproval) body.submitForApproval = true
+    else if (activate !== undefined) body.activate = Boolean(activate)
+    else body.activate = true
+    if (typeof isCustomerVisible === 'boolean') body.isCustomerVisible = isCustomerVisible
+    if (typeof isOnline === 'boolean') body.isOnline = isOnline
+
     const response = await apiClient.post(
       endpoints.admin.vendors.activate(id),
-      { activate: true },
+      body,
       {
         ...options,
         scope: 'admin',
@@ -221,7 +231,44 @@ export const adminVendorService = {
     )
 
     return {
-      data: response?.data ?? null,
+      data: mapAdminVendorDetailResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Update store online / dispatch controls.
+   * Confirmed: PATCH /admin/vendors/:vendorId/controls
+   */
+  async updateVendorStoreControls(vendorId, controls = {}, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) {
+      throw new Error('Vendor id is required.')
+    }
+
+    const body = {}
+    if (controls.isOnline !== undefined) body.isOnline = Boolean(controls.isOnline)
+    if (controls.isCustomerVisible !== undefined) {
+      body.isCustomerVisible = Boolean(controls.isCustomerVisible)
+    }
+    if (controls.dispatchMode !== undefined) body.dispatchMode = controls.dispatchMode
+
+    if (!Object.keys(body).length) {
+      throw new Error('No store control changes were provided.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update store controls.')
+    }
+
+    const response = await apiClient.patch(endpoints.admin.vendors.controls(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return {
+      data: mapAdminVendorDetailResponse(response?.data),
       meta: response?.meta ?? null,
     }
   },

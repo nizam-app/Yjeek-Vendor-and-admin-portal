@@ -8,6 +8,7 @@ import {
   GripVertical,
   Headphones,
   Image as ImageIcon,
+  ImageOff,
   LayoutGrid,
   Lightbulb,
   MapPin,
@@ -451,21 +452,19 @@ const ALL_BANNERS = [
   },
 ]
 
+/** Offline mock seeds when UI Editor API is off — taxonomy-aligned (no Vape/TEST). */
 const HOME_CATEGORIES = [
-  { id: 'cat-food', name: 'Food', emoji: '🍔' },
-  { id: 'cat-dine', name: 'Dine In', emoji: '🍽️' },
-  { id: 'cat-groceries', name: 'Groceries', emoji: '🛒' },
-  { id: 'cat-pharmacy', name: 'Pharmacy', emoji: '💊' },
-  { id: 'cat-cosmetics', name: 'Cosmetics', emoji: '💄' },
-  { id: 'cat-gifts', name: 'Gifts', emoji: '🎁' },
-  { id: 'cat-fashion', name: 'Fashion', emoji: '👕' },
-  { id: 'cat-electronics', name: 'Electronics', emoji: '🎧' },
-  { id: 'cat-vape', name: 'Vape', emoji: '💨' },
-  { id: 'cat-jewelry', name: 'Jewelry', emoji: '💎' },
-  { id: 'cat-stationery', name: 'Stationery', emoji: '✏️' },
-  { id: 'cat-baby', name: 'Baby & Kids', emoji: '🧸' },
-  { id: 'cat-sports', name: 'Sports', emoji: '⚽' },
-  { id: 'cat-services', name: 'Services', emoji: '🧰' },
+  { id: 'he-food', name: 'Food', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-food', slug: 'food', code: 'ST-1001' },
+  { id: 'he-dine-in', name: 'Dine In', iconUrl: null, kind: 'ORDER_MODE', refId: 'om-dine-in', slug: 'dine_in', code: 'OM-2003' },
+  { id: 'he-pickup', name: 'Pickup', iconUrl: null, kind: 'ORDER_MODE', refId: 'om-pickup', slug: 'pickup', code: 'OM-2002' },
+  { id: 'he-groceries', name: 'Groceries', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-grocery', slug: 'grocery', code: 'ST-1003' },
+  { id: 'he-pharmacy', name: 'Pharmacy', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-pharmacy', slug: 'pharmacy', code: 'ST-1004' },
+  { id: 'he-cosmetics', name: 'Cosmetics', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-cosmetics', slug: 'cosmetics', code: 'ST-1002' },
+  { id: 'he-gifts', name: 'Gifts', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-gifts', slug: 'gifts', code: 'ST-1008' },
+  { id: 'he-fashion', name: 'Fashion', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-fashion', slug: 'fashion', code: 'ST-1006' },
+  { id: 'he-electronics', name: 'Electronics', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-electronics', slug: 'electronics', code: 'ST-1007' },
+  { id: 'he-jewelry', name: 'Jewelry', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-jewelry', slug: 'jewelry', code: 'ST-1009' },
+  { id: 'he-services', name: 'Services', iconUrl: null, kind: 'STORE_TYPE', refId: 'st-services', slug: 'services', code: 'ST-1005', structure: 'TWO_LEVEL' },
 ]
 
 function humanizeKey(value) {
@@ -1660,8 +1659,8 @@ function CategoryIconButton({
       <button
         type="button"
         disabled={disabled || uploading}
-        title="Change icon"
-        aria-label={`Change icon for ${category?.name || 'category'}`}
+        title="Upload or replace image"
+        aria-label={`Upload or replace image for ${category?.name || 'category'}`}
         onClick={() => inputRef.current?.click()}
         className="relative grid shrink-0 place-items-center overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white hover:border-[#1aa054] disabled:opacity-60"
         style={{ width: size, height: size }}
@@ -1670,11 +1669,13 @@ function CategoryIconButton({
           <AdminMediaImage
             src={category.iconUrl}
             className="h-full w-full object-cover"
-            fallbackClassName="h-full w-full bg-[#e8f5e9]"
+            fallbackClassName="h-full w-full bg-[#e8ebe8]"
             iconSize={14}
           />
         ) : (
-          <span className="text-[16px] leading-none">{category?.emoji || '📦'}</span>
+          <span className="grid h-full w-full place-items-center bg-[#e8ebe8] text-[#9aa49d]">
+            <ImageOff size={Math.max(12, Math.round(size * 0.4))} strokeWidth={1.8} />
+          </span>
         )}
         <span className="absolute inset-x-0 bottom-0 bg-black/45 py-[1px] text-center text-[8px] font-bold text-white">
           {uploading ? '…' : 'Edit'}
@@ -1684,85 +1685,62 @@ function CategoryIconButton({
   )
 }
 
-function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
-  const [name, setName] = useState('')
-  const [iconUrl, setIconUrl] = useState('')
-  const [emoji, setEmoji] = useState('📦')
-  const [localPreview, setLocalPreview] = useState('')
-  const [uploading, setUploading] = useState(false)
+function kindLabel(kind) {
+  if (kind === 'ORDER_MODE') return 'Order mode'
+  if (kind === 'SUB_TYPE') return 'Sub-type'
+  return 'Store type'
+}
+
+function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
+  const [catalog, setCatalog] = useState({ storeTypes: [], orderModes: [] })
+  const [loading, setLoading] = useState(false)
+  const [selected, setSelected] = useState(null)
   const [error, setError] = useState(null)
-  const fileInputRef = useRef(null)
-  const previewRef = useRef(null)
 
   useEffect(() => {
-    if (!open) return
-    setName('')
-    setIconUrl('')
-    setEmoji('📦')
+    if (!open) return undefined
+    setSelected(null)
     setError(null)
-    setUploading(false)
-    if (previewRef.current) {
-      URL.revokeObjectURL(previewRef.current)
-      previewRef.current = null
-    }
-    setLocalPreview('')
+    setLoading(true)
+    adminUiEditorService
+      .getHomeCatalog()
+      .then((result) => {
+        setCatalog(result?.data || { storeTypes: [], orderModes: [] })
+      })
+      .catch((err) => setError(err))
+      .finally(() => setLoading(false))
+    return undefined
   }, [open])
-
-  useEffect(
-    () => () => {
-      if (previewRef.current) URL.revokeObjectURL(previewRef.current)
-    },
-    [],
-  )
 
   if (!open) return null
 
-  const busy = isSubmitting || uploading
+  const sections = [
+    { title: 'Store types', items: catalog.storeTypes || [] },
+    { title: 'Order modes', items: catalog.orderModes || [] },
+  ]
 
-  const handleFile = async (file) => {
-    setError(null)
-    try {
-      validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
-    } catch (err) {
-      setError(err)
-      return
-    }
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current)
-    const objectUrl = URL.createObjectURL(file)
-    previewRef.current = objectUrl
-    setLocalPreview(objectUrl)
-    setUploading(true)
-    try {
-      const result = await adminUploadService.uploadImage(file, { feature: 'ui-editor' })
-      const url = result?.data?.url
-      if (!url) throw new Error('Upload succeeded but no image URL was returned.')
-      setIconUrl(url)
-    } catch (err) {
-      setError(err)
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  const handleCreate = async () => {
-    const trimmed = String(name || '').trim()
-    if (!trimmed) {
-      setError(Object.assign(new Error('Name is required.'), { message: 'Name is required.' }))
-      return
-    }
-    if (uploading) {
+  const handleAdd = async () => {
+    if (!selected?.kind || (!selected?.id && !selected?.refId)) {
       setError(
-        Object.assign(new Error('Wait for icon upload to finish.'), {
-          message: 'Wait for icon upload to finish.',
+        Object.assign(new Error('Pick a Store Management record.'), {
+          message: 'Pick a Store Management record.',
+        }),
+      )
+      return
+    }
+    if (selected.onHome) {
+      setError(
+        Object.assign(new Error('Already on the home grid.'), {
+          message: 'Already on the home grid.',
         }),
       )
       return
     }
     try {
       await onSubmit?.({
-        name: trimmed,
-        iconUrl: iconUrl || null,
-        iconEmoji: iconUrl ? undefined : emoji || '📦',
+        kind: selected.kind,
+        refId: selected.refId || selected.id,
+        name: selected.name,
       })
     } catch (err) {
       setError(err)
@@ -1775,22 +1753,24 @@ function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
         type="button"
         aria-label="Close"
         className="absolute inset-0 bg-black/40"
-        disabled={busy}
-        onClick={() => !busy && onClose?.()}
+        disabled={isSubmitting}
+        onClick={() => !isSubmitting && onClose?.()}
       />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative w-full max-w-[420px] rounded-t-[16px] bg-white p-5 shadow-[0_18px_44px_rgba(0,0,0,0.28)] sm:rounded-[16px]"
+        className="relative w-full max-w-[480px] rounded-t-[16px] bg-white p-5 shadow-[0_18px_44px_rgba(0,0,0,0.28)] sm:rounded-[16px]"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-[16px] font-bold text-[#17231c]">Create category</h3>
-            <p className="mt-0.5 text-[12.5px] text-[#7c8780]">Name + optional icon image</p>
+            <h3 className="text-[16px] font-bold text-[#17231c]">Add to home</h3>
+            <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
+              Pick a published Store Management record. Display name can be edited after adding.
+            </p>
           </div>
           <button
             type="button"
-            disabled={busy}
+            disabled={isSubmitting}
             onClick={onClose}
             className="grid h-8 w-8 place-items-center rounded-[8px] text-[#8a948e] hover:bg-[#f7f9f7]"
             aria-label="Close"
@@ -1799,90 +1779,66 @@ function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
           </button>
         </div>
 
-        <label className="mb-3 block">
-          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
-            Name
-          </span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={busy}
-            placeholder="e.g. Electronics"
-            className="h-[40px] w-full rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
-          />
-        </label>
-
-        <div className="mb-4">
-          <span className="mb-1 block text-[11px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
-            Icon
-          </span>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              e.target.value = ''
-              if (file) handleFile(file)
-            }}
-          />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              'relative flex h-[88px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[12px] border border-dashed border-[#d5dbd6] bg-[#f7faf7] hover:bg-[#f0f4f0] disabled:opacity-60',
-              (localPreview || iconUrl) && 'border-solid',
-            )}
-          >
-            {localPreview ? (
-              <img src={localPreview} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            ) : iconUrl ? (
-              <AdminMediaImage
-                src={iconUrl}
-                className="absolute inset-0 h-full w-full object-cover"
-                fallbackClassName="absolute inset-0 h-full w-full bg-[#e8f5e9]"
-                iconSize={20}
-              />
-            ) : (
-              <>
-                <Upload size={18} className="text-[#6B736E]" />
-                <span className="text-[12px] font-medium text-[#6B736E]">
-                  Upload icon (PNG / JPG / WebP)
-                </span>
-              </>
-            )}
-            {localPreview || iconUrl ? (
-              <span className="relative z-[1] rounded-md bg-white/90 px-3 py-1 text-[12px] font-medium text-[#6B736E]">
-                {uploading ? 'Uploading…' : 'Change icon'}
-              </span>
-            ) : null}
-          </button>
-          {!iconUrl ? (
-            <label className="mt-2 block">
-              <span className="mb-1 block text-[11px] text-[#8a948e]">Or emoji fallback</span>
-              <input
-                value={emoji}
-                onChange={(e) => setEmoji(e.target.value)}
-                disabled={busy}
-                maxLength={8}
-                className="h-[36px] w-full rounded-[10px] border border-[#e4e8e4] px-3 text-[14px] outline-none focus:border-[#1aa054]"
-              />
-            </label>
-          ) : null}
+        <div className="mb-4 max-h-[360px] space-y-4 overflow-y-auto pr-1">
+          {loading ? <p className="text-[13px] text-[#8a948e]">Loading catalog…</p> : null}
+          {!loading
+            ? sections.map((section) => (
+                <div key={section.title}>
+                  <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
+                    {section.title}
+                  </p>
+                  <div className="space-y-1.5">
+                    {section.items.length ? (
+                      section.items.map((item) => {
+                        const key = item.refId || item.id
+                        const active = (selected?.refId || selected?.id) === key
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            disabled={item.onHome || isSubmitting}
+                            onClick={() => setSelected(item)}
+                            className={cn(
+                              'flex w-full items-center justify-between rounded-[10px] border px-3 py-2 text-left',
+                              active ? 'border-[#1aa054] bg-[#eef8f1]' : 'border-[#e4e8e4] bg-white',
+                              item.onHome && 'cursor-not-allowed opacity-50',
+                            )}
+                          >
+                            <span>
+                              <span className="block text-[13px] font-semibold text-[#17231c]">
+                                {item.name}
+                              </span>
+                              <span className="text-[11px] text-[#8a948e]">
+                                {kindLabel(item.kind)}
+                                {item.code ? ` · ${item.code}` : ''}
+                                {item.structure === 'TWO_LEVEL' ? ' · two-level' : ''}
+                              </span>
+                            </span>
+                            <span className="text-[11px] font-bold text-[#8a948e]">
+                              {item.onHome ? 'On home' : active ? 'Selected' : 'Add'}
+                            </span>
+                          </button>
+                        )
+                      })
+                    ) : (
+                      <p className="text-[12.5px] text-[#8a948e]">No published records.</p>
+                    )}
+                  </div>
+                </div>
+              ))
+            : null}
         </div>
 
         {error ? (
           <p className="mb-3 text-[12.5px] text-[#c91a24]">
-            {formatApiErrorMessage(error, 'Unable to create category.')}
+            {formatApiErrorMessage(error, 'Unable to add this record.')}
           </p>
         ) : null}
 
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            disabled={busy}
+            disabled={isSubmitting}
             onClick={onClose}
             className="inline-flex h-[36px] items-center rounded-full border border-[#d5dbd6] px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7]"
           >
@@ -1890,11 +1846,11 @@ function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
           </button>
           <button
             type="button"
-            disabled={busy}
-            onClick={handleCreate}
+            disabled={isSubmitting || loading}
+            onClick={handleAdd}
             className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {isSubmitting ? 'Creating…' : uploading ? 'Uploading…' : 'Create'}
+            {isSubmitting ? 'Adding…' : 'Add to home'}
           </button>
         </div>
       </div>
@@ -1905,7 +1861,7 @@ function CreateCategoryModal({ open, onClose, onSubmit, isSubmitting }) {
 function CategoriesTab({ onMessage }) {
   const { categories: apiCategories, isLoading, error, refetch, enabled } =
     useAdminUiEditorHomeCategories()
-  const [categories, setCategories] = useState(HOME_CATEGORIES)
+  const [categories, setCategories] = useState([])
   const categoriesRef = useRef(categories)
   const [dragIndex, setDragIndex] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -1917,12 +1873,13 @@ function CategoriesTab({ onMessage }) {
     categoriesRef.current = categories
   }, [categories])
 
+  // Real API: always mirror server home_entries (including empty). Mock seeds only when API off.
   useEffect(() => {
-    if (apiCategories.length > 0) {
-      setCategories(apiCategories)
-    } else if (!enabled) {
+    if (!enabled) {
       setCategories(HOME_CATEGORIES)
+      return
     }
+    setCategories(apiCategories)
   }, [apiCategories, enabled])
 
   const renameCategoryLocal = (id, name) => {
@@ -1943,7 +1900,6 @@ function CategoriesTab({ onMessage }) {
         sortOrder: category.sortOrder ?? 0,
         isActive: !category.isHidden,
         iconUrl: category.iconUrl ?? undefined,
-        iconEmoji: category.emoji || undefined,
       })
       await refetch()
     } catch (err) {
@@ -1969,7 +1925,7 @@ function CategoriesTab({ onMessage }) {
 
       setCategories((prev) =>
         prev.map((item) =>
-          item.id === category.id ? { ...item, iconUrl: url, emoji: item.emoji || '' } : item,
+          item.id === category.id ? { ...item, iconUrl: url } : item,
         ),
       )
 
@@ -1999,7 +1955,8 @@ function CategoriesTab({ onMessage }) {
         {
           id: `cat-new-${Date.now()}`,
           name: payload.name,
-          emoji: payload.iconEmoji || '📦',
+          kind: payload.kind,
+          refId: payload.refId,
           iconUrl: payload.iconUrl || null,
           isHidden: false,
         },
@@ -2011,17 +1968,16 @@ function CategoriesTab({ onMessage }) {
     setBusy(true)
     try {
       const created = await adminUiEditorService.createHomeCategory({
+        kind: payload.kind,
+        refId: payload.refId,
         name: payload.name,
-        isFeatured: true,
-        iconUrl: payload.iconUrl || null,
-        iconEmoji: payload.iconEmoji || (payload.iconUrl ? undefined : '📦'),
       })
       if (created?.data) {
         setCategories((prev) => [...prev, created.data])
       }
       await refetch()
       setCreateOpen(false)
-      onMessage?.('Category created.')
+      onMessage?.('Added to home.')
     } catch (err) {
       setLocalError(err)
       throw err
@@ -2108,7 +2064,7 @@ function CategoriesTab({ onMessage }) {
             className="inline-flex h-[36px] shrink-0 items-center gap-1 rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.12)] hover:bg-[#158a47] disabled:opacity-60"
           >
             <Plus size={14} strokeWidth={2.8} />
-            Create category
+            Add to home
           </button>
         </div>
 
@@ -2162,6 +2118,14 @@ function CategoriesTab({ onMessage }) {
                 }}
                 className="h-[38px] min-w-[140px] flex-1 rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
               />
+              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.03em] text-[#6b746e]">
+                {kindLabel(category.kind)}
+              </span>
+              {category.code || category.refId ? (
+                <span className="max-w-[88px] truncate text-[10px] text-[#8a948e]">
+                  {category.code || category.refId}
+                </span>
+              ) : null}
               <button
                 type="button"
                 aria-label={category.isHidden ? `Show ${category.name}` : `Hide ${category.name}`}
@@ -2181,7 +2145,7 @@ function CategoriesTab({ onMessage }) {
           className="mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-[12px] border border-[#1aa054] bg-white text-[13px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
         >
           <Plus size={15} strokeWidth={2.6} />
-          Create category
+          Add to home
         </button>
       </section>
 
@@ -2208,11 +2172,13 @@ function CategoriesTab({ onMessage }) {
                         <AdminMediaImage
                           src={category.iconUrl}
                           className="h-7 w-7 rounded-[8px] object-cover"
-                          fallbackClassName="h-7 w-7 rounded-[8px] bg-[#e8f5e9]"
+                          fallbackClassName="h-7 w-7 rounded-[8px] bg-[#e8ebe8]"
                           iconSize={12}
                         />
                       ) : (
-                        <span className="text-[18px] leading-none">{category.emoji || '📦'}</span>
+                        <span className="grid h-7 w-7 place-items-center rounded-[8px] bg-[#e8ebe8] text-[#9aa49d]">
+                          <ImageOff size={14} strokeWidth={1.8} />
+                        </span>
                       )}
                       <span className="w-full truncate text-center text-[9.5px] font-semibold leading-tight text-[#17231c]">
                         {category.name}
@@ -2225,7 +2191,7 @@ function CategoriesTab({ onMessage }) {
         </div>
       </div>
 
-      <CreateCategoryModal
+      <AddToHomeModal
         open={createOpen}
         onClose={() => !busy && setCreateOpen(false)}
         isSubmitting={busy}

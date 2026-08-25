@@ -8,6 +8,9 @@ import {
   mapAdminCustomerNotificationHistoryRow,
   mapAdminSendVendorNotificationRequest,
   mapAdminVendorNotificationHistoryRow,
+  mapAdminMarketingNotifyMetaResponse,
+  mapAdminEstimateVendorNotificationRequest,
+  mapAdminEstimateNotificationResponse,
 } from '../../mappers/admin/mapAdminMarketingNotifications'
 import { mapAdminMarketingPromoCodesPage, mapAdminCreatePromoCodeRequest } from '../../mappers/admin/mapAdminMarketingPromoCodes'
 
@@ -301,7 +304,7 @@ export const adminMarketingService = {
   /**
    * Send vendor notification.
    * Confirmed: POST /admin/marketing/notifications
-   * Body: { target, audience, vendorIds?, type, title, body, push, email, schedule }
+   * Body: { target, audience, vendorIds?, categoryId?, vendorStatus?, type, title, body, push, email, sms, schedule }
    *
    * @param {object} form
    * @param {{ signal?: AbortSignal }} [options]
@@ -322,6 +325,66 @@ export const adminMarketingService = {
 
     return {
       data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Marketing notify form meta (vendor categories / statuses, customer segments).
+   * Confirmed: GET /admin/marketing/notifications/meta
+   *
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getNotifyMeta(options = {}) {
+    if (!useRealMarketingApi()) {
+      return {
+        data: {
+          categories: [],
+          statuses: [
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+            { value: 'suspended', label: 'Suspended' },
+          ],
+        },
+        meta: null,
+      }
+    }
+
+    const response = await apiClient.get(endpoints.admin.marketing.notifications.meta, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+
+    return {
+      data: mapAdminMarketingNotifyMetaResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Estimate vendor notification audience size.
+   * Confirmed: POST /admin/marketing/notifications/estimate
+   *
+   * @param {object} form
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async estimateVendorNotification(form = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: { estimatedRecipients: 0 }, meta: null }
+    }
+
+    const body = mapAdminEstimateVendorNotificationRequest(form)
+    const response = await apiClient.post(endpoints.admin.marketing.notifications.estimate, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+
+    return {
+      data: mapAdminEstimateNotificationResponse(response?.data),
       meta: response?.meta ?? null,
     }
   },

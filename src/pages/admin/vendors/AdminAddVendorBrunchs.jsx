@@ -1,13 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ChevronDown, Copy, Map, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-react'
+import { ChevronDown, Copy, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
 import AdminDeleteBranchModal from '../../../components/admin/AdminDeleteBranchModal'
 import AdminBranchLocationPicker from '../../../components/admin/AdminBranchLocationPicker'
+import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import { isPlottableLatLng } from '../../../lib/googleMaps'
-import { mapOpeningHoursToWizardHours } from '../../../mappers/admin/mapAdminVendorBranches'
+import {
+  map24hToUiTime,
+  mapOpeningHoursToWizardHours,
+  mapUiTimeTo24h,
+} from '../../../mappers/admin/mapAdminVendorBranches'
+import { buildAllowedModesFromStoreType } from '../../../components/admin/AdminVendorSlaConfigs'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -62,20 +68,130 @@ function Toggle({ checked, onChange, label }) {
   )
 }
 
-function ShiftPill({ from, to }) {
+const timeInputClass =
+  'box-border h-[22px] w-[7.25rem] cursor-pointer rounded-[4px] border-0 bg-transparent px-0.5 text-[12.5px] font-medium text-[#1A1A1A] outline-none [color-scheme:light] focus:bg-[#F3FAF5]'
+
+function openNativeTimePicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    /* unsupported or already open */
+  }
+}
+
+function toMinutes(value) {
+  const hhmm = mapUiTimeTo24h(value)
+  if (!hhmm) return null
+  const [h, m] = hhmm.split(':').map(Number)
+  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  return h * 60 + m
+}
+
+function closeMinutes(value) {
+  const mins = toMinutes(value)
+  if (mins === 0) return 24 * 60
+  return mins
+}
+
+function isValidShiftRange(from, to) {
+  const open = toMinutes(from)
+  const close = closeMinutes(to)
+  return open != null && close != null && open < close
+}
+
+function dayHoursError(config) {
+  if (!config?.open) return null
+  const shifts = Array.isArray(config.shifts) ? config.shifts : []
+  if (!shifts.length) return 'Set opening hours or mark the day closed.'
+  for (let i = 0; i < shifts.length; i += 1) {
+    if (!isValidShiftRange(shifts[i].from, shifts[i].to)) {
+      return 'Close time must be after open time (midnight close is allowed).'
+    }
+  }
+  if (config.mode === 'split' && shifts.length > 1) {
+    const morningEnd = toMinutes(shifts[0].to)
+    const afternoonStart = toMinutes(shifts[1].from)
+    if (morningEnd == null || afternoonStart == null || afternoonStart < morningEnd) {
+      return 'Second shift must start at or after the first shift ends.'
+    }
+  }
+  return null
+}
+
+function splitSingleShift(shift) {
+  const from = shift?.from || '8:00 AM'
+  const to = shift?.to || '11:00 PM'
+  const close = closeMinutes(to) ?? 23 * 60
+  if (close <= 12 * 60) {
+    return [
+      { from, to },
+      { from: '4:00 PM', to: '10:00 PM' },
+    ]
+  }
+  return [
+    { from, to: '12:00 PM' },
+    { from: '4:00 PM', to },
+  ]
+}
+
+function ShiftTimeRange({ from, to, onChange, openLabel, closeLabel, inputRef }) {
   return (
-    <div className="box-border inline-flex h-[25px] shrink-0 items-center gap-1.5 rounded-sm border-[1.1px] border-[#E0E6E0] bg-white px-3 py-[8px]">
-      <span className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]">🕒</span>
-      <span className="whitespace-nowrap text-[12.5px] leading-[15px] font-medium text-[#1A1A1A]">
-        {from} – {to}
+    <div className="box-border inline-flex h-[32px] shrink-0 items-center gap-1 rounded-sm border-[1.1px] border-[#E0E6E0] bg-white px-2">
+      <span className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]" aria-hidden>
+        🕒
       </span>
+      <input
+        ref={inputRef}
+        type="time"
+        step={300}
+        className={timeInputClass}
+        value={mapUiTimeTo24h(from) || '09:00'}
+        onClick={openNativeTimePicker}
+        onChange={(e) => onChange({ from: map24hToUiTime(e.target.value), to })}
+        aria-label={openLabel}
+      />
+      <span className="text-[12px] text-[#6B756E]">–</span>
+      <input
+        type="time"
+        step={300}
+        className={timeInputClass}
+        value={mapUiTimeTo24h(to) || '23:00'}
+        onClick={openNativeTimePicker}
+        onChange={(e) => onChange({ from, to: map24hToUiTime(e.target.value) })}
+        aria-label={closeLabel}
+      />
     </div>
   )
 }
 
-function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChange }) {
+function DayCard({
+  day,
+  config,
+  onToggle,
+  onAddBreak,
+  onRemoveBreak,
+  onModeChange,
+  onShiftChange,
+  onBreakChange,
+}) {
   const isOpen = config.open
   const isSplit = config.mode === 'split' && config.shifts.length > 1
+  const [editingBreak, setEditingBreak] = useState(false)
+  const breakInputRef = useRef(null)
+  const error = dayHoursError(config)
+
+  useEffect(() => {
+    if (!isSplit) setEditingBreak(false)
+  }, [isSplit])
+
+  useEffect(() => {
+    if (editingBreak) breakInputRef.current?.focus()
+  }, [editingBreak])
+
+  function startEditBreak() {
+    if (!isSplit) onAddBreak?.()
+    setEditingBreak(true)
+  }
 
   return (
     <div
@@ -83,7 +199,7 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         isOpen ? 'border-[#E0E6E0] bg-white' : 'border-[#E0E6E0] bg-[#F2F4F2]'
       }`}
     >
-      <div className="flex h-6 w-full flex-row items-center gap-2.5 self-stretch">
+      <div className="flex min-h-6 w-full flex-row items-center gap-2.5 self-stretch">
         <p
           className={`shrink-0 text-[14px] leading-[17px] font-bold ${
             isOpen ? 'text-[#1A1A1A]' : 'text-[#69706E]'
@@ -99,7 +215,11 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
             <select
               className="box-border h-[25px] appearance-none rounded-sm border border-[#E0E6E0] bg-[#E3F2EB] py-[5px] pr-6 pl-2.5 text-[12.5px] leading-[15px] font-medium text-[#127036] outline-none"
               value={isSplit ? 'split' : 'single'}
-              onChange={(e) => onModeChange?.(e.target.value)}
+              onChange={(e) => {
+                const mode = e.target.value
+                onModeChange?.(mode)
+                setEditingBreak(mode === 'split')
+              }}
               aria-label={`${day} shift type`}
             >
               <option value="single">Single shift</option>
@@ -124,22 +244,63 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
       {!isOpen ? (
         <p className="text-[12.5px] leading-[15px] font-medium text-[#949C94]">Closed all day</p>
       ) : isSplit ? (
-        <div className="flex h-7 w-full flex-row flex-wrap items-center gap-2 self-stretch">
-          <ShiftPill from={config.shifts[0].from} to={config.shifts[0].to} />
+        <div className="flex w-full flex-row flex-wrap items-center gap-2 self-stretch">
+          <ShiftTimeRange
+            from={config.shifts[0].from}
+            to={config.shifts[0].to}
+            onChange={(next) => onShiftChange?.(0, next)}
+            openLabel={`${day} morning open`}
+            closeLabel={`${day} morning close`}
+          />
           <span className="shrink-0 text-[12px] leading-[15px] font-normal text-[#6B756E]">· break ·</span>
-          <ShiftPill from={config.shifts[1].from} to={config.shifts[1].to} />
+          <ShiftTimeRange
+            from={config.shifts[1].from}
+            to={config.shifts[1].to}
+            onChange={(next) => onShiftChange?.(1, next)}
+            openLabel={`${day} afternoon open`}
+            closeLabel={`${day} afternoon close`}
+          />
         </div>
       ) : (
-        <div className="flex h-7 w-full flex-row flex-wrap items-center gap-2 self-stretch">
-          <ShiftPill
+        <div className="flex w-full flex-row flex-wrap items-center gap-2 self-stretch">
+          <ShiftTimeRange
             from={config.shifts[0]?.from || '9:00 AM'}
             to={config.shifts[0]?.to || '11:00 PM'}
+            onChange={(next) => onShiftChange?.(0, next)}
+            openLabel={`${day} open`}
+            closeLabel={`${day} close`}
           />
           <span className="text-[12px] leading-[15px] font-normal text-[#6B756E]">single shift</span>
         </div>
       )}
 
-      <div className="flex h-[18px] w-full flex-row items-center gap-3.5 self-stretch">
+      {isOpen && isSplit && editingBreak ? (
+        <div className="flex w-full flex-col gap-1.5 rounded-lg border border-[#D8EDE0] bg-[#F3FAF5] px-3 py-2.5">
+          <p className="text-[12px] font-bold text-[#127036]">Break window</p>
+          <ShiftTimeRange
+            from={config.shifts[0].to}
+            to={config.shifts[1].from}
+            onChange={(next) => onBreakChange?.(next)}
+            openLabel={`${day} break starts`}
+            closeLabel={`${day} break ends`}
+            inputRef={breakInputRef}
+          />
+          <p className="text-[11px] leading-[14px] text-[#6B756E]">
+            Orders pause between these times. Morning close and afternoon open stay in sync.
+          </p>
+          <button
+            type="button"
+            onClick={() => setEditingBreak(false)}
+            className="self-start text-[12px] font-medium text-[#127036] hover:underline"
+          >
+            Done
+          </button>
+        </div>
+      ) : null}
+
+      {error ? <p className="text-[11.5px] font-medium text-[#C91A24]">{error}</p> : null}
+
+      <div className="flex min-h-[18px] w-full flex-row flex-wrap items-center gap-3.5 self-stretch">
         {!isOpen ? (
           <button
             type="button"
@@ -152,13 +313,18 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
           <>
             <button
               type="button"
+              onClick={startEditBreak}
               className="inline-flex items-center gap-1 text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
             >
-              ✎ Edit break
+              <Pencil size={12} strokeWidth={2.2} />
+              Edit break
             </button>
             <button
               type="button"
-              onClick={onRemoveBreak}
+              onClick={() => {
+                setEditingBreak(false)
+                onRemoveBreak?.()
+              }}
               className="text-[12.5px] leading-[15px] font-medium text-[#C91A24] hover:underline"
             >
               × Remove break
@@ -167,7 +333,10 @@ function DayCard({ day, config, onToggle, onAddBreak, onRemoveBreak, onModeChang
         ) : (
           <button
             type="button"
-            onClick={onAddBreak}
+            onClick={() => {
+              onAddBreak?.()
+              setEditingBreak(true)
+            }}
             className="text-[12.5px] leading-[15px] font-medium text-[#2E9E4D] hover:underline"
           >
             + Add break (make split shift)
@@ -277,8 +446,14 @@ export default function AdminAddVendorBrunchs() {
     hours: defaultHours(),
   }))
   const [branchOnline, setBranchOnline] = useState(true)
-  const [allowPickup, setAllowPickup] = useState(true)
-  const [allowDineIn, setAllowDineIn] = useState(true)
+  const [allowPickup, setAllowPickup] = useState(false)
+  const [allowDineIn, setAllowDineIn] = useState(false)
+  /** Gate F&B toggles: store-type caps ∩ vendor SLA (hidden until resolved). */
+  const [modeGate, setModeGate] = useState({
+    showPickup: false,
+    showDineIn: false,
+    ready: false,
+  })
   const [freeDeliveryEnabled, setFreeDeliveryEnabled] = useState(true)
   const [applyVendorDeliveryToAll, setApplyVendorDeliveryToAll] = useState(false)
   const [applyCustomerDeliveryToAll, setApplyCustomerDeliveryToAll] = useState(false)
@@ -286,6 +461,7 @@ export default function AdminAddVendorBrunchs() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [copyMondayPrompt, setCopyMondayPrompt] = useState(null)
   const [allBranches, setAllBranches] = useState([])
   const [reopening, setReopening] = useState(false)
   const [actionError, setActionError] = useState(null)
@@ -314,13 +490,19 @@ export default function AdminAddVendorBrunchs() {
     setLoading(true)
     setLoadError(null)
 
-    const tasks = [adminService.getVendorDeliveryZones(vendorId)]
+    const tasks = [
+      adminService.getVendorDeliveryZones(vendorId),
+      adminService.getVendorDetail(vendorId),
+      adminService.listStoreTypes(),
+      adminService.getVendorSla(vendorId).catch(() => ({ data: null })),
+    ]
     if (!isNewBranch) tasks.unshift(adminService.listVendorBranches(vendorId))
 
     Promise.all(tasks)
       .then((results) => {
         if (cancelled) return
 
+        let offset = 0
         if (!isNewBranch) {
           const list = results[0]?.data?.branches || []
           setAllBranches(list)
@@ -331,11 +513,12 @@ export default function AdminAddVendorBrunchs() {
           } else {
             setLoadedBranch(found)
           }
+          offset = 1
         } else {
           setAllBranches([])
         }
 
-        const zones = (!isNewBranch ? results[1] : results[0])?.data?.defaults || null
+        const zones = results[offset]?.data?.defaults || null
         if (zones) {
           setFreeDeliveryEnabled(Boolean(zones.freeDeliveryEnabled))
           setForm((prev) => ({
@@ -348,6 +531,25 @@ export default function AdminAddVendorBrunchs() {
             customerRadiusKm: zones.radiusKm || prev.customerRadiusKm,
           }))
         }
+
+        const detail = results[offset + 1]?.data || null
+        const storeTypesPayload = results[offset + 2]?.data || null
+        const storeTypes = Array.isArray(storeTypesPayload?.storeTypes)
+          ? storeTypesPayload.storeTypes
+          : Array.isArray(storeTypesPayload?.items)
+            ? storeTypesPayload.items
+            : []
+        const sla = results[offset + 3]?.data || null
+        const storeTypeId = detail?.storeTypeId ? String(detail.storeTypeId) : ''
+        const storeType =
+          storeTypes.find((row) => String(row.id) === storeTypeId) || null
+        const allowedLabels = buildAllowedModesFromStoreType(storeType)
+        const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
+        setModeGate({
+          showPickup: allowedLabels.includes('Pickup') && Boolean(modes.pickup),
+          showDineIn: allowedLabels.includes('Dine-in') && Boolean(modes.dineIn),
+          ready: true,
+        })
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err?.message || 'Failed to load branch.')
@@ -360,6 +562,20 @@ export default function AdminAddVendorBrunchs() {
       cancelled = true
     }
   }, [useRealBranchApi, vendorId, branchId, isNewBranch])
+
+  // Wizard / mock: gate from draft SLA labels (no flash of Food-only toggles).
+  useEffect(() => {
+    if (useRealBranchApi) return
+    const draft = state?.wizardDraft
+    const selectedModes = Array.isArray(draft?.serviceModes) ? draft.serviceModes : []
+    const showPickup = selectedModes.includes('Pickup')
+    const showDineIn = selectedModes.includes('Dine-in')
+    setModeGate({ showPickup, showDineIn, ready: true })
+    if (isNewBranch) {
+      setAllowPickup(showPickup)
+      setAllowDineIn(showDineIn)
+    }
+  }, [useRealBranchApi, state?.wizardDraft, isNewBranch])
 
   useEffect(() => {
     if (isNewBranch || !branch) return
@@ -390,7 +606,23 @@ export default function AdminAddVendorBrunchs() {
     } else if (branch.status) {
       setBranchOnline(!/closed|suspended/i.test(String(branch.status)))
     }
+    if (typeof branch.allowsPickup === 'boolean') setAllowPickup(branch.allowsPickup)
+    if (typeof branch.allowsDineIn === 'boolean') setAllowDineIn(branch.allowsDineIn)
   }, [branch, isNewBranch])
+
+  // New branch defaults: ON only for modes the vendor currently offers.
+  useEffect(() => {
+    if (!isNewBranch || !modeGate.ready) return
+    setAllowPickup(modeGate.showPickup)
+    setAllowDineIn(modeGate.showDineIn)
+  }, [isNewBranch, modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
+
+  // If vendor SLA / store type drops a mode, force branch flags off in UI state.
+  useEffect(() => {
+    if (!modeGate.ready) return
+    if (!modeGate.showPickup) setAllowPickup(false)
+    if (!modeGate.showDineIn) setAllowDineIn(false)
+  }, [modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
 
   const isBranchForceClosed = useMemo(() => {
     if (!branch || isNewBranch) return false
@@ -398,6 +630,29 @@ export default function AdminAddVendorBrunchs() {
     if (until && !Number.isNaN(until.getTime()) && until > new Date()) return true
     return /force-?closed/i.test(String(branch.status || ''))
   }, [branch, isNewBranch])
+
+  /** Live preview: pin + Vendor delivery details radius (km). */
+  const coveragePreview = useMemo(() => {
+    const lat = Number(form.latitude)
+    const lng = Number(form.longitude)
+    if (!isPlottableLatLng(lat, lng)) {
+      return { center: null, circles: [] }
+    }
+    const radiusRaw = Number(form.radiusKm)
+    const radiusKm = !Number.isNaN(radiusRaw) && radiusRaw > 0 ? radiusRaw : 5
+    const name = String(form.name || '').trim() || 'This branch'
+    return {
+      center: { latitude: lat, longitude: lng },
+      circles: [
+        {
+          name,
+          latitude: lat,
+          longitude: lng,
+          radiusKm,
+        },
+      ],
+    }
+  }, [form.latitude, form.longitude, form.radiusKm, form.name])
 
   async function refreshBranchList() {
     if (!useRealBranchApi || isNewBranch) return null
@@ -524,20 +779,21 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function addBreak(day) {
-    setForm((c) => ({
-      ...c,
-      hours: {
-        ...c.hours,
-        [day]: {
-          open: true,
-          mode: 'split',
-          shifts: [
-            { from: '8:00 AM', to: '12:00 PM' },
-            { from: '4:00 PM', to: '10:00 PM' },
-          ],
+    setForm((c) => {
+      const current = c.hours[day]
+      const first = current.shifts[0] || { from: '8:00 AM', to: '12:00 PM' }
+      return {
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: {
+            open: true,
+            mode: 'split',
+            shifts: current.shifts.length > 1 ? current.shifts : splitSingleShift(first),
+          },
         },
-      },
-    }))
+      }
+    })
   }
 
   function setDayMode(day, mode) {
@@ -549,32 +805,103 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function removeBreak(day) {
-    setForm((c) => ({
-      ...c,
-      hours: {
-        ...c.hours,
-        [day]: {
-          open: true,
-          mode: 'single',
-          shifts: [{ from: '9:00 AM', to: '11:00 PM' }],
+    setForm((c) => {
+      const current = c.hours[day]
+      const first = current.shifts[0]
+      const last = current.shifts[current.shifts.length - 1] || first
+      return {
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: {
+            open: true,
+            mode: 'single',
+            shifts: [
+              {
+                from: first?.from || '9:00 AM',
+                to: last?.to || '11:00 PM',
+              },
+            ],
+          },
         },
-      },
-    }))
+      }
+    })
   }
 
-  function copyMondayToAll() {
+  function updateShift(day, index, next) {
+    setForm((c) => {
+      const current = c.hours[day]
+      const shifts = current.shifts.map((shift, i) => (i === index ? { ...shift, ...next } : shift))
+      return {
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: { ...current, shifts },
+        },
+      }
+    })
+  }
+
+  function updateBreak(day, { from, to }) {
+    setForm((c) => {
+      const current = c.hours[day]
+      const shifts = current.shifts.map((shift, i) => {
+        if (i === 0) return { ...shift, to: from }
+        if (i === 1) return { ...shift, from: to }
+        return shift
+      })
+      return {
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: { ...current, mode: 'split', shifts },
+        },
+      }
+    })
+  }
+
+  function requestCopyMonday() {
+    const monday = form.hours.Monday
+    if (!monday?.open) {
+      setCopyMondayPrompt(null)
+      setSaveError('Set Monday hours first — Monday is marked Day off.')
+      return
+    }
+    const targets = DAYS.filter((day) => day !== 'Monday' && form.hours[day]?.open)
+    const skipped = DAYS.filter((day) => day !== 'Monday' && !form.hours[day]?.open)
+    if (!targets.length) {
+      setCopyMondayPrompt(null)
+      setSaveError('No other open days to update. Day off days were left unchanged.')
+      return
+    }
+    setSaveError(null)
+    setCopyMondayPrompt({ targets, skipped })
+  }
+
+  function cancelCopyMonday() {
+    setCopyMondayPrompt(null)
+  }
+
+  function confirmCopyMonday() {
+    if (!copyMondayPrompt?.targets?.length) {
+      setCopyMondayPrompt(null)
+      return
+    }
     setForm((c) => {
       const monday = c.hours.Monday
+      if (!monday?.open) return c
       const hours = { ...c.hours }
-      DAYS.forEach((day) => {
+      copyMondayPrompt.targets.forEach((day) => {
+        if (!hours[day]?.open) return
         hours[day] = {
-          open: monday.open,
+          open: true,
           mode: monday.mode,
           shifts: monday.shifts.map((s) => ({ ...s })),
         }
       })
       return { ...c, hours }
     })
+    setCopyMondayPrompt(null)
   }
 
   function handleCancel() {
@@ -582,6 +909,16 @@ export default function AdminAddVendorBrunchs() {
   }
 
   async function handleSaveBranch() {
+    const hoursIssue = DAYS.map((day) => {
+      const message = dayHoursError(form.hours[day])
+      return message ? `${day}: ${message}` : null
+    }).find(Boolean)
+    if (hoursIssue) {
+      setSaveError(`Working hours — ${hoursIssue}`)
+      return
+    }
+    setSaveError(null)
+
     if (!useRealBranchApi) {
       if (isLocalWizardCreate || returnToWizard) {
         const radiusKm = form.radiusKm || '5'
@@ -604,6 +941,8 @@ export default function AdminAddVendorBrunchs() {
           hours: form.hours,
           branchOnline,
           operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
+          allowsPickup: modeGate.showPickup ? allowPickup : false,
+          allowsDineIn: modeGate.showDineIn ? allowDineIn : false,
           customerRadiusKm: form.customerRadiusKm,
           deliveryContribution: form.deliveryContribution,
           maxDistanceKm: form.maxDistanceKm,
@@ -631,6 +970,8 @@ export default function AdminAddVendorBrunchs() {
         ...form,
         branchOnline,
         operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
+        allowsPickup: modeGate.showPickup ? allowPickup : false,
+        allowsDineIn: modeGate.showDineIn ? allowDineIn : false,
       }
       if (isNewBranch) {
         await adminService.createVendorBranch(vendorId, payload)
@@ -884,6 +1225,9 @@ export default function AdminAddVendorBrunchs() {
                   value={form.radiusKm}
                   onChange={(e) => updateField('radiusKm', e.target.value)}
                 />
+                <p className="mt-1 text-[11px] leading-[14px] text-[#9aa49d]">
+                  Drives the green circle on Branch delivery radius &amp; coverage below.
+                </p>
               </Field>
               <Field label="Delivery ETA (min)">
                 <input
@@ -1032,10 +1376,46 @@ export default function AdminAddVendorBrunchs() {
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
 
           
-            <div className='mb-4'>
-            <h2 className="mb-2 text-[16px] font-bold text-[#17231c]">Working hours</h2>
-            <p className="text-[12px] text-[#127338] font-medium"><Copy size={13} strokeWidth={2.2} /> Copy Monday’s hours to all days</p>
-
+            <div className="mb-4">
+              <h2 className="mb-2 text-[16px] font-bold text-[#17231c]">Working hours</h2>
+              <button
+                type="button"
+                onClick={requestCopyMonday}
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#127338] hover:underline"
+              >
+                <Copy size={13} strokeWidth={2.2} />
+                Copy Monday’s hours to all days
+              </button>
+              {copyMondayPrompt ? (
+                <div className="mt-3 rounded-[10px] border border-[#D8EDE0] bg-[#F3FAF5] px-3.5 py-3">
+                  <p className="text-[12.5px] font-medium text-[#17231c]">
+                    Apply Monday’s shifts
+                    {form.hours.Monday?.mode === 'split' ? ' + break' : ''} to{' '}
+                    <span className="font-bold">{copyMondayPrompt.targets.join(', ')}</span>?
+                  </p>
+                  {copyMondayPrompt.skipped.length ? (
+                    <p className="mt-1 text-[11.5px] text-[#6B756E]">
+                      Day off skipped: {copyMondayPrompt.skipped.join(', ')}
+                    </p>
+                  ) : null}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={confirmCopyMonday}
+                      className="inline-flex h-[30px] items-center rounded-full bg-[#1aa054] px-3.5 text-[12px] font-bold text-white hover:bg-[#158a47]"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelCopyMonday}
+                      className="inline-flex h-[30px] items-center rounded-full border border-[#d5dbd6] bg-white px-3.5 text-[12px] font-medium text-[#455249] hover:bg-[#f7f9f7]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
      
 
@@ -1050,6 +1430,8 @@ export default function AdminAddVendorBrunchs() {
                   onAddBreak={() => addBreak(day)}
                   onRemoveBreak={() => removeBreak(day)}
                   onModeChange={(mode) => setDayMode(day, mode)}
+                  onShiftChange={(index, next) => updateShift(day, index, next)}
+                  onBreakChange={(next) => updateBreak(day, next)}
                 />
               ))}
             </div>
@@ -1064,6 +1446,8 @@ export default function AdminAddVendorBrunchs() {
                   onAddBreak={() => addBreak(day)}
                   onRemoveBreak={() => removeBreak(day)}
                   onModeChange={(mode) => setDayMode(day, mode)}
+                  onShiftChange={(index, next) => updateShift(day, index, next)}
+                  onBreakChange={(next) => updateBreak(day, next)}
                 />
               ))}
             </div>
@@ -1087,23 +1471,27 @@ export default function AdminAddVendorBrunchs() {
               />
             </div>
 
-            <div className="flex items-center gap-6">
-              <p className="text-[13px] font-bold text-[#17231c]">Allow pickup</p>
-              <Toggle
-                checked={allowPickup}
-                onChange={() => setAllowPickup((prev) => !prev)}
-                label="Allow pickup"
-              />
-            </div>
+            {modeGate.showPickup ? (
+              <div className="flex items-center gap-6">
+                <p className="text-[13px] font-bold text-[#17231c]">Allow pickup</p>
+                <Toggle
+                  checked={allowPickup}
+                  onChange={() => setAllowPickup((prev) => !prev)}
+                  label="Allow pickup"
+                />
+              </div>
+            ) : null}
 
-            <div className="flex items-center gap-6">
-              <p className="text-[13px] font-bold text-[#17231c]">Allow Dine-in</p>
-              <Toggle
-                checked={allowDineIn}
-                onChange={() => setAllowDineIn((prev) => !prev)}
-                label="Allow Dine-in"
-              />
-            </div>
+            {modeGate.showDineIn ? (
+              <div className="flex items-center gap-6">
+                <p className="text-[13px] font-bold text-[#17231c]">Allow Dine-in</p>
+                <Toggle
+                  checked={allowDineIn}
+                  onChange={() => setAllowDineIn((prev) => !prev)}
+                  label="Allow Dine-in"
+                />
+              </div>
+            ) : null}
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-4 rounded-[10px] bg-[#fff7d8] px-3.5 py-3">
@@ -1140,13 +1528,18 @@ export default function AdminAddVendorBrunchs() {
           </div>
         </section>
 
-        {/* Coverage map */}
+        {/* Branch delivery radius & coverage — pin + Vendor delivery radius, live */}
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-          <h2 className="mb-3 text-[16px] font-bold text-[#17231c]">Coverage map</h2>
-          <div className="flex min-h-[180px] flex-col items-center justify-center rounded-[12px] border border-dashed border-[#dfe4e0] bg-[#fafbfa] px-6 py-10 text-center">
-            <Map size={28} className="mb-2 text-[#b0b8b2]" strokeWidth={1.6} />
-            <p className="text-[13px] font-medium text-[#7c8780]">Delivery radius &amp; zones map</p>
-          </div>
+          <h2 className="mb-1 text-[16px] font-bold text-[#17231c]">
+            Branch delivery radius &amp; coverage
+          </h2>
+          <p className="mb-3 text-[12px] leading-[16px] text-[#7c8780]">
+            Pin from pinned location · green circle from Delivery radius · updates live as you edit.
+          </p>
+          <AdminDeliveryCoverageMap
+            coverage={coveragePreview}
+            emptyLabel="Branch delivery radius & coverage"
+          />
         </section>
 
         {/* Bottom actions */}

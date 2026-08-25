@@ -73,7 +73,7 @@ export function mapUiTimeTo24h(value) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
-function map24hToUiTime(value) {
+export function map24hToUiTime(value) {
   const raw = String(value || '').trim()
   const match = raw.match(/^(\d{1,2}):(\d{2})$/)
   if (!match) return raw || '9:00 AM'
@@ -253,6 +253,8 @@ export function mapAdminVendorBranchListItem(branch) {
     longitude: branch.longitude ?? null,
     deliveryFee: branch.deliveryFee ?? null,
     areaCity: branch.area || branch.city || 'Manama',
+    allowsPickup: typeof branch.allowsPickup === 'boolean' ? branch.allowsPickup : true,
+    allowsDineIn: typeof branch.allowsDineIn === 'boolean' ? branch.allowsDineIn : true,
   }
 }
 
@@ -331,6 +333,9 @@ export function mapAdminCreateBranchRequest(form = {}) {
 
   if (typeof form.isPrimary === 'boolean') body.isPrimary = form.isPrimary
 
+  if (typeof form.allowsPickup === 'boolean') body.allowsPickup = form.allowsPickup
+  if (typeof form.allowsDineIn === 'boolean') body.allowsDineIn = form.allowsDineIn
+
   return body
 }
 
@@ -384,6 +389,9 @@ export function mapAdminUpdateBranchRequest(form = {}) {
   if (operationalStatus) body.operationalStatus = operationalStatus
 
   if (typeof form.isPrimary === 'boolean') body.isPrimary = form.isPrimary
+
+  if (typeof form.allowsPickup === 'boolean') body.allowsPickup = form.allowsPickup
+  if (typeof form.allowsDineIn === 'boolean') body.allowsDineIn = form.allowsDineIn
 
   if (Object.keys(body).length === 0) {
     throw new ApiError({ message: 'No branch fields to update.' })

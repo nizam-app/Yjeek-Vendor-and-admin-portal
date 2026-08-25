@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { mapAdminSupplierDetailToForm } from '../../../mappers/admin/mapAdminFleet'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
+import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
 import { cn } from '../../../components/admin/cn'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
@@ -21,6 +23,10 @@ const EMPTY_FORM = {
   email: '',
   city: 'Manama',
   commissionPct: '12',
+}
+
+function serializeSupplierForm(form) {
+  return JSON.stringify(form)
 }
 
 function Field({ label, children, className }) {
@@ -47,6 +53,28 @@ export default function AdminAddSupplierPage() {
   const isEdit = Boolean(supplierId)
   const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
 
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [editBaseline, setEditBaseline] = useState(null)
+  const [bootstrapped, setBootstrapped] = useState(!isEdit)
+  const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  const createBaseline = useMemo(() => serializeSupplierForm(EMPTY_FORM), [])
+  const isDirty = isEdit
+    ? editBaseline != null && serializeSupplierForm(form) !== editBaseline
+    : serializeSupplierForm(form) !== createBaseline
+
+  const {
+    allowLeave,
+    requestLeave,
+    leaveModalOpen,
+    handleStayEditing,
+    handleLeaveWithoutSaving,
+  } = useAdminFormNavigationGuard({
+    isDirty,
+    enabled: bootstrapped,
+  })
+
   const goBack = () => {
     if (isEdit) {
       navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`)
@@ -55,10 +83,7 @@ export default function AdminAddSupplierPage() {
     navigate('/admin/fleet/suppliers')
   }
 
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [bootstrapped, setBootstrapped] = useState(!isEdit)
-  const [saving, setSaving] = useState(false)
-  const [submitError, setSubmitError] = useState('')
+  const handleBack = () => requestLeave(goBack)
 
   const { data: detail, error: loadError, isLoading: loadLoading, refetch } = useApiResource(
     () => {
@@ -84,11 +109,14 @@ export default function AdminAddSupplierPage() {
   useEffect(() => {
     if (!isEdit) {
       setForm(EMPTY_FORM)
+      setEditBaseline(null)
       setBootstrapped(true)
       return
     }
     if (!detail) return
-    setForm(mapAdminSupplierDetailToForm(detail))
+    const mapped = mapAdminSupplierDetailToForm(detail)
+    setForm(mapped)
+    setEditBaseline(serializeSupplierForm(mapped))
     setBootstrapped(true)
   }, [isEdit, detail])
 
@@ -108,12 +136,14 @@ export default function AdminAddSupplierPage() {
     try {
       if (isEdit) {
         await adminService.updateAdminFleetSupplier(supplierId, form)
+        allowLeave()
         navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}`)
         return
       }
 
       const result = await adminService.createAdminFleetSupplier(form)
       const id = result?.data?.id
+      allowLeave()
       navigate(id ? `/admin/fleet/suppliers/${encodeURIComponent(id)}` : '/admin/fleet/suppliers')
     } catch (err) {
       setSubmitError(
@@ -134,7 +164,7 @@ export default function AdminAddSupplierPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={goBack}
+            onClick={handleBack}
             className="inline-flex h-[34px] shrink-0 items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3 text-[13px] font-medium text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
           >
             <ChevronLeft size={15} strokeWidth={2.2} />
@@ -249,12 +279,25 @@ export default function AdminAddSupplierPage() {
       <div className="mt-5 flex justify-end">
         <button
           type="button"
-          onClick={goBack}
+          onClick={handleBack}
           className="inline-flex h-[36px] items-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[13px] font-medium text-[#455249] hover:bg-[#f6f8f6]"
         >
           Cancel
         </button>
       </div>
+
+      <AdminLeaveFormModal
+        open={leaveModalOpen}
+        busy={saving}
+        title={isEdit ? 'Leave supplier setup?' : 'Leave add supplier?'}
+        message={
+          isEdit
+            ? 'You have unsaved changes on this supplier. Keep editing or leave without saving.'
+            : 'You have unsaved progress on this supplier form. Keep editing or leave without saving.'
+        }
+        onStay={handleStayEditing}
+        onLeave={handleLeaveWithoutSaving}
+      />
     </div>
   )
 }

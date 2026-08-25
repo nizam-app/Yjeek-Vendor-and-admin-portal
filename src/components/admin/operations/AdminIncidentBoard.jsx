@@ -1,26 +1,37 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, RefreshCw, Search, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowUpRight, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
-import {
-  ADMIN_BOARD_FULL_LIMIT,
-  ADMIN_BOARD_PREVIEW_LIMIT,
-} from '../../../lib/adminBoardLimits'
+import { ADMIN_BOARD_FULL_LIMIT } from '../../../lib/adminBoardLimits'
 import {
   ADMIN_OPS_BOARD_FILTERS,
-  chatMatchesOpsFilter,
+  buildOpsBoardChats,
   filterOpsBoardColumns,
+  flattenOpsBoardOrders,
+  isOpsChatFilter,
+  orderMatchesOpsFilter,
 } from '../../../lib/adminOpsBoardFilters'
+import {
+  EMPTY_LIVE_ORDER_QUERY,
+  applyLiveOrderQuery,
+  filterOpsBoardLiveQuery,
+  liveOrderQueryIsActive,
+  parseLiveOrderQuery,
+  writeLiveOrderQuery,
+} from '../../../lib/adminLiveOrderQuery'
 import { ApiState } from '../ApiState'
 import { Button } from '../Button'
 import { cn } from '../cn'
+import { AdminLiveOrderFilterBar } from './AdminLiveOrderFilterBar'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminChatPanel } from './AdminChatPanel'
 import { AdminOpenChats } from './AdminOpenChats'
 import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import { OpsIncidentsSidebar } from './OpsIncidentsSidebar'
+import { AdminIncidentDetailModal } from './AdminIncidentDetailModal'
 import {
   AdminOrderDetailModal,
   IncidentOrderModal,
@@ -30,8 +41,11 @@ function ModeBoardFullView({
   column,
   boardTitle,
   fetchBoard,
+  filter,
   chats,
-  chatsActive,
+  query,
+  onQueryChange,
+  onQueryClear,
   onBack,
   onChatClick,
   onIncidentClick,
@@ -47,12 +61,18 @@ function ModeBoardFullView({
     data?.columns?.find((item) => item.id === column.id) ||
     data?.columns?.find((item) => item.tone === column.tone)
 
-  const orders = bucketColumn?.orders || []
-  const count = bucketColumn?.count ?? orders.length
+  const rawOrders = bucketColumn?.orders || []
+  const chatOrders = isOpsChatFilter(filter)
+    ? rawOrders.filter((order) => orderMatchesOpsFilter(order, filter))
+    : rawOrders
+  const orders = applyLiveOrderQuery(chatOrders, query)
+  const count = orders.length
+  const filtersActive = liveOrderQueryIsActive(query)
+  const visibleChats = buildOpsBoardChats(chats, rawOrders, filter)
 
   return (
-    <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
-      <div className="flex items-start gap-3">
+    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+      <div className="flex shrink-0 items-start gap-3">
         <button
           type="button"
           onClick={onBack}
@@ -66,7 +86,7 @@ function ModeBoardFullView({
             {column.title} — full view
           </h2>
           <p className="mt-0.5 text-[10px] text-[#7a847e]">
-            {isLoading && !data ? 'Loading…' : `${count} orders in this status`}
+            {isLoading && !data ? 'Loading…' : `${count} order${count === 1 ? '' : 's'} in this status`}
           </p>
         </div>
         <button
@@ -79,64 +99,83 @@ function ModeBoardFullView({
         </button>
       </div>
 
-      <div className="mt-8 flex flex-wrap items-center gap-2">
-        <label className="flex h-[31px] w-[225px] items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3">
-          <Search size={12} className="text-[#7b867f]" />
-          <input
-            className="min-w-0 flex-1 border-0 bg-transparent text-[10px] outline-none"
-            placeholder="Search order, vendor, champ..."
-          />
-        </label>
-        <button
-          type="button"
-          className="ml-auto h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]"
-        >
-          Sort · <b>Time left</b>▾
-        </button>
+      <div className="relative z-30 mt-6 shrink-0 overflow-visible">
+        <AdminLiveOrderFilterBar
+          query={query}
+          onChange={onQueryChange}
+          onClear={onQueryClear}
+          orders={chatOrders}
+          showTypes={false}
+        />
       </div>
 
-      {error && !orders.length ? (
-        <div className="mt-8 rounded-lg border border-[#f0d5d5] bg-[#fff7f7] px-4 py-6 text-center text-[12px] text-[#a15b58]">
-          <p>Unable to load {column.title.toLowerCase()} orders.</p>
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="mt-2 rounded-md border border-[#e0e5e1] bg-white px-2.5 py-1 text-[11px] text-[#536158]"
-          >
-            Try again
-          </button>
-        </div>
-      ) : null}
+      <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+        {error && !chatOrders.length ? (
+          <div className="mt-8 rounded-lg border border-[#f0d5d5] bg-[#fff7f7] px-4 py-6 text-center text-[12px] text-[#a15b58]">
+            <p>Unable to load {column.title.toLowerCase()} orders.</p>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="mt-2 rounded-md border border-[#e0e5e1] bg-white px-2.5 py-1 text-[11px] text-[#536158]"
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
 
-      {isLoading && !orders.length && !error ? (
-        <p className="mt-8 text-[12px] font-medium text-[#7a857e]">Loading {column.title.toLowerCase()} orders…</p>
-      ) : null}
+        {isLoading && !chatOrders.length && !error ? (
+          <p className="mt-8 text-[12px] font-medium text-[#7a857e]">Loading {column.title.toLowerCase()} orders…</p>
+        ) : null}
 
-      {!isLoading && !error && !orders.length ? (
-        <p className="mt-8 text-[12px] font-medium text-[#8a938c]">No {column.title.toLowerCase()} orders.</p>
-      ) : null}
+        {!isLoading && !error && !chatOrders.length ? (
+          <p className="mt-8 text-[12px] font-medium text-[#8a938c]">No {column.title.toLowerCase()} orders.</p>
+        ) : null}
 
-      <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
-        {orders.map((order) => (
-          <AdminOpsOrderCard
-            key={order.orderId || order.id}
-            order={order}
-            tone={column.tone}
-            onIncidentClick={onIncidentClick}
-            onContactClick={onContactClick}
-            onOrderClick={onOrderClick}
-          />
-        ))}
+        {!isLoading && chatOrders.length > 0 && orders.length === 0 ? (
+          <div className="mt-8 rounded-lg border border-dashed border-[#dfe4e0] bg-white px-4 py-10 text-center">
+            <p className="text-[12px] font-medium text-[#536158]">No orders match</p>
+            {filtersActive ? (
+              <button
+                type="button"
+                onClick={onQueryClear}
+                className="mt-2 text-[11px] font-medium text-[#16854a] hover:underline"
+              >
+                Clear all
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {orders.length > 0 ? (
+          <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
+            {orders.map((order) => (
+              <AdminOpsOrderCard
+                key={order.orderId || order.id}
+                order={order}
+                tone={column.tone}
+                onIncidentClick={onIncidentClick}
+                onContactClick={onContactClick}
+                onOrderClick={onOrderClick}
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <AdminOpenChats chats={chats} activeCount={chatsActive} onChatClick={onChatClick} />
+      <AdminOpenChats
+        chats={visibleChats}
+        activeCount={visibleChats.length}
+        unreadCount={visibleChats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)}
+        onChatClick={onChatClick}
+        groupByRole={isOpsChatFilter(filter)}
+      />
     </div>
   )
 }
 
 /**
  * Shared Incident / On Track board for Pickup, Dine-in, Services.
- * Live Orders parity: max 10 preview, ↗ full view, Incident / Champ / Customer / detail.
+ * Live Orders parity: vendor/search/champ filters, clickable incident log, pinned chats.
  */
 export function AdminIncidentBoard({
   boardTitle = 'Board',
@@ -145,32 +184,44 @@ export function AdminIncidentBoard({
   error: controlledError,
   isLoading: controlledLoading,
   onRetry,
-  previewLimit = ADMIN_BOARD_PREVIEW_LIMIT,
 }) {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('All orders')
   const [activeChat, setActiveChat] = useState(null)
   const [fullView, setFullView] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [incidentOrder, setIncidentOrder] = useState(null)
+  const [selectedIncident, setSelectedIncident] = useState(null)
+  const boardQuery = useMemo(() => parseLiveOrderQuery(searchParams), [searchParams])
+
+  function patchBoardQuery(nextQuery) {
+    setSearchParams((prev) => writeLiveOrderQuery(prev, nextQuery), { replace: true })
+  }
+
+  function clearBoardQuery() {
+    patchBoardQuery(EMPTY_LIVE_ORDER_QUERY)
+  }
 
   const useFetchBoard = typeof fetchBoard === 'function'
   const fetched = useApiResource(
-    () => (useFetchBoard ? fetchBoard({ limit: previewLimit }) : Promise.resolve({ data: null })),
-    [useFetchBoard, fetchBoard, previewLimit],
+    () => (useFetchBoard ? fetchBoard({ limit: ADMIN_BOARD_FULL_LIMIT }) : Promise.resolve({ data: null })),
+    [useFetchBoard, fetchBoard],
   )
 
   const { data: incidentsData } = useAdminIncidents()
-  const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats()
-
   const data = useFetchBoard ? fetched.data : controlledData
   const error = useFetchBoard ? fetched.error : controlledError
   const isLoading = useFetchBoard ? fetched.isLoading : controlledLoading
   const refetch = useFetchBoard ? fetched.refetch : onRetry
+  const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats({
+    refreshSeconds: data?.refreshIntervalSeconds,
+  })
 
   useEffect(() => {
     setFullView(null)
     setSelectedOrder(null)
     setIncidentOrder(null)
+    setSelectedIncident(null)
     setActiveChat(null)
     setFilter('All orders')
   }, [boardTitle])
@@ -196,40 +247,52 @@ export function AdminIncidentBoard({
   const chatsActive = feedChats.length > 0
     ? (chatsData?.active ?? feedChats.length)
     : chats.length
+  const chatsUnread = chatsData?.unreadTotal
+    ?? chats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
 
   const filters = useMemo(() => {
     const fromData = Array.isArray(data?.filters) ? data.filters : []
     return fromData.length > 0 ? fromData : ADMIN_OPS_BOARD_FILTERS
   }, [data?.filters])
 
-  const columns = useMemo(
-    () => filterOpsBoardColumns(Array.isArray(data?.columns) ? data.columns : [], filter),
-    [data?.columns, filter],
-  )
+  const rawColumns = Array.isArray(data?.columns) ? data.columns : []
+  const columns = useMemo(() => {
+    const byChat = filterOpsBoardColumns(rawColumns, filter)
+    return filterOpsBoardLiveQuery(byChat, boardQuery)
+  }, [rawColumns, filter, boardQuery])
+  const boardOrders = useMemo(() => flattenOpsBoardOrders(rawColumns), [rawColumns])
 
   const visibleChats = useMemo(
-    () => chats.filter((chat) => chatMatchesOpsFilter(chat, filter)),
-    [chats, filter],
+    () => buildOpsBoardChats(chats, boardOrders, filter),
+    [chats, boardOrders, filter],
   )
-  const visibleChatsActive = filter === 'All orders'
-    ? chatsActive
-    : visibleChats.length
+  const visibleChatsActive = isOpsChatFilter(filter) ? visibleChats.length : chatsActive
+  const visibleChatsUnread = isOpsChatFilter(filter)
+    ? visibleChats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
+    : chatsUnread
+  const filtersActive = liveOrderQueryIsActive(boardQuery)
+  const filteredOrderCount = columns.reduce((sum, column) => sum + (Number(column.count) || 0), 0)
+  const headerOrderCount = (isOpsChatFilter(filter) || filtersActive)
+    ? filteredOrderCount
+    : (data?.activeCount ?? '—')
 
   const refreshKey = useMemo(() => {
     if (!data) return '0'
-    return `${data.activeCount}-${columns.map((c) => c.count).join('-')}-${isLoading ? '1' : '0'}`
+    return `${data.activeCount}-${columns.map((column) => column.count).join('-')}-${isLoading ? '1' : '0'}`
   }, [data, columns, isLoading])
 
   function handleChatMarkedRead(conversationId) {
     setChatsData((current) => {
       if (!current?.items) return current
+      const items = current.items.map((item) =>
+        item.conversationId === conversationId || item.id === conversationId
+          ? { ...item, unreadCount: 0 }
+          : item,
+      )
       return {
         ...current,
-        items: current.items.map((item) =>
-          item.conversationId === conversationId || item.id === conversationId
-            ? { ...item, unreadCount: 0 }
-            : item,
-        ),
+        items,
+        unreadTotal: items.reduce((sum, item) => sum + (Number(item.unreadCount) || 0), 0),
       }
     })
     refetchChats()
@@ -270,6 +333,16 @@ export function AdminIncidentBoard({
       {incidentOrder ? (
         <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} />
       ) : null}
+      {selectedIncident ? (
+        <AdminIncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onOpenOrder={(order) => {
+            setSelectedIncident(null)
+            setSelectedOrder(order)
+          }}
+        />
+      ) : null}
       {activeChat ? (
         <AdminChatPanel
           key={`${activeChat.id}-${activeChat.orderId || ''}`}
@@ -288,8 +361,11 @@ export function AdminIncidentBoard({
           column={fullView}
           boardTitle={boardTitle}
           fetchBoard={fetchBoard}
+          filter={filter}
           chats={chats}
-          chatsActive={chatsActive}
+          query={boardQuery}
+          onQueryChange={patchBoardQuery}
+          onQueryClear={clearBoardQuery}
           onBack={() => setFullView(null)}
           onChatClick={setActiveChat}
           onIncidentClick={setIncidentOrder}
@@ -304,13 +380,13 @@ export function AdminIncidentBoard({
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   return (
-    <div className="flex min-h-[calc(100vh-44px)] flex-col px-[18px] pb-0 pt-[15px]">
-      <div className="grid flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
+        <div className="flex min-h-0 min-w-0 flex-col">
+          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2.5">
               <h2 className="text-[14px] font-bold text-[#17231c]">
-                {data.activeCount} {data.activeLabel}
+                {headerOrderCount} {data.activeLabel}
               </h2>
               <AdminAutoRefreshBadge
                 intervalSeconds={data.refreshIntervalSeconds}
@@ -318,14 +394,13 @@ export function AdminIncidentBoard({
               />
             </div>
             <div className="flex gap-2">
-              <Button className="h-[31px] px-3">All vendors ▾</Button>
               <Button className="h-[31px] px-4" onClick={refetch} disabled={isLoading}>
                 <RefreshCw size={11} /> Refresh
               </Button>
             </div>
           </div>
 
-          <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
+          <div className="mb-3 mt-3 flex shrink-0 flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
             <span>Filter:</span>
             {filters.map((item) => (
               <button
@@ -342,66 +417,83 @@ export function AdminIncidentBoard({
             ))}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
-            {columns.map((column) => {
-              const previewOrders = (column.orders || []).slice(0, previewLimit)
-              return (
-                <section key={column.id} className="min-h-[416px] rounded-[10px] bg-[#f1f4f1] p-2.5">
-                  <div className="mb-2 flex h-[22px] items-center gap-2">
-                    <span className={cn(
-                      'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
-                      column.tone === 'red' ? 'bg-[#fff0ed] text-[#d33f44]' : 'bg-[#e7f5eb] text-[#247c4b]',
-                    )}>
-                      {column.tone === 'red' ? <TriangleAlert size={12} /> : <ShieldCheck size={12} />}
-                      {column.title}
-                    </span>
-                    <strong className={cn('text-[12px]', column.tone === 'red' ? 'text-[#d33f44]' : 'text-[#247c4b]')}>{column.count}</strong>
-                    <button
-                      type="button"
-                      onClick={() => useFetchBoard && setFullView(column)}
-                      className="ml-auto grid h-[22px] w-[22px] place-items-center rounded-md border border-[#dfe4e0] bg-white text-[#748078] hover:text-[#118446]"
-                      aria-label={`Open ${column.title} full view`}
-                    >
-                      <ArrowUpRight size={12} />
-                    </button>
-                  </div>
-                  <div className="space-y-2.5">
-                    {previewOrders.length === 0 ? (
-                      <div className="rounded-[12px] border border-dashed border-[#dfe4e0] bg-white px-3 py-8 text-center text-[11px] text-[#78837c]">
-                        No orders
-                      </div>
-                    ) : (
-                      previewOrders.map((order) => (
-                        <AdminOpsOrderCard
-                          key={order.orderId || order.id}
-                          order={order}
-                          tone={column.tone}
-                          onIncidentClick={setIncidentOrder}
-                          onContactClick={openOrderChat}
-                          onOrderClick={setSelectedOrder}
-                        />
-                      ))
-                    )}
-                    {column.count > previewLimit && useFetchBoard ? (
-                      <button
-                        type="button"
-                        onClick={() => setFullView(column)}
-                        className="w-full rounded-[9px] border border-dashed border-[#cfd7d1] bg-white px-2 py-2 text-[10px] font-medium text-[#3d7a55] hover:border-[#1a9b53] hover:text-[#14763f]"
-                      >
-                        View all {column.count} {column.title.toLowerCase()} orders ↗
-                      </button>
-                    ) : null}
-                  </div>
-                </section>
-              )
-            })}
+          <div className="relative z-30 mb-3 shrink-0 overflow-visible">
+            <AdminLiveOrderFilterBar
+              query={boardQuery}
+              onChange={patchBoardQuery}
+              onClear={clearBoardQuery}
+              orders={boardOrders}
+              showTypes={false}
+            />
+          </div>
+
+          <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+            {columns.map((column) => (
+              <section key={column.id} className="flex min-h-0 flex-col overflow-hidden rounded-[10px] bg-[#f1f4f1] p-2.5">
+                <div className="mb-2 flex h-[22px] shrink-0 items-center gap-2">
+                  <span className={cn(
+                    'inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium',
+                    column.tone === 'red' ? 'bg-[#fff0ed] text-[#d33f44]' : 'bg-[#e7f5eb] text-[#247c4b]',
+                  )}>
+                    {column.tone === 'red' ? <TriangleAlert size={12} /> : <ShieldCheck size={12} />}
+                    {column.title}
+                  </span>
+                  <strong className={cn('text-[12px]', column.tone === 'red' ? 'text-[#d33f44]' : 'text-[#247c4b]')}>{column.count}</strong>
+                  <button
+                    type="button"
+                    onClick={() => useFetchBoard && setFullView(column)}
+                    className="ml-auto grid h-[22px] w-[22px] place-items-center rounded-md border border-[#dfe4e0] bg-white text-[#748078] hover:text-[#118446]"
+                    aria-label={`Open ${column.title} full view`}
+                  >
+                    <ArrowUpRight size={12} />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
+                  {(column.orders || []).length === 0 ? (
+                    <div className="rounded-[12px] border border-dashed border-[#dfe4e0] bg-white px-3 py-8 text-center text-[11px] text-[#78837c]">
+                      <p>{filtersActive ? 'No orders match' : isOpsChatFilter(filter) ? 'No matching chat orders' : 'No orders'}</p>
+                      {filtersActive ? (
+                        <button
+                          type="button"
+                          onClick={clearBoardQuery}
+                          className="mt-1 text-[10px] font-medium text-[#16854a] hover:underline"
+                        >
+                          Clear all
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    (column.orders || []).map((order) => (
+                      <AdminOpsOrderCard
+                        key={order.orderId || order.id}
+                        order={order}
+                        tone={column.tone}
+                        onIncidentClick={setIncidentOrder}
+                        onContactClick={openOrderChat}
+                        onOrderClick={setSelectedOrder}
+                      />
+                    ))
+                  )}
+                </div>
+              </section>
+            ))}
           </div>
         </div>
 
-        <OpsIncidentsSidebar incidents={incidents} />
+        <OpsIncidentsSidebar
+          fillHeight
+          incidents={incidents}
+          onIncidentClick={setSelectedIncident}
+        />
       </div>
 
-      <AdminOpenChats chats={visibleChats} activeCount={visibleChatsActive} onChatClick={setActiveChat} />
+      <AdminOpenChats
+        chats={visibleChats}
+        activeCount={visibleChatsActive}
+        unreadCount={visibleChatsUnread}
+        onChatClick={setActiveChat}
+        groupByRole={isOpsChatFilter(filter)}
+      />
       {modals}
     </div>
   )

@@ -323,7 +323,7 @@ export function mapAdminUiEditorBanners(data) {
 
 /**
  * GET /admin/ui-editor/home/categories
- * Backend presentCategory: { id, name, slug, iconUrl, iconEmoji, sortOrder, isActive, isFeatured, publishStatus }
+ * Backend presentCategory: { id, name, slug, iconUrl, sortOrder, isActive, isFeatured, publishStatus }
  */
 export function mapAdminUiEditorHomeCategories(data) {
   const src = asObject(data) || {}
@@ -354,23 +354,29 @@ export function mapAdminUiEditorHomeCategories(data) {
           iconUrlRaw.includes('/uploads/'))
           ? iconUrlRaw
           : null
-      // icon may be a URL string — don't treat URLs as emoji
-      const emojiRaw = asString(item.iconEmoji || item.emoji || '').trim()
-      const emoji =
-        emojiRaw && !/^https?:\/\//i.test(emojiRaw) && !emojiRaw.includes('/')
-          ? emojiRaw
-          : iconUrl
-            ? ''
-            : '📦'
       return {
         id,
         name: asString(item.name || item.label || 'Category'),
-        emoji,
         iconUrl: iconUrl || null,
         sortOrder: asNumber(item.sortOrder ?? item.order ?? index, index),
         isFeatured: item.isFeatured != null ? Boolean(item.isFeatured) : true,
         isHidden,
         isActive: item.isActive != null ? Boolean(item.isActive) : !isHidden,
+        kind: asString(item.kind || 'STORE_TYPE'),
+        refId: asString(item.refId || item.ref_id || id),
+        structure: asString(item.structure || 'SINGLE'),
+        code: asString(item.code || ''),
+        children: Array.isArray(item.children)
+          ? item.children.map((child, childIndex) => ({
+              id: asString(child.id),
+              name: asString(child.name || child.label || 'Sub-type'),
+              kind: asString(child.kind || 'SUB_TYPE'),
+              refId: asString(child.refId || child.id),
+              iconUrl: child.iconUrl || null,
+              sortOrder: asNumber(child.sortOrder ?? childIndex, childIndex),
+              isHidden: child.isActive === false,
+            }))
+          : [],
         raw: item,
       }
     })
@@ -382,21 +388,29 @@ export function mapAdminUiEditorHomeCategories(data) {
 
 /**
  * POST /admin/ui-editor/home/categories body
- * Backend: { name, slug?, iconUrl?, iconEmoji?, sortOrder?, isFeatured?, isActive? }
+ * Backend: { kind, refId, name?, iconUrl?, sortOrder?, isFeatured?, isActive? }
+ * Rule 1: kind + refId required — no free-text / invent-entity create.
  */
 export function mapAdminCreateHomeCategoryRequest(input = {}) {
   const src = asObject(input) || {}
+  const kind = asString(src.kind).trim()
+  const refId = asString(src.refId || src.ref_id).trim()
+  if (!kind || !refId) {
+    throw Object.assign(new Error('Home entries require kind and refId from Store Management.'), {
+      message: 'Home entries require kind and refId from Store Management.',
+    })
+  }
   const body = {
-    name: asString(src.name || 'New Category').trim() || 'New Category',
+    kind,
+    refId,
     isFeatured: src.isFeatured != null ? Boolean(src.isFeatured) : true,
   }
+  const name = asString(src.name).trim()
+  if (name) body.name = name
   const iconUrl = pickMediaUrl(src.iconUrl, src.icon_url, src.imageUrl)
   if (iconUrl && !iconUrl.startsWith('blob:') && !iconUrl.startsWith('data:')) {
     body.iconUrl = iconUrl
   }
-  const emoji = asString(src.iconEmoji || src.emoji).trim()
-  if (emoji) body.iconEmoji = emoji
-  else if (!body.iconUrl) body.iconEmoji = '✨'
   if (src.isActive != null) body.isActive = Boolean(src.isActive)
   if (src.sortOrder != null) body.sortOrder = asNumber(src.sortOrder, 0)
   return body
@@ -404,7 +418,7 @@ export function mapAdminCreateHomeCategoryRequest(input = {}) {
 
 /**
  * PATCH /admin/ui-editor/home/categories/:id body
- * Backend: { name?, slug?, iconUrl?, iconEmoji?, isFeatured?, sortOrder?, isActive?, publishStatus? }
+ * Presentation only: name/icon/visibility/order. Slug is never patched (Rule 7).
  */
 export function mapAdminPatchHomeCategoryRequest(input = {}) {
   const src = asObject(input) || {}
@@ -414,9 +428,6 @@ export function mapAdminPatchHomeCategoryRequest(input = {}) {
   if (src.sortOrder != null) body.sortOrder = asNumber(src.sortOrder, 0)
   if (src.isActive != null) body.isActive = Boolean(src.isActive)
   else if (src.isHidden != null) body.isActive = !Boolean(src.isHidden)
-  if (src.iconEmoji != null || src.emoji != null) {
-    body.iconEmoji = asString(src.iconEmoji || src.emoji).trim()
-  }
   if (src.iconUrl !== undefined || src.icon_url !== undefined || src.imageUrl !== undefined) {
     const iconUrl = pickMediaUrl(src.iconUrl, src.icon_url, src.imageUrl)
     if (iconUrl === null || iconUrl === '') {

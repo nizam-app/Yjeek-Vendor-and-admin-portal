@@ -1,13 +1,30 @@
 import { Check } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { Badge } from '../Badge'
 
-export function AdminVendorSla({ sla }) {
+export function AdminVendorSla({ sla, vendorId, storeName }) {
+  const navigate = useNavigate()
+
   if (!sla) return null
 
   const metrics = Array.isArray(sla.metrics) ? sla.metrics : []
   const rules = Array.isArray(sla.rules) ? sla.rules : []
   const vpiWeights = Array.isArray(sla.vpiWeights) ? sla.vpiWeights : []
   const compliance = Array.isArray(sla.compliance) ? sla.compliance : []
+
+  const openSlaEditor = () => {
+    const id = String(vendorId || '').trim()
+    if (!id) return
+    navigate('/admin/vendors/new', {
+      state: {
+        mode: 'edit',
+        vendorId: id,
+        storeName: storeName || sla.modelName || '',
+        step: 5,
+        returnTab: 'SLA',
+      },
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -28,12 +45,14 @@ export function AdminVendorSla({ sla }) {
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={openSlaEditor}
               className="inline-flex h-[36px] items-center rounded-sm border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#455249] hover:bg-[#f6f8f6]"
             >
               Change model
             </button>
             <button
               type="button"
+              onClick={openSlaEditor}
               className="inline-flex h-[36px] items-center rounded-sm bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47]"
             >
               Edit SLA

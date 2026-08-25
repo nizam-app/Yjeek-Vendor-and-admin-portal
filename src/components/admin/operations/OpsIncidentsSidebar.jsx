@@ -1,60 +1,75 @@
-import { useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
 import { cn } from '../cn'
-import { ADMIN_BOARD_PREVIEW_LIMIT } from '../../../lib/adminBoardLimits'
+
+function incidentTone(incident) {
+  return incident?.tone || 'red'
+}
+
+function incidentSubtitle(incident) {
+  if (incident?.detail) return String(incident.detail)
+  const id = incident?.orderNumber ? `#${incident.orderNumber}` : (incident?.id ? `#${incident.id}` : '')
+  const status = incident?.status ? String(incident.status).toLowerCase() : ''
+  return [id, status].filter(Boolean).join(' · ')
+}
 
 /**
- * Right-rail Incidents Log (Live / Pickup / Dine-in / Services).
- * Preview max 5; View all expands the list.
+ * Shared Incidents Log for Live Orders, Pickup, Dine-in, Services, and Dashboard.
+ * Same card: P1 badge, title, `#order · status`, internal scroll, clickable rows.
  */
 export function OpsIncidentsSidebar({
   incidents = [],
-  previewLimit = ADMIN_BOARD_PREVIEW_LIMIT,
   title = 'Incidents Log',
+  onIncidentClick,
+  fillHeight = true,
 }) {
-  const [showAll, setShowAll] = useState(false)
   const list = Array.isArray(incidents) ? incidents : []
-  const visible = showAll ? list : list.slice(0, previewLimit)
-  const canExpand = list.length > previewLimit
 
   return (
-    <aside className="flex h-[441px] flex-col overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px]">
-      <div className="flex h-[43px] shrink-0 items-center gap-1.5">
-        <ShieldAlert size={14} className="text-[#d46763]" />
+    <aside
+      className={cn(
+        'flex flex-col overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px] shadow-[0_1px_2px_rgba(20,40,28,.025)]',
+        fillHeight ? 'h-full min-h-0 self-stretch' : 'h-[360px]',
+      )}
+    >
+      <div className="flex h-[44px] shrink-0 items-center gap-1.5">
+        <ShieldAlert size={14} strokeWidth={2} className="text-[#d46763]" />
         <h2 className="text-[14px] font-bold text-[#17231c]">{title}</h2>
-        {list.length > 0 ? (
-          <span className="rounded-full bg-[#f0f2f0] px-2 text-[9px] text-[#718078]">{list.length}</span>
-        ) : null}
-        {canExpand ? (
-          <button
-            type="button"
-            onClick={() => setShowAll((current) => !current)}
-            className="ml-auto text-[9px] font-medium text-[#16854a] hover:underline"
-          >
-            {showAll ? 'Show less' : 'View all →'}
-          </button>
-        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {list.length === 0 ? (
-          <div className="py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
+          <div className="px-0.5 py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
         ) : (
-          visible.map(({ id, priority, title: rowTitle, detail, tone }) => (
-            <div key={id || `${priority}-${rowTitle}`} className="flex h-[59px] items-center border-b border-[#e2e6e3]">
-              <span className={cn(
-                'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[9px] font-medium',
-                tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
-                tone === 'yellow' && 'bg-[#fff4d9] text-[#c78a18]',
-                tone === 'blue' && 'bg-[#eaf2fb] text-[#3974ad]',
-                tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
-                !tone && 'bg-[#fdebec] text-[#d64044]',
-              )}>{priority}</span>
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-bold text-[#17231c]">{rowTitle}</p>
-                <p className="truncate text-[9px] text-[#818b84]">{detail}</p>
-              </div>
-            </div>
-          ))
+          list.map((incident) => {
+            const tone = incidentTone(incident)
+            return (
+              <button
+                key={incident.id || `${incident.priority}-${incident.title}`}
+                type="button"
+                onClick={() => onIncidentClick?.(incident)}
+                className="flex h-[63px] w-full items-center border-b border-[#e2e6e3] px-0.5 text-left hover:bg-[#f6f8f6]"
+              >
+                <span
+                  className={cn(
+                    'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[10px] font-medium',
+                    tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
+                    tone === 'yellow' && 'bg-[#fff4d9] text-[#c78a18]',
+                    tone === 'blue' && 'bg-[#eaf2fb] text-[#3974ad]',
+                    tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
+                  )}
+                >
+                  {incident.priority || 'P1'}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-bold leading-[15px] text-[#202722]">
+                    {incident.title || incident.name || 'Incident'}
+                  </p>
+                  <p className="truncate text-[10px] font-normal leading-[14px] text-[#77827b]">
+                    {incidentSubtitle(incident)}
+                  </p>
+                </div>
+              </button>
+            )
+          })
         )}
       </div>
     </aside>

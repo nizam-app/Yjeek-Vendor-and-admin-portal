@@ -266,6 +266,7 @@ export function mapAdminUpdateVendorSlaRequest(form = {}) {
 
   if (form.slaConfigs && typeof form.slaConfigs === 'object') {
     config.modeConfigs = form.slaConfigs
+    config.modeOverrides = form.slaConfigs
     const hotFood = form.slaConfigs['Hot food · on demand']
     if (hotFood?.customized && hotFood.fields?.acceptance) {
       const h = num(hotFood.fields.acceptance.h) || 0
@@ -278,6 +279,143 @@ export function mapAdminUpdateVendorSlaRequest(form = {}) {
   if (Object.keys(config).length) body.config = config
 
   return body
+}
+
+function pad2(n) {
+  return String(Math.max(0, Math.floor(Number(n) || 0))).padStart(2, '0')
+}
+
+function secondsToDuration(totalSec, operator = '≤') {
+  const sec = Math.max(0, Math.floor(Number(totalSec) || 0))
+  return {
+    operator,
+    h: pad2(Math.floor(sec / 3600)),
+    m: pad2(Math.floor((sec % 3600) / 60)),
+    s: pad2(sec % 60),
+  }
+}
+
+function clockToWizard(value) {
+  const raw = String(value || '12:00:00').trim()
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!match) return { time: '12:00', period: 'PM' }
+  let hour = Number(match[1])
+  const minute = match[2]
+  const period = hour >= 12 ? 'PM' : 'AM'
+  if (hour === 0) hour = 12
+  else if (hour > 12) hour -= 12
+  return { time: `${pad2(hour)}:${minute}`, period }
+}
+
+/**
+ * Map published SLA model `config` → wizard modeConfigs (all inherit / customized:false).
+ */
+export function mapSlaModelConfigToWizardModes(modelConfig = {}) {
+  const vendor = modelConfig?.vendor && typeof modelConfig.vendor === 'object' ? modelConfig.vendor : {}
+  const hot = vendor.hotFoodOnDemand || {}
+  const dine = vendor.dineIn || {}
+  const pickup = vendor.pickup || {}
+  const scheduled = vendor.scheduledDelivery || {}
+  const services = vendor.services || {}
+  const start = clockToWizard(hot.fullDeliveryWindowStart || '11:00:00')
+  const end = clockToWizard(hot.fullDeliveryWindowEnd || '23:00:00')
+
+  const tierKeys = [
+    ['Same day', 'sameDay'],
+    ['Next day', 'nextDay'],
+    ['Standard', 'days3to5'],
+    ['Economy', 'customDay'],
+  ]
+  const tiers = {}
+  for (const [label, key] of tierKeys) {
+    const tier = scheduled[key] || {}
+    const cutoff = clockToWizard(tier.cutoffTime || '12:00:00')
+    const prepHours = Number(tier.preparationTimeHours) || 0
+    const prepClock = clockToWizard(`${pad2(Math.floor(prepHours) % 24)}:00:00`)
+    tiers[label] = {
+      acceptance: secondsToDuration(tier.acceptanceTimeSec ?? 120, '≤'),
+      champCollection: secondsToDuration(tier.champCollectionTimeSec ?? 900, '≤'),
+      dailyOnline: secondsToDuration(tier.earlyOnlineHoursSec ?? 7200, '≥'),
+      cutoff: { operator: '=', time: cutoff.time, period: cutoff.period },
+      prepareMax: { operator: '≤', time: prepClock.time, period: prepClock.period },
+      markReady: secondsToDuration(1800, '≤'),
+    }
+  }
+
+  return {
+    'Hot food · on demand': {
+      customized: false,
+      fields: {
+        acceptance: secondsToDuration(hot.acceptanceTimeSec ?? 120, '≤'),
+        champCollection: secondsToDuration(hot.champCollectionTimeSec ?? 600, '≤'),
+        dailyOnline: secondsToDuration(hot.earlyOnlineHoursSec ?? 28800, '≥'),
+      },
+      window: {
+        label: 'Full delivery window',
+        from: start.time,
+        fromPeriod: start.period,
+        to: end.time,
+        toPeriod: end.period,
+      },
+    },
+    'Dine-in': {
+      customized: false,
+      fields: {
+        acceptance: secondsToDuration(dine.acceptanceTimeSec ?? 180, '≤'),
+        tableReady: secondsToDuration(
+          dine.tablePreparationSec ?? dine.customerArrivalWaitSec ?? 900,
+          '≤',
+        ),
+        dailyOnline: secondsToDuration(28800, '≥'),
+      },
+      window: null,
+    },
+    Pickup: {
+      customized: false,
+      fields: {
+        acceptance: secondsToDuration(pickup.acceptanceTimeSec ?? 180, '≤'),
+        customerWait: secondsToDuration(pickup.customerWaitSec ?? 600, '≤'),
+        dailyOnline: secondsToDuration(28800, '≥'),
+      },
+      window: null,
+    },
+    'Scheduled delivery': {
+      customized: false,
+      tiers,
+    },
+    Services: {
+      customized: false,
+      fields: {
+        acceptance: secondsToDuration(services.acceptanceTimeSec ?? 300, '≤'),
+        serviceStart: secondsToDuration(
+          services.serviceLevelAgreementSec ?? services.qualityReportWindowSec ?? 1800,
+          '≤',
+        ),
+        dailyOnline: secondsToDuration(28800, '≥'),
+      },
+      window: null,
+    },
+  }
+}
+
+/**
+ * Merge model defaults with stored overrides for wizard display.
+ * Customize OFF always uses live model defaults.
+ */
+export function mergeWizardSlaModes(modelDefaults = {}, overrides = {}, selectedModes = []) {
+  const modes = selectedModes.length ? selectedModes : Object.keys(modelDefaults)
+  const next = {}
+  for (const mode of modes) {
+    const base = modelDefaults[mode]
+    if (!base) continue
+    const override = overrides[mode]
+    if (override?.customized === true) {
+      next[mode] = { ...base, ...override, customized: true }
+    } else {
+      next[mode] = { ...base, customized: false }
+    }
+  }
+  return next
 }
 
 /**

@@ -218,7 +218,7 @@ export function mapAdminCommissionToWizardForm(commission) {
         ? Number(commission.platformServiceFeeAmount).toFixed(3)
         : stripCurrency(commission.platformServiceFee) || '0.300',
     vatOnCommission: vat,
-    currency: `${currencyCode} (fixed)`,
+    currency: String(currencyCode).trim().split(/\s+/)[0] || 'BHD',
     fixedPct: gateway.fixedPct || '1.000',
     debitPct: gateway.debitPct || '0.500',
     creditPct: gateway.creditPct || '2.000',

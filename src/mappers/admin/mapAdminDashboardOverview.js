@@ -108,6 +108,7 @@ export function mapAdminDashboardOverviewResponse(data) {
         ? null
         : Number(data.autoRefreshSeconds),
     summary: KPI_STRIP.map(({ key, label, tone }) => ({
+      key,
       value: formatCount(kpis[key]),
       label,
       ...(tone ? { tone } : {}),

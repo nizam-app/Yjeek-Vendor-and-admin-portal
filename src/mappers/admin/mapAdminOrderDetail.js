@@ -104,6 +104,7 @@ function mapOrderIncidents(incidents) {
         meta: [
           item.cause ? humanizeAdminStatus(item.cause) : null,
           item.createdAt ? formatClock(item.createdAt) : null,
+          item.resolvedByName ? `resolved by ${item.resolvedByName}` : null,
           item.resolvedAt ? `resolved ${formatClock(item.resolvedAt)}` : null,
         ]
           .filter(Boolean)

@@ -27,6 +27,7 @@ import {
   mapAdminFleetNotifyResponse,
   mapAdminFleetNotifyHistoryResponse,
 } from '../../mappers/admin/mapAdminFleet'
+import { adminStoreTypeService } from './storeTypeService'
 
 function useFleetRealApi() {
   return isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
@@ -93,12 +94,21 @@ export const adminFleetService = {
       ? this.getFleetSummary(options).catch(() => ({ data: null, meta: null }))
       : Promise.resolve({ data: null, meta: null })
 
-    const [listResponse, summaryResult] = await Promise.all([listPromise, summaryPromise])
+    const storeTypesPromise = adminStoreTypeService
+      .listStoreTypesForChampForm(options)
+      .catch(() => ({ data: { storeTypes: [] }, meta: null }))
+
+    const [listResponse, summaryResult, storeTypesResult] = await Promise.all([
+      listPromise,
+      summaryPromise,
+      storeTypesPromise,
+    ])
 
     return {
       data: mapAdminFleetChampsListResponse(
         listResponse?.data,
         summaryResult?.data?.stats || null,
+        storeTypesResult?.data?.storeTypes || [],
       ),
       meta: listResponse?.meta ?? null,
     }
@@ -440,6 +450,60 @@ export const adminFleetService = {
 
     return {
       data: mapAdminCreateSupplierResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Deactivate supplier and suspend active champs under it.
+   * Confirmed: POST /admin/fleet/suppliers/:supplierId/deactivate
+   */
+  async deactivateSupplier(supplierId, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to deactivate a supplier.')
+    }
+
+    const id = String(supplierId || '').trim()
+    if (!id) {
+      throw new Error('Supplier id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.admin.fleet.supplierDeactivate(id), null, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Reactivate supplier and restore champs suspended by supplier deactivation.
+   * Confirmed: POST /admin/fleet/suppliers/:supplierId/activate
+   */
+  async activateSupplier(supplierId, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to activate a supplier.')
+    }
+
+    const id = String(supplierId || '').trim()
+    if (!id) {
+      throw new Error('Supplier id is required.')
+    }
+
+    const response = await apiClient.post(endpoints.admin.fleet.supplierActivate(id), null, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    return {
+      data: response?.data ?? null,
       meta: response?.meta ?? null,
     }
   },

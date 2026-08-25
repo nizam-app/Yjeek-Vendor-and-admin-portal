@@ -6,6 +6,8 @@ import {
 import { mapWizardHoursToOpeningHours } from './mapAdminVendorBranches'
 import { mapAdminStaffPermissionsToApi } from './mapAdminVendorStaff'
 
+export { requiresServiceSubTypeSelection } from './taxonomyHelpers'
+
 const SERVICE_MODE_UI_TO_API = {
   'Hot food · on demand': 'hotFoodOnDemand',
   'Dine-in': 'dineIn',
@@ -231,12 +233,7 @@ function mapServiceModes(selectedModes = []) {
     if (key) serviceModes[key] = true
   }
 
-  // Sensible default if nothing selected
-  if (!Object.values(serviceModes).some(Boolean)) {
-    serviceModes.hotFoodOnDemand = true
-    serviceModes.pickup = true
-  }
-
+  // Do not invent modes when none selected — admin toggles are authoritative (Rule 10).
   return serviceModes
 }
 
@@ -296,6 +293,9 @@ function mapSla(form = {}, selectedModes = [], slaConfigs = {}) {
  * @param {array} [input.serviceModes]
  * @param {object} [input.slaConfigs]
  * @param {boolean} [input.activate]
+ * @param {boolean} [input.submitForApproval]
+ * @param {boolean} [input.isCustomerVisible]
+ * @param {boolean} [input.isOnline]
  */
 export function mapAdminCreateVendorRequest(input = {}) {
   const {
@@ -307,6 +307,9 @@ export function mapAdminCreateVendorRequest(input = {}) {
     serviceModes = [],
     slaConfigs = {},
     activate = false,
+    submitForApproval = false,
+    isCustomerVisible,
+    isOnline,
   } = input
 
   const name = trim(form.storeName || form.name)
@@ -353,6 +356,8 @@ export function mapAdminCreateVendorRequest(input = {}) {
     storeTypeId,
     catalogIds: catalogIds.length ? catalogIds : undefined,
     subcategoryId: subcategoryId || undefined,
+    storeSubTypeId: trim(form.storeSubTypeId) || undefined,
+    serviceSubTypeId: trim(form.serviceSubTypeId) || undefined,
     categoryLabel,
     description: trim(form.description) || undefined,
     logoUrl: trim(form.logoUrl) || undefined,
@@ -373,6 +378,9 @@ export function mapAdminCreateVendorRequest(input = {}) {
     commission: mapCommission(form, { customFees, commissionTiers }),
     sla: mapSla(form, serviceModes, slaConfigs),
     activate: Boolean(activate),
+    submitForApproval: Boolean(submitForApproval) && !activate,
+    ...(typeof isCustomerVisible === 'boolean' ? { isCustomerVisible } : {}),
+    ...(typeof isOnline === 'boolean' ? { isOnline } : {}),
   }
 
   // Drop undefined keys at top level

@@ -71,6 +71,7 @@ export function mapAdminChatsResponse(data) {
 
   return {
     active: Number(data.active) || items.length,
+    unreadTotal: Number(data.unreadTotal) || items.reduce((sum, item) => sum + (Number(item.unreadCount) || 0), 0),
     items,
   }
 }

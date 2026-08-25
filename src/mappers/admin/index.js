@@ -100,6 +100,8 @@ export {
   mapAdminVendorBranchesResponse,
   mapOpeningHoursToWizardHours,
   mapWizardHoursToOpeningHours,
+  mapUiTimeTo24h,
+  map24hToUiTime,
 } from './mapAdminVendorBranches'
 export {
   mapAdminCreateStaffRequest,

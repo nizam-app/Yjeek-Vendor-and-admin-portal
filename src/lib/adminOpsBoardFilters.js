@@ -99,6 +99,29 @@ export function flattenOpsBoardOrders(columns) {
   ))
 }
 
+/**
+ * Filter board columns by selected vendor ids.
+ * Empty selection = All vendors.
+ * @param {Array<{ orders?: unknown[], count?: number, [key: string]: unknown }>} columns
+ * @param {string[]} vendorIds
+ */
+export function filterOpsBoardVendors(columns, vendorIds) {
+  const list = Array.isArray(columns) ? columns : []
+  const selected = (Array.isArray(vendorIds) ? vendorIds : []).map(String).filter(Boolean)
+  if (!selected.length) return list
+  const allowed = new Set(selected)
+
+  return list.map((column) => {
+    const orders = (Array.isArray(column.orders) ? column.orders : [])
+      .filter((order) => allowed.has(String(order?.vendorId || '')))
+    return {
+      ...column,
+      orders,
+      count: orders.length,
+    }
+  })
+}
+
 function initialsFromName(name) {
   const parts = String(name || '')
     .trim()

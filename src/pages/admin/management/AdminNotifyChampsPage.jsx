@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { Badge } from '../../../components/admin/Badge'
+import { AdminDatePicker } from '../../../components/admin/AdminDatePicker'
+import { AdminFormMultiSelect } from '../../../components/admin/AdminFormMultiSelect'
 import { cn } from '../../../components/admin/cn'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
@@ -88,10 +90,36 @@ function statusTone(statusKey) {
   return 'green'
 }
 
-function defaultScheduledAtLocal() {
+function defaultScheduleFields() {
   const d = new Date(Date.now() + 60 * 60 * 1000)
   const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+
+function buildScheduledAt(dateValue, timeValue) {
+  const dateRaw = String(dateValue || '').trim()
+  const timeRaw = String(timeValue || '').trim()
+  if (!dateRaw || !timeRaw) return ''
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
+    const iso = new Date(`${dateRaw}T${timeRaw}:00`)
+    if (!Number.isNaN(iso.getTime())) return iso.toISOString()
+  }
+
+  const parsed = new Date(`${dateRaw} ${timeRaw}`)
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
+  return ''
+}
+
+function openTimePicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    // Older browsers rely on native click.
+  }
 }
 
 export default function AdminNotifyChampsPage() {
@@ -100,8 +128,8 @@ export default function AdminNotifyChampsPage() {
   const goBack = () => navigate('/admin/fleet')
 
   const [audience, setAudience] = useState('Online')
-  const [category, setCategory] = useState('Food')
-  const [zone, setZone] = useState('Adliya')
+  const [categories, setCategories] = useState([])
+  const [zones, setZones] = useState([])
   const [champIdsText, setChampIdsText] = useState('')
   const [messageType, setMessageType] = useState('Incentive')
   const [title, setTitle] = useState('Peak hour bonus active!')
@@ -109,7 +137,8 @@ export default function AdminNotifyChampsPage() {
   const [push, setPush] = useState(true)
   const [sms, setSms] = useState(false)
   const [schedule, setSchedule] = useState('Send now')
-  const [scheduledAt, setScheduledAt] = useState(defaultScheduledAtLocal)
+  const [scheduleDate, setScheduleDate] = useState(() => defaultScheduleFields().date)
+  const [scheduleTime, setScheduleTime] = useState(() => defaultScheduleFields().time)
 
   const [estimated, setEstimated] = useState(null)
   const [estimateLoading, setEstimateLoading] = useState(false)
@@ -123,14 +152,26 @@ export default function AdminNotifyChampsPage() {
   const [sendError, setSendError] = useState('')
   const [sendSuccess, setSendSuccess] = useState('')
 
+  const [storeTypeOptions, setStoreTypeOptions] = useState([])
+  const [storeTypesLoading, setStoreTypesLoading] = useState(false)
+  const [storeTypesError, setStoreTypesError] = useState('')
+  const [zoneOptions, setZoneOptions] = useState([])
+  const [zonesLoading, setZonesLoading] = useState(false)
+  const [zonesError, setZonesError] = useState('')
+
   const estimatePayload = useMemo(
     () => ({
       audience,
-      category,
-      zone,
+      categories,
+      zones,
       champIdsText,
     }),
-    [audience, category, zone, champIdsText],
+    [audience, categories, zones, champIdsText],
+  )
+
+  const scheduledAt = useMemo(
+    () => (schedule === 'Schedule later' ? buildScheduledAt(scheduleDate, scheduleTime) : ''),
+    [schedule, scheduleDate, scheduleTime],
   )
 
   const formPayload = useMemo(
@@ -173,8 +214,74 @@ export default function AdminNotifyChampsPage() {
 
   useEffect(() => {
     if (!useRealFleet) {
+      setStoreTypeOptions([])
+      setZoneOptions([])
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadAudienceOptions() {
+      setStoreTypesLoading(true)
+      setZonesLoading(true)
+      setStoreTypesError('')
+      setZonesError('')
+
+      try {
+        const [storeTypesResult, usersMetaResult] = await Promise.all([
+          adminService.listAdminStoreTypesForChampForm(),
+          adminService.getAdminUsersMeta(),
+        ])
+        if (cancelled) return
+
+        const storeTypes = (storeTypesResult?.data?.storeTypes || []).map((item) => ({
+          id: String(item.slug || item.id),
+          label: String(item.name || item.slug || item.id),
+        }))
+        setStoreTypeOptions(storeTypes)
+
+        const coverageZones = (usersMetaResult?.data?.zones || []).map((item) => ({
+          id: String(item.id || item.name || item),
+          label: String(item.name || item.id || item),
+        }))
+        setZoneOptions(coverageZones)
+      } catch (err) {
+        if (cancelled) return
+        const message = formatApiErrorMessage(err, 'Failed to load audience options.')
+        setStoreTypesError(message)
+        setZonesError(message)
+        setStoreTypeOptions([])
+        setZoneOptions([])
+      } finally {
+        if (!cancelled) {
+          setStoreTypesLoading(false)
+          setZonesLoading(false)
+        }
+      }
+    }
+
+    loadAudienceOptions()
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealFleet])
+
+  useEffect(() => {
+    if (!useRealFleet) {
       setEstimated(null)
       setEstimateError('')
+      return undefined
+    }
+
+    const needsCategories = audience === 'By category' && categories.length === 0
+    const needsZones = audience === 'By zone' && zones.length === 0
+    const needsChampIds = audience === 'Selected' && !champIdsText.trim()
+
+    if (needsCategories || needsZones || needsChampIds) {
+      setEstimated(null)
+      setEstimateError('')
+      setEstimateLoading(false)
       return undefined
     }
 
@@ -199,7 +306,7 @@ export default function AdminNotifyChampsPage() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [useRealFleet, estimatePayload])
+  }, [useRealFleet, estimatePayload, audience, categories, zones, champIdsText])
 
   const handleSend = async () => {
     setSendError('')
@@ -271,27 +378,43 @@ export default function AdminNotifyChampsPage() {
             <Segmented options={AUDIENCE_OPTIONS} value={audience} onChange={setAudience} />
 
             {audience === 'By category' ? (
-              <label className="mt-4 block">
+              <div className="mt-4">
                 <span className={labelClass}>Category</span>
-                <input
-                  className={inputClass}
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  placeholder="e.g. Food"
+                <AdminFormMultiSelect
+                  className="mt-1.5"
+                  options={storeTypeOptions}
+                  selectedIds={categories}
+                  onChange={setCategories}
+                  placeholder="Select store types"
+                  searchPlaceholder="Search store types…"
+                  loading={storeTypesLoading}
+                  disabled={!useRealFleet}
+                  emptyLabel="No store types from Store Management."
                 />
-              </label>
+                {storeTypesError ? (
+                  <p className="mt-1 text-[12px] text-[#b42318]">{storeTypesError}</p>
+                ) : null}
+              </div>
             ) : null}
 
             {audience === 'By zone' ? (
-              <label className="mt-4 block">
+              <div className="mt-4">
                 <span className={labelClass}>Zone</span>
-                <input
-                  className={inputClass}
-                  value={zone}
-                  onChange={(e) => setZone(e.target.value)}
-                  placeholder="e.g. Adliya"
+                <AdminFormMultiSelect
+                  className="mt-1.5"
+                  options={zoneOptions}
+                  selectedIds={zones}
+                  onChange={setZones}
+                  placeholder="Select zones"
+                  searchPlaceholder="Search zones…"
+                  loading={zonesLoading}
+                  disabled={!useRealFleet}
+                  emptyLabel="No zones in country coverage."
                 />
-              </label>
+                {zonesError ? (
+                  <p className="mt-1 text-[12px] text-[#b42318]">{zonesError}</p>
+                ) : null}
+              </div>
             ) : null}
 
             {audience === 'Selected' ? (
@@ -352,15 +475,28 @@ export default function AdminNotifyChampsPage() {
             </div>
 
             {schedule === 'Schedule later' ? (
-              <label className="mt-3 block">
-                <span className={labelClass}>Send at</span>
-                <input
-                  type="datetime-local"
-                  className={inputClass}
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                />
-              </label>
+              <div className="mt-3 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
+                <div className="min-w-0">
+                  <span className={labelClass}>Date</span>
+                  <AdminDatePicker
+                    className="mt-1.5"
+                    value={scheduleDate}
+                    onChange={setScheduleDate}
+                    placeholder="DD/MM/YYYY"
+                  />
+                </div>
+                <label className="block min-w-0">
+                  <span className={labelClass}>Time</span>
+                  <input
+                    type="time"
+                    className={cn(inputClass, 'mt-1.5 cursor-pointer')}
+                    value={scheduleTime}
+                    onClick={openTimePicker}
+                    onFocus={openTimePicker}
+                    onChange={(event) => setScheduleTime(event.target.value)}
+                  />
+                </label>
+              </div>
             ) : null}
           </Card>
         </div>

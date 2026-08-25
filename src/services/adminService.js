@@ -50,6 +50,9 @@ export const adminService = {
   listAdminStoreTypes(options = {}) {
     return adminStoreTypeService.listStoreTypes(options)
   },
+  listAdminStoreTypesForChampForm(options = {}) {
+    return adminStoreTypeService.listStoreTypesForChampForm(options)
+  },
   getAdminStoreType(storeTypeId, options = {}) {
     return adminStoreTypeService.getStoreType(storeTypeId, options)
   },
@@ -100,6 +103,12 @@ export const adminService = {
   },
   updateAdminFleetSupplier(supplierId, form, options = {}) {
     return adminFleetService.updateSupplier(supplierId, form, options)
+  },
+  deactivateAdminFleetSupplier(supplierId, options = {}) {
+    return adminFleetService.deactivateSupplier(supplierId, options)
+  },
+  activateAdminFleetSupplier(supplierId, options = {}) {
+    return adminFleetService.activateSupplier(supplierId, options)
   },
   createAdminFleetChamp(form, options = {}) {
     return adminFleetService.createChamp(form, options)
@@ -203,8 +212,14 @@ export const adminService = {
   activateVendor(vendorId, options = {}) {
     return adminVendorService.activateVendor(vendorId, options)
   },
+  updateVendorStoreControls(vendorId, controls, options = {}) {
+    return adminVendorService.updateVendorStoreControls(vendorId, controls, options)
+  },
   listSlaModels(options = {}) {
     return adminVendorService.listSlaModels(options)
+  },
+  getSlaModel(slaModelId, options = {}) {
+    return adminSlaModelsService.getById(slaModelId, options)
   },
   getSlaModelsPage(options = {}) {
     return adminSlaModelsService.getForPage(options)
@@ -340,6 +355,12 @@ export const adminService = {
   },
   listAdminVendorNotificationHistory(options = {}) {
     return adminMarketingService.listVendorNotificationHistory(options)
+  },
+  getAdminMarketingNotifyMeta(options = {}) {
+    return adminMarketingService.getNotifyMeta(options)
+  },
+  estimateAdminVendorNotification(form, options = {}) {
+    return adminMarketingService.estimateVendorNotification(form, options)
   },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)

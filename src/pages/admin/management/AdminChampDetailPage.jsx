@@ -154,7 +154,7 @@ export default function AdminChampDetailPage() {
     } catch (err) {
       if (nextOnline && isPodCashOutstandingError(err)) {
         setActionError(
-          `Outstanding POD cash (${data.cod}). Reconcile POD cash below, then ask the champ to go online from the driver app.`,
+          `Could not set online: daily cash limit reached (${data.cod} of ${data.cashLimit}). Reconcile POD cash, or retry — admin override should still work if the limit is not actually reached.`,
         )
       } else {
         setActionError(
@@ -415,10 +415,12 @@ export default function AdminChampDetailPage() {
                 </span>
               </div>
 
-              {data.hasOutstandingPod ? (
+              {data.cashLimitReached ? (
                 <div className="mt-3.5 rounded-[10px] border border-[#f3e0b8] bg-[#fff8ec] px-3.5 py-3">
                   <p className="text-[12px] leading-[16px] font-medium text-[#9a6b12]">
-                    Outstanding POD cash is blocking go-online. Reconcile after banking collected cash.
+                    Daily cash limit reached ({data.cod} of {data.cashLimit}). The champ cannot go
+                    online from the driver app until cash is reconciled. As admin, you can still set
+                    them online here or use Reconcile POD cash.
                   </p>
                   <button
                     type="button"
@@ -429,18 +431,7 @@ export default function AdminChampDetailPage() {
                     Reconcile POD cash
                   </button>
                 </div>
-              ) : (
-                <div className="mt-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setReconcileOpen(true)}
-                    disabled={Boolean(actionBusy)}
-                    className="inline-flex h-[36px] items-center justify-center rounded-full border border-[#dfe4e0] bg-white px-4 text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Reconcile POD cash
-                  </button>
-                </div>
-              )}
+              ) : null}
 
               <div className="mt-5 flex flex-col gap-2.5">
                 {isTerminated ? (

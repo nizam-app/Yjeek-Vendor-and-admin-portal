@@ -270,8 +270,12 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
         message: 'Pick a date & time for Schedule later, or choose Send now.',
       })
     }
+    const parsed = new Date(when)
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      throw new ApiError({ message: 'Scheduled time must be in the future.' })
+    }
     schedule = 'later'
-    scheduledAt = when
+    scheduledAt = parsed.toISOString()
   } else if (scheduleUi) {
     schedule = scheduleUi
   }
@@ -334,10 +338,107 @@ export function mapVendorNotificationAudienceToApi(audience) {
   return raw.replace(/\s+/g, '_')
 }
 
+const VENDOR_STATUS_UI_TO_API = {
+  Active: 'active',
+  active: 'active',
+  Inactive: 'inactive',
+  inactive: 'inactive',
+  Suspended: 'suspended',
+  suspended: 'suspended',
+}
+
+/**
+ * Map Send vendor notification / estimate form → marketing audience fields.
+ */
+export function mapAdminVendorNotificationAudienceFields(form = {}) {
+  const audience = mapVendorNotificationAudienceToApi(form.audience)
+  const vendorIds = Array.isArray(form.vendorIds)
+    ? form.vendorIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : []
+  const categoryId = String(form.categoryId || '').trim()
+  const categoryLabel = String(form.categoryLabel || form.category || '').trim()
+  const vendorStatus =
+    VENDOR_STATUS_UI_TO_API[form.vendorStatus] ||
+    VENDOR_STATUS_UI_TO_API[String(form.vendorStatus || '').trim()] ||
+    String(form.vendorStatus || '').trim().toLowerCase() ||
+    ''
+
+  if (audience === 'selected' && !vendorIds.length) {
+    throw new ApiError({ message: 'Add at least one vendor id for Selected.' })
+  }
+  if (audience === 'by_category' && !categoryId && !categoryLabel) {
+    throw new ApiError({ message: 'Select a category for By category.' })
+  }
+  if (audience === 'by_status' && !['active', 'inactive', 'suspended'].includes(vendorStatus)) {
+    throw new ApiError({ message: 'Select a status for By status.' })
+  }
+
+  const payload = {
+    target: 'vendor',
+    audience,
+  }
+  if (audience === 'selected') payload.vendorIds = vendorIds
+  if (audience === 'by_category') {
+    if (categoryId) payload.categoryId = categoryId
+    if (categoryLabel) payload.categoryLabel = categoryLabel
+  }
+  if (audience === 'by_status') payload.vendorStatus = vendorStatus
+
+  return payload
+}
+
+/**
+ * Map vendor audience form → POST /admin/marketing/notifications/estimate body.
+ */
+export function mapAdminEstimateVendorNotificationRequest(form = {}) {
+  return mapAdminVendorNotificationAudienceFields(form)
+}
+
+/**
+ * Map POST /admin/marketing/notifications/estimate → UI.
+ */
+export function mapAdminEstimateNotificationResponse(data) {
+  return {
+    target: data?.target || null,
+    audience: data?.audience || null,
+    audienceLabel: data?.audienceLabel || null,
+    estimatedRecipients:
+      typeof data?.estimatedRecipients === 'number' ? data.estimatedRecipients : 0,
+  }
+}
+
+/**
+ * Map GET /admin/marketing/notifications/meta → UI option lists.
+ */
+export function mapAdminMarketingNotifyMetaResponse(data) {
+  const vendor = data?.vendor && typeof data.vendor === 'object' ? data.vendor : {}
+  const categories = (Array.isArray(vendor.categories) ? vendor.categories : [])
+    .map((item) => ({
+      id: String(item?.id || ''),
+      name: String(item?.name || item?.slug || ''),
+      slug: item?.slug ? String(item.slug) : null,
+    }))
+    .filter((item) => item.id && item.name)
+
+  const statuses = (Array.isArray(vendor.statuses) ? vendor.statuses : ['active', 'inactive', 'suspended'])
+    .map((value) => {
+      const key = String(value || '').toLowerCase()
+      if (key === 'inactive') return { value: 'inactive', label: 'Inactive' }
+      if (key === 'suspended') return { value: 'suspended', label: 'Suspended' }
+      return { value: 'active', label: 'Active' }
+    })
+
+  return {
+    categories,
+    statuses,
+    raw: data,
+  }
+}
+
 /**
  * Map Send vendor notification form → POST /admin/marketing/notifications body.
  * Confirmed:
- *   { target, audience, vendorIds?, type, title, body, push, email, schedule }
+ *   { target, audience, vendorIds?, categoryId?, vendorStatus?, type, title, body, push, email, sms, schedule }
  */
 export function mapAdminSendVendorNotificationRequest(form = {}) {
   const title = String(form.title || '').trim()
@@ -350,14 +451,7 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
     throw new ApiError({ message: 'Notification body is required.' })
   }
 
-  const audience = mapVendorNotificationAudienceToApi(form.audience)
-  const vendorIds = Array.isArray(form.vendorIds)
-    ? form.vendorIds.map((id) => String(id || '').trim()).filter(Boolean)
-    : []
-
-  if (audience === 'selected' && !vendorIds.length) {
-    throw new ApiError({ message: 'Add at least one vendor id for Selected.' })
-  }
+  const audiencePayload = mapAdminVendorNotificationAudienceFields(form)
 
   const scheduleUi = String(form.schedule || 'Send now').trim().toLowerCase()
   let schedule = 'now'
@@ -371,15 +465,18 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
         message: 'Pick a date & time for Schedule later, or choose Send now.',
       })
     }
+    const parsed = new Date(when)
+    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+      throw new ApiError({ message: 'Scheduled time must be in the future.' })
+    }
     schedule = 'later'
-    scheduledAt = when
+    scheduledAt = parsed.toISOString()
   } else if (scheduleUi) {
     schedule = scheduleUi
   }
 
   const payload = {
-    target: 'vendor',
-    audience,
+    ...audiencePayload,
     type: String(form.type || form.messageType || 'Promo').trim() || 'Promo',
     title,
     body: bodyText,
@@ -389,10 +486,6 @@ export function mapAdminSendVendorNotificationRequest(form = {}) {
     schedule,
   }
   if (scheduledAt) payload.scheduledAt = scheduledAt
-
-  if (audience === 'selected') {
-    payload.vendorIds = vendorIds
-  }
 
   return payload
 }
@@ -432,16 +525,77 @@ export function mapAdminVendorNotificationHistoryRow(item) {
   }
 }
 
-export function formatMarketingNotifySendSuccess(title, options = {}) {
-  const heading = `Sent: ${title || 'Notification'}`
-  if (options.email !== true) return heading
+function formatScheduledWhen(value) {
+  if (!value) return null
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return null
+  const day = date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  const time = date.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  return `${day}, ${time}`
+}
 
-  const delivery = options.emailDelivery || {}
-  const delivered = Number(delivery.delivered || 0)
-  const failed = Number(delivery.failed || 0)
-  const skipped = Number(delivery.skippedNoEmail || 0)
-  const parts = [`email ${delivered} delivered`]
-  if (skipped) parts.push(`${skipped} skipped (no email)`)
-  if (failed) parts.push(`${failed} failed`)
+function recipientLabel(count, target) {
+  const n = Number(count)
+  if (!Number.isFinite(n) || n < 0) return null
+  if (target === 'vendor') return `${n} vendor${n === 1 ? '' : 's'}`
+  if (target === 'customer') return `${n} customer${n === 1 ? '' : 's'}`
+  return `${n} recipient${n === 1 ? '' : 's'}`
+}
+
+export function formatMarketingNotifySendSuccess(title, options = {}) {
+  const heading = options.scheduled
+    ? `Scheduled: ${title || 'Notification'}`
+    : `Sent: ${title || 'Notification'}`
+
+  if (options.scheduled) {
+    const parts = []
+    const when = formatScheduledWhen(options.scheduledAt)
+    if (when) parts.push(`for ${when}`)
+    const recipients = recipientLabel(options.sentTo, options.target)
+    if (recipients) parts.push(recipients)
+    const channels = []
+    if (options.push !== false) channels.push('Push')
+    if (options.email === true) channels.push('Email')
+    if (options.sms === true) channels.push('SMS')
+    if (channels.length) parts.push(channels.join(' · '))
+    if (!parts.length) return heading
+    return `${heading} · ${parts.join(' · ')}`
+  }
+
+  const parts = []
+
+  if (options.push !== false && options.email !== true && options.sms !== true) {
+    parts.push('push sent')
+  }
+
+  if (options.email === true) {
+    const delivery = options.emailDelivery || {}
+    const delivered = Number(delivery.delivered || 0)
+    const failed = Number(delivery.failed || 0)
+    const skipped = Number(delivery.skippedNoEmail || 0)
+    parts.push(`email ${delivered} delivered`)
+    if (skipped) parts.push(`${skipped} skipped (no email)`)
+    if (failed) parts.push(`${failed} failed`)
+  }
+
+  if (options.sms === true) {
+    const delivery = options.smsDelivery || {}
+    const delivered = Number(delivery.delivered || 0)
+    const failed = Number(delivery.failed || 0)
+    const skipped = Number(delivery.skippedNoPhone || 0)
+    parts.push(`SMS ${delivered} delivered`)
+    if (skipped) parts.push(`${skipped} skipped (no phone)`)
+    if (failed) parts.push(`${failed} failed`)
+  }
+
+  if (!parts.length) return heading
   return `${heading} · ${parts.join(', ')}`
 }

@@ -11,13 +11,23 @@ import { Button } from '../../../components/admin/Button'
 import { cn } from '../../../components/admin/cn'
 import { ChatStrip } from '../../../components/admin/operations/ChatStrip'
 import { IncidentLog } from '../../../components/admin/operations/IncidentLog'
+import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { OperationsViewTabs } from '../../../components/admin/operations/OperationsViewTabs'
 import { OrderCard } from '../../../components/admin/operations/OrderCard'
 import {
+  ADMIN_BOARD_FULL_LIMIT,
   ADMIN_BOARD_PREVIEW_LIMIT,
 } from '../../../lib/adminBoardLimits'
 import { emptyAdminScheduledCalendar } from '../../../mappers/admin/mapAdminScheduledCalendar'
 import { AdminOrderDetailModal } from './AdminLiveOrdersPage'
+import { AdminScheduledBoardFilterBar } from '../../../components/admin/operations/AdminScheduledBoardFilterBar'
+import {
+  EMPTY_SCHEDULED_BOARD_QUERY,
+  filterScheduledOrders,
+  parseScheduledBoardQuery,
+  scheduledBoardQueryIsActive,
+  writeScheduledBoardQuery,
+} from '../../../lib/adminScheduledBoardQuery'
 
 const useAdminMocks = () => apiConfig.adminUseMockApi
 
@@ -48,15 +58,35 @@ function boardToneForOrder(order) {
   return 'green'
 }
 
+function looksLikeTimer(value) {
+  const text = String(value || '').trim()
+  if (!text || text.length > 28) return false
+  return /\d+\s*(m|h|min|mins|hr|hrs)\b/i.test(text)
+}
+
+function extraBadgeTone(label) {
+  if (/declin|expir|cancel|fail/i.test(label)) return 'red'
+  if (/paid|ready|dispatch/i.test(label)) return 'green'
+  if (/await|payment|vendor/i.test(label)) return 'blue'
+  return 'gray'
+}
+
 function mapScheduledOrderToBoardRow(order) {
   if (!order) return null
   const type = order.deliverySpeedLabel
     || order.tags?.find((tag) => ['Same Day', 'Next Day', 'Economy', 'Standard'].includes(tag))
     || order.category
     || '—'
-  const stage = order.column === 'new'
-    ? `New · ${order.statusLabel || order.payment || '—'}`
-    : (COLUMN_STAGE_LABEL[order.column] || order.statusLabel || '—')
+  const pipeline = COLUMN_STAGE_LABEL[order.column] || 'New'
+  const extras = String(order.statusLabel || order.payment || '')
+    .split(/\s*[·•|]\s*/)
+    .map((part) => part.trim())
+    .filter((part) => part && part !== '—' && part.toLowerCase() !== pipeline.toLowerCase())
+  const rawTimer = order.timeLeftLabel || order.timer || ''
+  const timer = looksLikeTimer(rawTimer) ? rawTimer : (looksLikeTimer(order.timeLeftLabel) ? order.timeLeftLabel : '')
+  const note = !looksLikeTimer(order.timer) && order.timer && order.timer !== timer
+    ? String(order.timer)
+    : ''
 
   return {
     id: order.id,
@@ -66,8 +96,10 @@ function mapScheduledOrderToBoardRow(order) {
     prep: order.prep || '—',
     window: order.slot || order.windowLabel || '—',
     champ: order.champ || '—',
-    stage,
-    timer: order.timer || order.timeLeftLabel || '—',
+    stage: pipeline,
+    stageExtras: extras,
+    note,
+    timer,
     tone: boardToneForOrder(order),
   }
 }
@@ -77,6 +109,7 @@ function AdminOperationsBoard({ mode }) {
   const viewParamRaw = searchParams.get('view')
   const viewParam = normalizeScheduledView(viewParamRaw)
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [selectedIncident, setSelectedIncident] = useState(null)
   const [view, setView] = useState(() => (
     mode === 'scheduled' && viewParam
       ? viewParam
@@ -93,13 +126,35 @@ function AdminOperationsBoard({ mode }) {
   const onViewChange = (next) => {
     setView(next)
     if (mode === 'scheduled') {
-      setSearchParams(next === 'Pipeline' ? {} : { view: next }, { replace: true })
+      setSearchParams((prev) => {
+        const params = new URLSearchParams(prev)
+        if (next === 'Pipeline') params.delete('view')
+        else params.set('view', next)
+        return params
+      }, { replace: true })
     }
+  }
+
+  const boardQuery = useMemo(
+    () => (mode === 'scheduled' ? parseScheduledBoardQuery(searchParams) : EMPTY_SCHEDULED_BOARD_QUERY),
+    [mode, searchParams],
+  )
+
+  function patchBoardQuery(nextQuery) {
+    setSearchParams((prev) => writeScheduledBoardQuery(prev, nextQuery), { replace: true })
+  }
+
+  function clearBoardQuery() {
+    setSearchParams((prev) => {
+      const params = writeScheduledBoardQuery(prev, { ...EMPTY_SCHEDULED_BOARD_QUERY, dates: [] })
+      params.set('date', 'all')
+      return params
+    }, { replace: true })
   }
 
   const { data, error, isLoading, refetch } = useAdminScheduledBoard({
     sort: 'time_left',
-    limit: 50,
+    limit: ADMIN_BOARD_FULL_LIMIT,
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
@@ -112,6 +167,12 @@ function AdminOperationsBoard({ mode }) {
   const title = mode === 'scheduled'
     ? (view === 'Board' ? 'Scheduled orders — dispatch' : view === 'Calendar' ? 'Scheduled Orders · Dispatching' : 'Scheduled orders — pipeline')
     : `${mode[0].toUpperCase()}${mode.slice(1).replace('-', ' ')} — live operations`
+
+  const filteredOrders = useMemo(() => {
+    const list = Array.isArray(data?.orders) ? data.orders : []
+    return mode === 'scheduled' ? filterScheduledOrders(list, boardQuery) : list
+  }, [mode, data?.orders, boardQuery])
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   return (
@@ -124,10 +185,15 @@ function AdminOperationsBoard({ mode }) {
       {view === 'Board' && mode === 'scheduled' ? (
         <ScheduledDispatchBoard
           data={data}
+          orders={filteredOrders}
+          query={boardQuery}
+          onQueryChange={patchBoardQuery}
+          onQueryClear={clearBoardQuery}
           incidents={incidents}
           incidentCountLabel={incidentCountLabel}
           view={view}
           onViewChange={onViewChange}
+          onIncidentClick={setSelectedIncident}
         />
       ) : view === 'Calendar' && mode === 'scheduled' ? (
         <ScheduledCalendarDispatch view={view} onViewChange={onViewChange} />
@@ -136,12 +202,25 @@ function AdminOperationsBoard({ mode }) {
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <OperationsViewTabs view={view} onViewChange={onViewChange} />
             <span className="flex-1" />
-            <Button>Zone: All ▾</Button>
             <Button primary><Zap size={12} /> Auto-assign</Button>
           </div>
+          {mode === 'scheduled' ? (
+            <div className="mb-3">
+              <AdminScheduledBoardFilterBar
+                query={boardQuery}
+                onChange={patchBoardQuery}
+                onClear={clearBoardQuery}
+                orders={data.orders}
+              />
+            </div>
+          ) : (
+            <div className="mb-3 flex justify-end">
+              <Button>Zone: All ▾</Button>
+            </div>
+          )}
           <div className="grid grid-cols-4 gap-3 overflow-x-auto max-[1100px]:grid-cols-2 max-[650px]:grid-cols-1">
             {data.columns.map((column) => {
-              const cards = data.orders.filter((order) => order.column === column.key)
+              const cards = filteredOrders.filter((order) => order.column === column.key)
               const previewCards = cards.slice(0, ADMIN_BOARD_PREVIEW_LIMIT)
               const columnHref = mode === 'scheduled' ? `/admin/scheduled/${column.key}` : null
               return (
@@ -165,6 +244,13 @@ function AdminOperationsBoard({ mode }) {
                     )}
                   </div>
                   <div className="space-y-2">
+                    {previewCards.length === 0 ? (
+                      <p className="rounded-[9px] border border-dashed border-[#dfe4e0] bg-white px-2 py-8 text-center text-[10px] text-[#8a938c]">
+                        {mode === 'scheduled' && scheduledBoardQueryIsActive(boardQuery)
+                          ? 'No orders match'
+                          : 'No orders'}
+                      </p>
+                    ) : null}
                     {previewCards.map((order, index) => (
                       <OrderCard
                         key={`${column.key}-${order.id}-${index}`}
@@ -186,7 +272,7 @@ function AdminOperationsBoard({ mode }) {
               )
             })}
           </div>
-          <IncidentLog incidents={incidents} countLabel={incidentCountLabel} />
+          <IncidentLog incidents={incidents} countLabel={incidentCountLabel} onIncidentClick={setSelectedIncident} />
         </>
       )}
       {view === 'Calendar' && mode === 'scheduled' ? null : <ChatStrip chats={chats} activeCount={chatsActive} />}
@@ -195,6 +281,16 @@ function AdminOperationsBoard({ mode }) {
           order={selectedOrder}
           preference="scheduled"
           onClose={() => setSelectedOrder(null)}
+        />
+      ) : null}
+      {selectedIncident ? (
+        <AdminIncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => setSelectedIncident(null)}
+          onOpenOrder={(order) => {
+            setSelectedIncident(null)
+            setSelectedOrder(order)
+          }}
         />
       ) : null}
     </div>
@@ -776,23 +872,33 @@ const dispatchRows = [
 
 function ScheduledDispatchBoard({
   data,
+  orders: filteredOrders,
+  query,
+  onQueryChange,
+  onQueryClear,
   incidents: feedIncidents = [],
   incidentCountLabel = '0',
   view,
   onViewChange,
+  onIncidentClick,
 }) {
   const showMockChrome = useAdminMocks()
-  const apiRows = (Array.isArray(data?.orders) ? data.orders : [])
+  const sourceOrders = Array.isArray(filteredOrders)
+    ? filteredOrders
+    : (Array.isArray(data?.orders) ? data.orders : [])
+  const apiRows = sourceOrders
     .map(mapScheduledOrderToBoardRow)
     .filter(Boolean)
-  const rows = showMockChrome && apiRows.length === 0 ? dispatchRows : apiRows
+  const rows = showMockChrome && apiRows.length === 0 && !scheduledBoardQueryIsActive(query) ? dispatchRows : apiRows
   const incidents = Array.isArray(feedIncidents) ? feedIncidents : []
+  const filtersActive = scheduledBoardQueryIsActive(query)
+  const sourceCount = Array.isArray(data?.orders) ? data.orders.length : 0
 
-  const unassignedCount = apiRows.filter((row) => !row.champ || row.champ === '—').length
-  const reconfirmCount = (data?.orders || []).filter((order) => order.column === 'confirmation').length
-  const scheduledToday = Number(data?.counts?.all) || apiRows.length
+  const unassignedCount = sourceOrders.filter((order) => !order.champ || order.champ === '—').length
+  const reconfirmCount = sourceOrders.filter((order) => order.column === 'confirmation').length
+  const scheduledToday = sourceOrders.length
 
-  const snapshotRows = showMockChrome && apiRows.length === 0
+  const snapshotRows = showMockChrome && apiRows.length === 0 && !filtersActive
     ? [['Scheduled today', '18'], ['Unassigned', '5'], ['Re-confirm pending', '2']]
     : [
         ['Scheduled today', String(scheduledToday)],
@@ -801,19 +907,19 @@ function ScheduledDispatchBoard({
       ]
 
   const windowBuckets = new Map()
-  for (const order of data?.orders || []) {
+  for (const order of sourceOrders) {
     const key = order.slot || order.windowLabel
     if (!key) continue
     windowBuckets.set(key, (windowBuckets.get(key) || 0) + 1)
   }
-  const windowRows = showMockChrome && windowBuckets.size === 0
+  const windowRows = showMockChrome && windowBuckets.size === 0 && !filtersActive
     ? [['1–3 PM', '4 orders'], ['3–5 PM', '2 orders'], ['6–8 PM', '9 orders'], ['8–10 PM', '3 orders']]
     : Array.from(windowBuckets.entries()).map(([label, count]) => [
         label,
         `${count} order${count === 1 ? '' : 's'}`,
       ])
 
-  const champAvailable = showMockChrome && apiRows.length === 0 ? '12' : '—'
+  const champAvailable = showMockChrome && apiRows.length === 0 && !filtersActive ? '12' : '—'
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-3 max-[900px]:grid-cols-1">
@@ -821,54 +927,88 @@ function ScheduledDispatchBoard({
         <div className="mb-3 flex items-center gap-2">
           <OperationsViewTabs view={view} onViewChange={onViewChange} />
         </div>
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {['Date: Today', 'Type: All', 'Stage: All', 'Zone: All'].map((filter) => (
-            <Button key={filter} className="h-[29px] px-2.5">{filter}▾</Button>
-          ))}
-          <span className="flex-1" />
-          <Button primary className="h-[31px] px-4"><Zap size={11} /> Auto-assign</Button>
+        <div className="mb-3 flex flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <AdminScheduledBoardFilterBar
+              query={query}
+              onChange={onQueryChange}
+              onClear={onQueryClear}
+              orders={data?.orders}
+            />
+          </div>
+          <Button primary className="h-[31px] shrink-0 px-4"><Zap size={11} /> Auto-assign</Button>
         </div>
         <section className="overflow-hidden rounded-[10px] border border-[#dfe4e0] bg-white">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] table-fixed border-collapse text-left">
+            <table className="w-full min-w-[980px] border-collapse text-left">
               <colgroup>
-                <col className="w-[11%]" /><col className="w-[21%]" /><col className="w-[10%]" /><col className="w-[10%]" />
-                <col className="w-[15%]" /><col className="w-[11%]" /><col className="w-[19%]" /><col className="w-[3%]" />
+                <col className="w-[108px]" />
+                <col />
+                <col className="w-[108px]" />
+                <col className="w-[88px]" />
+                <col className="w-[132px]" />
+                <col className="w-[104px]" />
+                <col className="w-[240px]" />
+                <col className="w-[64px]" />
               </colgroup>
               <thead>
                 <tr className="h-[38px] border-b border-[#e8ebe9] bg-[#fafbfa] text-[8px] uppercase tracking-[.04em] text-[#8a948e]">
                   {['Order', 'Vendor → zone', 'Type', 'Prep', 'Window', 'Champ', 'Stage', ''].map((heading, index) => (
-                    <th key={`${heading}-${index}`} className="whitespace-nowrap px-3 font-medium">{heading}</th>
+                    <th
+                      key={`${heading}-${index}`}
+                      className={cn(
+                        'whitespace-nowrap px-3 font-medium',
+                        index === 6 && 'min-w-[220px]',
+                        index === 7 && 'w-16 px-2 text-right',
+                      )}
+                    >
+                      {heading}
+                    </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-[11px] text-[#78837c]">No scheduled board rows</td>
+                    <td colSpan={8} className="px-3 py-8 text-center text-[11px] text-[#78837c]">
+                      {filtersActive && sourceCount > 0 ? (
+                        <span>
+                          No orders match
+                          {onQueryClear ? (
+                            <>
+                              {' · '}
+                              <button type="button" onClick={onQueryClear} className="font-medium text-[#16854a] hover:underline">
+                                Clear all
+                              </button>
+                            </>
+                          ) : null}
+                        </span>
+                      ) : 'No scheduled board rows'}
+                    </td>
                   </tr>
                 ) : rows.map((order, index) => (
-                  <tr key={`${order.id}-${index}`} className="h-[54px] border-b border-[#edf0ee] last:border-0 hover:bg-[#fafcfa]">
-                    <td className="whitespace-nowrap px-3 text-[10px] font-bold">{order.id}</td>
-                    <td className="truncate px-3 text-[10px] font-semibold">{order.route}</td>
-                    <td className="px-3"><BoardTag>{order.type}</BoardTag></td>
-                    <td className="whitespace-nowrap px-3 text-[10px] text-[#566159]">{order.prep}</td>
-                    <td className="whitespace-nowrap px-3 text-[10px] font-medium">{order.window}</td>
-                    <td className="whitespace-nowrap px-3 text-[10px]">{order.champ}</td>
-                    <td className="px-3">
-                      <div className="flex items-center gap-1 whitespace-nowrap">
-                        <BoardStage tone={order.tone}>{order.stage}</BoardStage>
-                        <span className="inline-flex items-center gap-0.5 text-[8px] text-[#a66f13]"><Clock3 size={8} />{order.timer}</span>
-                      </div>
+                  <tr key={`${order.id}-${index}`} className="border-b border-[#edf0ee] last:border-0 hover:bg-[#fafcfa]">
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top text-[10px] font-bold">{order.id}</td>
+                    <td className="px-3 py-2.5 align-top text-[10px] font-semibold">
+                      <span className="block max-w-[220px] truncate" title={order.route}>{order.route}</span>
                     </td>
-                    <td className="px-1"><button type="button" className="text-[9px] font-medium text-[#16854a]">View</button></td>
+                    <td className="px-3 py-2.5 align-top"><BoardTag>{order.type}</BoardTag></td>
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top text-[10px] text-[#566159]">{order.prep}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top text-[10px] font-medium">{order.window}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 align-top text-[10px]">{order.champ}</td>
+                    <td className="overflow-hidden px-3 py-2.5 align-top">
+                      <BoardStageCell order={order} />
+                    </td>
+                    <td className="px-2 py-2.5 align-top text-right">
+                      <button type="button" className="whitespace-nowrap text-[9px] font-medium text-[#16854a]">View</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </section>
-        <IncidentLog incidents={incidents} countLabel={incidentCountLabel} />
+        <IncidentLog incidents={incidents} countLabel={incidentCountLabel} onIncidentClick={onIncidentClick} />
       </div>
 
       <aside className="space-y-3">
@@ -907,8 +1047,48 @@ function BoardStage({ children, tone }) {
     green: 'bg-[#e4f5e9] text-[#287a48]',
     blue: 'bg-[#e7f1fb] text-[#3575a7]',
     red: 'bg-[#fde9e9] text-[#c74747]',
+    gray: 'bg-[#f0f2f0] text-[#667169]',
   }
-  return <span className={cn('rounded-full px-2 py-0.5 text-[8px] font-medium', tones[tone])}>{children}</span>
+  return (
+    <span className={cn(
+      'inline-flex max-w-full shrink-0 items-center rounded-full px-2 py-0.5 text-[8px] font-medium leading-tight',
+      tones[tone] || tones.gray,
+    )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function BoardStageCell({ order }) {
+  const extras = Array.isArray(order.stageExtras)
+    ? order.stageExtras
+    : String(order.stage || '').split(/\s*·\s*/).slice(1).map((part) => part.trim()).filter(Boolean)
+  const pipeline = order.stage?.includes('·')
+    ? String(order.stage).split(/\s*·\s*/)[0]
+    : (order.stage || '—')
+  const note = order.note || ''
+  const timer = order.timer && order.timer !== '—' ? order.timer : ''
+
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-1">
+        <BoardStage tone={order.tone}>{pipeline}</BoardStage>
+        {extras.map((label) => (
+          <BoardStage key={label} tone={extraBadgeTone(label)}>{label}</BoardStage>
+        ))}
+      </div>
+      {note ? (
+        <p className="m-0 max-w-full break-words text-[8px] font-medium leading-snug text-[#c74747]">{note}</p>
+      ) : null}
+      {timer ? (
+        <span className="inline-flex min-w-0 items-center gap-0.5 text-[8px] leading-snug text-[#a66f13]">
+          <Clock3 size={8} className="shrink-0" />
+          <span className="min-w-0 break-words">{timer}</span>
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
 function DispatchSummary({ title, children }) {

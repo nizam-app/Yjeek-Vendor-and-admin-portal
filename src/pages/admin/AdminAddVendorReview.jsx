@@ -2,12 +2,43 @@ import { Check } from 'lucide-react'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
+function StatusToggle({ label, hint, checked, onChange }) {
+  return (
+    <div className="mt-4 flex items-center gap-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-bold text-[#17231c]">{label}</p>
+        <p className="mt-0.5 text-[12px] text-[#7c8780]">{hint}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => onChange?.(!checked)}
+        className={cn(
+          'relative h-[26px] w-[46px] shrink-0 rounded-full transition',
+          checked ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-[3px] h-[20px] w-[20px] rounded-full bg-white shadow transition',
+            checked ? 'left-[23px]' : 'left-[3px]',
+          )}
+        />
+      </button>
+    </div>
+  )
+}
+
 export default function AdminAddVendorReview({
   form,
   branches,
   users,
-  activateImmediately = true,
-  onActivateImmediatelyChange,
+  vendorVisible = true,
+  vendorActive = true,
+  onVendorVisibleChange,
+  onVendorActiveChange,
 }) {
   const branchNames = (branches || [])
     .map((branch) => String(branch.name || '').split('—')[0]?.trim() || branch.name)
@@ -16,6 +47,7 @@ export default function AdminAddVendorReview({
     .join(', ')
 
   const staffCount = (users || []).length
+  const ownerLabel = form?.ownerEmail || form?.ownerName ? '1 owner' : 'No owner'
   const summaryRows = [
     ['Store', `${form.storeName} · ${form.storeType}`],
     ['Branches', `${(branches || []).length}${branchNames ? ` (${branchNames})` : ''}`],
@@ -23,8 +55,18 @@ export default function AdminAddVendorReview({
       'Location',
       [form.area, form.city].filter(Boolean).join(', ') || '—',
     ],
-    ['Users', `1 owner · ${staffCount} additional`],
+    ['Users', `${ownerLabel} · ${staffCount} additional`],
   ]
+
+  let statusTitle = 'Hidden from customer app'
+  let statusBody = 'Vendor will not appear in search or category listings until Visible is ON.'
+  if (vendorVisible && vendorActive) {
+    statusTitle = 'Visible and accepting orders'
+    statusBody = 'Store appears in the customer app and customers can place orders.'
+  } else if (vendorVisible && !vendorActive) {
+    statusTitle = 'Visible but unavailable for ordering'
+    statusBody = 'Store appears in the customer app, but customers cannot place orders.'
+  }
 
   return (
     <div className="grid grid-cols-3 gap-3 max-[900px]:grid-cols-1">
@@ -44,44 +86,40 @@ export default function AdminAddVendorReview({
       </section>
 
       <section className="rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
-        <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Activation</h3>
+        <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Customer app status</h3>
 
         <div className="rounded-[10px] border border-[#cfe9d8] bg-[#e8f7ed] px-3.5 py-3">
-          <p className="text-[13px] font-bold text-[#147940]">Ready to go live</p>
-          <p className="mt-1 text-[12px] leading-[16px] text-[#2f7a4d]">
-            Store will appear in the customer app once activated. License can be completed after.
-          </p>
+          <p className="text-[13px] font-bold text-[#147940]">{statusTitle}</p>
+          <p className="mt-1 text-[12px] leading-[16px] text-[#2f7a4d]">{statusBody}</p>
         </div>
 
-        <div className="mt-4 flex items-center  gap-3">
-          <div>
-            <p className="text-[13px] font-bold text-[#17231c]">Activate immediately</p>
-            <p className="mt-0.5 text-[12px] text-[#7c8780]">Otherwise saved as draft.</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={activateImmediately}
-            onClick={() => onActivateImmediatelyChange?.(!activateImmediately)}
-            className={cn(
-              'relative h-[26px] w-[46px] shrink-0 rounded-full transition',
-              activateImmediately ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
-            )}
-          >
-            <span
-              className={cn(
-                'absolute top-[3px] h-[20px] w-[20px] rounded-full bg-white shadow transition',
-                activateImmediately ? 'left-[23px]' : 'left-[3px]',
-              )}
-            />
-          </button>
-        </div>
+        <StatusToggle
+          label="Visible"
+          hint={
+            vendorVisible
+              ? 'Shown in customer search and category listings.'
+              : 'Hidden from the customer app.'
+          }
+          checked={vendorVisible}
+          onChange={onVendorVisibleChange}
+        />
+
+        <StatusToggle
+          label="Active"
+          hint={
+            vendorActive
+              ? 'Vendor can receive orders; customers can check out.'
+              : 'Customers cannot place orders (can still browse if Visible is ON).'
+          }
+          checked={vendorActive}
+          onChange={onVendorActiveChange}
+        />
       </section>
     </div>
   )
 }
 
-export function AdminAddVendorActivateButton({ onClick, disabled = false, label = 'Activate vendor' }) {
+export function AdminAddVendorActivateButton({ onClick, disabled = false, label = 'Create Vendor' }) {
   return (
     <button
       type="button"

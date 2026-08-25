@@ -1,22 +1,34 @@
-import { Flame, ShieldAlert, ShieldCheck, TriangleAlert, ChevronRight } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { Flame, ShieldCheck, TriangleAlert, ChevronRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAdminDashboard } from '../../../hooks/admin/useAdminDashboard'
 import { useAdminDashboardMap } from '../../../hooks/admin/useAdminDashboardMap'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
+import { useAdminShell } from '../../../context/AdminShellContext'
 import { AdminLiveMap } from '../../../components/admin/AdminLiveMap'
 import { ApiErrorBanner, SkeletonBar } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+import { AdminOrderDetailModal } from '../../admin/operations/AdminLiveOrdersPage'
+import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
+import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
 
 const KPI_PLACEHOLDERS = [
-  'Live',
-  'Placed',
-  'Accepted',
-  'Preparing',
-  'Pickup',
-  'On way',
-  'Arrived',
-  'Completed',
-  'Issues',
+  { key: 'pending', label: 'Pending' },
+  { key: 'accepted', label: 'Accepted' },
+  { key: 'preparing', label: 'Preparing' },
+  { key: 'ready', label: 'Ready' },
+  { key: 'pickedUp', label: 'Picked up' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'onlineVendor', label: 'Online Vendor' },
+  { key: 'onlineChamp', label: 'Online Champ' },
 ]
+
+const BUCKET_QUERY = {
+  Critical: 'critical',
+  'At Risk': 'at_risk',
+  'On Track': 'on_track',
+}
 
 function DashboardKpiStrip({ items }) {
   return (
@@ -42,7 +54,7 @@ function DashboardKpiStrip({ items }) {
               aria-hidden="true"
               size={14}
               strokeWidth={1.4}
-              className="absolute right-[-4px] top-1/2 -translate-y-1/2 text-[#dfe3df]"
+              className="pointer-events-none absolute right-[-4px] top-1/2 -translate-y-1/2 text-[#dfe3df]"
             />
           ) : null}
         </div>
@@ -52,7 +64,9 @@ function DashboardKpiStrip({ items }) {
 }
 
 export default function AdminDashboardPage() {
-  const { data, error, refetch } = useAdminDashboard({ region: 'BH' })
+  const navigate = useNavigate()
+  const { region, mapFocus, setMapFocus, clearMapFocus } = useAdminShell()
+  const { data, error, refetch } = useAdminDashboard({ region })
   const {
     data: mapData,
     error: mapError,
@@ -61,15 +75,55 @@ export default function AdminDashboardPage() {
     layer,
     setLayer,
   } = useAdminDashboardMap({
-    region: 'BH',
+    region,
     refreshSeconds: data?.autoRefreshSeconds,
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
   const kpiItems = data?.summary?.length
     ? data.summary
-    : KPI_PLACEHOLDERS.map((label) => ({ label, value: null }))
+    : KPI_PLACEHOLDERS.map((item) => ({ ...item, value: null }))
   const slaColumns = data?.slaColumns?.length ? data.slaColumns : []
+
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [selectedIncident, setSelectedIncident] = useState(null)
+
+  const handlePointClick = useCallback((point) => {
+    if (point?.orderId) {
+      setSelectedOrder({
+        orderId: point.orderId,
+        id: point.orderNumber || point.orderId,
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!mapFocus) return undefined
+
+    if (mapFocus.type === 'incident') {
+      setSelectedIncident({ id: mapFocus.id, title: mapFocus.label, orderId: mapFocus.orderId })
+      if (mapFocus.orderId) {
+        setLayer('orders')
+      }
+      return undefined
+    }
+
+    if (mapFocus.type === 'order') {
+      setLayer('orders')
+      setSelectedOrder({ orderId: mapFocus.id, id: mapFocus.label || mapFocus.id })
+      return undefined
+    }
+    if (mapFocus.type === 'vendor') setLayer('vendors')
+    if (mapFocus.type === 'champ') setLayer('champs')
+    return undefined
+  }, [mapFocus, setLayer])
+
+  const mapFocusForPins =
+    mapFocus && mapFocus.type !== 'incident'
+      ? mapFocus
+      : mapFocus?.orderId
+        ? { type: 'order', id: mapFocus.orderId, label: mapFocus.label }
+        : null
 
   return (
     <div className="px-4 pb-5 pt-2 max-[700px]:px-3">
@@ -86,31 +140,15 @@ export default function AdminDashboardPage() {
           isLoading={mapLoading}
           error={mapError}
           onRetry={refetchMap}
+          focusTarget={mapFocusForPins}
+          onPointClick={handlePointClick}
         />
 
-        <section className="h-[360px] overflow-hidden rounded-xl border border-[#dfe4e0] bg-white px-[14px] shadow-[0_1px_2px_rgba(20,40,28,.025)]">
-          <div className="flex h-[44px] items-center gap-1.5 px-0.5">
-            <ShieldAlert size={14} strokeWidth={2} className="text-[#d46763]" />
-            <h2 className="text-[14px] font-bold">Incidents Log</h2>
-          </div>
-          {incidents.length === 0 ? (
-            <div className="px-0.5 py-8 text-center text-[12px] text-[#78837c]">No incidents</div>
-          ) : incidents.map(({ id, priority, title, detail, tone }) => (
-            <div key={id} className="flex h-[63px] items-center border-b border-[#e2e6e3] px-0.5">
-              <span className={cn(
-                'mr-2.5 grid h-[19px] w-8 shrink-0 place-items-center rounded-md text-[10px] font-medium',
-                tone === 'red' && 'bg-[#fdebec] text-[#d64044]',
-                tone === 'yellow' && 'bg-[#fff4d9] text-[#c78a18]',
-                tone === 'blue' && 'bg-[#eaf2fb] text-[#3974ad]',
-                tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
-              )}>{priority}</span>
-              <div className="min-w-0">
-                <p className="truncate text-[12px] font-bold leading-[15px] text-[#202722]">{title}</p>
-                <p className="truncate text-[10px] font-normal leading-[14px] text-[#77827b]">{detail}</p>
-              </div>
-            </div>
-          ))}
-        </section>
+        <OpsIncidentsSidebar
+          fillHeight={false}
+          incidents={incidents}
+          onIncidentClick={setSelectedIncident}
+        />
       </div>
 
       <div className="mt-[18px] grid grid-cols-3 gap-8 max-[700px]:grid-cols-1">
@@ -123,7 +161,14 @@ export default function AdminDashboardPage() {
             ]
         ).map((column) => (
           <section key={column.title} className="min-w-0">
-            <div className="flex h-[25px] items-center gap-1.5 px-2 text-[11px] font-medium">
+            <button
+              type="button"
+              onClick={() => {
+                const bucket = BUCKET_QUERY[column.title]
+                if (bucket) navigate(`/admin/live-orders?bucket=${encodeURIComponent(bucket)}`)
+              }}
+              className="flex h-[25px] w-full items-center gap-1.5 px-2 text-left text-[11px] font-medium hover:opacity-80"
+            >
               <div className={cn(
                 'inline-flex h-5 items-center gap-1 rounded-md px-1.5',
                 column.tone === 'red' && 'bg-[#fff0ed] text-[#d34b4d]',
@@ -136,23 +181,31 @@ export default function AdminDashboardPage() {
                 <span>{column.title}</span>
               </div>
               <strong className={column.tone === 'red' ? 'text-[#d34b4d]' : column.tone === 'yellow' ? 'text-[#b27b17]' : 'text-[#32815a]'}>{column.count}</strong>
-            </div>
+            </button>
             {column.orders.length ? (
               <div className="mt-1.5 space-y-2.5">
-                {column.orders.map(({ id, detail, timeLeft, hasIncident }) => (
-                  <article key={id} className="h-[74px] rounded-[8px] border border-[#e5e8e5] bg-white px-2.5 py-2 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
+                {column.orders.map((order) => (
+                  <button
+                    key={order.id}
+                    type="button"
+                    onClick={() => {
+                      if (!order.orderId) return
+                      setSelectedOrder({ orderId: order.orderId, id: order.id })
+                    }}
+                    className="block h-[74px] w-full rounded-[8px] border border-[#e5e8e5] bg-white px-2.5 py-2 text-left shadow-[0_1px_3px_rgba(20,40,28,.04)] hover:border-[#c9d4cc]"
+                  >
                     <div className="flex items-center justify-between">
-                      <strong className="text-[11px] font-medium leading-3 tracking-[.02em]">{id}</strong>
+                      <strong className="text-[11px] font-medium leading-3 tracking-[.02em]">{order.id}</strong>
                       <span className={cn('flex items-center gap-3 text-[11px] font-medium leading-3', column.tone === 'red' ? 'text-[#d34b4d]' : column.tone === 'yellow' ? 'text-[#b27b17]' : 'text-[#32815a]')}>
-                      ⏱ 
-                        {timeLeft}
+                      ⏱
+                        {order.timeLeft}
                       </span>
                     </div>
-                    <p className="mt-1 truncate text-[11px] font-medium leading-3 text-[#727c76]">{detail}</p>
-                    {hasIncident ? (
+                    <p className="mt-1 truncate text-[11px] font-medium leading-3 text-[#727c76]">{order.detail}</p>
+                    {order.hasIncident ? (
                       <span className={cn('mt-1 inline-block rounded px-1.5 py-0.5 text-[11px] font-medium leading-3', column.tone === 'red' ? 'bg-[#fdecec] text-[#d44749]' : 'bg-[#fff4dc] text-[#b67f17]')}>Incident</span>
                     ) : null}
-                  </article>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -161,6 +214,23 @@ export default function AdminDashboardPage() {
           </section>
         ))}
       </div>
+
+      {selectedOrder?.orderId ? (
+        <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
+      ) : null}
+      {selectedIncident ? (
+        <AdminIncidentDetailModal
+          incident={selectedIncident}
+          onClose={() => {
+            setSelectedIncident(null)
+            if (mapFocus?.type === 'incident') clearMapFocus()
+          }}
+          onOpenOrder={(order) => {
+            setSelectedIncident(null)
+            setSelectedOrder(order)
+          }}
+        />
+      ) : null}
     </div>
   )
 }

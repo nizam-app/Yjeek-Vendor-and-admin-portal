@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
+import AdminPasswordField from '../../../components/admin/AdminPasswordField'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -253,7 +254,7 @@ export default function AdminAddVendorUser() {
       fullName: user?.name || '',
       email: user?.email || '',
       phone: user?.phone || '',
-      password: '',
+      password: user?.password || '',
       role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
       branchId: user?.branchId || user?.branch || '',
       status: user?.status || 'Active',
@@ -406,12 +407,15 @@ export default function AdminAddVendorUser() {
               />
             </Field>
             <Field label="Password">
-              <input
-                className={inputClass}
-                type="password"
+              <AdminPasswordField
                 value={form.password}
-                onChange={updateField('password')}
-                placeholder={isNewUser ? '' : '••••••••'}
+                onChange={(next) => setForm((prev) => ({ ...prev, password: next }))}
+                placeholder={
+                  isNewUser
+                    ? 'Generate or type a password'
+                    : 'Shown when available — leave as-is or generate a new one'
+                }
+                inputClassName={inputClass}
               />
             </Field>
           </div>

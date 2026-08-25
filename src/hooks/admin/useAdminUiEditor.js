@@ -117,11 +117,9 @@ export function useAdminUiEditorHomeCategories() {
     return adminUiEditorService.getHomePreview()
   }, [enabled])
 
-  const categories = useMemo(() => {
-    const fromList = resource.data?.categories || []
-    if (fromList.length > 0) return fromList
-    return previewResource.data?.categories || []
-  }, [resource.data, previewResource.data])
+  // Home grid must come only from home_entries (ref_id FK). Do not fall back to
+  // getHomePreview().categories — that lists raw Store Management rows without home FK.
+  const categories = useMemo(() => resource.data?.categories || [], [resource.data])
 
   return {
     ...resource,

@@ -80,6 +80,8 @@ export function mapAdminIncidentItem(item) {
     champName: item.champName ?? null,
     resolvedAt: item.resolvedAt ?? null,
     resolvedByName: item.resolvedByName ?? null,
+    acknowledgedAt: item.acknowledgedAt ?? null,
+    acknowledgedByName: item.acknowledgedByName ?? null,
     createdAt: item.createdAt ?? null,
     createdLabel: item.createdLabel ? String(item.createdLabel) : null,
     time: item.createdLabel
@@ -148,3 +150,70 @@ export function emptyAdminIncidents() {
     items: [],
   }
 }
+
+function formatWhen(iso) {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString([], {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+/**
+ * Build incident history from confirmed timestamps + actor names.
+ * No invented events — only rows the API actually sent.
+ */
+export function mapAdminIncidentHistory(incident) {
+  if (!incident) return []
+  const rows = []
+
+  if (incident.createdAt) {
+    rows.push({
+      id: 'created',
+      label: 'Opened',
+      actor: incident.customerName ? `Reported · ${incident.customerName}` : 'System',
+      at: formatWhen(incident.createdAt),
+    })
+  }
+  if (incident.acknowledgedAt) {
+    rows.push({
+      id: 'acknowledged',
+      label: 'Acknowledged',
+      actor: incident.acknowledgedByName || 'Admin',
+      at: formatWhen(incident.acknowledgedAt),
+    })
+  }
+  if (incident.resolvedAt) {
+    rows.push({
+      id: 'resolved',
+      label: 'Resolved',
+      actor: incident.resolvedByName || 'Admin',
+      at: formatWhen(incident.resolvedAt),
+    })
+  }
+
+  return rows
+}
+
+/**
+ * Map GET /admin/incidents/:id `data`.
+ */
+export function mapAdminIncidentDetail(data) {
+  const item = mapAdminIncidentItem(data)
+  if (!item) {
+    throw new ApiError({ message: 'Invalid incident detail from the server.' })
+  }
+
+  return {
+    ...item,
+    order: data?.order && typeof data.order === 'object' ? data.order : null,
+    canResolve: Boolean(data?.canResolve),
+    history: mapAdminIncidentHistory(item),
+  }
+}
+

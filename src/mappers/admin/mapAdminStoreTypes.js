@@ -71,6 +71,31 @@ export function mapAdminStoreTypesResponse(data) {
       slug: item.slug ?? null,
       visible: item.visible !== false,
       isActive: item.isActive !== false,
+      structure: item.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+      supportedOrderModes: Array.isArray(item.supportedOrderModes)
+        ? item.supportedOrderModes.map((code) => String(code))
+        : Array.isArray(item.supportedOrderModes)
+          ? item.supportedOrderModes.map((code) => String(code))
+          : [],
+      subTypes: Array.isArray(item.subTypes)
+        ? item.subTypes
+            .filter((sub) => sub && sub.id && sub.name)
+            .map((sub) => ({
+              id: String(sub.id),
+              name: String(sub.name),
+              slug: sub.slug ?? null,
+              iconUrl: sub.iconUrl ?? null,
+            }))
+        : Array.isArray(item.subTypes)
+          ? item.subTypes
+              .filter((sub) => sub && sub.id && sub.name)
+              .map((sub) => ({
+                id: String(sub.id),
+                name: String(sub.name),
+                slug: sub.slug ?? null,
+                iconUrl: sub.iconUrl ?? null,
+              }))
+          : [],
     }))
 
   return {
@@ -96,7 +121,6 @@ export function mapAdminStoreTypesListPage(data, summaryData = null) {
     })
     .map((item) => {
       const slug = item.slug != null ? String(item.slug) : ''
-      const iconEmoji = item.iconEmoji ?? item.icon ?? null
       const rawIconUrl = item.iconUrl ? String(item.iconUrl) : null
       const iconUrl =
         rawIconUrl &&
@@ -108,8 +132,6 @@ export function mapAdminStoreTypesListPage(data, summaryData = null) {
         id: String(item.id),
         name: String(item.name),
         slug,
-        icon: iconEmoji,
-        iconEmoji,
         iconUrl,
         iconBg: '#eef2ef',
         orderModes: formatOrderModes(item.orderModes),
@@ -336,7 +358,7 @@ export function mapAdminUpdateBadgeRequest(form = {}) {
 
 /**
  * Map create form → POST /admin/store-types body.
- * Confirmed sample: name, slug, iconUrl, iconEmoji, sortOrder, isActive,
+ * Confirmed sample: name, slug, iconUrl, sortOrder, isActive,
  * onDemandDelivery, pickup, dineIn, scheduled, services, publishStatus.
  */
 export function mapAdminCreateStoreTypeRequest(form = {}) {
@@ -375,6 +397,18 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
     scheduled: Boolean(modes.Scheduled),
     services: Boolean(modes.Services),
     publishStatus,
+    structure: form.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+  }
+
+  if (Array.isArray(form.subTypes)) {
+    body.subTypes = form.subTypes
+      .map((sub, index) => ({
+        name: String(sub?.name || '').trim(),
+        slug: sub?.slug ? String(sub.slug).trim() : undefined,
+        iconUrl: sub?.iconUrl || null,
+        sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
+      }))
+      .filter((sub) => sub.name)
   }
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
@@ -385,7 +419,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
 /**
  * Map edit form → PATCH /admin/store-types/:id body.
  * Confirmed sample: name, iconUrl, sortOrder, onDemandDelivery, pickup, dineIn.
- * Also sends scheduled, services, iconEmoji so UI toggles / Change icon persist.
+ * Also sends scheduled, services so UI toggles persist.
  */
 export function mapAdminUpdateStoreTypeRequest(form = {}) {
   const name = String(form.displayName ?? form.name ?? '').trim()
@@ -415,6 +449,18 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
     dineIn: Boolean(modes['Dine-in']),
     scheduled: Boolean(modes.Scheduled),
     services: Boolean(modes.Services),
+    structure: form.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+  }
+
+  if (Array.isArray(form.subTypes)) {
+    body.subTypes = form.subTypes
+      .map((sub, index) => ({
+        name: String(sub?.name || '').trim(),
+        slug: sub?.slug ? String(sub.slug).trim() : undefined,
+        iconUrl: sub?.iconUrl || null,
+        sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
+      }))
+      .filter((sub) => sub.name)
   }
 
   if (publishStatus) {
@@ -431,7 +477,7 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
 }
 
 /**
- * Persist catalog/emoji icons safely. Only remote http(s)/data URLs are stored as iconUrl.
+ * Persist uploaded image URL only. Never sends emoji / icon keys.
  */
 function applyStoreTypeIconFields(body, form = {}, { clearWhenEmpty = false } = {}) {
   const rawUrl = form.iconUrl
@@ -442,18 +488,8 @@ function applyStoreTypeIconFields(body, form = {}, { clearWhenEmpty = false } = 
     if (/^https?:\/\//i.test(iconUrl) || iconUrl.startsWith('data:image/')) {
       body.iconUrl = iconUrl
     } else if (clearWhenEmpty) {
-      // Drop invalid / broken local paths so UI can use catalog + emoji.
       body.iconUrl = null
     }
-  }
-
-  const iconEmoji = String(form.iconEmoji || form.icon || '').trim()
-  if (iconEmoji) {
-    body.iconEmoji = iconEmoji
-  } else if (form.iconId) {
-    body.iconEmoji = '🛒'
-  } else if (clearWhenEmpty && (form.iconEmoji === null || form.iconEmoji === '')) {
-    body.iconEmoji = null
   }
 }
 
@@ -466,7 +502,6 @@ export function mapAdminStoreTypeDetail(data) {
   }
 
   const slug = data.slug != null ? String(data.slug) : ''
-  const iconEmoji = data.iconEmoji ?? data.icon ?? null
   const rawIconUrl = data.iconUrl ? String(data.iconUrl) : null
   const iconUrl =
     rawIconUrl &&
@@ -483,12 +518,21 @@ export function mapAdminStoreTypeDetail(data) {
     visibleInApp: data.visible === true,
     isActive: data.isActive !== false,
     publishStatus: data.publishStatus != null ? String(data.publishStatus) : null,
-    iconId: slug || 'food',
-    iconEmoji,
     iconUrl,
     modes: mapOrderModesToUi(data.orderModes),
     orderModeLabels: Array.isArray(data.orderModeLabels)
       ? data.orderModeLabels.map((label) => String(label))
+      : [],
+    structure: data.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+    subTypes: Array.isArray(data.subTypes)
+      ? data.subTypes
+          .filter((sub) => sub && (sub.name || sub.id))
+          .map((sub, index) => ({
+            id: sub.id ? String(sub.id) : `new-${index}`,
+            name: String(sub.name || ''),
+            slug: sub.slug ?? '',
+            iconUrl: sub.iconUrl ?? null,
+          }))
       : [],
     categories: mapMenuCategories(data.menuCategories),
     badges: mapBadges(data.badges),

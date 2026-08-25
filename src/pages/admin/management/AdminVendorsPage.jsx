@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Copy, MoreVertical, Plus, Search } from 'lucide-react'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { adminVendorService } from '../../../services/admin/vendorService'
+import { matchesVendorTab } from '../../../mappers/admin/mapAdminVendors'
 import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
+import { showFlashMessage } from '../../../utils/toast'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
 
 const PAGE_SIZE = 20
-const VENDOR_TABS = ['All', 'Active', 'Pending', 'Suspended']
+const VENDOR_TABS = ['All', 'Active', 'Pending', 'Drafts', 'Suspended']
 const VENDOR_COLUMNS = ['Vendor', 'Category', 'Orders', 'GMV', 'Commission', 'Status']
 
 function pageNumbers(current, total) {
@@ -20,27 +22,32 @@ function pageNumbers(current, total) {
   return [1, '…', current, '…', total]
 }
 
-function matchesLocalFilters(row, { tab, category, query }) {
-  const status = String(row.status || '')
-  const matchesTab =
-    tab === 'All' ||
-    (tab === 'Pending'
-      ? /pending|draft/i.test(status)
-      : status.toLowerCase() === tab.toLowerCase())
-  const matchesCategory = !category || row.category === category
-  const haystack = `${row.name} ${row.displayCode || ''} ${row.id} ${row.category} ${status}`.toLowerCase()
-  const matchesQuery = !query || haystack.includes(query.toLowerCase())
-  return matchesTab && matchesCategory && matchesQuery
+function filterVendorRows(rows, { tab, category, query }) {
+  return rows.filter((row) => {
+    const matchesCategory = !category || row.category === category
+    const haystack =
+      `${row.name} ${row.displayCode || ''} ${row.id} ${row.category} ${row.status}`.toLowerCase()
+    const matchesQuery = !query || haystack.includes(query.toLowerCase())
+    return matchesVendorTab(row, tab) && matchesCategory && matchesQuery
+  })
 }
 
 export default function AdminVendorsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const useRealApi = isAdminRealApiFeature('vendors')
   const [tab, setTab] = useState('All')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('')
   const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    if (location.state?.flash) {
+      showFlashMessage(String(location.state.flash))
+      navigate(location.pathname, { replace: true, state: { ...location.state, flash: undefined } })
+    }
+  }, [location.pathname, location.state, navigate])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 350)
@@ -68,23 +75,32 @@ export default function AdminVendorsPage() {
     if (!data?.rows) return []
 
     if (useRealApi) {
-      // Server already filters + paginates.
-      return data.rows
+      const tabFiltered =
+        tab === 'All' ? data.rows : data.rows.filter((row) => matchesVendorTab(row, tab))
+      return tabFiltered
     }
 
-    const filtered = data.rows.filter((row) =>
-      matchesLocalFilters(row, { tab, category, query: debouncedQuery }),
-    )
+    const filtered = filterVendorRows(data.rows, { tab, category, query: debouncedQuery })
     const start = (page - 1) * PAGE_SIZE
     return filtered.slice(start, start + PAGE_SIZE)
   }, [data, useRealApi, tab, debouncedQuery, category, page])
 
   const total = useMemo(() => {
-    if (useRealApi && data?.total != null) return Number(data.total) || 0
     if (!data?.rows) return 0
-    return data.rows.filter((row) =>
-      matchesLocalFilters(row, { tab, category, query: debouncedQuery }),
-    ).length
+
+    if (useRealApi && data.total != null) {
+      const serverTotal = Number(data.total) || 0
+      if (tab !== 'All') {
+        const tabFiltered = data.rows.filter((row) => matchesVendorTab(row, tab))
+        // Server ignored status — full unfiltered page; use client-side tab count.
+        if (tabFiltered.length < data.rows.length && data.rows.length >= serverTotal) {
+          return tabFiltered.length
+        }
+      }
+      return serverTotal
+    }
+
+    return filterVendorRows(data.rows, { tab, category, query: debouncedQuery }).length
   }, [data, useRealApi, tab, debouncedQuery, category])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1)
@@ -121,6 +137,8 @@ export default function AdminVendorsPage() {
     const normalized = String(status || '').toLowerCase()
     if (normalized === 'active') return 'green'
     if (normalized === 'suspended') return 'red'
+    if (normalized === 'draft' || normalized === 'hidden' || normalized === 'inactive') return 'gray'
+    if (normalized === 'unavailable') return 'orange'
     if (normalized === 'pending' || normalized.includes('pending')) return 'yellow'
     if (normalized.includes('force')) return 'orange'
     return 'gray'

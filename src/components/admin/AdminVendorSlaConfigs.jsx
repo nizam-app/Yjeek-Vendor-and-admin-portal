@@ -16,7 +16,7 @@ const MUTED_TEXT = 'text-[#7c8780]'
 const MODE_META = {
   'Hot food · on demand': {
     title: 'Hot food — on demand',
-    defaultCustomized: true,
+    defaultCustomized: false,
     rows: [
       { key: 'acceptance', label: 'Acceptance time', operator: '≤', h: '00', m: '02', s: '00' },
       { key: 'champCollection', label: 'Champ (champ) collection time', operator: '≤', h: '00', m: '10', s: '00' },
@@ -246,14 +246,21 @@ function buildInitialState(mode) {
   }
 }
 
-function SlaModeCard({ mode, state, onChange }) {
+function SlaModeCard({ mode, state, onChange, modelDefault }) {
   const meta = MODE_META[mode]
   if (!meta || !state) return null
 
   const customized = state.customized
   const useDefault = !customized
   const disabled = useDefault
-  const setCustomized = (next) => onChange({ ...state, customized: next })
+  const setCustomized = (next) => {
+    if (!next && modelDefault) {
+      // Inherit live model defaults again
+      onChange({ ...modelDefault, customized: false })
+      return
+    }
+    onChange({ ...state, customized: next })
+  }
   const labelClass = customized ? ACTIVE_TEXT : MUTED_TEXT
 
   return (
@@ -373,7 +380,7 @@ function SlaModeCard({ mode, state, onChange }) {
   )
 }
 
-export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
+export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange, modelDefaults = null }) {
   const [internalConfigs, setInternalConfigs] = useState({})
   const isControlled = typeof onChange === 'function'
   const configs = isControlled ? value || {} : internalConfigs
@@ -389,9 +396,19 @@ export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
       const next = { ...(prev || {}) }
       let changed = false
       selectedModes.forEach((mode) => {
+        const fromModel = modelDefaults?.[mode]
+          ? { ...modelDefaults[mode], customized: false }
+          : null
         if (!next[mode]) {
-          next[mode] = buildInitialState(mode)
+          next[mode] = fromModel || buildInitialState(mode)
           changed = true
+        } else if (!next[mode].customized && fromModel) {
+          const prevJson = JSON.stringify({ ...next[mode], customized: false })
+          const nextJson = JSON.stringify(fromModel)
+          if (prevJson !== nextJson) {
+            next[mode] = fromModel
+            changed = true
+          }
         }
       })
       Object.keys(next).forEach((mode) => {
@@ -402,7 +419,9 @@ export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
       })
       return changed ? next : prev
     })
-  }, [selectedModes])
+    // modelDefaults identity is controlled by parent (set only when SLA model loads)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModes.join('|'), modelDefaults])
 
   if (!selectedModes.length) return null
 
@@ -413,6 +432,7 @@ export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
           key={mode}
           mode={mode}
           state={configs[mode]}
+          modelDefault={modelDefaults?.[mode] || null}
           onChange={(next) => setConfigs((prev) => ({ ...prev, [mode]: next }))}
         />
       ))}
@@ -421,3 +441,28 @@ export function AdminVendorSlaConfigs({ selectedModes = [], value, onChange }) {
 }
 
 export const SERVICE_MODE_OPTIONS = Object.keys(MODE_META)
+
+const ORDER_MODE_CODE_TO_LABEL = {
+  delivery: 'Hot food · on demand',
+  pickup: 'Pickup',
+  dine_in: 'Dine-in',
+  scheduled: 'Scheduled delivery',
+  services: 'Services',
+}
+
+export function labelsForSupportedOrderModes(codes = []) {
+  return (Array.isArray(codes) ? codes : [])
+    .map((code) => ORDER_MODE_CODE_TO_LABEL[String(code).trim().toLowerCase().replace(/-/g, '_')])
+    .filter((label) => SERVICE_MODE_OPTIONS.includes(label))
+}
+
+/**
+ * Order-mode toggle labels allowed for a store type (Rule 3).
+ * Uses store_type.supportedOrderModes only — never a static 5-mode default.
+ */
+export function buildAllowedModesFromStoreType(storeType) {
+  const codes = Array.isArray(storeType?.supportedOrderModes)
+    ? storeType.supportedOrderModes
+    : []
+  return labelsForSupportedOrderModes(codes)
+}

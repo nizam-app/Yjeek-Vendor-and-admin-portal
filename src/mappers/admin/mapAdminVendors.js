@@ -11,7 +11,7 @@ const VENDOR_COLUMNS = [
   'Status',
 ]
 
-const VENDOR_TABS = ['All', 'Active', 'Pending', 'Suspended']
+const VENDOR_TABS = ['All', 'Active', 'Pending', 'Drafts', 'Suspended']
 
 function formatCount(value) {
   if (value === null || value === undefined || value === '') return '0'
@@ -35,8 +35,39 @@ export function mapAdminVendorsStatusQuery(tab = 'All') {
   const normalized = String(tab || 'All').trim().toLowerCase()
   if (normalized === 'active') return 'active'
   if (normalized === 'pending') return 'pending'
+  if (normalized === 'drafts' || normalized === 'draft') return 'draft'
   if (normalized === 'suspended') return 'suspended'
   return 'all'
+}
+
+/**
+ * Match a vendor row to a Vendor Management status tab.
+ * Uses accountStatus from the API when present; falls back to display status.
+ */
+export function matchesVendorTab(row, tab = 'All') {
+  const label = String(tab || 'All').trim()
+  if (label === 'All') return true
+
+  const status = String(row?.status || '').trim().toLowerCase()
+  const accountStatus = String(row?.accountStatus || '').trim().toUpperCase()
+
+  if (label === 'Active') {
+    return (
+      accountStatus === 'ACTIVE' ||
+      (status === 'active' && accountStatus !== 'SUSPENDED' && accountStatus !== 'DRAFT')
+    )
+  }
+  if (label === 'Pending') {
+    return accountStatus === 'PENDING_APPROVAL' || /pending/.test(status)
+  }
+  if (label === 'Drafts') {
+    return accountStatus === 'DRAFT' || status === 'draft'
+  }
+  if (label === 'Suspended') {
+    return accountStatus === 'SUSPENDED' || status === 'suspended'
+  }
+
+  return status === label.toLowerCase()
 }
 
 /**
@@ -63,6 +94,7 @@ export function mapAdminVendorListItem(vendor) {
     accountStatus: vendor.accountStatus ?? null,
     isActive: vendor.isActive !== false,
     isOnline: Boolean(vendor.isOnline),
+    isCustomerVisible: Boolean(vendor.isCustomerVisible),
     storeTypeId: vendor.storeTypeId ?? null,
     area: vendor.area ?? null,
     city: vendor.city ?? null,
@@ -161,6 +193,13 @@ function formatDispatchMode(value) {
   return raw
 }
 
+function normalizeDispatchModeValue(value) {
+  const raw = String(value || '').trim().toUpperCase()
+  if (raw === 'MANUAL') return 'MANUAL'
+  if (raw === 'AUTO') return 'AUTO'
+  return 'AUTO'
+}
+
 const DETAIL_TABS = [
   'Overview',
   'Branches',
@@ -199,9 +238,14 @@ export function mapAdminVendorDetailResponse(data) {
       : data.deliveryDefaults
 
   const isOnline = controls.isOnline ?? data.isOnline ?? false
-  const visibleAndAccepting = controls.visibleAndAccepting ?? isOnline
+  const isCustomerVisible =
+    controls.isCustomerVisible ?? data.isCustomerVisible ?? Boolean(isOnline)
   const openIssues = Number(kpis.openIssues) || 0
   const avgRating = kpis.avgRating ?? data.rating
+
+  let storeOnlineHint = 'Hidden from customers'
+  if (isCustomerVisible && isOnline) storeOnlineHint = 'Visible & accepting orders'
+  else if (isCustomerVisible && !isOnline) storeOnlineHint = 'Visible but unavailable for ordering'
 
   return {
     // Subtitle shows display code (same slot mock used for VND-xxxx).
@@ -212,6 +256,7 @@ export function mapAdminVendorDetailResponse(data) {
     initials: vendorInitials(name),
     status: String(data.status || '').trim() || '—',
     accountStatus: data.accountStatus ?? null,
+    isAccountActive: Boolean(data.isActive),
     storeType: data.category || '—',
     category: storeProfile.category || data.category || '—',
     rating: formatRating(data.rating),
@@ -226,6 +271,8 @@ export function mapAdminVendorDetailResponse(data) {
     city: data.city ?? null,
     cuisineTags: Array.isArray(data.cuisineTags) ? data.cuisineTags.filter(Boolean).map(String) : [],
     storeTypeId: data.storeTypeId ?? null,
+    storeSubTypeId: data.storeSubTypeId ?? null,
+    serviceSubTypeId: data.serviceSubTypeId ?? null,
     catalogIds: Array.isArray(data.catalogIds)
       ? data.catalogIds.map((id) => String(id || '').trim()).filter(Boolean)
       : Array.isArray(data.catalogs)
@@ -241,11 +288,12 @@ export function mapAdminVendorDetailResponse(data) {
     subCategory: data.subcategoryName || null,
     crNumber: data.crNumber ?? '',
     vatNumber: data.vatNumber ?? '',
+    isOnline: Boolean(isOnline),
+    isCustomerVisible: Boolean(isCustomerVisible),
     storeOnline: Boolean(isOnline),
-    storeOnlineHint: visibleAndAccepting
-      ? 'Visible & accepting orders'
-      : 'Hidden from customers',
+    storeOnlineHint,
     dispatchMode: formatDispatchMode(controls.dispatchMode ?? data.dispatchMode),
+    dispatchModeValue: normalizeDispatchModeValue(controls.dispatchMode ?? data.dispatchMode),
     forceClosed: Boolean(data.forceClosed),
     forceClosedUntil: data.forceClosedUntil ?? null,
     forceClosedReason: data.forceClosedReason ?? null,
@@ -307,6 +355,16 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
 
   const storeTypeId = String(form.storeTypeId || '').trim()
   if (storeTypeId) body.storeTypeId = storeTypeId
+
+  if (form.storeSubTypeId !== undefined) {
+    const storeSubTypeId = String(form.storeSubTypeId || '').trim()
+    body.storeSubTypeId = storeSubTypeId || null
+  }
+
+  if (form.serviceSubTypeId !== undefined) {
+    const serviceSubTypeId = String(form.serviceSubTypeId || '').trim()
+    body.serviceSubTypeId = serviceSubTypeId || null
+  }
 
   if (Array.isArray(form.catalogIds)) {
     const catalogIds = [...new Set(

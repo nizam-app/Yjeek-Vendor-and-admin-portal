@@ -65,28 +65,56 @@ export const adminStoreTypeService = {
   },
 
   /**
-   * Lightweight list for dropdowns.
+   * Lightweight list for dropdowns / champ allowed-store-type chips.
+   * Returns `{ id, name, slug }` objects only (Rule 9 — chips valued by slug).
    *
    * @param {{ signal?: AbortSignal, params?: Record<string, unknown> }} [options]
+   * @returns {Promise<{ data: { total: number, storeTypes: Array<{ id: string, name: string, slug: string|null }> }, meta: unknown }>}
    */
   async listStoreTypes(options = {}) {
-    if (!useRealStoreTypesApi() && !isAdminRealApiFeature('vendors')) {
+    if (!useRealStoreTypesApi() && !isAdminRealApiFeature('vendors') && !isAdminRealApiFeature('fleet')) {
       return { data: { total: 0, storeTypes: [] }, meta: null }
     }
 
-    const feature = useRealStoreTypesApi() ? 'store-types' : 'vendors'
+    const feature = useRealStoreTypesApi()
+      ? 'store-types'
+      : isAdminRealApiFeature('vendors')
+        ? 'vendors'
+        : 'fleet'
 
     const response = await apiClient.get(endpoints.admin.storeTypes.list, {
       ...options,
       scope: 'admin',
       feature,
       forceReal: !apiConfig.adminUseMockApi,
-      params: { limit: 50, ...(options.params || {}) },
+      params: { limit: 100, ...(options.params || {}) },
     })
 
     return {
       data: mapAdminStoreTypesResponse(response?.data),
       meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Store types for Add Champ chips / fleet category filter (name label, slug value).
+   * Filters to rows with a slug; does not invent hardcoded fallbacks.
+   *
+   * @param {{ signal?: AbortSignal, params?: Record<string, unknown> }} [options]
+   */
+  async listStoreTypesForChampForm(options = {}) {
+    const result = await this.listStoreTypes(options)
+    const storeTypes = (result?.data?.storeTypes || [])
+      .filter((item) => item && item.id && item.name && item.slug)
+      .map((item) => ({
+        id: String(item.id),
+        name: String(item.name),
+        slug: String(item.slug).trim().toLowerCase(),
+      }))
+
+    return {
+      data: { total: storeTypes.length, storeTypes },
+      meta: result?.meta ?? null,
     }
   },
 

@@ -6,6 +6,7 @@ import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySearchPicker'
+import { AdminDatePicker } from '../../../components/admin/AdminDatePicker'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
@@ -102,7 +103,6 @@ function buildScheduledAt(dateValue, timeValue) {
   const timeRaw = String(timeValue || '').trim()
   if (!dateRaw || !timeRaw) return ''
 
-  // Prefer HTML date (YYYY-MM-DD) + time (HH:mm)
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
     const iso = new Date(`${dateRaw}T${timeRaw}:00`)
     if (!Number.isNaN(iso.getTime())) return iso.toISOString()
@@ -111,6 +111,23 @@ function buildScheduledAt(dateValue, timeValue) {
   const parsed = new Date(`${dateRaw} ${timeRaw}`)
   if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
   return ''
+}
+
+function defaultScheduleFields() {
+  const d = new Date(Date.now() + 60 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+
+function openTimePicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    // Older browsers rely on native click.
+  }
 }
 
 export default function AdminSendCustomerNotificationPage() {
@@ -129,8 +146,8 @@ export default function AdminSendCustomerNotificationPage() {
   const [email, setEmail] = useState(true)
   const [sms, setSms] = useState(false)
   const [schedule, setSchedule] = useState('Send now')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [scheduleDate, setScheduleDate] = useState(() => defaultScheduleFields().date)
+  const [scheduleTime, setScheduleTime] = useState(() => defaultScheduleFields().time)
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
@@ -209,13 +226,24 @@ export default function AdminSendCustomerNotificationPage() {
         email,
         sms,
         schedule,
-        scheduledAt: buildScheduledAt(date, time),
+        scheduledAt:
+          schedule === 'Schedule later'
+            ? buildScheduledAt(scheduleDate, scheduleTime)
+            : '',
       })
       const createdTitle = response?.data?.title || title
+      const isScheduled = String(response?.data?.statusKey || '').toLowerCase() === 'scheduled'
       setActionSuccess(
         formatMarketingNotifySendSuccess(createdTitle, {
+          scheduled: isScheduled,
+          scheduledAt: response?.data?.scheduledAt,
+          sentTo: response?.data?.sentTo,
+          target: 'customer',
+          push,
           email,
           emailDelivery: response?.data?.emailDelivery,
+          sms,
+          smsDelivery: response?.data?.smsDelivery,
         }),
       )
       await refetchHistory()
@@ -387,58 +415,32 @@ export default function AdminSendCustomerNotificationPage() {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
-              <label className="block min-w-0">
-                <span className={labelClass}>Date</span>
-                <input
-                  type="date"
-                  className={cn(inputClass, 'cursor-pointer')}
-                  value={date}
-                  disabled={submitting}
-                  onClick={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    try {
-                      event.currentTarget.showPicker?.()
-                    } catch {
-                      // Older browsers: native click still opens the picker when supported.
-                    }
-                  }}
-                  onFocus={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    try {
-                      event.currentTarget.showPicker?.()
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  onChange={(event) => setDate(event.target.value)}
-                />
-              </label>
-              <label className="block min-w-0">
-                <span className={labelClass}>Time</span>
-                <input
-                  type="time"
-                  className={cn(inputClass, 'cursor-pointer')}
-                  value={time}
-                  disabled={submitting}
-                  onClick={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    try {
-                      event.currentTarget.showPicker?.()
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  onFocus={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    try {
-                      event.currentTarget.showPicker?.()
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  onChange={(event) => setTime(event.target.value)}
-                />
-              </label>
+              {schedule === 'Schedule later' ? (
+                <>
+                  <div className="min-w-0">
+                    <span className={labelClass}>Date</span>
+                    <AdminDatePicker
+                      className="mt-1.5"
+                      value={scheduleDate}
+                      onChange={setScheduleDate}
+                      placeholder="DD/MM/YYYY"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <label className="block min-w-0">
+                    <span className={labelClass}>Time</span>
+                    <input
+                      type="time"
+                      className={cn(inputClass, 'mt-1.5 cursor-pointer')}
+                      value={scheduleTime}
+                      disabled={submitting}
+                      onClick={openTimePicker}
+                      onFocus={openTimePicker}
+                      onChange={(event) => setScheduleTime(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
           </Card>
         </div>
@@ -467,7 +469,13 @@ export default function AdminSendCustomerNotificationPage() {
             onClick={handleSend}
             className="mt-4 inline-flex h-[40px] w-full items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {submitting ? 'Sending…' : 'Send notification'}
+            {submitting
+              ? schedule === 'Schedule later'
+                ? 'Scheduling…'
+                : 'Sending…'
+              : schedule === 'Schedule later'
+                ? 'Schedule notification'
+                : 'Send notification'}
           </button>
         </Card>
       </div>

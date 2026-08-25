@@ -16,13 +16,15 @@ import {
   X,
 } from 'lucide-react'
 import vegetarianBadgeIcon from '../../../assets/🥗.png'
-import { CatalogStoreIcon, catalogStoreIconSrc, resolveCatalogIconKey } from '../../../components/CatalogStoreIcons'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import AdminIconImageUpload from '../../../components/admin/AdminIconImageUpload'
+import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -79,27 +81,28 @@ const EMPTY_MODES = {
   Services: false,
 }
 
-const ICON_EMOJI_BY_KEY = {
-  all: '🛒',
-  food: '🍔',
-  food_drink: '🍔',
-  'food-drink': '🍔',
-  groceries: '🛒',
-  grocery: '🛒',
-  pharmacy: '💊',
-  cosmetics: '💄',
-  vape: '💨',
-  'dine-in': '🍽️',
-  dine_in: '🍽️',
-  pickup: '🥡',
-  gifts: '🎁',
-  fashion: '👗',
-  electronics: '📱',
-  jewelry: '💍',
-}
-
 function useRealStoreTypes() {
   return isAdminRealApiFeature('store-types') || !apiConfig.adminUseMockApi
+}
+
+function serializeStoreTypeState(state) {
+  return JSON.stringify({
+    displayName: String(state.displayName || '').trim(),
+    internalKey: String(state.internalKey || '').trim(),
+    homeOrder: String(state.homeOrder || '').trim(),
+    visibleInApp: Boolean(state.visibleInApp),
+    iconUrl: state.iconUrl || null,
+    modes: state.modes || {},
+    structure: state.structure || 'SINGLE',
+    subTypes: state.subTypes || [],
+    categories: state.categories || [],
+    badges: (state.badges || []).map((badge) => ({
+      id: badge.id,
+      label: badge.label,
+      bg: badge.bg,
+      text: badge.text,
+    })),
+  })
 }
 
 function mockInitialValues(storeTypeId, isEdit) {
@@ -109,16 +112,15 @@ function mockInitialValues(storeTypeId, isEdit) {
       internalKey: '',
       homeOrder: '',
       visibleInApp: true,
-      iconId: 'food',
-      iconEmoji: '🍔',
       iconUrl: null,
       modes: { ...EMPTY_MODES },
+      structure: 'SINGLE',
+      subTypes: [],
       categories: [],
       badges: [],
     }
   }
 
-  const iconId = catalogStoreIconSrc[storeTypeId] ? storeTypeId : 'food'
   const displayName =
     storeTypeId === 'dine-in'
       ? 'Dine In'
@@ -129,8 +131,6 @@ function mockInitialValues(storeTypeId, isEdit) {
     internalKey: String(storeTypeId || '').replace(/-/g, '_'),
     homeOrder: '5',
     visibleInApp: true,
-    iconId,
-    iconEmoji: null,
     iconUrl: null,
     modes: {
       'On-Demand Delivery': true,
@@ -139,6 +139,8 @@ function mockInitialValues(storeTypeId, isEdit) {
       Scheduled: false,
       Services: false,
     },
+    structure: 'SINGLE',
+    subTypes: [],
     categories: DEFAULT_CATEGORIES,
     badges: DEFAULT_BADGES,
   }
@@ -146,21 +148,21 @@ function mockInitialValues(storeTypeId, isEdit) {
 
 function initialFromDetail(detail) {
   const slug = detail.internalKey || detail.slug || ''
-  const resolvedIconId =
-    resolveCatalogIconKey(detail.iconId) ||
-    resolveCatalogIconKey(slug) ||
-    'food'
 
   return {
     displayName: detail.displayName || '',
     internalKey: slug,
     homeOrder: detail.homeOrder || '',
     visibleInApp: Boolean(detail.visibleInApp),
-    iconId: resolvedIconId,
-    iconEmoji: detail.iconEmoji || ICON_EMOJI_BY_KEY[resolvedIconId] || '🛒',
-    // Prefer catalog/emoji when remote URL is missing or invalid (avoids broken <img>).
     iconUrl: detail.iconUrl || null,
     modes: detail.modes || { ...EMPTY_MODES },
+    structure: detail.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+    subTypes: Array.isArray(detail.subTypes)
+      ? detail.subTypes.map((sub) => ({
+          ...sub,
+          iconUrl: sub.iconUrl || null,
+        }))
+      : [],
     categories: Array.isArray(detail.categories) ? detail.categories : [],
     badges: (Array.isArray(detail.badges) ? detail.badges : []).map((badge) => ({
       ...badge,
@@ -514,10 +516,12 @@ function StoreTypeForm({
   const [internalKey, setInternalKey] = useState(initial.internalKey)
   const [homeOrder, setHomeOrder] = useState(initial.homeOrder)
   const [visibleInApp, setVisibleInApp] = useState(initial.visibleInApp)
-  const [iconId, setIconId] = useState(initial.iconId)
-  const [iconEmoji, setIconEmoji] = useState(initial.iconEmoji)
   const [iconUrl, setIconUrl] = useState(initial.iconUrl)
   const [modes, setModes] = useState(initial.modes)
+  const [structure, setStructure] = useState(initial.structure || 'SINGLE')
+  const [subTypes, setSubTypes] = useState(
+    Array.isArray(initial.subTypes) ? initial.subTypes : [],
+  )
   const [categories, setCategories] = useState(initial.categories)
   const [badges, setBadges] = useState(initial.badges)
   const [saving, setSaving] = useState(false)
@@ -534,8 +538,47 @@ function StoreTypeForm({
   const [editingBadgeId, setEditingBadgeId] = useState(null)
   const [editingBadgeLabel, setEditingBadgeLabel] = useState('')
 
+  const baselineSnapshot = useMemo(() => serializeStoreTypeState(initial), [initial])
+  const currentSnapshot = useMemo(
+    () =>
+      serializeStoreTypeState({
+        displayName,
+        internalKey,
+        homeOrder,
+        visibleInApp,
+        iconUrl,
+        modes,
+        structure,
+        subTypes,
+        categories,
+        badges,
+      }),
+    [
+      displayName,
+      internalKey,
+      homeOrder,
+      visibleInApp,
+      iconUrl,
+      modes,
+      structure,
+      subTypes,
+      categories,
+      badges,
+    ],
+  )
+  const isDirty = currentSnapshot !== baselineSnapshot
+
+  const {
+    allowLeave,
+    requestLeave,
+    leaveModalOpen,
+    handleStayEditing,
+    handleLeaveWithoutSaving,
+  } = useAdminFormNavigationGuard({ isDirty })
+
+  const handleBack = () => requestLeave(onBack)
+
   const titleName = displayName.trim() || 'New'
-  const iconOptions = useMemo(() => Object.keys(catalogStoreIconSrc), [])
   const isEditMode = mode === 'edit'
   const canManageNested = Boolean(storeTypeId && isEditMode && canSaveRemote)
 
@@ -545,17 +588,16 @@ function StoreTypeForm({
     homeOrder,
     visibleInApp: visible,
     isActive: visible,
-    iconId,
-    iconEmoji: iconEmoji || ICON_EMOJI_BY_KEY[iconId] || '🛒',
-    // Local catalog icons are not remote URLs — never send a bad path as iconUrl.
     iconUrl: iconUrl || null,
     modes,
+    structure,
+    subTypes,
     publishStatus,
   })
 
   const handleSave = async (intent = 'DRAFT') => {
     if (!canSaveRemote) {
-      onBack()
+      handleBack()
       return
     }
 
@@ -590,6 +632,7 @@ function StoreTypeForm({
       } else {
         await adminService.createAdminStoreType(buildFormPayload(publishStatus, nextVisible))
       }
+      allowLeave()
       onBack()
     } catch (err) {
       setSaveError(
@@ -898,21 +941,13 @@ function StoreTypeForm({
     }, 'Failed to add badge.')
   }
 
-  const cycleIcon = () => {
-    const idx = iconOptions.indexOf(iconId)
-    const next = iconOptions[(idx + 1) % iconOptions.length]
-    setIconId(next)
-    setIconEmoji(ICON_EMOJI_BY_KEY[next] || null)
-    setIconUrl(null)
-  }
-
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
       <div className="mb-5 flex  items-center justify-between gap-3">
         <div className=" flex items-center  gap-4">
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleBack}
             className=" inline-flex items-center gap-1 rounded-full border border-[#dfe4e0] bg-white px-4 py-2.5 text-[12px] font-medium text-[#455249] hover:bg-[#f6f8f6]"
           >
             <ChevronLeft size={14} strokeWidth={2.2} />
@@ -947,24 +982,14 @@ function StoreTypeForm({
         <Card title="Identity">
           <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 max-[800px]:grid-cols-1">
             <div>
-              <span className={labelClass}>Icon</span>
-              <div className="flex items-center gap-2.5">
-                <span className="grid h-[48px] w-[48px] place-items-center overflow-hidden rounded-[12px] bg-[#f3f5f3]">
-                  <CatalogStoreIcon
-                    id={iconId}
-                    emoji={iconEmoji}
-                    iconUrl={iconUrl}
-                    className="size-8"
-                  />
-                </span>
-                <button
-                  type="button"
-                  onClick={cycleIcon}
-                  className="inline-flex h-[34px] items-center rounded-full border border-[#1aa054] bg-white px-3.5 text-[12.5px] font-medium text-[#1aa054] hover:bg-[#f3faf5]"
-                >
-                  Change icon
-                </button>
-              </div>
+              <span className={labelClass}>Image</span>
+              <AdminIconImageUpload
+                iconUrl={iconUrl}
+                onUrlChange={setIconUrl}
+                size={48}
+                feature="store-types"
+                disabled={saving}
+              />
             </div>
 
             <label className="block min-w-0">
@@ -1004,6 +1029,92 @@ function StoreTypeForm({
               <Toggle checked={visibleInApp} onChange={setVisibleInApp} />
             </div>
           </div>
+        </Card>
+
+        <Card
+          title="Catalog structure"
+          subtitle="Single-level is a store type only. Two-level also has sub-types (e.g. Services → Salon)."
+        >
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'SINGLE', label: 'Single level' },
+              { id: 'TWO_LEVEL', label: 'Two-level' },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setStructure(option.id)}
+                className={cn(
+                  'h-[34px] rounded-full border px-4 text-[12.5px] font-bold',
+                  structure === option.id
+                    ? 'border-[#1aa054] bg-[#e8f7ed] text-[#147940]'
+                    : 'border-[#dfe4e0] bg-white text-[#455249]',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {structure === 'TWO_LEVEL' ? (
+            <div className="mt-4 space-y-3">
+              {subTypes.map((sub, index) => (
+                <div
+                  key={sub.id || index}
+                  className="flex flex-wrap items-center gap-2 rounded-[12px] border border-[#eceeec] bg-[#fafbfa] p-2.5"
+                >
+                  <AdminIconImageUpload
+                    iconUrl={sub.iconUrl || null}
+                    onUrlChange={(url) =>
+                      setSubTypes((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, iconUrl: url } : item,
+                        ),
+                      )
+                    }
+                    size={40}
+                    feature="store-types"
+                    disabled={saving}
+                  />
+                  <input
+                    className={cn(inputClass, 'min-w-[160px] flex-1')}
+                    value={sub.name}
+                    placeholder={`Sub-type ${index + 1}`}
+                    onChange={(event) => {
+                      const name = event.target.value
+                      setSubTypes((prev) =>
+                        prev.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, name } : item,
+                        ),
+                      )
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSubTypes((prev) => prev.filter((_, itemIndex) => itemIndex !== index))
+                    }
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] text-[#8a948e] hover:bg-[#fdebec] hover:text-[#d64044]"
+                    aria-label="Remove sub-type"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setSubTypes((prev) => [
+                    ...prev,
+                    { id: `new-${Date.now()}`, name: '', iconUrl: null, isNew: true },
+                  ])
+                }
+                className="inline-flex h-[34px] items-center gap-1.5 rounded-full border border-[#1aa054] bg-white px-3.5 text-[12.5px] font-medium text-[#1aa054]"
+              >
+                <Plus size={14} strokeWidth={2.4} />
+                Add sub-type
+              </button>
+            </div>
+          ) : null}
         </Card>
 
         <Card
@@ -1170,7 +1281,7 @@ function StoreTypeForm({
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
-          onClick={onBack}
+          onClick={handleBack}
           disabled={saving}
           className="text-[13px] font-medium text-[#7c8780] hover:text-[#455249] disabled:opacity-60"
         >
@@ -1199,6 +1310,19 @@ function StoreTypeForm({
           </button>
         </div>
       </div>
+
+      <AdminLeaveFormModal
+        open={leaveModalOpen}
+        busy={saving}
+        title={isEditMode ? 'Leave store type setup?' : 'Leave add store type?'}
+        message={
+          isEditMode
+            ? 'You have unsaved changes on this store type. Keep editing or leave without saving.'
+            : 'You have unsaved progress on this store type form. Keep editing or leave without saving.'
+        }
+        onStay={handleStayEditing}
+        onLeave={handleLeaveWithoutSaving}
+      />
     </div>
   )
 }

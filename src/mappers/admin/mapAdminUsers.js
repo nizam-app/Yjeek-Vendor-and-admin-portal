@@ -489,11 +489,12 @@ function mapScopeLevel(value) {
 }
 
 /**
- * Map Create user wizard → POST /admin/users (invite) body.
+ * Map Create user wizard → POST /admin/users body.
  *
- * Confirmed Postman:
+ * Admin sets the password directly; account is Active and can log in immediately.
+ * Confirmed:
  *   fullName, email, username, phone, countryCode, jobTitle, roleId,
- *   scopeLevel, countries[], zones[], permissionOverrides, sendInvite
+ *   scopeLevel, countries[], zones[], permissionOverrides, temporaryPassword
  */
 export function mapAdminCreateUserRequest(input = {}) {
   const {
@@ -508,16 +509,18 @@ export function mapAdminCreateUserRequest(input = {}) {
     countries = [],
     zones = [],
     permissionOverrides = {},
-    sendInvite = true,
     temporaryPassword = '',
+    password = '',
   } = input
 
   const name = String(fullName || '').trim()
   const mail = String(email || '').trim()
   const role = String(roleId || '').trim()
+  const pwd = String(temporaryPassword || password || '').trim()
   if (!name) throw new ApiError({ message: 'Full name is required.' })
   if (!mail) throw new ApiError({ message: 'Email is required.' })
   if (!role) throw new ApiError({ message: 'Role is required.' })
+  if (!pwd) throw new ApiError({ message: 'Password is required.' })
 
   const phoneParts = splitPhone(phone, countryCode)
   const scope = mapScopeLevel(scopeLevel)
@@ -545,11 +548,9 @@ export function mapAdminCreateUserRequest(input = {}) {
             .filter(Boolean),
     permissionOverrides:
       permissionOverrides && typeof permissionOverrides === 'object' ? permissionOverrides : {},
-    sendInvite: Boolean(sendInvite),
+    temporaryPassword: pwd,
+    sendInvite: false,
   }
-
-  const temp = String(temporaryPassword || '').trim()
-  if (temp && !body.sendInvite) body.temporaryPassword = temp
 
   if (body.jobTitle === undefined) delete body.jobTitle
 

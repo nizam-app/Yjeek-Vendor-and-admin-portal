@@ -38,43 +38,61 @@ function ChatGrid({ chats, onChatClick }) {
   )
 }
 
-export function AdminOpenChats({ chats = [], activeCount, onChatClick, groupByRole = false }) {
+export function AdminOpenChats({
+  chats = [],
+  activeCount,
+  unreadCount,
+  onChatClick,
+  groupByRole = false,
+}) {
   const list = Array.isArray(chats) ? chats : []
   const count = activeCount == null ? list.length : Number(activeCount) || 0
+  const unread = unreadCount == null
+    ? list.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
+    : Number(unreadCount) || 0
   const champChats = list.filter((chat) => chat.role === 'Champ')
   const customerChats = list.filter((chat) => chat.role === 'Customer')
   const otherChats = list.filter((chat) => chat.role !== 'Champ' && chat.role !== 'Customer')
   const shouldGroup = groupByRole && (champChats.length > 0 || customerChats.length > 0)
 
   return (
-    <section className="mt-auto rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-3 pt-2.5">
+    <section className="sticky bottom-0 z-20 shrink-0 rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-3 pt-2.5 shadow-[0_-4px_16px_rgba(20,40,28,.06)]">
       <div className="mb-2 flex items-center justify-between text-[11px]">
-        <b>chats</b>
+        <span className="flex items-center gap-2">
+          <b>chats</b>
+          {unread > 0 ? (
+            <span className="grid min-w-4 place-items-center rounded-full bg-[#c91f2b] px-1.5 text-[9px] font-bold text-white">
+              {unread > 99 ? '99+' : unread}
+            </span>
+          ) : null}
+        </span>
         <span className="text-[#657169]">{count} active</span>
       </div>
-      {list.length === 0 ? (
-        <div className="py-4 text-center text-[11px] text-[#78837c]">No open chats</div>
-      ) : shouldGroup ? (
-        <div className="space-y-3">
-          {champChats.length > 0 ? (
-            <div>
-              <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#6a7fa0]">Champ</p>
-              <ChatGrid chats={champChats} onChatClick={onChatClick} />
-            </div>
-          ) : null}
-          {customerChats.length > 0 ? (
-            <div>
-              <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#7a64a8]">Customer</p>
-              <ChatGrid chats={customerChats} onChatClick={onChatClick} />
-            </div>
-          ) : null}
-          {otherChats.length > 0 ? (
-            <ChatGrid chats={otherChats} onChatClick={onChatClick} />
-          ) : null}
-        </div>
-      ) : (
-        <ChatGrid chats={list} onChatClick={onChatClick} />
-      )}
+      <div className="max-h-[132px] overflow-y-auto">
+        {list.length === 0 ? (
+          <div className="py-4 text-center text-[11px] text-[#78837c]">No open chats</div>
+        ) : shouldGroup ? (
+          <div className="space-y-3">
+            {champChats.length > 0 ? (
+              <div>
+                <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#6a7fa0]">Champ</p>
+                <ChatGrid chats={champChats} onChatClick={onChatClick} />
+              </div>
+            ) : null}
+            {customerChats.length > 0 ? (
+              <div>
+                <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#7a64a8]">Customer</p>
+                <ChatGrid chats={customerChats} onChatClick={onChatClick} />
+              </div>
+            ) : null}
+            {otherChats.length > 0 ? (
+              <ChatGrid chats={otherChats} onChatClick={onChatClick} />
+            ) : null}
+          </div>
+        ) : (
+          <ChatGrid chats={list} onChatClick={onChatClick} />
+        )}
+      </div>
     </section>
   )
 }

@@ -22,6 +22,7 @@ import AdminNotifyChampsPage from '../pages/admin/management/AdminNotifyChampsPa
 import AdminFleetSuppliersPage from '../pages/admin/management/AdminFleetSuppliersPage'
 import AdminAddSupplierPage from '../pages/admin/management/AdminAddSupplierPage'
 import AdminSupplierDetailPage from '../pages/admin/management/AdminSupplierDetailPage'
+import AdminSupplierChampsPage from '../pages/admin/management/AdminSupplierChampsPage'
 import AdminCustomersPage from '../pages/admin/management/AdminCustomersPage'
 import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDetailPage'
 import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
@@ -70,6 +71,7 @@ export const adminRoutes = (
     <Route path="fleet/notify" element={<AdminNotifyChampsPage />} />
     <Route path="fleet/suppliers/new" element={<AdminAddSupplierPage />} />
     <Route path="fleet/suppliers/:supplierId/edit" element={<AdminAddSupplierPage />} />
+    <Route path="fleet/suppliers/:supplierId/champs" element={<AdminSupplierChampsPage />} />
     <Route path="fleet/suppliers/:supplierId" element={<AdminSupplierDetailPage />} />
     <Route path="fleet/suppliers" element={<AdminFleetSuppliersPage />} />
     <Route path="fleet/:champId" element={<AdminChampDetailPage />} />

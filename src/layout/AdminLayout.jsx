@@ -1,7 +1,6 @@
 import {
   Activity,
   BarChart3,
-  Bell,
   Bike,
   ChevronDown,
   ChevronLeft,
@@ -11,7 +10,6 @@ import {
   LogOut,
   Megaphone,
   PanelTop,
-  Search,
   Settings,
   ShieldCheck,
   ShoppingBag,
@@ -21,7 +19,9 @@ import {
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { AdminShellProvider, useAdminShell } from '../context/AdminShellContext'
 import { cn } from '../components/admin/cn'
+import { AdminTopbarTools } from '../components/admin/AdminTopbarTools'
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed'
 
@@ -92,10 +92,21 @@ function readCollapsedPreference() {
   }
 }
 
+function guardedNavClick(event, { to, pathname, navigate, attemptNavigation, end = false }) {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    return
+  }
+  const isActive = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`)
+  if (isActive) return
+  event.preventDefault()
+  attemptNavigation(to, () => navigate(to))
+}
+
 function AdminSidebar({ collapsed, onToggleCollapsed }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const { attemptNavigation } = useAdminShell()
   const dashboardActive = dashboardChildren.some(([, to]) => pathname === to || pathname.startsWith(`${to}/`))
   const [dashboardOpen, setDashboardOpen] = useState(dashboardActive)
 
@@ -149,6 +160,15 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
           <NavLink
             to="/admin/dashboard"
             title="Live Dashboard"
+            onClick={(event) =>
+              guardedNavClick(event, {
+                to: '/admin/dashboard',
+                pathname,
+                navigate,
+                attemptNavigation,
+                end: true,
+              })
+            }
             className={() =>
               cn(
                 'mx-auto mb-0.5 flex h-9 w-9 items-center justify-center rounded-[9px] border transition',
@@ -190,6 +210,15 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
                     key={to}
                     to={to}
                     end={to !== '/admin/scheduled'}
+                    onClick={(event) =>
+                      guardedNavClick(event, {
+                        to,
+                        pathname,
+                        navigate,
+                        attemptNavigation,
+                        end: to !== '/admin/scheduled',
+                      })
+                    }
                     className={({ isActive }) =>
                       `flex h-[27px] mt-1 items-center gap-2 rounded-sm px-[34px] text-[12.5px] font-medium transition ${
                         isActive || (to === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
@@ -211,6 +240,9 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
             key={to}
             to={to}
             title={collapsed ? label : undefined}
+            onClick={(event) =>
+              guardedNavClick(event, { to, pathname, navigate, attemptNavigation })
+            }
             className={({ isActive }) =>
               cn(
                 'flex items-center rounded-[9px] border text-[13px] font-medium transition',
@@ -240,7 +272,7 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
       <div className={cn(collapsed && 'flex w-full flex-col items-center gap-1')}>
         <button
           type="button"
-          onClick={() => navigate('/admin/account')}
+          onClick={() => attemptNavigation('/admin/account', () => navigate('/admin/account'))}
           title={collapsed ? user?.name || 'Account' : undefined}
           className={cn(
             'flex items-center text-left transition',
@@ -322,19 +354,7 @@ function AdminTopbar({ collapsed }) {
         <h1 className="text-[20px] font-bold tracking-[-.02em] text-[#17231c]">{title}</h1>
       </div>
       <div className="flex items-center gap-2">
-        <button className="flex h-[25px] items-center gap-1 rounded-md border border-[#dfe4e0] px-2 text-[12px] text-[#536158]">
-          <span>🌍</span>
-          Bahrain · All regions
-          <ChevronDown size={10} />
-        </button>
-        <label className="flex h-[27px] w-[220px] items-center gap-2 rounded-md bg-[#f6f7f6] px-2.5 max-[700px]:hidden">
-          <Search size={13} className="text-[#89938c]" />
-          <input className="min-w-0 flex-1 border-0 bg-transparent text-[12px] outline-none" placeholder="Search orders, vendors, champs…" />
-        </label>
-        <button className="relative grid h-7 w-7 place-items-center rounded-md hover:bg-[#f3f6f4]">
-          <Bell size={15} strokeWidth={1.7} />
-          <span className="absolute right-1.5 top-1.5 h-1 w-1 rounded-full bg-[#e14b42]" />
-        </button>
+        <AdminTopbarTools />
       </div>
     </header>
   )
@@ -356,17 +376,19 @@ export default function AdminLayout() {
   }
 
   return (
-    <div className="admin-shell h-full overflow-hidden bg-[#f5f7f5] text-[#17231c]">
-      <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
-      <AdminTopbar collapsed={collapsed} />
-      <main
-        className={cn(
-          'h-full overflow-y-auto overflow-x-hidden pt-[44px] transition-[padding-left] duration-200 max-[900px]:pl-0 [-webkit-overflow-scrolling:touch]',
-          collapsed ? 'pl-[68px]' : 'pl-[250px]',
-        )}
-      >
-        <Outlet />
-      </main>
-    </div>
+    <AdminShellProvider>
+      <div className="admin-shell h-full overflow-hidden bg-[#f5f7f5] text-[#17231c]">
+        <AdminSidebar collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
+        <AdminTopbar collapsed={collapsed} />
+        <main
+          className={cn(
+            'h-full overflow-y-auto overflow-x-hidden pt-[44px] transition-[padding-left] duration-200 max-[900px]:pl-0 [-webkit-overflow-scrolling:touch]',
+            collapsed ? 'pl-[68px]' : 'pl-[250px]',
+          )}
+        >
+          <Outlet />
+        </main>
+      </div>
+    </AdminShellProvider>
   )
 }

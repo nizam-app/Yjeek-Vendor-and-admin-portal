@@ -4,6 +4,7 @@ import { endpoints } from '../../api/endpoints'
 import { ApiError } from '../../api/errors'
 import {
   emptyAdminIncidents,
+  mapAdminIncidentDetail,
   mapAdminIncidentsResponse,
 } from '../../mappers/admin/mapAdminIncidents'
 
@@ -12,6 +13,7 @@ import {
  *
  * Confirmed:
  * - GET /admin/incidents?status=&priority=&limit=
+ * - GET /admin/incidents/:incidentId
  * - POST /admin/incidents/:incidentId/resolve (also used from order take-action)
  */
 export const adminIncidentService = {
@@ -46,6 +48,28 @@ export const adminIncidentService = {
 
     return {
       data: mapAdminIncidentsResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * GET /admin/incidents/:incidentId
+   * @param {string} incidentId
+   */
+  async get(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) {
+      throw new ApiError({ message: 'Incident id is required.' })
+    }
+
+    const response = await apiClient.get(endpoints.admin.incidents.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+
+    return {
+      data: mapAdminIncidentDetail(response?.data),
       meta: response?.meta ?? null,
     }
   },

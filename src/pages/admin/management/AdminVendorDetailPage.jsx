@@ -3,9 +3,11 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Pause, Play, Plus, Star } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
+import { showError, showFlashMessage, showSuccess } from '../../../utils/toast'
 import AdminSuspendVendorModal from '../../../components/admin/AdminSuspendVendorModal'
 import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { AdminVendorBranches } from '../../../components/admin/management/AdminVendorBranches'
@@ -26,11 +28,17 @@ export default function AdminVendorDetailPage() {
   const location = useLocation()
   const [tab, setTab] = useState(location.state?.tab ?? 'Overview')
   const [storeOnline, setStoreOnline] = useState(null)
+  const [storeVisible, setStoreVisible] = useState(null)
   const [forceCloseOpen, setForceCloseOpen] = useState(false)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [reopening, setReopening] = useState(false)
   const [unsuspending, setUnsuspending] = useState(false)
-  const [actionError, setActionError] = useState(null)
+  const [storeOnlineSaving, setStoreOnlineSaving] = useState(false)
+  const [storeVisibleSaving, setStoreVisibleSaving] = useState(false)
+  const [activating, setActivating] = useState(false)
+  const [deactivating, setDeactivating] = useState(false)
+  const [dispatchSaving, setDispatchSaving] = useState(false)
+  const [dispatchModeValue, setDispatchModeValue] = useState(null)
   const [branches, setBranches] = useState([])
   const [branchesCount, setBranchesCount] = useState(0)
   const [branchesLoading, setBranchesLoading] = useState(false)
@@ -63,6 +71,37 @@ export default function AdminVendorDetailPage() {
   useEffect(() => {
     if (location.state?.tab) setTab(location.state.tab)
   }, [location.state?.tab])
+
+  useEffect(() => {
+    if (location.state?.flash) {
+      showFlashMessage(String(location.state.flash))
+      navigate(location.pathname, { replace: true, state: { ...location.state, flash: undefined } })
+    }
+  }, [location.pathname, location.state, navigate])
+
+  useEffect(() => {
+    if (!data) return
+    setStoreOnline(
+      typeof data.isOnline === 'boolean'
+        ? data.isOnline
+        : data.storeOnline === false
+          ? false
+          : Boolean(data.storeOnline),
+    )
+    setStoreVisible(
+      typeof data.isCustomerVisible === 'boolean'
+        ? data.isCustomerVisible
+        : Boolean(data.storeOnline),
+    )
+    setDispatchModeValue(data.dispatchModeValue || 'AUTO')
+  }, [
+    data?.backendId,
+    data?.storeOnline,
+    data?.isOnline,
+    data?.isCustomerVisible,
+    data?.status,
+    data?.dispatchModeValue,
+  ])
 
   useEffect(() => {
     if (!vendorId || !isAdminRealApiFeature('vendors')) {
@@ -278,19 +317,63 @@ export default function AdminVendorDetailPage() {
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
-  const online = storeOnline ?? data.storeOnline
+  const online = storeOnline ?? data.isOnline ?? data.storeOnline
+  const visible =
+    storeVisible ??
+    (typeof data.isCustomerVisible === 'boolean' ? data.isCustomerVisible : Boolean(online))
+  const dispatchMode = dispatchModeValue ?? data.dispatchModeValue ?? 'AUTO'
   const statusLower = String(data.status || '').toLowerCase()
+  const accountStatusUpper = String(data.accountStatus || '').toUpperCase()
+  const isDraft =
+    statusLower === 'draft' || accountStatusUpper === 'DRAFT'
+  const isPending =
+    statusLower.includes('pending') || accountStatusUpper === 'PENDING_APPROVAL'
   const isForceClosed =
     Boolean(data.forceClosed) || statusLower.includes('force-closed')
   const isSuspended =
-    statusLower === 'suspended' ||
-    String(data.accountStatus || '').toUpperCase() === 'SUSPENDED'
+    statusLower === 'suspended' || accountStatusUpper === 'SUSPENDED'
+  const isActiveAccount =
+    !isDraft && !isPending && !isSuspended && Boolean(data.isAccountActive ?? !isDraft)
+  const storeControlsDisabled =
+    isSuspended ||
+    isForceClosed ||
+    storeOnlineSaving ||
+    storeVisibleSaving ||
+    activating ||
+    deactivating
+  const storeVisibleHint = isDraft || isPending
+    ? isPending
+      ? 'Approve the vendor before showing in the customer app'
+      : 'Activate the vendor before showing in the customer app'
+    : visible
+      ? 'Shown in customer search and category listings.'
+      : 'Hidden from the customer app.'
+  const storeActiveHint = isDraft || isPending
+    ? isPending
+      ? 'Approve the vendor before accepting orders'
+      : 'Activate the vendor before accepting orders'
+    : online
+      ? 'Vendor can receive orders; customers can check out.'
+      : 'Customers cannot place orders (can still browse if Visible is ON).'
+
+  let displayStatus = String(data.status || '').trim() || '—'
+  if (isSuspended) displayStatus = 'Suspended'
+  else if (isForceClosed) displayStatus = 'Force-closed'
+  else if (isDraft) displayStatus = 'Draft'
+  else if (isPending) displayStatus = 'Pending approval'
+  else if (isActiveAccount) {
+    if (!visible) displayStatus = 'Hidden'
+    else if (!online) displayStatus = 'Unavailable'
+    else displayStatus = 'Active'
+  }
 
   const statusBadgeClass = isSuspended
     ? 'bg-[#fdebea] text-[#bf3c36]'
-    : isForceClosed
+    : isForceClosed || displayStatus === 'Unavailable'
       ? 'bg-[#fff3d6] text-[#9E6B0D]'
-      : 'bg-[#e8f7ed] text-[#147940]'
+      : isDraft || isPending || displayStatus === 'Hidden' || displayStatus === 'Inactive'
+        ? 'bg-[#eff2f0] text-[#637068]'
+        : 'bg-[#e8f7ed] text-[#147940]'
 
   const deliveryZonesForTab = (() => {
     if (deliveryZones?.defaults) return deliveryZones
@@ -417,7 +500,18 @@ export default function AdminVendorDetailPage() {
   const applyVendorDetail = (next) => {
     if (!next) return
     setData(next)
-    setStoreOnline(next.storeOnline === false ? false : Boolean(next.storeOnline))
+    setStoreOnline(
+      typeof next.isOnline === 'boolean'
+        ? next.isOnline
+        : next.storeOnline === false
+          ? false
+          : Boolean(next.storeOnline),
+    )
+    setStoreVisible(
+      typeof next.isCustomerVisible === 'boolean'
+        ? next.isCustomerVisible
+        : Boolean(next.storeOnline),
+    )
   }
 
   const handleForceClose = async (form) => {
@@ -431,7 +525,6 @@ export default function AdminVendorDetailPage() {
 
   const handleReopen = async () => {
     if (reopening) return
-    setActionError(null)
     setReopening(true)
     try {
       const response = await adminService.reopenVendor(vendorId)
@@ -440,8 +533,9 @@ export default function AdminVendorDetailPage() {
         await refetch()
         setStoreOnline(true)
       }
+      showSuccess('Store reopened.')
     } catch (err) {
-      setActionError(err?.message || 'Failed to reopen vendor.')
+      showError(err?.message || 'Failed to reopen vendor.')
     } finally {
       setReopening(false)
     }
@@ -458,7 +552,6 @@ export default function AdminVendorDetailPage() {
 
   const handleUnsuspend = async () => {
     if (unsuspending) return
-    setActionError(null)
     setUnsuspending(true)
     try {
       const response = await adminService.unsuspendVendor(vendorId)
@@ -467,10 +560,144 @@ export default function AdminVendorDetailPage() {
         await refetch()
         setStoreOnline(true)
       }
+      showSuccess('Vendor unsuspended.')
     } catch (err) {
-      setActionError(err?.message || 'Failed to unsuspend vendor.')
+      showError(err?.message || 'Failed to unsuspend vendor.')
     } finally {
       setUnsuspending(false)
+    }
+  }
+
+  const handleActivateVendor = async (successLabel = 'Vendor activated successfully.') => {
+    if (activating || !isAdminRealApiFeature('vendors')) return
+    setActivating(true)
+    try {
+      const response = await adminService.activateVendor(vendorId, {
+        activate: true,
+        isCustomerVisible: true,
+        isOnline: true,
+      })
+      applyVendorDetail(response?.data)
+      if (!response?.data) await refetch()
+      showSuccess(successLabel)
+    } catch (err) {
+      showError(formatApiErrorMessage(err, 'Failed to activate vendor.'))
+    } finally {
+      setActivating(false)
+    }
+  }
+
+  const handleReturnToDraft = async () => {
+    if (deactivating || !isAdminRealApiFeature('vendors')) return
+    setDeactivating(true)
+    try {
+      const response = await adminService.activateVendor(vendorId, { activate: false })
+      applyVendorDetail(response?.data)
+      if (!response?.data) await refetch()
+      showSuccess('Vendor moved back to draft.')
+    } catch (err) {
+      showError(formatApiErrorMessage(err, 'Failed to update vendor status.'))
+    } finally {
+      setDeactivating(false)
+    }
+  }
+
+  const handleStoreVisibleToggle = async () => {
+    if (storeControlsDisabled) return
+    const nextVisible = !visible
+
+    if (isDraft || isPending) {
+      if (!nextVisible) return
+      await handleActivateVendor(
+        isPending ? 'Vendor approved and activated.' : 'Vendor activated successfully.',
+      )
+      return
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      setStoreVisible(nextVisible)
+      showSuccess(nextVisible ? 'Store is now visible.' : 'Store is now hidden from the customer app.')
+      return
+    }
+
+    setStoreVisibleSaving(true)
+    try {
+      const response = await adminService.updateVendorStoreControls(vendorId, {
+        isCustomerVisible: nextVisible,
+      })
+      applyVendorDetail(response?.data)
+      if (!response?.data) {
+        await refetch()
+        setStoreVisible(nextVisible)
+      }
+      showSuccess(nextVisible ? 'Store is now visible.' : 'Store is now hidden from the customer app.')
+    } catch (err) {
+      showError(formatApiErrorMessage(err, 'Failed to update visibility.'))
+    } finally {
+      setStoreVisibleSaving(false)
+    }
+  }
+
+  const handleStoreOnlineToggle = async () => {
+    if (storeControlsDisabled) return
+
+    const nextOnline = !online
+
+    if (isDraft || isPending) {
+      if (!nextOnline) return
+      await handleActivateVendor(
+        isPending ? 'Vendor approved and activated.' : 'Vendor activated successfully.',
+      )
+      return
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      setStoreOnline(nextOnline)
+      showSuccess(nextOnline ? 'Store is now accepting orders.' : 'Store is unavailable for ordering.')
+      return
+    }
+
+    setStoreOnlineSaving(true)
+    try {
+      const response = await adminService.updateVendorStoreControls(vendorId, {
+        isOnline: nextOnline,
+      })
+      applyVendorDetail(response?.data)
+      if (!response?.data) {
+        await refetch()
+        setStoreOnline(nextOnline)
+      }
+      showSuccess(nextOnline ? 'Store is now accepting orders.' : 'Store is unavailable for ordering.')
+    } catch (err) {
+      showError(formatApiErrorMessage(err, 'Failed to update store status.'))
+    } finally {
+      setStoreOnlineSaving(false)
+    }
+  }
+
+  const handleDispatchModeChange = async (nextMode) => {
+    const normalized = String(nextMode || '').toUpperCase() === 'MANUAL' ? 'MANUAL' : 'AUTO'
+    if (normalized === dispatchMode || dispatchSaving) return
+
+    setDispatchModeValue(normalized)
+    if (!isAdminRealApiFeature('vendors')) {
+      showSuccess(`Dispatch mode set to ${normalized === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}.`)
+      return
+    }
+
+    setDispatchSaving(true)
+    try {
+      const response = await adminService.updateVendorStoreControls(vendorId, {
+        dispatchMode: normalized,
+      })
+      applyVendorDetail(response?.data)
+      if (!response?.data) await refetch()
+      showSuccess(`Dispatch mode set to ${normalized === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}.`)
+    } catch (err) {
+      setDispatchModeValue(data.dispatchModeValue || 'AUTO')
+      showError(formatApiErrorMessage(err, 'Failed to update dispatch mode.'))
+    } finally {
+      setDispatchSaving(false)
     }
   }
 
@@ -495,7 +722,7 @@ export default function AdminVendorDetailPage() {
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-[22px] font-bold tracking-[-0.02em] text-[#17231c]">{data.name}</h2>
               <span className={cn('inline-flex rounded-full px-2.5 py-[3px] text-[11px] font-bold', statusBadgeClass)}>
-                {data.status}
+                {displayStatus}
               </span>
             </div>
             <p className="mt-1 truncate text-[12.5px] text-[#7c8780]">
@@ -595,18 +822,58 @@ export default function AdminVendorDetailPage() {
 
               <div className="flex items-start justify-between gap-3 border-b border-[#f0f2f0] pb-3">
                 <div className="min-w-0">
-                  <p className="text-[13px] font-bold text-[#17231c]">Store online</p>
+                  <p className="text-[13px] font-bold text-[#17231c]">Visible</p>
                   <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-                    {online ? data.storeOnlineHint : 'Hidden from customers'}
+                    {storeVisibleHint}
                   </p>
+                  {isActiveAccount ? (
+                    <p className="mt-1 text-[11px] leading-[15px] text-[#9aa49d]">
+                      Controls customer-app discovery only. Does not deactivate the vendor account.
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={visible}
+                  aria-label="Visible"
+                  disabled={storeControlsDisabled}
+                  onClick={handleStoreVisibleToggle}
+                  className={cn(
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
+                    visible ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
+                      visible ? 'left-[23px]' : 'left-[3px]',
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-start justify-between gap-3 border-b border-[#f0f2f0] pb-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-[#17231c]">Active</p>
+                  <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+                    {storeActiveHint}
+                  </p>
+                  {isActiveAccount ? (
+                    <p className="mt-1 text-[11px] leading-[15px] text-[#9aa49d]">
+                      Controls order acceptance. Vendor can stay visible while Active is OFF.
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={online}
-                  onClick={() => setStoreOnline(!online)}
+                  aria-label="Active"
+                  disabled={storeControlsDisabled}
+                  onClick={handleStoreOnlineToggle}
                   className={cn(
-                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition',
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
                     online ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
                   )}
                 >
@@ -619,10 +886,101 @@ export default function AdminVendorDetailPage() {
                 </button>
               </div>
 
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <span className="text-[13px] text-[#7c8780]">Dispatch mode</span>
-                <span className="text-[13px] font-bold text-[#17231c]">{data.dispatchMode}</span>
+              {isDraft ? (
+                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                  <p className="text-[12px] leading-relaxed text-[#7c8780]">
+                    This vendor is still a draft. Activate it to make the store visible in the customer app.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleActivateVendor()}
+                    disabled={activating}
+                    className="mt-3 inline-flex h-[38px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+                  >
+                    {activating ? 'Activating…' : 'Activate vendor'}
+                  </button>
+                </div>
+              ) : null}
+
+              {isPending ? (
+                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                  <p className="text-[12px] leading-relaxed text-[#7c8780]">
+                    This vendor is waiting for approval before it can go live.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleActivateVendor('Vendor approved and activated.')}
+                      disabled={activating || deactivating}
+                      className="inline-flex h-[38px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+                    >
+                      {activating ? 'Approving…' : 'Approve & activate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReturnToDraft}
+                      disabled={activating || deactivating}
+                      className="inline-flex h-[38px] items-center rounded-full border border-[#d5dbd6] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7] disabled:opacity-60"
+                    >
+                      {deactivating ? 'Updating…' : 'Return to draft'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-bold text-[#17231c]">Dispatch mode</p>
+                    <p className="mt-0.5 text-[12px] text-[#7c8780]">
+                      {dispatchMode === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}
+                    </p>
+                  </div>
+                  {dispatchSaving ? (
+                    <span className="text-[12px] text-[#7c8780]">Saving…</span>
+                  ) : null}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    { value: 'AUTO', label: 'Auto-dispatch' },
+                    { value: 'MANUAL', label: 'Manual dispatch' },
+                  ].map((option) => {
+                    const selected = dispatchMode === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={dispatchSaving || isDraft || isPending || isSuspended}
+                        onClick={() => handleDispatchModeChange(option.value)}
+                        className={cn(
+                          'inline-flex h-[34px] items-center rounded-full border px-3.5 text-[12.5px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
+                          selected
+                            ? 'border-[#1aa054] bg-[#e8f7ed] text-[#147940]'
+                            : 'border-[#e1e5e2] bg-white text-[#455249] hover:border-[#c9d0cb]',
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
+
+              {isActiveAccount && !isForceClosed && !isSuspended ? (
+                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                  <p className="text-[12px] leading-relaxed text-[#7c8780]">
+                    Need to stop all activity? Move the vendor back to draft. This hides the store and disables the account until reactivated.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleReturnToDraft}
+                    disabled={deactivating}
+                    className="mt-3 inline-flex h-[36px] items-center rounded-full border border-[#d5dbd6] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7] disabled:opacity-60"
+                  >
+                    {deactivating ? 'Updating…' : 'Move to draft'}
+                  </button>
+                </div>
+              ) : null}
 
               <div className="mt-5 flex flex-col gap-2.5">
                 {isForceClosed ? (
@@ -645,9 +1003,6 @@ export default function AdminVendorDetailPage() {
                     Force close store
                   </button>
                 )}
-                {actionError ? (
-                  <p className="text-[12px] font-medium text-[#d64044]">{actionError}</p>
-                ) : null}
                 {isSuspended ? (
                   <button
                     type="button"
@@ -660,10 +1015,7 @@ export default function AdminVendorDetailPage() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      setActionError(null)
-                      setSuspendOpen(true)
-                    }}
+                    onClick={() => setSuspendOpen(true)}
                     className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
                   >
                     Suspend vendor
@@ -824,7 +1176,11 @@ export default function AdminVendorDetailPage() {
           {slaLoading && !(sla || data.sla) ? (
             <p className="text-[12px] text-[#7c8780]">Loading SLA…</p>
           ) : (sla || data.sla) ? (
-            <AdminVendorSla sla={sla || data.sla} />
+            <AdminVendorSla
+              sla={sla || data.sla}
+              vendorId={data.backendId || vendorId}
+              storeName={data.name}
+            />
           ) : (
             <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
               <p className="text-[15px] font-bold text-[#17231c]">SLA</p>

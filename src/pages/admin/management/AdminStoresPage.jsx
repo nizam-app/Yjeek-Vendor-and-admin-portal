@@ -157,10 +157,9 @@ export default function AdminStoresPage() {
                           aria-hidden
                         >
                           <CatalogStoreIcon
-                            id={row.slug || row.id}
-                            emoji={row.iconEmoji || row.icon}
                             iconUrl={row.iconUrl}
                             className="size-5"
+                            placeholderSize={14}
                           />
                         </span>
                         <div className="min-w-0">

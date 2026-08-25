@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
@@ -10,6 +10,7 @@ import {
   AdminDatePicker,
   todayLocalIsoDate,
 } from '../../../components/admin/AdminDatePicker'
+import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
@@ -18,6 +19,7 @@ import {
 } from '../../../mappers/admin/mapAdminFleet'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import { adminService } from '../../../services/adminService'
+import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
   ADMIN_IMAGE_UPLOAD_MAX_BYTES,
@@ -42,25 +44,68 @@ const SPECIAL_ITEMS = [
   'Frozen / Chilled',
 ]
 
-const STORE_TYPES = [
-  'Groceries',
-  'Food',
-  'Cosmetics',
-  'Gifts',
-  'Fashion',
-  'Stationery',
-  'Baby & Kids',
-  'Sports',
-  'Flowers',
-]
+function isSupplierActive(supplier) {
+  const status = String(supplier?.status || '').trim().toLowerCase()
+  if (status === 'active') return true
+  return String(supplier?.statusRaw || supplier?.status || '').trim().toUpperCase() === 'ACTIVE'
+}
 
-const MOCK_SUPPLIERS = [
-  { id: '', name: 'Yjeek Fleet (In-house)' },
-  { id: '', name: 'SwiftFleet' },
-  { id: '', name: 'PrimeRide' },
-]
+function formatSupplierOption(supplier) {
+  const name = String(supplier?.name || '').trim()
+  const type = String(supplier?.type || '').trim()
+  if (!name) return '—'
+  if (type === 'In-house') return `${name} (In-house)`
+  if (type === '3PL') return `${name} (3PL)`
+  return name
+}
+
+function dedupeSuppliers(list) {
+  const byId = new Map()
+  for (const item of list) {
+    if (!item?.id) continue
+    byId.set(item.id, item)
+  }
+  return [...byId.values()]
+}
 
 const EMPTY_DOCS = Object.fromEntries(Object.keys(CHAMP_DOC_SLOT_META).map((key) => [key, '']))
+
+const EMPTY_CHAMP_FORM = {
+  fullName: '',
+  phone: '',
+  email: '',
+  nationality: '',
+  supplierId: '',
+  supplier: '',
+  cpr: '',
+  cprExpiry: '',
+  birthDate: '',
+  passport: '',
+  passportExpiry: '',
+  visa: '',
+  visaExpiry: '',
+  insuranceExpiry: '',
+  licenseExpiry: '',
+  plate: '',
+  make: '',
+  model: '',
+  color: '',
+  year: '',
+  vehicleType: 'Bike',
+  specialItems: false,
+  dailyLimit: '',
+  orderLimit: '',
+  onLimit: '',
+}
+
+function serializeChampDraft(form, docs, selectedSlugs, specialTypes) {
+  return JSON.stringify({
+    form,
+    docs,
+    selectedSlugs: [...(selectedSlugs || [])].sort(),
+    specialTypes: [...(specialTypes || [])].sort(),
+  })
+}
 
 function Field({ label, children, className }) {
   return (
@@ -279,47 +324,47 @@ export default function AdminAddChampPage() {
     navigate('/admin/fleet')
   }
 
-  const [form, setForm] = useState({
-    fullName: '',
-    phone: '',
-    email: '',
-    nationality: '',
-    supplierId: '',
-    supplier: '',
-    city: '',
-    zone: '',
-    tier: '',
-    cpr: '',
-    cprExpiry: '',
-    birthDate: '',
-    passport: '',
-    passportExpiry: '',
-    visa: '',
-    visaExpiry: '',
-    insuranceExpiry: '',
-    licenseExpiry: '',
-    plate: '',
-    make: '',
-    model: '',
-    color: '',
-    year: '',
-    vehicleType: 'Bike',
-    specialItems: false,
-    dailyLimit: '',
-    orderLimit: '',
-    onLimit: '',
-  })
+  const [form, setForm] = useState(EMPTY_CHAMP_FORM)
 
   const [docs, setDocs] = useState(() => ({ ...EMPTY_DOCS }))
   const [specialTypes, setSpecialTypes] = useState([])
-  const [storeTypes, setStoreTypes] = useState([])
-  const [suppliers, setSuppliers] = useState(MOCK_SUPPLIERS)
+  const [storeTypeOptions, setStoreTypeOptions] = useState([])
+  /** Selected store-type slugs (Rule 9). */
+  const [selectedSlugs, setSelectedSlugs] = useState([])
+  const [storeTypesLoading, setStoreTypesLoading] = useState(false)
+  const [storeTypesError, setStoreTypesError] = useState('')
+  const [suppliers, setSuppliers] = useState([])
   const [suppliersError, setSuppliersError] = useState('')
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [createdResult, setCreatedResult] = useState(null)
   const [loadingEdit, setLoadingEdit] = useState(isEdit)
   const [loadError, setLoadError] = useState('')
+  const [editBaseline, setEditBaseline] = useState(null)
+  const createBaseline = useMemo(
+    () => serializeChampDraft(EMPTY_CHAMP_FORM, EMPTY_DOCS, [], []),
+    [],
+  )
+  const draftSnapshot = useMemo(
+    () => serializeChampDraft(form, docs, selectedSlugs, specialTypes),
+    [form, docs, selectedSlugs, specialTypes],
+  )
+  const isDirty = isEdit
+    ? editBaseline != null && draftSnapshot !== editBaseline
+    : draftSnapshot !== createBaseline
+
+  const {
+    allowLeave,
+    requestLeave,
+    leaveModalOpen,
+    handleStayEditing,
+    handleLeaveWithoutSaving,
+  } = useAdminFormNavigationGuard({
+    isDirty,
+    enabled: !loadingEdit,
+  })
+
+  const handleBack = () => requestLeave(goBack)
 
   const update = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))
 
@@ -335,13 +380,50 @@ export default function AdminAddChampPage() {
     if (!useRealFleet) return undefined
 
     let cancelled = false
+    setStoreTypesLoading(true)
+    setStoreTypesError('')
+
+    ;(async () => {
+      try {
+        const typesRes = await adminService.listAdminStoreTypesForChampForm()
+        if (cancelled) return
+        const types = typesRes?.data?.storeTypes || []
+        setStoreTypeOptions(types)
+        if (!types.length) {
+          setStoreTypesError('No store types returned from Store Management.')
+        }
+      } catch (err) {
+        if (cancelled) return
+        setStoreTypeOptions([])
+        setStoreTypesError(formatApiErrorMessage(err, 'Failed to load store types from Store Management.'))
+      } finally {
+        if (!cancelled) setStoreTypesLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealFleet])
+
+  useEffect(() => {
+    if (!useRealFleet) return undefined
+
+    let cancelled = false
     ;(async () => {
       try {
         const result = await adminService.listAdminFleetSuppliers()
         if (cancelled) return
-        const list = result?.data?.suppliers || []
+        const list = dedupeSuppliers(result?.data?.suppliers || [])
         setSuppliers(list)
-        setSuppliersError(list.length ? '' : 'No suppliers found. Create a supplier first.')
+        const activeCount = list.filter(isSupplierActive).length
+        setSuppliersError(
+          activeCount
+            ? ''
+            : list.length
+              ? 'No active suppliers found. Activate a supplier first.'
+              : 'No suppliers found. Create a supplier first.',
+        )
       } catch (err) {
         if (cancelled) return
         setSuppliersError(formatApiErrorMessage(err, 'Failed to load suppliers.'))
@@ -372,19 +454,41 @@ export default function AdminAddChampPage() {
         if (cancelled) return
         const mapped = mapAdminChampDetailToForm(detailResult?.data || detailResult, docsResult?.data)
         const {
+          selectedSlugs: nextSelectedSlugs,
           storeTypes: nextStoreTypes,
           specialTypes: nextSpecialTypes,
           docs: nextDocs,
           ...nextForm
         } = mapped
         setForm((prev) => ({ ...prev, ...nextForm }))
-        setStoreTypes(Array.isArray(nextStoreTypes) ? nextStoreTypes : [])
+        const hydratedSlugs = Array.isArray(nextSelectedSlugs)
+          ? nextSelectedSlugs
+          : Array.isArray(nextStoreTypes)
+            ? nextStoreTypes
+            : []
+        setSelectedSlugs(hydratedSlugs)
         if (Array.isArray(nextSpecialTypes) && nextSpecialTypes.length) {
           setSpecialTypes(nextSpecialTypes)
         }
         if (nextDocs && typeof nextDocs === 'object') {
           setDocs((prev) => ({ ...prev, ...nextDocs }))
         }
+        const hydratedSlugsFinal = Array.isArray(nextSelectedSlugs)
+          ? nextSelectedSlugs
+          : Array.isArray(nextStoreTypes)
+            ? nextStoreTypes
+            : []
+        const specialFinal = Array.isArray(nextSpecialTypes) && nextSpecialTypes.length
+          ? nextSpecialTypes
+          : []
+        setEditBaseline(
+          serializeChampDraft(
+            { ...EMPTY_CHAMP_FORM, ...nextForm },
+            nextDocs && typeof nextDocs === 'object' ? { ...EMPTY_DOCS, ...nextDocs } : EMPTY_DOCS,
+            hydratedSlugsFinal,
+            specialFinal,
+          ),
+        )
       } catch (err) {
         if (!cancelled) {
           setLoadError(formatApiErrorMessage(err, 'Failed to load champ for edit.'))
@@ -399,18 +503,25 @@ export default function AdminAddChampPage() {
     }
   }, [isEdit, champId, useRealFleet])
 
+  const supplierOptions = useMemo(() => {
+    const active = suppliers.filter(isSupplierActive)
+    if (isEdit && form.supplierId) {
+      const current = suppliers.find((item) => item.id === form.supplierId)
+      if (current && !active.some((item) => item.id === current.id)) {
+        return [current, ...active]
+      }
+    }
+    return active
+  }, [suppliers, isEdit, form.supplierId])
+
   const handleSupplierChange = (e) => {
     const value = e.target.value
-    if (useRealFleet) {
-      const match = suppliers.find((s) => s.id === value)
-      setForm((prev) => ({
-        ...prev,
-        supplierId: value,
-        supplier: match?.name || prev.supplier,
-      }))
-      return
-    }
-    setForm((prev) => ({ ...prev, supplier: value, supplierId: '' }))
+    const match = supplierOptions.find((s) => s.id === value)
+    setForm((prev) => ({
+      ...prev,
+      supplierId: value,
+      supplier: match?.name || prev.supplier,
+    }))
   }
 
   async function handleSave() {
@@ -422,12 +533,18 @@ export default function AdminAddChampPage() {
       return
     }
 
+    if (storeTypesError || !storeTypeOptions.length) {
+      setSubmitError(storeTypesError || 'Store types are required before saving a champ.')
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
         ...form,
-        storeTypes,
-        allowedCategories: storeTypes,
+        selectedSlugs,
+        storeTypes: selectedSlugs,
+        allowedCategories: selectedSlugs,
         specialTypes,
         specialItemTypes: specialTypes,
         docs,
@@ -435,6 +552,7 @@ export default function AdminAddChampPage() {
 
       if (isEdit) {
         await adminService.updateAdminFleetChamp(champId, payload)
+        allowLeave()
         navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
         return
       }
@@ -444,10 +562,12 @@ export default function AdminAddChampPage() {
       setCreatedResult(created)
 
       if (created?.temporaryPassword) {
+        allowLeave()
         return
       }
 
       const id = created?.id
+      allowLeave()
       navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
     } catch (err) {
       setSubmitError(
@@ -460,6 +580,7 @@ export default function AdminAddChampPage() {
 
   const goToCreatedChamp = () => {
     const id = createdResult?.id
+    allowLeave()
     navigate(id ? `/admin/fleet/${encodeURIComponent(id)}` : '/admin/fleet')
   }
 
@@ -468,7 +589,7 @@ export default function AdminAddChampPage() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <button
           type="button"
-          onClick={goBack}
+          onClick={handleBack}
           className="inline-flex h-[34px] shrink-0 items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3 text-[13px] font-medium text-[#1C211F] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
         >
           <ChevronLeft size={15} strokeWidth={2.2} />
@@ -498,6 +619,12 @@ export default function AdminAddChampPage() {
       {suppliersError && useRealFleet ? (
         <div className="mb-4 rounded-[12px] border border-[#f0e0b2] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
           {suppliersError}
+        </div>
+      ) : null}
+
+      {storeTypesError && useRealFleet ? (
+        <div className="mb-4 rounded-[12px] border border-[#f0c9c6] bg-[#fff5f4] px-4 py-3 text-[13px] text-[#b42318]">
+          {storeTypesError}
         </div>
       ) : null}
 
@@ -540,8 +667,6 @@ export default function AdminAddChampPage() {
                 value={form.phone}
                 onChange={update('phone')}
                 placeholder={isEdit ? undefined : '+973 3xxx xxxx'}
-                disabled={isEdit}
-                title={isEdit ? 'Phone cannot be changed via edit API' : undefined}
               />
             </Field>
             <Field label="Email">
@@ -566,60 +691,27 @@ export default function AdminAddChampPage() {
             </Field>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+          <div className="mt-3 max-[700px]:grid-cols-1">
             <Field label="Supplier">
-              {useRealFleet ? (
-                <Select value={form.supplierId} onChange={handleSupplierChange} disabled={!suppliers.length}>
-                  <option value="" disabled>
-                    {suppliers.length ? 'Select supplier' : 'No suppliers'}
-                  </option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </Select>
-              ) : (
-                <Select value={form.supplier} onChange={handleSupplierChange}>
-                  <option value="" disabled>
-                    Select supplier
-                  </option>
-                  <option value="Yjeek Fleet (In-house)">Yjeek Fleet (In-house)</option>
-                  <option value="SwiftFleet">SwiftFleet</option>
-                  <option value="PrimeRide">PrimeRide</option>
-                </Select>
-              )}
-            </Field>
-            <Field label="Tier">
-              <Select value={form.tier} onChange={update('tier')}>
+              <Select
+                value={form.supplierId}
+                onChange={handleSupplierChange}
+                disabled={!useRealFleet || !supplierOptions.length}
+              >
                 <option value="" disabled>
-                  Select tier
+                  {!useRealFleet
+                    ? 'Real fleet API required'
+                    : supplierOptions.length
+                      ? 'Select supplier'
+                      : 'No active suppliers'}
                 </option>
-                <option value="BRONZE">Bronze</option>
-                <option value="SILVER">Silver</option>
-                <option value="GOLD">Gold</option>
-                <option value="ELITE">Elite</option>
-                <option value="AT_RISK">At Risk</option>
+                {supplierOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {formatSupplierOption(s)}
+                    {!isSupplierActive(s) ? ' (inactive)' : ''}
+                  </option>
+                ))}
               </Select>
-            </Field>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
-            <Field label="City">
-              <input
-                className={inputClass}
-                value={form.city}
-                onChange={update('city')}
-                placeholder={isEdit ? undefined : 'Manama'}
-              />
-            </Field>
-            <Field label="Zone">
-              <input
-                className={inputClass}
-                value={form.zone}
-                onChange={update('zone')}
-                placeholder={isEdit ? undefined : 'Adliya'}
-              />
             </Field>
           </div>
 
@@ -839,16 +931,24 @@ export default function AdminAddChampPage() {
 
           <div className="mb-5">
             <p className="mb-2.5 text-[12px] font-medium text-[#7c8780]">Allowed store types</p>
-            <div className="flex flex-wrap gap-2">
-              {STORE_TYPES.map((item) => (
-                <Chip
-                  key={item}
-                  label={item}
-                  selected={storeTypes.includes(item)}
-                  onClick={() => toggleChip(storeTypes, setStoreTypes, item)}
-                />
-              ))}
-            </div>
+            {storeTypesLoading ? (
+              <p className="text-[12px] text-[#7c8780]">Loading store types…</p>
+            ) : storeTypeOptions.length ? (
+              <div className="flex flex-wrap gap-2">
+                {storeTypeOptions.map((item) => (
+                  <Chip
+                    key={item.slug}
+                    label={item.name}
+                    selected={selectedSlugs.includes(item.slug)}
+                    onClick={() => toggleChip(selectedSlugs, setSelectedSlugs, item.slug)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12px] text-[#b42318]">
+                {storeTypesError || 'No store types available from Store Management.'}
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 max-[900px]:grid-cols-1">
@@ -885,7 +985,7 @@ export default function AdminAddChampPage() {
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
-          onClick={goBack}
+          onClick={handleBack}
           className="text-[13px] font-semibold hover:text-[#455249]  py-2.5 px-3 rounded-full bg-white text-black"
         >
           Cancel
@@ -913,6 +1013,19 @@ export default function AdminAddChampPage() {
           </button>
         </div>
       </div>
+
+      <AdminLeaveFormModal
+        open={leaveModalOpen}
+        busy={saving}
+        title={isEdit ? 'Leave champ setup?' : 'Leave add champ?'}
+        message={
+          isEdit
+            ? 'You have unsaved changes on this champ. Keep editing or leave without saving.'
+            : 'You have unsaved progress on this champ form. Keep editing or leave without saving.'
+        }
+        onStay={handleStayEditing}
+        onLeave={handleLeaveWithoutSaving}
+      />
     </div>
   )
 }

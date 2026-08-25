@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
@@ -230,6 +230,7 @@ export default function AdminCreateUserPage() {
   const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [submitError, setSubmitError] = useState(null)
 
   const { data: meta, error: metaError, isLoading: metaLoading, refetch: refetchMeta } =
@@ -425,13 +426,20 @@ export default function AdminCreateUserPage() {
       return
     }
 
+    if (!String(form.password || '').trim()) {
+      setSubmitError('Password is required.')
+      setStep(0)
+      return
+    }
+
     setSaving(true)
     try {
       const created = await adminService.createAdminUser({
         ...form,
         username: form.username || form.email,
-        sendInvite: true,
+        sendInvite: false,
         temporaryPassword: form.password,
+        password: form.password,
         permissionOverrides: {},
       })
       const id = created?.data?.row?.id
@@ -444,7 +452,12 @@ export default function AdminCreateUserPage() {
   }
 
   const goNext = async () => {
+    if (step === 0 && !String(form.password || '').trim()) {
+      setSubmitError('Password is required.')
+      return
+    }
     if (step < steps.length - 1) {
+      setSubmitError(null)
       setStep((current) => current + 1)
       return
     }
@@ -468,7 +481,9 @@ export default function AdminCreateUserPage() {
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3.5">
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Create user</h2>
-        <p className="mt-0.5 text-[12.5px] text-[#7c8780]">Invite a staff member to the admin panel</p>
+        <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
+          Create an admin account with a password. The user can log in immediately.
+        </p>
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1">
@@ -570,15 +585,29 @@ export default function AdminCreateUserPage() {
                   onChange={update('username')}
                 />
               </Field>
-              <Field label="Temporary password">
-                <input
-                  className={inputClass}
-                  value={form.password}
-                  onChange={update('password')}
-                />
+              <Field label="Password">
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    className={cn(inputClass, 'pr-11')}
+                    value={form.password}
+                    onChange={update('password')}
+                    placeholder="Min 12 chars · upper, lower, number, symbol"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-md text-[#7c8780] hover:bg-[#f3f5f3] hover:text-[#455249]"
+                  >
+                    {showPassword ? <EyeOff size={16} strokeWidth={2} /> : <Eye size={16} strokeWidth={2} />}
+                  </button>
+                </div>
               </Field>
               <p className="text-[11px] text-[#8a948e]">
-                Invite flow uses email invitation (`sendInvite: true`). Temporary password is optional.
+                Required. Share this password with the user securely. Account is Active right away —
+                no invite email.
               </p>
             </div>
           </Card>
@@ -665,7 +694,7 @@ export default function AdminCreateUserPage() {
           <Card title="Login credentials">
             <div className="grid grid-cols-2 gap-4 max-[700px]:grid-cols-1">
               <ReviewField label="Username" value={form.username || form.email} />
-              <ReviewField label="Password" value={form.password || '— (invite email)'} />
+              <ReviewField label="Password" value={form.password ? '••••••••' : '—'} />
             </div>
           </Card>
 
@@ -686,7 +715,7 @@ export default function AdminCreateUserPage() {
 
           <Card
             title="Permissions"
-            subtitle="Filled automatically from the selected role. Checkboxes are locked on invite (permissionOverrides stay empty)."
+            subtitle="Filled automatically from the selected role. Checkboxes are locked on create (permissionOverrides stay empty)."
           >
             <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
               <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -767,7 +796,7 @@ export default function AdminCreateUserPage() {
               ? 'Next: Role & scope'
               : step === 1
                 ? 'Next: Review'
-                : 'Create & invite'}
+                : 'Create user'}
         </button>
       </div>
     </div>

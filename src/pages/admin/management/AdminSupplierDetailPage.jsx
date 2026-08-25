@@ -6,10 +6,17 @@ import motoBikeIcon from '../../../assets/moto_bike.png'
 import carIcon from '../../../assets/💨.png'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
+import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import {
+  AdminDatePicker,
+  localDateToEndIso,
+  localDateToStartIso,
+} from '../../../components/admin/AdminDatePicker'
 import { cn } from '../../../components/admin/cn'
+import { showError, showSuccess } from '../../../utils/toast'
 
 const MOCK_SUPPLIER_DETAILS = {
   'sup-speedx': {
@@ -178,18 +185,18 @@ function InfoItem({ label, children, valueClassName }) {
   )
 }
 
-function PeriodField({ label, value }) {
+function PeriodDateField({ label, value, onChange, min, max }) {
   return (
-    <label className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3">
-      <span className="text-[12px] font-medium text-[#7c8780]">📅</span>
+    <div className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3">
       <span className="text-[12px] font-medium text-[#7c8780]">{label}</span>
-      <input
-        type="text"
-        readOnly
+      <AdminDatePicker
         value={value}
-        className="w-[96px] border-0 bg-transparent p-0 text-[12.5px] font-medium text-[#17231c] outline-none"
+        onChange={onChange}
+        min={min}
+        max={max}
+        className="w-[118px] [&>button]:h-[28px] [&>button]:border-0 [&>button]:px-0 [&>button]:shadow-none [&>button]:focus:border-transparent"
       />
-    </label>
+    </div>
   )
 }
 
@@ -209,20 +216,33 @@ function PerfCard({ value, label, tone }) {
   )
 }
 
-function defaultPeriodFilters() {
+function defaultPeriodLocalDates() {
   const now = new Date()
-  const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
-  const to = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59, 999),
-  ).toISOString()
-  return { from, to }
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const lastDay = new Date(year, now.getMonth() + 1, 0).getDate()
+  return {
+    fromLocal: `${year}-${month}-01`,
+    toLocal: `${year}-${month}-${String(lastDay).padStart(2, '0')}`,
+  }
 }
 
 export default function AdminSupplierDetailPage() {
   const { supplierId } = useParams()
   const navigate = useNavigate()
   const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
-  const [period] = useState(defaultPeriodFilters)
+  const defaults = defaultPeriodLocalDates()
+  const [fromLocal, setFromLocal] = useState(defaults.fromLocal)
+  const [toLocal, setToLocal] = useState(defaults.toLocal)
+  const [togglingStatus, setTogglingStatus] = useState(false)
+
+  const period = useMemo(
+    () => ({
+      from: localDateToStartIso(fromLocal),
+      to: localDateToEndIso(toLocal),
+    }),
+    [fromLocal, toLocal],
+  )
 
   const { data: apiData, error, isLoading, refetch } = useApiResource(
     () => {
@@ -245,6 +265,38 @@ export default function AdminSupplierDetailPage() {
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const statusActive = String(data.status || '').toLowerCase() === 'active'
+
+  const handleToggleSupplierStatus = async () => {
+    if (togglingStatus || !useRealFleet) return
+
+    const nextActive = !statusActive
+    const confirmMessage = nextActive
+      ? 'Reactivate this supplier? Champs suspended due to supplier deactivation will be restored.'
+      : 'Deactivate this supplier? All active champs under this supplier will also be suspended.'
+
+    if (!window.confirm(confirmMessage)) return
+
+    setTogglingStatus(true)
+    try {
+      if (nextActive) {
+        await adminService.activateAdminFleetSupplier(supplierId)
+        showSuccess('Supplier activated.')
+      } else {
+        await adminService.deactivateAdminFleetSupplier(supplierId)
+        showSuccess('Supplier deactivated. Active champs under this supplier were suspended.')
+      }
+      await refetch()
+    } catch (err) {
+      showError(
+        formatApiErrorMessage(
+          err,
+          nextActive ? 'Failed to activate supplier.' : 'Failed to deactivate supplier.',
+        ),
+      )
+    } finally {
+      setTogglingStatus(false)
+    }
+  }
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -316,9 +368,22 @@ export default function AdminSupplierDetailPage() {
           </button>
           <button
             type="button"
-            className="inline-flex h-[36px] items-center rounded-full border border-[#f3c8ca] bg-[#fdebec] px-3.5 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+            onClick={handleToggleSupplierStatus}
+            disabled={togglingStatus || !useRealFleet}
+            className={cn(
+              'inline-flex h-[36px] items-center rounded-full border px-3.5 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-60',
+              statusActive
+                ? 'border-[#f3c8ca] bg-[#fdebec] text-[#d64044] hover:bg-[#f9d9da]'
+                : 'border-[#b8e6cb] bg-[#e8f7ee] text-[#127338] hover:bg-[#d9f0e3]',
+            )}
           >
-            {statusActive ? 'Deactivate' : 'Activate'}
+            {togglingStatus
+              ? statusActive
+                ? 'Deactivating…'
+                : 'Activating…'
+              : statusActive
+                ? 'Deactivate'
+                : 'Activate'}
           </button>
         </div>
       </div>
@@ -365,7 +430,9 @@ export default function AdminSupplierDetailPage() {
           <h3 className="text-[15px] font-bold text-[#17231c]">Champs ({data.champsCount})</h3>
           <button
             type="button"
-            onClick={() => navigate('/admin/fleet')}
+            onClick={() =>
+              navigate(`/admin/fleet/suppliers/${encodeURIComponent(supplierId)}/champs`)
+            }
             className="inline-flex h-[32px] items-center rounded-full border border-[#e4e8e4] bg-white px-3 text-[12px] font-bold text-[#17231c] hover:bg-[#f6f8f6]"
           >
             View all champs
@@ -431,8 +498,41 @@ export default function AdminSupplierDetailPage() {
 
         <div className="mt-3 mb-4 flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-medium text-[#7c8780]">Period</span>
-          <PeriodField label="From" value={data.periodFrom} />
-          <PeriodField label="To" value={data.periodTo} />
+          {useRealFleet ? (
+            <>
+              <PeriodDateField
+                label="From"
+                value={fromLocal}
+                min={null}
+                max={toLocal || undefined}
+                onChange={(value) => {
+                  setFromLocal(value)
+                  if (value && toLocal && value > toLocal) setToLocal(value)
+                }}
+              />
+              <PeriodDateField
+                label="To"
+                value={toLocal}
+                min={fromLocal || null}
+                max={null}
+                onChange={(value) => {
+                  setToLocal(value)
+                  if (value && fromLocal && value < fromLocal) setFromLocal(value)
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <div className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3 text-[12.5px] font-medium text-[#17231c]">
+                <span className="text-[12px] font-medium text-[#7c8780]">From</span>
+                {data.periodFrom}
+              </div>
+              <div className="inline-flex h-[36px] items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3 text-[12.5px] font-medium text-[#17231c]">
+                <span className="text-[12px] font-medium text-[#7c8780]">To</span>
+                {data.periodTo}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-3 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1">

@@ -46,6 +46,7 @@ export function mapAdminLiveOrderItem(item) {
     vendor: vendor?.name || '—',
     vendorArea: vendor?.area ?? null,
     vendorId: vendor?.id ?? null,
+    createdAt: item.createdAt ?? null,
     temperature: item.category ? String(item.category) : null,
     timeLeft: item.timeLeftLabel || (item.elapsedMin != null ? `${item.elapsedMin}m` : '—'),
     elapsedMin: item.elapsedMin ?? null,

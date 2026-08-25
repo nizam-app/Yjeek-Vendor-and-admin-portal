@@ -7,6 +7,23 @@ import { hasGoogleMapsApiKey, isPlottableLatLng, loadGoogleMapsApi } from '../..
 const DEFAULT_CENTER = { lat: 26.2285, lng: 50.586 }
 const USER_LOCATION_ZOOM = 14
 
+function matchesFocus(point, focusTarget) {
+  if (!point || !focusTarget?.id) return false
+  const id = String(focusTarget.id)
+  const type = focusTarget.type
+
+  if (type === 'order') {
+    return String(point.orderId || '') === id || String(point.id || '').startsWith(`${id}-`)
+  }
+  if (type === 'vendor') {
+    return point.kind === 'vendor' && String(point.id) === id
+  }
+  if (type === 'champ') {
+    return point.kind === 'champ' && String(point.id) === id
+  }
+  return String(point.id) === id || String(point.orderId || '') === id
+}
+
 function buildPointTitle(point) {
   return [
     point.orderNumber || point.name,
@@ -33,11 +50,14 @@ export function AdminLiveMap({
   isLoading = false,
   error = null,
   onRetry,
+  focusTarget = null,
+  onPointClick,
 }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markersRef = useRef([])
   const userMarkerRef = useRef(null)
+  const infoWindowRef = useRef(null)
   const [mapStatus, setMapStatus] = useState('loading')
   const [mapError, setMapError] = useState(null)
   const [locating, setLocating] = useState(false)
@@ -110,12 +130,16 @@ export function AdminLiveMap({
 
     const maps = window.google.maps
     const map = mapInstanceRef.current
+    const clickListeners = []
 
     markersRef.current.forEach((marker) => marker.setMap(null))
     markersRef.current = []
+    if (infoWindowRef.current) {
+      infoWindowRef.current.close()
+    }
 
     if (!plottable.length) {
-      if (!userMarkerRef.current) {
+      if (!userMarkerRef.current && !focusTarget) {
         map.setCenter(DEFAULT_CENTER)
         map.setZoom(11)
       }
@@ -123,26 +147,67 @@ export function AdminLiveMap({
     }
 
     const bounds = new maps.LatLngBounds()
+    let focusedMarker = null
+    let focusedPoint = null
 
     plottable.forEach((point) => {
       const position = { lat: Number(point.lat), lng: Number(point.lng) }
       const size = point.kind === 'dropoff' ? 8 : 10
+      const isFocus = matchesFocus(point, focusTarget)
       const marker = new maps.Marker({
         map,
         position,
         title: buildPointTitle(point),
+        zIndex: isFocus ? 800 : undefined,
         icon: {
           path: maps.SymbolPath.CIRCLE,
-          scale: size / 2,
+          scale: isFocus ? 8 : size / 2,
           fillColor: point.color || '#737d77',
           fillOpacity: 1,
-          strokeColor: '#ffffff',
-          strokeWeight: 1.5,
+          strokeColor: isFocus ? '#17231c' : '#ffffff',
+          strokeWeight: isFocus ? 2.5 : 1.5,
         },
       })
+
+      const clickListener = marker.addListener('click', () => {
+        onPointClick?.(point)
+        if (!infoWindowRef.current) {
+          infoWindowRef.current = new maps.InfoWindow()
+        }
+        infoWindowRef.current.setContent(
+          `<div style="font:12px/1.4 sans-serif;max-width:220px"><strong>${
+            point.orderNumber || point.name || 'Pin'
+          }</strong><div>${buildPointTitle(point)}</div></div>`,
+        )
+        infoWindowRef.current.open({ map, anchor: marker })
+      })
+      clickListeners.push(clickListener)
+
+      if (isFocus && !focusedMarker) {
+        focusedMarker = marker
+        focusedPoint = point
+      }
+
       markersRef.current.push(marker)
       bounds.extend(position)
     })
+
+    if (focusedMarker && focusedPoint) {
+      map.panTo({ lat: Number(focusedPoint.lat), lng: Number(focusedPoint.lng) })
+      if (map.getZoom() < 14) map.setZoom(15)
+      if (!infoWindowRef.current) {
+        infoWindowRef.current = new maps.InfoWindow()
+      }
+      infoWindowRef.current.setContent(
+        `<div style="font:12px/1.4 sans-serif;max-width:220px"><strong>${
+          focusedPoint.orderNumber || focusedPoint.name || focusTarget?.label || 'Pin'
+        }</strong><div>${buildPointTitle(focusedPoint)}</div></div>`,
+      )
+      infoWindowRef.current.open({ map, anchor: focusedMarker })
+      return () => {
+        clickListeners.forEach((listener) => maps.event.removeListener(listener))
+      }
+    }
 
     map.fitBounds(bounds, 40)
     const listener = maps.event.addListenerOnce(map, 'bounds_changed', () => {
@@ -152,8 +217,9 @@ export function AdminLiveMap({
 
     return () => {
       maps.event.removeListener(listener)
+      clickListeners.forEach((item) => maps.event.removeListener(item))
     }
-  }, [mapStatus, pointsKey, plottable])
+  }, [mapStatus, pointsKey, plottable, focusTarget, onPointClick])
 
   useEffect(() => {
     return () => {

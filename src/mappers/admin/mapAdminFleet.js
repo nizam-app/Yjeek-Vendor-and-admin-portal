@@ -1,4 +1,15 @@
 import { ApiError } from '../../api/errors'
+import {
+  buildFleetCategoryFilterOptions,
+  normalizeChampAllowedCategorySlugs,
+  resolveChampSelectedSlugs,
+} from './taxonomyHelpers'
+
+export {
+  buildFleetCategoryFilterOptions,
+  normalizeChampAllowedCategorySlugs,
+  resolveChampSelectedSlugs,
+} from './taxonomyHelpers'
 
 const FLEET_COLUMNS = [
   'Champ name',
@@ -47,12 +58,62 @@ function formatMoney(value, currency = 'BHD') {
 }
 
 function moneyAmount(value) {
-  const numeric = Number(value)
+  if (value == null || value === '') return 0
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  if (typeof value === 'object' && value !== null && typeof value.toNumber === 'function') {
+    const n = value.toNumber()
+    return Number.isFinite(n) ? n : 0
+  }
+  const raw = String(value).replace(/,/g, '').trim()
+  const match = raw.match(/-?\d+(\.\d+)?/)
+  if (!match) return 0
+  const numeric = Number(match[0])
   return Number.isNaN(numeric) ? 0 : numeric
 }
 
-function hasOutstandingPodCash({ podCashBalance, codOutstanding, codAmount }) {
-  return [podCashBalance, codOutstanding, codAmount].some((value) => moneyAmount(value) > 0)
+function getAuthoritativeCollectedCash({ podCashBalance, codOutstanding, codAmount, pendingCashCollected }) {
+  return Math.max(
+    moneyAmount(podCashBalance),
+    moneyAmount(codOutstanding),
+    moneyAmount(codAmount),
+    moneyAmount(pendingCashCollected),
+  )
+}
+
+function isDailyCashLimitReached({
+  podCashBalance,
+  codOutstanding,
+  codAmount,
+  pendingCashCollected,
+  dailyCashLimit,
+}) {
+  const limit = moneyAmount(dailyCashLimit)
+  if (limit <= 0) return false
+  return (
+    getAuthoritativeCollectedCash({
+      podCashBalance,
+      codOutstanding,
+      codAmount,
+      pendingCashCollected,
+    }) >= limit
+  )
+}
+
+/** True only when collected COD meets/exceeds daily cash limit (blocks go-online). */
+function hasOutstandingPodCash({
+  podCashBalance,
+  codOutstanding,
+  codAmount,
+  pendingCashCollected,
+  dailyCashLimit,
+}) {
+  return isDailyCashLimitReached({
+    podCashBalance,
+    codOutstanding,
+    codAmount,
+    pendingCashCollected,
+    dailyCashLimit,
+  })
 }
 
 function titleCaseWords(value) {
@@ -145,15 +206,19 @@ function mapVehicleLabel(champ) {
 }
 
 function mapCategories(champ) {
-  const list = Array.isArray(champ.allowedCategories)
-    ? champ.allowedCategories
-    : Array.isArray(champ.categories)
-      ? champ.categories
-      : []
+  const resolved = Array.isArray(champ.allowedStoreTypes) ? champ.allowedStoreTypes : null
+  const list =
+    resolved && resolved.length
+      ? resolved
+      : Array.isArray(champ.allowedCategories)
+        ? champ.allowedCategories
+        : Array.isArray(champ.categories)
+          ? champ.categories
+          : []
   const labels = list
     .map((item) => {
-      if (typeof item === 'string') return item
-      return item?.name || item?.label || item?.id || null
+      if (typeof item === 'string') return item === '*' ? 'Any' : item
+      return item?.name || item?.label || item?.slug || item?.id || null
     })
     .filter(Boolean)
   const visible = labels.slice(0, 2)
@@ -187,6 +252,7 @@ function flattenChampListSource(champ) {
     lastName: profile?.lastName || champ.lastName,
     cprNumber: profile?.cprNumber || champ.cprNumber,
     allowedCategories: profile?.allowedCategories || champ.allowedCategories,
+    allowedStoreTypes: profile?.allowedStoreTypes || champ.allowedStoreTypes,
     dailyCashLimit: profile?.dailyCashLimit ?? champ.dailyCashLimit,
     vehicle: profile?.vehicle || champ.vehicle,
     vehicleType: profile?.vehicle?.type || champ.vehicleType,
@@ -494,11 +560,15 @@ export function mapAdminCreateChampRequest(form = {}) {
     throw new ApiError({ message: 'Supplier is required.' })
   }
 
-  const allowedCategories = Array.isArray(form.allowedCategories)
-    ? form.allowedCategories
-    : Array.isArray(form.storeTypes)
-      ? form.storeTypes
-      : []
+  const allowedCategories = normalizeChampAllowedCategorySlugs(
+    Array.isArray(form.allowedCategories)
+      ? form.allowedCategories
+      : Array.isArray(form.selectedSlugs)
+        ? form.selectedSlugs
+        : Array.isArray(form.storeTypes)
+          ? form.storeTypes
+          : [],
+  )
 
   const body = {
     firstName,
@@ -544,18 +614,31 @@ export function mapAdminUpdateChampRequest(form = {}) {
   if (firstName) body.firstName = firstName
   if (lastName) body.lastName = lastName
 
+  const phoneRaw = String(form.phone || '').trim()
+  if (phoneRaw) {
+    const { countryCode, phone } = parseChampPhone(form.phone, form.countryCode || '+973')
+    if (phone) {
+      body.countryCode = countryCode
+      body.phone = phone
+    }
+  }
+
   const email = String(form.email || '').trim()
   if (email) body.email = email
 
   const cprNumber = String(form.cprNumber || form.cpr || '').trim()
   if (cprNumber) body.cprNumber = cprNumber
 
-  const allowedCategories = Array.isArray(form.allowedCategories)
+  const allowedCategoriesRaw = Array.isArray(form.allowedCategories)
     ? form.allowedCategories
-    : Array.isArray(form.storeTypes)
-      ? form.storeTypes
-      : null
-  if (allowedCategories) body.allowedCategories = allowedCategories
+    : Array.isArray(form.selectedSlugs)
+      ? form.selectedSlugs
+      : Array.isArray(form.storeTypes)
+        ? form.storeTypes
+        : null
+  if (allowedCategoriesRaw) {
+    body.allowedCategories = normalizeChampAllowedCategorySlugs(allowedCategoriesRaw)
+  }
 
   if (form.dailyCashLimit != null || form.dailyLimit != null) {
     body.dailyCashLimit = parseDailyCashLimit(form.dailyCashLimit ?? form.dailyLimit)
@@ -624,11 +707,10 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
       ? 'Car'
       : 'Bike'
 
-  const categories = Array.isArray(detail.allowedCategories)
-    ? detail.allowedCategories
-    : Array.isArray(profile.allowedCategories)
-      ? profile.allowedCategories
-      : []
+  const selectedSlugs = resolveChampSelectedSlugs(
+    detail.allowedStoreTypes || profile.allowedStoreTypes,
+    detail.allowedCategories || profile.allowedCategories,
+  )
 
   const dailyLimitRaw = profile.dailyCashLimit ?? detail.cashLimit
   const dailyLimit =
@@ -712,7 +794,9 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
     dailyLimit,
     orderLimit,
     onLimit: CASH_LIMIT_ACTION_TO_FORM[profile.cashLimitAction] || 'Stop cash orders',
-    storeTypes: categories,
+    selectedSlugs,
+    storeTypes: selectedSlugs,
+    allowedCategories: selectedSlugs,
     docs,
   }
 }
@@ -1129,6 +1213,9 @@ export function mapAdminFleetChampsListParams(filters = {}) {
   const category = String(filters.category || '').trim()
   if (category) params.category = category
 
+  const supplierId = String(filters.supplierId || '').trim()
+  if (supplierId) params.supplierId = supplierId
+
   return params
 }
 
@@ -1136,8 +1223,12 @@ export function mapAdminFleetChampsListParams(filters = {}) {
  * Map GET /admin/fleet/champs `data` → Fleet · Champs page list shape.
  * Confirmed envelope: page, limit, total, champs[]
  * Empty `champs: []` is valid.
+ *
+ * @param {unknown} data
+ * @param {unknown} [summaryStats]
+ * @param {Array<{ name?: string, slug?: string|null }>|null} [storeTypes]
  */
-export function mapAdminFleetChampsListResponse(data, summaryStats = null) {
+export function mapAdminFleetChampsListResponse(data, summaryStats = null, storeTypes = null) {
   // Tolerate accidental bare array or missing wrapper.
   const payload =
     Array.isArray(data)
@@ -1186,12 +1277,7 @@ export function mapAdminFleetChampsListResponse(data, summaryStats = null) {
         { value: 'BRONZE', label: 'Bronze' },
         { value: 'AT_RISK', label: 'At Risk' },
       ],
-      categories: [
-        { value: '', label: 'Categories' },
-        { value: 'Food', label: 'Food' },
-        { value: 'Groceries', label: 'Groceries' },
-        { value: 'Pharmacy', label: 'Pharmacy' },
-      ],
+      categories: buildFleetCategoryFilterOptions(storeTypes),
     },
   }
 }
@@ -1269,8 +1355,21 @@ export function mapAdminChampDetailResponse(data) {
     accountStatus === 'TERMINATED' || String(status).toLowerCase() === 'terminated'
   const online = Boolean(controls.online)
   const avatar = avatarForKey(id + name)
-  const categories = Array.isArray(profile.allowedCategories) ? profile.allowedCategories : []
-  const cashLimit = formatMoney(profile.dailyCashLimit, 'BHD')
+  const allowedStoreTypes = Array.isArray(profile.allowedStoreTypes)
+    ? profile.allowedStoreTypes
+        .filter((item) => item && (item.slug || item.name))
+        .map((item) => ({
+          id: item.id != null ? String(item.id) : null,
+          name: item.name != null ? String(item.name) : String(item.slug || ''),
+          slug: item.slug != null ? String(item.slug).toLowerCase() : '',
+        }))
+        .filter((item) => item.slug)
+    : []
+  const categorySlugs = resolveChampSelectedSlugs(allowedStoreTypes, profile.allowedCategories)
+  const categoryLabels = allowedStoreTypes.length
+    ? allowedStoreTypes.map((item) => item.name)
+    : categorySlugs.map((slug) => (slug === '*' ? 'Any' : slug))
+  const cashLimit = formatMoney(profile.dailyCashLimit ?? controls.dailyCashLimit, 'BHD')
   const phone = header.phone || '—'
   const cpr = profile.cprNumber || '—'
   const avgRating = kpis.avgRating ?? 0
@@ -1278,11 +1377,28 @@ export function mapAdminChampDetailResponse(data) {
   const podCashBalance = moneyAmount(podObj?.currentCashBalance)
   const codOutstandingAmount = moneyAmount(profile.codOutstanding)
   const codAmountValue = moneyAmount(controls.codAmount ?? profile.codOutstanding)
-  const hasOutstandingPod = hasOutstandingPodCash({
+  const pendingCashCollected = moneyAmount(
+    controls.pendingCashCollected ?? profile.pendingCashCollected ?? profile.wallet?.pendingCashCollected,
+  )
+  const dailyCashLimitRaw =
+    profile.dailyCashLimit ?? controls.dailyCashLimit ?? profile.cashLimit
+  const collectedCash = getAuthoritativeCollectedCash({
     podCashBalance,
     codOutstanding: codOutstandingAmount,
     codAmount: codAmountValue,
+    pendingCashCollected,
   })
+  const cashLimitReached =
+    typeof controls.cashLimitReached === 'boolean'
+      ? controls.cashLimitReached
+      : hasOutstandingPodCash({
+          podCashBalance,
+          codOutstanding: codOutstandingAmount,
+          codAmount: codAmountValue,
+          pendingCashCollected,
+          dailyCashLimit: dailyCashLimitRaw,
+        })
+  const hasOutstandingPod = collectedCash > 0
 
   return {
     id,
@@ -1307,11 +1423,13 @@ export function mapAdminChampDetailResponse(data) {
     cod: formatMoney(codAmountValue, 'BHD'),
     podCashBalance: formatMoney(podCashBalance, 'BHD'),
     hasOutstandingPod,
+    cashLimitReached,
     online,
     onlineHint: 'Receiving orders now',
     offlineHint: 'Not receiving orders',
     canToggleOnline: controls.canToggleOnline !== false,
-    allowedCategories: categories,
+    allowedCategories: categorySlugs,
+    allowedStoreTypes,
     metrics: [
       { label: 'Lifetime deliveries', value: formatCount(kpis.lifetimeDeliveries) },
       {
@@ -1340,7 +1458,7 @@ export function mapAdminChampDetailResponse(data) {
       ['CPR', cpr],
       ['Vehicle type', vehicle],
       ['Supplier', supplierLabel],
-      ['Allowed categories', categories.length ? categories.join(', ') : '—'],
+      ['Allowed categories', categoryLabels.length ? categoryLabels.join(', ') : '—'],
       ['Daily cash limit', cashLimit],
       ['Joined', formatJoinedDate(header.joinedAt)],
     ],
@@ -1647,6 +1765,14 @@ function parseChampIdsInput(value) {
     .filter(Boolean)
 }
 
+function normalizeNotifyStringList(value, fallback = '') {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean)
+  }
+  const single = String(value ?? fallback).trim()
+  return single ? [single] : []
+}
+
 /**
  * Map Notify Champs form → POST /admin/fleet/notify/estimate body.
  */
@@ -1658,15 +1784,19 @@ export function mapAdminFleetNotifyEstimateRequest(form = {}) {
   const body = { audience }
 
   if (audience === 'by_category') {
-    const category = String(form.category || '').trim()
-    if (!category) throw new ApiError({ message: 'Category is required for this audience.' })
-    body.category = category
+    const categories = normalizeNotifyStringList(form.categories, form.category)
+    if (!categories.length) {
+      throw new ApiError({ message: 'Select at least one category for this audience.' })
+    }
+    body.categories = categories
   }
 
   if (audience === 'by_zone') {
-    const zone = String(form.zone || '').trim()
-    if (!zone) throw new ApiError({ message: 'Zone is required for this audience.' })
-    body.zone = zone
+    const zones = normalizeNotifyStringList(form.zones, form.zone)
+    if (!zones.length) {
+      throw new ApiError({ message: 'Select at least one zone for this audience.' })
+    }
+    body.zones = zones
   }
 
   if (audience === 'selected') {

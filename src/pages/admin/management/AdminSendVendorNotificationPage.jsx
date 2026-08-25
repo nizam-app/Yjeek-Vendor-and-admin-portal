@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, MoreVertical } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
@@ -6,6 +6,7 @@ import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { AdminEntitySearchPicker } from '../../../components/admin/AdminEntitySearchPicker'
+import { AdminDatePicker } from '../../../components/admin/AdminDatePicker'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
@@ -16,6 +17,11 @@ const MESSAGE_TYPES = ['Info', 'Promo', 'Alert', 'Policy']
 const SCHEDULE_OPTIONS = ['Send now', 'Schedule later']
 const DATE_RANGE_OPTIONS = ['Date range', 'Last 7 days', 'Last 30 days', 'This year']
 const CHANNEL_FILTERS = ['All channels', 'Push', 'Email', 'SMS']
+const DEFAULT_STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+  { value: 'suspended', label: 'Suspended' },
+]
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -145,7 +151,16 @@ function buildScheduledAt(dateValue, timeValue) {
   return ''
 }
 
-function openPicker(event) {
+function defaultScheduleFields() {
+  const d = new Date(Date.now() + 60 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+
+function openTimePicker(event) {
   try {
     event.currentTarget.showPicker?.()
   } catch {
@@ -160,6 +175,15 @@ export default function AdminSendVendorNotificationPage() {
 
   const [audience, setAudience] = useState('Selected')
   const [selectedVendors, setSelectedVendors] = useState([])
+  const [categoryId, setCategoryId] = useState('')
+  const [vendorStatus, setVendorStatus] = useState('active')
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [statusOptions, setStatusOptions] = useState(DEFAULT_STATUS_OPTIONS)
+  const [metaLoading, setMetaLoading] = useState(false)
+  const [metaError, setMetaError] = useState('')
+  const [estimated, setEstimated] = useState(null)
+  const [estimateLoading, setEstimateLoading] = useState(false)
+  const [estimateError, setEstimateError] = useState('')
   const [messageType, setMessageType] = useState('Promo')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -167,13 +191,29 @@ export default function AdminSendVendorNotificationPage() {
   const [email, setEmail] = useState(true)
   const [sms, setSms] = useState(false)
   const [schedule, setSchedule] = useState('Send now')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [scheduleDate, setScheduleDate] = useState(() => defaultScheduleFields().date)
+  const [scheduleTime, setScheduleTime] = useState(() => defaultScheduleFields().time)
   const [dateRange, setDateRange] = useState('Date range')
   const [channelFilter, setChannelFilter] = useState('All channels')
   const [submitting, setSubmitting] = useState(false)
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+
+  const selectedCategory = useMemo(
+    () => categoryOptions.find((item) => item.id === categoryId) || null,
+    [categoryOptions, categoryId],
+  )
+
+  const estimatePayload = useMemo(
+    () => ({
+      audience,
+      vendorIds: selectedVendors.map((item) => item.id),
+      categoryId,
+      categoryLabel: selectedCategory?.name || '',
+      vendorStatus,
+    }),
+    [audience, selectedVendors, categoryId, selectedCategory, vendorStatus],
+  )
 
   const searchVendors = useCallback(async (query, options = {}) => {
     const result = await adminService.getVendors({
@@ -210,6 +250,81 @@ export default function AdminSendVendorNotificationPage() {
     (row) => channelFilter === 'All channels' || String(row.channel || '').includes(channelFilter),
   )
 
+  useEffect(() => {
+    if (!useReal) {
+      setCategoryOptions([])
+      setStatusOptions(DEFAULT_STATUS_OPTIONS)
+      return undefined
+    }
+
+    let cancelled = false
+    async function loadMeta() {
+      setMetaLoading(true)
+      setMetaError('')
+      try {
+        const result = await adminService.getAdminMarketingNotifyMeta()
+        if (cancelled) return
+        setCategoryOptions(result?.data?.categories || [])
+        setStatusOptions(
+          result?.data?.statuses?.length ? result.data.statuses : DEFAULT_STATUS_OPTIONS,
+        )
+      } catch (err) {
+        if (cancelled) return
+        setMetaError(formatApiErrorMessage(err, 'Failed to load audience options.'))
+        setCategoryOptions([])
+        setStatusOptions(DEFAULT_STATUS_OPTIONS)
+      } finally {
+        if (!cancelled) setMetaLoading(false)
+      }
+    }
+
+    loadMeta()
+    return () => {
+      cancelled = true
+    }
+  }, [useReal])
+
+  useEffect(() => {
+    if (!useReal) {
+      setEstimated(null)
+      setEstimateError('')
+      return undefined
+    }
+
+    const needsCategory = audience === 'By category' && !categoryId
+    const needsStatus = audience === 'By status' && !vendorStatus
+    const needsVendors = audience === 'Selected' && selectedVendors.length === 0
+
+    if (needsCategory || needsStatus || needsVendors) {
+      setEstimated(null)
+      setEstimateError('')
+      setEstimateLoading(false)
+      return undefined
+    }
+
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      setEstimateLoading(true)
+      setEstimateError('')
+      try {
+        const result = await adminService.estimateAdminVendorNotification(estimatePayload)
+        if (cancelled) return
+        setEstimated(result?.data?.estimatedRecipients ?? 0)
+      } catch (err) {
+        if (cancelled) return
+        setEstimated(null)
+        setEstimateError(formatApiErrorMessage(err, 'Could not estimate recipients.'))
+      } finally {
+        if (!cancelled) setEstimateLoading(false)
+      }
+    }, 350)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [useReal, estimatePayload, audience, categoryId, vendorStatus, selectedVendors])
+
   async function handleSend() {
     setActionError('')
     setActionSuccess('')
@@ -218,6 +333,9 @@ export default function AdminSendVendorNotificationPage() {
       const response = await adminService.sendAdminVendorNotification({
         audience,
         vendorIds: selectedVendors.map((item) => item.id),
+        categoryId,
+        categoryLabel: selectedCategory?.name || '',
+        vendorStatus,
         type: messageType,
         title,
         body,
@@ -225,13 +343,24 @@ export default function AdminSendVendorNotificationPage() {
         email,
         sms,
         schedule,
-        scheduledAt: buildScheduledAt(date, time),
+        scheduledAt:
+          schedule === 'Schedule later'
+            ? buildScheduledAt(scheduleDate, scheduleTime)
+            : '',
       })
       const createdTitle = response?.data?.title || title
+      const isScheduled = String(response?.data?.statusKey || '').toLowerCase() === 'scheduled'
       setActionSuccess(
         formatMarketingNotifySendSuccess(createdTitle, {
+          scheduled: isScheduled,
+          scheduledAt: response?.data?.scheduledAt,
+          sentTo: response?.data?.sentTo,
+          target: 'vendor',
+          push,
           email,
           emailDelivery: response?.data?.emailDelivery,
+          sms,
+          smsDelivery: response?.data?.smsDelivery,
         }),
       )
       await refetchHistory()
@@ -309,22 +438,73 @@ export default function AdminSendVendorNotificationPage() {
               <AdminEntitySearchPicker
                 label="Vendors"
                 placeholder="Type vendor name (e.g. sakura)…"
-                helperText="Suggestions from GET /admin/vendors?search=. Send uses real vendor ids."
+                helperText="Search live vendors. Send uses real vendor ids."
                 selected={selectedVendors}
                 onChange={setSelectedVendors}
                 searchFn={searchVendors}
                 disabled={submitting}
               />
-            ) : (
+            ) : null}
+
+            {audience === 'By category' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Category</span>
+                <select
+                  className={cn(inputClass, 'cursor-pointer')}
+                  value={categoryId}
+                  disabled={submitting || metaLoading}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                >
+                  <option value="">
+                    {metaLoading ? 'Loading categories…' : 'Select category'}
+                  </option>
+                  {categoryOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+                {metaError ? (
+                  <p className="mt-1 text-[12px] text-[#b42318]">{metaError}</p>
+                ) : null}
+              </label>
+            ) : null}
+
+            {audience === 'By status' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Status</span>
+                <select
+                  className={cn(inputClass, 'cursor-pointer')}
+                  value={vendorStatus}
+                  disabled={submitting}
+                  onChange={(event) => setVendorStatus(event.target.value)}
+                >
+                  {statusOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+
+            {audience === 'All vendors' ? (
               <p className="mt-4 text-[12.5px] text-[#7c8780]">
-                {audience === 'All vendors'
-                  ? 'Sends with audience: all (no vendorIds).'
-                  : `${audience} is mapped to API audience; category/status filters are not in the confirmed body yet.`}
+                Sends to every active vendor on the platform.
               </p>
-            )}
+            ) : null}
 
             <p className="mt-5 text-[12.5px] text-[#7c8780]">Estimated recipients</p>
-            <p className="text-[12px] text-[#8a948e]">Wire estimate API when you share a sample.</p>
+            <p className="mt-1 text-[18px] font-bold text-[#17231c]">
+              {estimateLoading
+                ? '…'
+                : estimated == null
+                  ? '—'
+                  : estimated.toLocaleString()}
+            </p>
+            {estimateError ? (
+              <p className="mt-1 text-[12px] text-[#b42318]">{estimateError}</p>
+            ) : null}
           </Card>
 
           <Card title="Message">
@@ -375,42 +555,32 @@ export default function AdminSendVendorNotificationPage() {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
-              <label className="block min-w-0">
-                <span className={labelClass}>Date</span>
-                <input
-                  type="date"
-                  className={cn(inputClass, 'cursor-pointer')}
-                  value={date}
-                  disabled={submitting}
-                  onClick={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    openPicker(event)
-                  }}
-                  onFocus={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    openPicker(event)
-                  }}
-                  onChange={(event) => setDate(event.target.value)}
-                />
-              </label>
-              <label className="block min-w-0">
-                <span className={labelClass}>Time</span>
-                <input
-                  type="time"
-                  className={cn(inputClass, 'cursor-pointer')}
-                  value={time}
-                  disabled={submitting}
-                  onClick={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    openPicker(event)
-                  }}
-                  onFocus={(event) => {
-                    if (schedule !== 'Schedule later') setSchedule('Schedule later')
-                    openPicker(event)
-                  }}
-                  onChange={(event) => setTime(event.target.value)}
-                />
-              </label>
+              {schedule === 'Schedule later' ? (
+                <>
+                  <div className="min-w-0">
+                    <span className={labelClass}>Date</span>
+                    <AdminDatePicker
+                      className="mt-1.5"
+                      value={scheduleDate}
+                      onChange={setScheduleDate}
+                      placeholder="DD/MM/YYYY"
+                      disabled={submitting}
+                    />
+                  </div>
+                  <label className="block min-w-0">
+                    <span className={labelClass}>Time</span>
+                    <input
+                      type="time"
+                      className={cn(inputClass, 'mt-1.5 cursor-pointer')}
+                      value={scheduleTime}
+                      disabled={submitting}
+                      onClick={openTimePicker}
+                      onFocus={openTimePicker}
+                      onChange={(event) => setScheduleTime(event.target.value)}
+                    />
+                  </label>
+                </>
+              ) : null}
             </div>
           </Card>
         </div>
@@ -437,7 +607,13 @@ export default function AdminSendVendorNotificationPage() {
             onClick={handleSend}
             className="mt-4 inline-flex h-[36px] w-full items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
-            {submitting ? 'Sending…' : 'Send notification'}
+            {submitting
+              ? schedule === 'Schedule later'
+                ? 'Scheduling…'
+                : 'Sending…'
+              : schedule === 'Schedule later'
+                ? 'Schedule notification'
+                : 'Send notification'}
           </button>
         </Card>
       </div>

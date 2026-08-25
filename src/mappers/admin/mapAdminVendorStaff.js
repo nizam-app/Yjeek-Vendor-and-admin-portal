@@ -91,6 +91,7 @@ export function mapAdminVendorStaffListItem(user) {
     name: user.displayName || 'Untitled',
     email: user.email || '—',
     phone: user.phone || '',
+    password: typeof user.password === 'string' ? user.password : '',
     role: mapAdminStaffRoleFromApi(user.role),
     roleRaw: user.roleRaw || user.role || null,
     isOwner: Boolean(user.isOwner),

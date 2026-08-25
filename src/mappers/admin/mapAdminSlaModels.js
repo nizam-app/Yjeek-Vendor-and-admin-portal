@@ -260,7 +260,13 @@ function mapVendorFromConfig(config, defaults) {
 
   const dineIn = { ...asRecord(defaults['dine-in']) }
   setDuration(dineIn, 'acceptance', dine.acceptanceTimeSec, defaults['dine-in'])
-  setDuration(dineIn, 'customerWait', dine.customerArrivalWaitSec, defaults['dine-in'])
+  // Align with vendor wizard "Table ready" (tablePreparationSec) and SLA UI "Customer wait".
+  setDuration(
+    dineIn,
+    'customerWait',
+    dine.tablePreparationSec ?? dine.customerArrivalWaitSec,
+    defaults['dine-in'],
+  )
   setPercent(dineIn, 'reservationHonored', dine.orderAccuracyPct, defaults['dine-in'])
   setDuration(dineIn, 'billDispute', dine.issueResponseSec, defaults['dine-in'])
   setDuration(dineIn, 'reservationNotice', dine.noShowGraceSec, defaults['dine-in'], '≥')
@@ -284,6 +290,12 @@ function mapVendorFromConfig(config, defaults) {
   setDuration(servicesValues, 'acceptance', services.acceptanceTimeSec, defaults.services)
   setPercent(servicesValues, 'attendance', services.serviceAttendancePct, defaults.services)
   setRating(servicesValues, 'quality', services.serviceRating, defaults.services)
+  setDuration(
+    servicesValues,
+    'providerNoShowWait',
+    services.serviceLevelAgreementSec,
+    defaults.services,
+  )
   setDuration(servicesValues, 'qualityReport', services.qualityReportWindowSec, defaults.services)
   setDuration(servicesValues, 'damageReport', services.inventoryDamageReportWindowSec, defaults.services)
 
@@ -487,7 +499,9 @@ function mapVendorToConfig(vendorValues) {
       },
       dineIn: {
         acceptanceTimeSec: secFromDuration(dineIn.acceptance) ?? undefined,
+        // Keep both keys in sync so Vendor wizard tableReady inherits SLA Model edits.
         customerArrivalWaitSec: secFromDuration(dineIn.customerWait) ?? undefined,
+        tablePreparationSec: secFromDuration(dineIn.customerWait) ?? undefined,
         orderAccuracyPct: pctFromPercent(dineIn.reservationHonored) ?? undefined,
         issueResponseSec: secFromDuration(dineIn.billDispute) ?? undefined,
         noShowGraceSec: secFromDuration(dineIn.reservationNotice) ?? undefined,
@@ -504,6 +518,8 @@ function mapVendorToConfig(vendorValues) {
         acceptanceTimeSec: secFromDuration(services.acceptance) ?? undefined,
         serviceAttendancePct: pctFromPercent(services.attendance) ?? undefined,
         serviceRating: num(services.quality?.amount) ?? undefined,
+        // Align with Vendor wizard "Service start time".
+        serviceLevelAgreementSec: secFromDuration(services.providerNoShowWait) ?? undefined,
         qualityReportWindowSec: secFromDuration(services.qualityReport) ?? undefined,
         inventoryDamageReportWindowSec: secFromDuration(services.damageReport) ?? undefined,
       },
@@ -665,6 +681,9 @@ export function mapAdminSlaModelRecord(raw) {
     hasUnpublishedChanges: Boolean(source.hasUnpublishedChanges),
     currentVersion: num(source.currentVersion) ?? 0,
     config,
+    // Live published rules for vendor inheritance (ignore unpublished draft).
+    publishedConfig: asRecord(source.publishedConfig || source.config),
+    draftConfig: source.draftConfig ? asRecord(source.draftConfig) : null,
     raw: source,
   }
 }
