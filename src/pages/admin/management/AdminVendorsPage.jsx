@@ -75,9 +75,10 @@ export default function AdminVendorsPage() {
     if (!data?.rows) return []
 
     if (useRealApi) {
-      const tabFiltered =
-        tab === 'All' ? data.rows : data.rows.filter((row) => matchesVendorTab(row, tab))
-      return tabFiltered
+      // Exact category match (defense-in-depth; list API must also use equals, not contains).
+      let next = category ? data.rows.filter((row) => row.category === category) : data.rows
+      if (tab !== 'All') next = next.filter((row) => matchesVendorTab(row, tab))
+      return next
     }
 
     const filtered = filterVendorRows(data.rows, { tab, category, query: debouncedQuery })

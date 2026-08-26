@@ -26,19 +26,75 @@ Confirmed from Postman **17. UI Editor** mapping table (2026-08-02).
 
 ## Categories tab
 
+Home categories configure the **customer app home grid only** (global `home_entries`, not scoped to Champ).
+
 | UI | API |
 | --- | --- |
-| Load categories | `GET /admin/ui-editor/home/categories` |
+| Load categories | `GET /admin/ui-editor/home/categories` → `categories` (live SM refs) + `unavailableCategories` |
+| Add to home picker catalog | `GET /admin/ui-editor/home/catalog` |
 | Home layout preview | `GET /admin/ui-editor/home` |
-| Add category | `POST /admin/ui-editor/home/categories` |
+| Add to home | `POST /admin/ui-editor/home/categories` |
 | Drag reorder | `PATCH /admin/ui-editor/home/categories/reorder` |
-| Rename / hide | `PATCH /admin/ui-editor/home/categories/:categoryId` |
-| Publish categories | `POST /admin/ui-editor/home/categories/publish` (header Publish on Categories tab) |
+| Rename / hide (parent or nested sub-type row) | `PATCH /admin/ui-editor/home/categories/:categoryId` |
+| Remove from home | `DELETE /admin/ui-editor/home/categories/:categoryId` |
+| Repair duplicates / cascade | `POST /admin/ui-editor/home/categories/cleanup` |
+| Publish home grid | `POST /admin/ui-editor/home/categories/publish` (header **Publish home grid** on Categories tab) |
 
-### Create body
+### GET home/categories response
+
+Top-level rows are home grid tiles (`parentId = null`). Two-level store types include nested `children[]` for sub-type presentation rows (not home tiles — shown when customer taps the parent category).
 
 ```json
-{ "name": "New Category", "isFeatured": true, "iconEmoji": "✨" }
+{
+  "categories": [
+    {
+      "id": "he-food",
+      "kind": "STORE_TYPE",
+      "refId": "st-food",
+      "name": "Food",
+      "iconUrl": "https://…/food.png",
+      "sortOrder": 0,
+      "isActive": true,
+      "isHidden": false,
+      "structure": "SINGLE",
+      "kindMismatch": false,
+      "refActive": true,
+      "refPublishStatus": "PUBLISHED",
+      "children": []
+    },
+    {
+      "id": "he-services",
+      "kind": "STORE_TYPE",
+      "refId": "st-services",
+      "name": "Services",
+      "structure": "TWO_LEVEL",
+      "children": [
+        {
+          "id": "he-salon",
+          "kind": "SUB_TYPE",
+          "refId": "sb-salon",
+          "name": "Salon & Beauty",
+          "sortOrder": 0,
+          "isActive": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+Adding a two-level store type via POST cascades published sub-types into `children` automatically. Store Management sub-type changes re-sync child rows when the parent is on home.
+
+### Create body (Add to home)
+
+Rule 1: `kind` + `refId` required — no free-text entity creation.
+
+```json
+{
+  "kind": "STORE_TYPE",
+  "refId": "st-food",
+  "name": "Food"
+}
 ```
 
 ### Reorder body

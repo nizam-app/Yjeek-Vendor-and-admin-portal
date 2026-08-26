@@ -37,6 +37,16 @@ function buildPointTitle(point) {
     .join(' · ')
 }
 
+function focusTargetKey(focusTarget) {
+  if (!focusTarget?.id) return null
+  return `${focusTarget.type || 'any'}:${focusTarget.id}`
+}
+
+function buildInfoWindowHtml(point, fallbackLabel) {
+  const title = point.orderNumber || point.name || fallbackLabel || 'Pin'
+  return `<div style="font:12px/1.4 sans-serif;max-width:220px"><strong>${title}</strong><div>${buildPointTitle(point)}</div></div>`
+}
+
 /**
  * Admin Live map panel — Google Maps basemap + API layer markers.
  * Keeps existing tabs / legend / scope chrome.
@@ -51,6 +61,7 @@ export function AdminLiveMap({
   error = null,
   onRetry,
   focusTarget = null,
+  onFocusClear,
   onPointClick,
 }) {
   const mapRef = useRef(null)
@@ -58,10 +69,16 @@ export function AdminLiveMap({
   const markersRef = useRef([])
   const userMarkerRef = useRef(null)
   const infoWindowRef = useRef(null)
+  const infoWindowCloseListenerRef = useRef(null)
+  const focusKeyRef = useRef(null)
+  const keepInfoWindowOpenRef = useRef(false)
+  const onFocusClearRef = useRef(onFocusClear)
   const [mapStatus, setMapStatus] = useState('loading')
   const [mapError, setMapError] = useState(null)
   const [locating, setLocating] = useState(false)
   const [locateError, setLocateError] = useState(null)
+
+  onFocusClearRef.current = onFocusClear
 
   const plottable = useMemo(
     () =>
@@ -123,6 +140,35 @@ export function AdminLiveMap({
     }
   }, [])
 
+  function ensureInfoWindow(maps) {
+    if (!infoWindowRef.current) {
+      infoWindowRef.current = new maps.InfoWindow()
+    }
+    if (!infoWindowCloseListenerRef.current) {
+      infoWindowCloseListenerRef.current = infoWindowRef.current.addListener('closeclick', () => {
+        keepInfoWindowOpenRef.current = false
+        focusKeyRef.current = null
+        onFocusClearRef.current?.()
+      })
+    }
+    return infoWindowRef.current
+  }
+
+  function openInfoWindow(maps, map, marker, html) {
+    const infoWindow = ensureInfoWindow(maps)
+    infoWindow.setContent(html)
+    keepInfoWindowOpenRef.current = true
+    // Never steal keyboard focus from the topbar search (Maps defaults to focusing ✕).
+    infoWindow.open({ map, anchor: marker, shouldFocus: false })
+  }
+
+  function closeInfoWindow() {
+    keepInfoWindowOpenRef.current = false
+    if (infoWindowRef.current) {
+      infoWindowRef.current.close()
+    }
+  }
+
   useEffect(() => {
     if (mapStatus !== 'ready' || !mapInstanceRef.current || !window.google?.maps) {
       return undefined
@@ -131,14 +177,17 @@ export function AdminLiveMap({
     const maps = window.google.maps
     const map = mapInstanceRef.current
     const clickListeners = []
+    const nextFocusKey = focusTargetKey(focusTarget)
+    const focusChanged = nextFocusKey !== focusKeyRef.current
 
     markersRef.current.forEach((marker) => marker.setMap(null))
     markersRef.current = []
-    if (infoWindowRef.current) {
-      infoWindowRef.current.close()
-    }
 
     if (!plottable.length) {
+      if (focusChanged || !nextFocusKey) {
+        closeInfoWindow()
+        focusKeyRef.current = nextFocusKey
+      }
       if (!userMarkerRef.current && !focusTarget) {
         map.setCenter(DEFAULT_CENTER)
         map.setZoom(11)
@@ -171,15 +220,7 @@ export function AdminLiveMap({
 
       const clickListener = marker.addListener('click', () => {
         onPointClick?.(point)
-        if (!infoWindowRef.current) {
-          infoWindowRef.current = new maps.InfoWindow()
-        }
-        infoWindowRef.current.setContent(
-          `<div style="font:12px/1.4 sans-serif;max-width:220px"><strong>${
-            point.orderNumber || point.name || 'Pin'
-          }</strong><div>${buildPointTitle(point)}</div></div>`,
-        )
-        infoWindowRef.current.open({ map, anchor: marker })
+        openInfoWindow(maps, map, marker, buildInfoWindowHtml(point))
       })
       clickListeners.push(clickListener)
 
@@ -192,18 +233,43 @@ export function AdminLiveMap({
       bounds.extend(position)
     })
 
-    if (focusedMarker && focusedPoint) {
-      map.panTo({ lat: Number(focusedPoint.lat), lng: Number(focusedPoint.lng) })
-      if (map.getZoom() < 14) map.setZoom(15)
-      if (!infoWindowRef.current) {
-        infoWindowRef.current = new maps.InfoWindow()
+    if (nextFocusKey) {
+      if (focusedMarker && focusedPoint) {
+        if (focusChanged) {
+          map.panTo({ lat: Number(focusedPoint.lat), lng: Number(focusedPoint.lng) })
+          if (map.getZoom() < 14) map.setZoom(15)
+          keepInfoWindowOpenRef.current = true
+        }
+        focusKeyRef.current = nextFocusKey
+
+        // Re-anchor after marker rebuilds / open on new focus — never steal search focus.
+        if (keepInfoWindowOpenRef.current) {
+          openInfoWindow(
+            maps,
+            map,
+            focusedMarker,
+            buildInfoWindowHtml(focusedPoint, focusTarget?.label),
+          )
+        }
+      } else if (focusChanged) {
+        // Focused pin not on this layer yet — wait without jumping the camera.
+        closeInfoWindow()
+        focusKeyRef.current = nextFocusKey
       }
-      infoWindowRef.current.setContent(
-        `<div style="font:12px/1.4 sans-serif;max-width:220px"><strong>${
-          focusedPoint.orderNumber || focusedPoint.name || focusTarget?.label || 'Pin'
-        }</strong><div>${buildPointTitle(focusedPoint)}</div></div>`,
-      )
-      infoWindowRef.current.open({ map, anchor: focusedMarker })
+
+      return () => {
+        clickListeners.forEach((listener) => maps.event.removeListener(listener))
+      }
+    }
+
+    if (focusChanged || focusKeyRef.current) {
+      closeInfoWindow()
+    }
+    const hadFocus = Boolean(focusKeyRef.current)
+    focusKeyRef.current = null
+
+    // Keep camera after dismissing a focused pin; only auto-fit for normal layer views.
+    if (hadFocus) {
       return () => {
         clickListeners.forEach((listener) => maps.event.removeListener(listener))
       }
@@ -223,6 +289,14 @@ export function AdminLiveMap({
 
   useEffect(() => {
     return () => {
+      if (infoWindowCloseListenerRef.current && window.google?.maps?.event) {
+        window.google.maps.event.removeListener(infoWindowCloseListenerRef.current)
+        infoWindowCloseListenerRef.current = null
+      }
+      if (infoWindowRef.current) {
+        infoWindowRef.current.close()
+        infoWindowRef.current = null
+      }
       if (userMarkerRef.current) {
         userMarkerRef.current.setMap(null)
         userMarkerRef.current = null

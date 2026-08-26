@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  ChevronDown,
   CreditCard,
   Eye,
   EyeOff,
@@ -1692,6 +1694,202 @@ function kindLabel(kind) {
   return 'Store type'
 }
 
+const CUSTOMER_HOME_TILE_LIMIT = 8
+
+function findCategoryInTree(categories, id) {
+  for (const item of categories) {
+    if (item.id === id) return item
+    if (item.children?.length) {
+      const child = item.children.find((row) => row.id === id)
+      if (child) return child
+    }
+  }
+  return null
+}
+
+function updateCategoryInTree(categories, id, updater) {
+  return categories.map((item) => {
+    if (item.id === id) return updater(item)
+    if (item.children?.length) {
+      const nextChildren = item.children.map((child) =>
+        child.id === id ? updater(child) : child,
+      )
+      if (nextChildren.some((child, index) => child !== item.children[index])) {
+        return { ...item, children: nextChildren }
+      }
+    }
+    return item
+  })
+}
+
+function CategoryIntegrityBadges({ category }) {
+  if (!category.kindMismatch) return null
+  return (
+    <span className="shrink-0 rounded-full bg-[#fff3e0] px-2 py-1 text-[10px] font-bold text-[#e65100]">
+      Kind mismatch — run Repair
+    </span>
+  )
+}
+
+function unavailableRefLabel(category) {
+  if (category.refActive === false) return 'Inactive in Store Management'
+  if (category.refPublishStatus && category.refPublishStatus !== 'PUBLISHED') {
+    return 'Unpublished in Store Management'
+  }
+  return 'Unavailable in Store Management'
+}
+
+function storeManagementLink(category) {
+  if (category.kind === 'STORE_TYPE' && category.refId) {
+    return `/admin/stores/${encodeURIComponent(category.refId)}`
+  }
+  return '/admin/stores'
+}
+
+function CategoryRow({
+  category,
+  variant = 'parent',
+  indexLabel,
+  dragIndex,
+  rowIndex,
+  busy,
+  uploadingId,
+  onDragStart,
+  onDragOver,
+  onDragEnd,
+  onRenameLocal,
+  onRenamePersist,
+  onUploadIcon,
+  onToggleHidden,
+  onRemove,
+}) {
+  const isParent = variant === 'parent'
+  const isUnavailable = variant === 'unavailable'
+  const isDragging = isParent && dragIndex === rowIndex
+
+  if (isUnavailable) {
+    return (
+      <div className="flex items-center gap-2 rounded-[12px] border border-[#f0d8da] bg-[#fdf6f6] px-2.5 py-2 w-fit max-w-full opacity-90">
+        <span className="h-8 w-6 shrink-0" aria-hidden="true" />
+        <span className="w-9 shrink-0 text-[12px] font-bold text-[#8a948e]">{indexLabel}</span>
+        {category.iconUrl ? (
+          <AdminMediaImage
+            src={category.iconUrl}
+            className="h-8 w-8 shrink-0 rounded-[8px] object-cover opacity-60"
+            fallbackClassName="h-8 w-8 shrink-0 rounded-[8px] bg-[#e8ebe8]"
+            iconSize={12}
+          />
+        ) : (
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] bg-[#eceeec] text-[#9aa49d]">
+            <ImageOff size={14} strokeWidth={1.8} />
+          </span>
+        )}
+        <div className="min-w-[140px] flex-1">
+          <span className="block text-[13px] font-semibold text-[#69756d]">{category.name}</span>
+          {category.parentName ? (
+            <span className="text-[10.5px] text-[#8a948e]">Sub-type of {category.parentName}</span>
+          ) : null}
+        </div>
+        <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.03em] text-[#6b746e]">
+          {kindLabel(category.kind)}
+        </span>
+        {category.code || category.refId ? (
+          <span className="max-w-[88px] truncate text-[10px] text-[#8a948e]">
+            {category.code || category.refId}
+          </span>
+        ) : null}
+        <span className="shrink-0 rounded-full bg-[#fdecea] px-2 py-1 text-[10px] font-bold text-[#c62828]">
+          {unavailableRefLabel(category)}
+        </span>
+        <Link
+          to={storeManagementLink(category)}
+          className="shrink-0 text-[11px] font-bold text-[#147940] underline hover:text-[#0f5a2e]"
+        >
+          Store Management
+        </Link>
+        <button
+          type="button"
+          aria-label={`Remove ${category.name} from home`}
+          disabled={busy}
+          onClick={() => onRemove?.(category)}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#c62828] disabled:opacity-60"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      draggable={isParent}
+      onDragStart={isParent ? onDragStart : undefined}
+      onDragOver={isParent ? onDragOver : undefined}
+      onDragEnd={isParent ? onDragEnd : undefined}
+      className={cn(
+        'flex items-center gap-2 rounded-[12px] bg-[#f3f5f4] px-2.5 py-2 w-fit max-w-full',
+        isParent ? '' : 'ml-8 border-l-2 border-[#dce3de] bg-[#f8faf8]',
+        isDragging && 'ring-1 ring-[#1aa054] bg-[#eaf6ee]',
+        category.isHidden && 'opacity-55',
+      )}
+    >
+      {isParent ? (
+        <button
+          type="button"
+          aria-label={`Reorder ${category.name}`}
+          className="grid h-8 w-6 shrink-0 cursor-grab place-items-center text-[#b0b8b3] active:cursor-grabbing"
+        >
+          <GripVertical size={16} strokeWidth={2.2} />
+        </button>
+      ) : (
+        <span className="h-8 w-6 shrink-0" aria-hidden="true" />
+      )}
+      <span className="w-9 shrink-0 text-[12px] font-bold text-[#8a948e]">{indexLabel}</span>
+      <CategoryIconButton
+        category={category}
+        size={isParent ? 36 : 32}
+        uploading={uploadingId === category.id}
+        disabled={busy || uploadingId === category.id}
+        onUploaded={onUploadIcon}
+      />
+      <input
+        value={category.name}
+        onChange={(event) => onRenameLocal(category.id, event.target.value)}
+        onBlur={() => onRenamePersist(category)}
+        className="h-[38px] min-w-[140px] flex-1 rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
+      />
+      <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.03em] text-[#6b746e]">
+        {kindLabel(category.kind)}
+      </span>
+      {category.code || category.refId ? (
+        <span className="max-w-[88px] truncate text-[10px] text-[#8a948e]">
+          {category.code || category.refId}
+        </span>
+      ) : null}
+      {isParent ? <CategoryIntegrityBadges category={category} /> : null}
+      <button
+        type="button"
+        aria-label={category.isHidden ? `Show ${category.name}` : `Hide ${category.name}`}
+        onClick={() => onToggleHidden(category)}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#455249]"
+      >
+        {category.isHidden ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+      {isParent ? (
+        <button
+          type="button"
+          aria-label={`Remove ${category.name} from home`}
+          disabled={busy}
+          onClick={() => onRemove(category)}
+          className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#c62828] disabled:opacity-60"
+        >
+          <Trash2 size={15} />
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
 function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
   const [catalog, setCatalog] = useState({ storeTypes: [], orderModes: [] })
   const [loading, setLoading] = useState(false)
@@ -1720,8 +1918,29 @@ function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
     { title: 'Order modes', items: catalog.orderModes || [] },
   ]
 
+  const addableItems = [
+    ...(catalog.storeTypes || []),
+    ...(catalog.orderModes || []),
+  ].filter((item) => !item.onHome)
+
+  const canAdd =
+    addableItems.length > 0 && selected && !selected.onHome && selected?.kind && (selected?.id || selected?.refId)
+
+  const cascadeSubTypes =
+    selected?.structure === 'TWO_LEVEL' && Array.isArray(selected.subTypes)
+      ? selected.subTypes.filter((sub) => !sub.onHome)
+      : []
+
   const handleAdd = async () => {
-    if (!selected?.kind || (!selected?.id && !selected?.refId)) {
+    if (!canAdd) {
+      if (!addableItems.length) {
+        setError(
+          Object.assign(new Error('All published records are already on the home grid.'), {
+            message: 'All published records are already on the home grid.',
+          }),
+        )
+        return
+      }
       setError(
         Object.assign(new Error('Pick a Store Management record.'), {
           message: 'Pick a Store Management record.',
@@ -1836,6 +2055,18 @@ function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
             : null}
         </div>
 
+        {!loading && addableItems.length === 0 ? (
+          <p className="mb-3 rounded-[10px] bg-[#f3f5f4] px-3 py-2 text-[12.5px] text-[#69756d]">
+            All published records are already on the home grid.
+          </p>
+        ) : null}
+
+        {selected?.structure === 'TWO_LEVEL' && cascadeSubTypes.length ? (
+          <p className="mb-3 rounded-[10px] border border-[#dcefe3] bg-[#eef8f1] px-3 py-2 text-[12.5px] text-[#147940]">
+            Includes nested sub-types: {cascadeSubTypes.map((sub) => sub.name).join(', ')}.
+          </p>
+        ) : null}
+
         {error ? (
           <p className="mb-3 text-[12.5px] text-[#c91a24]">
             {formatApiErrorMessage(error, 'Unable to add this record.')}
@@ -1853,7 +2084,7 @@ function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
           </button>
           <button
             type="button"
-            disabled={isSubmitting || loading}
+            disabled={isSubmitting || loading || !canAdd}
             onClick={handleAdd}
             className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
@@ -1866,9 +2097,18 @@ function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
 }
 
 function CategoriesTab({ onMessage }) {
-  const { categories: apiCategories, isLoading, error, refetch, enabled } =
-    useAdminUiEditorHomeCategories()
+  const {
+    categories: apiCategories,
+    unavailableCategories: apiUnavailableCategories,
+    unavailableCount,
+    isLoading,
+    error,
+    refetch,
+    enabled,
+  } = useAdminUiEditorHomeCategories()
   const [categories, setCategories] = useState([])
+  const [unavailableCategories, setUnavailableCategories] = useState([])
+  const [unavailableOpen, setUnavailableOpen] = useState(false)
   const categoriesRef = useRef(categories)
   const [dragIndex, setDragIndex] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -1880,24 +2120,34 @@ function CategoriesTab({ onMessage }) {
     categoriesRef.current = categories
   }, [categories])
 
-  // Real API: always mirror server home_entries (including empty). Mock seeds only when API off.
+  // Real API: mirror live home grid only; inactive SM refs go to unavailable section.
   useEffect(() => {
     if (!enabled) {
       setCategories(HOME_CATEGORIES)
+      setUnavailableCategories([])
       return
     }
     setCategories(apiCategories)
-  }, [apiCategories, enabled])
+    setUnavailableCategories(apiUnavailableCategories)
+  }, [apiCategories, apiUnavailableCategories, enabled])
 
   const renameCategoryLocal = (id, name) => {
-    setCategories((prev) => prev.map((item) => (item.id === id ? { ...item, name } : item)))
+    setCategories((prev) => updateCategoryInTree(prev, id, (item) => ({ ...item, name })))
   }
 
   const persistRename = async (category) => {
     if (!enabled || !category?.id) return
     const nextName = String(category.name || '').trim()
-    if (!nextName) return
-    const original = apiCategories.find((item) => item.id === category.id)
+    if (!nextName) {
+      const original = findCategoryInTree(apiCategories, category.id)
+      if (original) {
+        setCategories((prev) =>
+          updateCategoryInTree(prev, category.id, (item) => ({ ...item, name: original.name })),
+        )
+      }
+      return
+    }
+    const original = findCategoryInTree(apiCategories, category.id)
     if (original && original.name === nextName) return
     setLocalError(null)
     try {
@@ -1931,9 +2181,7 @@ function CategoriesTab({ onMessage }) {
       if (!url) throw new Error('Upload succeeded but no image URL was returned.')
 
       setCategories((prev) =>
-        prev.map((item) =>
-          item.id === category.id ? { ...item, iconUrl: url } : item,
-        ),
+        updateCategoryInTree(prev, category.id, (item) => ({ ...item, iconUrl: url })),
       )
 
       if (enabled) {
@@ -1996,9 +2244,11 @@ function CategoriesTab({ onMessage }) {
   const toggleHidden = async (category) => {
     const nextHidden = !category.isHidden
     setCategories((prev) =>
-      prev.map((item) =>
-        item.id === category.id ? { ...item, isHidden: nextHidden, isActive: !nextHidden } : item,
-      ),
+      updateCategoryInTree(prev, category.id, (item) => ({
+        ...item,
+        isHidden: nextHidden,
+        isActive: !nextHidden,
+      })),
     )
     if (!enabled) return
     setLocalError(null)
@@ -2014,22 +2264,30 @@ function CategoriesTab({ onMessage }) {
     } catch (err) {
       setLocalError(err)
       setCategories((prev) =>
-        prev.map((item) =>
-          item.id === category.id
-            ? { ...item, isHidden: category.isHidden, isActive: !category.isHidden }
-            : item,
-        ),
+        updateCategoryInTree(prev, category.id, (item) => ({
+          ...item,
+          isHidden: category.isHidden,
+          isActive: !category.isHidden,
+        })),
       )
     }
   }
 
   const removeFromHome = async (category) => {
     if (!category?.id) return
-    if (!window.confirm(`Remove “${category.name}” from the home grid? Store Management is unchanged.`)) {
+    const nestedNote = category.children?.length
+      ? ` This will also remove ${category.children.length} nested sub-type presentation row(s) from home.`
+      : ''
+    if (
+      !window.confirm(
+        `Remove “${category.name}” from the home grid? Store Management is unchanged.${nestedNote}`,
+      )
+    ) {
       return
     }
     if (!enabled) {
       setCategories((prev) => prev.filter((item) => item.id !== category.id))
+      setUnavailableCategories((prev) => prev.filter((item) => item.id !== category.id))
       return
     }
     setBusy(true)
@@ -2040,6 +2298,31 @@ function CategoriesTab({ onMessage }) {
       onMessage?.('Removed from home.')
     } catch (err) {
       setLocalError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeAllUnavailableFromHome = async () => {
+    if (!unavailableCategories.length) return
+    if (
+      !window.confirm(
+        `Remove all ${unavailableCategories.length} unavailable tile(s) from the home grid? Store Management records are unchanged.`,
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setLocalError(null)
+    try {
+      for (const category of unavailableCategories) {
+        await adminUiEditorService.deleteHomeCategory(category.id)
+      }
+      await refetch()
+      onMessage?.(`Removed ${unavailableCategories.length} unavailable tile(s) from home.`)
+    } catch (err) {
+      setLocalError(err)
+      await refetch()
     } finally {
       setBusy(false)
     }
@@ -2060,10 +2343,13 @@ function CategoriesTab({ onMessage }) {
       const result = await adminUiEditorService.cleanupHomeCategories()
       await refetch()
       const raw = result?.raw || {}
+      const cascade = raw.cascadeRepair || {}
       const parts = [
         raw.kindFixed ? `${raw.kindFixed} kind fix(es)` : null,
         raw.duplicatesRemoved ? `${raw.duplicatesRemoved} duplicate(s) removed` : null,
         raw.hiddenInactiveRefs ? `${raw.hiddenInactiveRefs} hidden (inactive SM)` : null,
+        cascade.synced ? `${cascade.synced} sub-type row(s) synced` : null,
+        cascade.removed ? `${cascade.removed} orphan sub-type row(s) removed` : null,
       ].filter(Boolean)
       onMessage?.(parts.length ? `Cleanup done: ${parts.join(', ')}.` : 'Cleanup done — nothing to fix.')
     } catch (err) {
@@ -2111,7 +2397,8 @@ function CategoriesTab({ onMessage }) {
           <div className="min-w-0">
             <h3 className="text-[16px] font-bold text-[#17231c]">Home categories</h3>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Drag to reorder · rename · change icon · hide. Order here = order on the app home grid.
+              Drag to reorder · rename · change icon · hide. Only live Store Management records appear
+              here.
             </p>
           </div>
           <button
@@ -2147,80 +2434,110 @@ function CategoriesTab({ onMessage }) {
 
         <div className="space-y-2">
           {categories.map((category, index) => (
-            <div
-              key={category.id}
-              draggable
-              onDragStart={() => onDragStart(index)}
-              onDragOver={(event) => onDragOver(event, index)}
-              onDragEnd={onDragEnd}
-              className={cn(
-                'flex items-center gap-2 rounded-[12px] bg-[#f3f5f4] px-2.5 py-2 w-fit max-w-full',
-                dragIndex === index && 'ring-1 ring-[#1aa054] bg-[#eaf6ee]',
-                category.isHidden && 'opacity-55',
-              )}
-            >
-              <button
-                type="button"
-                aria-label={`Reorder ${category.name}`}
-                className="grid h-8 w-6 shrink-0 cursor-grab place-items-center text-[#b0b8b3] active:cursor-grabbing"
-              >
-                <GripVertical size={16} strokeWidth={2.2} />
-              </button>
-              <span className="w-7 shrink-0 text-[12px] font-bold text-[#8a948e]">#{index + 1}</span>
-              <CategoryIconButton
+            <div key={category.id} className="space-y-1.5">
+              <CategoryRow
                 category={category}
-                size={36}
-                uploading={uploadingId === category.id}
-                disabled={busy || uploadingId === category.id}
-                onUploaded={(file) => uploadCategoryIcon(category, file)}
-              />
-              <input
-                value={category.name}
-                onChange={(event) => renameCategoryLocal(category.id, event.target.value)}
-                onBlur={() => {
-                  const current = categories.find((item) => item.id === category.id) || category
+                variant="parent"
+                indexLabel={`#${index + 1}`}
+                dragIndex={dragIndex}
+                rowIndex={index}
+                busy={busy}
+                uploadingId={uploadingId}
+                onDragStart={() => onDragStart(index)}
+                onDragOver={(event) => onDragOver(event, index)}
+                onDragEnd={onDragEnd}
+                onRenameLocal={renameCategoryLocal}
+                onRenamePersist={(row) => {
+                  const current = findCategoryInTree(categories, row.id) || row
                   persistRename(current)
                 }}
-                className="h-[38px] min-w-[140px] flex-1 rounded-[10px] border border-[#e4e8e4] bg-white px-3 text-[13px] font-semibold text-[#17231c] outline-none focus:border-[#1aa054]"
+                onUploadIcon={(file) => uploadCategoryIcon(category, file)}
+                onToggleHidden={toggleHidden}
+                onRemove={removeFromHome}
               />
-              <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-[0.03em] text-[#6b746e]">
-                {kindLabel(category.kind)}
-              </span>
-              {category.code || category.refId ? (
-                <span className="max-w-[88px] truncate text-[10px] text-[#8a948e]">
-                  {category.code || category.refId}
-                </span>
-              ) : null}
-              <button
-                type="button"
-                aria-label={category.isHidden ? `Show ${category.name}` : `Hide ${category.name}`}
-                onClick={() => toggleHidden(category)}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#455249]"
-              >
-                {category.isHidden ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove ${category.name} from home`}
-                disabled={busy}
-                onClick={() => removeFromHome(category)}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#c62828] disabled:opacity-60"
-              >
-                <Trash2 size={15} />
-              </button>
+              {category.children?.length
+                ? category.children.map((child, childIndex) => (
+                    <CategoryRow
+                      key={child.id}
+                      category={child}
+                      variant="child"
+                      indexLabel={`${index + 1}.${childIndex + 1}`}
+                      busy={busy}
+                      uploadingId={uploadingId}
+                      onRenameLocal={renameCategoryLocal}
+                      onRenamePersist={(row) => {
+                        const current = findCategoryInTree(categories, row.id) || row
+                        persistRename(current)
+                      }}
+                      onUploadIcon={(file) => uploadCategoryIcon(child, file)}
+                      onToggleHidden={toggleHidden}
+                    />
+                  ))
+                : null}
             </div>
           ))}
         </div>
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => setCreateOpen(true)}
-          className="mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-[12px] border border-[#1aa054] bg-white text-[13px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
-        >
-          <Plus size={15} strokeWidth={2.6} />
-          Add to home
-        </button>
+        {enabled && unavailableCategories.length ? (
+          <div className="mt-5 border-t border-[#eceeec] pt-4">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setUnavailableOpen((open) => !open)}
+                className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#69756d] hover:text-[#455249]"
+              >
+                <ChevronDown
+                  size={16}
+                  className={cn('transition', unavailableOpen ? 'rotate-0' : '-rotate-90')}
+                />
+                Unavailable in Store Management ({unavailableCount || unavailableCategories.length})
+              </button>
+              {unavailableOpen ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={removeAllUnavailableFromHome}
+                  className="inline-flex h-[32px] items-center rounded-full border border-[#d5dbd6] bg-white px-3 text-[11.5px] font-bold text-[#c62828] hover:bg-[#fdf6f6] disabled:opacity-60"
+                >
+                  Remove all from home
+                </button>
+              ) : null}
+            </div>
+            {unavailableOpen ? (
+              <>
+                <p className="mb-3 text-[12px] text-[#8a948e]">
+                  These tiles reference inactive or unpublished Store Management records. They never
+                  appear in the customer app. Reactivate in Store Management or remove them from home.
+                </p>
+                <div className="space-y-2">
+                  {unavailableCategories.map((category, index) => (
+                    <div key={category.id} className="space-y-1.5">
+                      <CategoryRow
+                        category={category}
+                        variant="unavailable"
+                        indexLabel={`!${index + 1}`}
+                        busy={busy}
+                        onRemove={removeFromHome}
+                      />
+                      {category.children?.length
+                        ? category.children.map((child, childIndex) => (
+                            <CategoryRow
+                              key={child.id}
+                              category={{ ...child, parentName: category.name }}
+                              variant="unavailable"
+                              indexLabel={`!${index + 1}.${childIndex + 1}`}
+                              busy={busy}
+                              onRemove={removeFromHome}
+                            />
+                          ))
+                        : null}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </section>
 
       <div className="flex justify-center pt-1 max-[980px]:order-first">
@@ -2237,6 +2554,7 @@ function CategoriesTab({ onMessage }) {
               <div className="grid h-[520px] auto-rows-max grid-cols-4 content-start gap-2 ">
                 {categories
                   .filter((category) => !category.isHidden)
+                  .slice(0, CUSTOMER_HOME_TILE_LIMIT)
                   .map((category) => (
                     <div
                       key={`preview-${category.id}`}
@@ -2260,6 +2578,9 @@ function CategoriesTab({ onMessage }) {
                     </div>
                   ))}
               </div>
+              <p className="mt-2 text-center text-[9.5px] text-[#8a948e]">
+                Customer home shows up to {CUSTOMER_HOME_TILE_LIMIT} tiles.
+              </p>
             </div>
           </div>
         </div>
@@ -2584,7 +2905,9 @@ export default function AdminUiEditorPage() {
     try {
       if (tab === 'categories') {
         await adminUiEditorService.publishHomeCategories()
-        setActionMessage('Published home categories.')
+        setActionMessage(
+          'Published home grid. Visible tiles are now live for the customer app (respects visibility and publish status).',
+        )
         return
       }
       await publishUi(appKey)
@@ -2604,32 +2927,41 @@ export default function AdminUiEditorPage() {
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
-            {appButtons.map((app) => (
-              <button
-                key={app.key}
-                type="button"
-                onClick={() => setPlatform(app.platform)}
-                className={cn(
-                  'inline-flex h-[32px] items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-bold transition',
-                  platform === app.platform
-                    ? 'bg-white text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
-                    : 'text-[#69756d] hover:text-[#455249]',
-                )}
-              >
-                {app.platform === 'champ' ? (
-                  <img src={motoBike} alt="" className="h-4 w-4 object-contain" />
-                ) : (
-                  <Smartphone size={14} strokeWidth={2.1} />
-                )}
-                {app.label}
-              </button>
-            ))}
-          </div>
+          {tab === 'categories' ? (
+            <div className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] bg-white px-3 text-[12px] font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]">
+              <Smartphone size={14} strokeWidth={2.1} />
+              Customer app home grid
+            </div>
+          ) : (
+            <div className="inline-flex items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
+              {appButtons.map((app) => (
+                <button
+                  key={app.key}
+                  type="button"
+                  onClick={() => setPlatform(app.platform)}
+                  className={cn(
+                    'inline-flex h-[32px] items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-bold transition',
+                    platform === app.platform
+                      ? 'bg-white text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
+                      : 'text-[#69756d] hover:text-[#455249]',
+                  )}
+                >
+                  {app.platform === 'champ' ? (
+                    <img src={motoBike} alt="" className="h-4 w-4 object-contain" />
+                  ) : (
+                    <Smartphone size={14} strokeWidth={2.1} />
+                  )}
+                  {app.label}
+                </button>
+              ))}
+            </div>
+          )}
           <div>
             <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">UI Editor</h2>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Banners, ads, categories & screens for the customer / champ app
+              {tab === 'categories'
+                ? 'Customer home category grid — shared across the customer app'
+                : 'Banners, ads, categories & screens for the customer / champ app'}
             </p>
           </div>
         </div>
@@ -2645,7 +2977,11 @@ export default function AdminUiEditorPage() {
             onClick={handlePublish}
             className="inline-flex h-[36px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isPublishing ? 'Publishing…' : 'Publish'}
+            {isPublishing
+              ? 'Publishing…'
+              : tab === 'categories'
+                ? 'Publish home grid'
+                : 'Publish'}
           </button>
         </div>
       </div>

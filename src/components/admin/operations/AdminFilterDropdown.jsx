@@ -16,6 +16,7 @@ export function AdminFilterDropdown({
   multiple = true,
   showAll = true,
   align = 'left',
+  rounded = 'full',
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -73,7 +74,10 @@ export function AdminFilterDropdown({
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
         aria-haspopup="listbox"
-        className="h-[31px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]"
+        className={cn(
+          'h-[31px] border border-[#dfe4e0] bg-white px-3 text-[10px] text-[#59655e]',
+          rounded === 'md' ? 'rounded-md' : 'rounded-full',
+        )}
       >
         {label} · <b>{summary}</b>
         <ChevronDown size={11} className="ml-1 inline-block align-[-1px] text-[#7a857e]" aria-hidden />

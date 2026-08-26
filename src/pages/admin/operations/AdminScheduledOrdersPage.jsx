@@ -14,10 +14,7 @@ import { IncidentLog } from '../../../components/admin/operations/IncidentLog'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { OperationsViewTabs } from '../../../components/admin/operations/OperationsViewTabs'
 import { OrderCard } from '../../../components/admin/operations/OrderCard'
-import {
-  ADMIN_BOARD_FULL_LIMIT,
-  ADMIN_BOARD_PREVIEW_LIMIT,
-} from '../../../lib/adminBoardLimits'
+import { ADMIN_BOARD_FULL_LIMIT } from '../../../lib/adminBoardLimits'
 import { emptyAdminScheduledCalendar } from '../../../mappers/admin/mapAdminScheduledCalendar'
 import { AdminOrderDetailModal } from './AdminLiveOrdersPage'
 import { AdminScheduledBoardFilterBar } from '../../../components/admin/operations/AdminScheduledBoardFilterBar'
@@ -199,33 +196,35 @@ function AdminOperationsBoard({ mode }) {
         <ScheduledCalendarDispatch view={view} onViewChange={onViewChange} />
       ) : (
         <>
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <OperationsViewTabs view={view} onViewChange={onViewChange} />
-            <span className="flex-1" />
-            <Button primary><Zap size={12} /> Auto-assign</Button>
-          </div>
-          {mode === 'scheduled' ? (
-            <div className="mb-3">
+            {mode === 'scheduled' ? (
               <AdminScheduledBoardFilterBar
                 query={boardQuery}
                 onChange={patchBoardQuery}
                 onClear={clearBoardQuery}
                 orders={data.orders}
+                trailing={(
+                  <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
+                )}
               />
-            </div>
-          ) : (
-            <div className="mb-3 flex justify-end">
-              <Button>Zone: All ▾</Button>
-            </div>
-          )}
-          <div className="grid grid-cols-4 gap-3 overflow-x-auto max-[1100px]:grid-cols-2 max-[650px]:grid-cols-1">
+            ) : (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button className="h-[31px]">Zone: All ▾</Button>
+                <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
+              </div>
+            )}
+          </div>
+          <div className="grid h-[548px] grid-cols-4 gap-3 overflow-x-auto max-[1100px]:grid-cols-2 max-[650px]:grid-cols-1 max-[1100px]:h-auto max-[1100px]:auto-rows-[min(548px,70vh)]">
             {data.columns.map((column) => {
               const cards = filteredOrders.filter((order) => order.column === column.key)
-              const previewCards = cards.slice(0, ADMIN_BOARD_PREVIEW_LIMIT)
               const columnHref = mode === 'scheduled' ? `/admin/scheduled/${column.key}` : null
               return (
-                <section key={column.key} className="min-h-[548px] min-w-[230px] rounded-lg bg-[#f1f4f1] p-2.5">
-                  <div className="mb-2 flex h-6 items-center gap-2 px-1">
+                <section
+                  key={column.key}
+                  className="flex min-h-0 min-w-[230px] flex-col overflow-hidden rounded-lg bg-[#f1f4f1] p-2.5"
+                >
+                  <div className="mb-2 flex h-6 shrink-0 items-center gap-2 px-1">
                     <span className="h-2 w-2 rounded-full" style={{ background: column.tone }} />
                     <h3 className="text-[10px] font-bold">{column.title}</h3>
                     <span className="rounded-full bg-white px-2 py-0.5 text-[9px] text-[#6d7871]">{cards.length}</span>
@@ -243,15 +242,15 @@ function AdminOperationsBoard({ mode }) {
                       <button type="button" className="grid h-5 w-5 place-items-center rounded bg-white text-[#738078]"><ArrowUpRight size={11} /></button>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    {previewCards.length === 0 ? (
+                  <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-0.5">
+                    {cards.length === 0 ? (
                       <p className="rounded-[9px] border border-dashed border-[#dfe4e0] bg-white px-2 py-8 text-center text-[10px] text-[#8a938c]">
                         {mode === 'scheduled' && scheduledBoardQueryIsActive(boardQuery)
                           ? 'No orders match'
                           : 'No orders'}
                       </p>
                     ) : null}
-                    {previewCards.map((order, index) => (
+                    {cards.map((order, index) => (
                       <OrderCard
                         key={`${column.key}-${order.id}-${index}`}
                         order={order}
@@ -259,14 +258,6 @@ function AdminOperationsBoard({ mode }) {
                         onOrderClick={mode === 'scheduled' ? setSelectedOrder : undefined}
                       />
                     ))}
-                    {cards.length > ADMIN_BOARD_PREVIEW_LIMIT && columnHref ? (
-                      <Link
-                        to={columnHref}
-                        className="flex w-full items-center justify-center rounded-[9px] border border-dashed border-[#cfd7d1] bg-white px-2 py-2 text-[10px] font-medium text-[#3d7a55] hover:border-[#1a9b53] hover:text-[#14763f]"
-                      >
-                        View all {cards.length} orders ↗
-                      </Link>
-                    ) : null}
                   </div>
                 </section>
               )
@@ -924,19 +915,17 @@ function ScheduledDispatchBoard({
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-3 max-[900px]:grid-cols-1">
       <div className="min-w-0">
-        <div className="mb-3 flex items-center gap-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <OperationsViewTabs view={view} onViewChange={onViewChange} />
-        </div>
-        <div className="mb-3 flex flex-wrap items-start gap-2">
-          <div className="min-w-0 flex-1">
-            <AdminScheduledBoardFilterBar
-              query={query}
-              onChange={onQueryChange}
-              onClear={onQueryClear}
-              orders={data?.orders}
-            />
-          </div>
-          <Button primary className="h-[31px] shrink-0 px-4"><Zap size={11} /> Auto-assign</Button>
+          <AdminScheduledBoardFilterBar
+            query={query}
+            onChange={onQueryChange}
+            onClear={onQueryClear}
+            orders={data?.orders}
+            trailing={(
+              <Button primary className="h-[31px] shrink-0 px-4"><Zap size={11} /> Auto-assign</Button>
+            )}
+          />
         </div>
         <section className="overflow-hidden rounded-[10px] border border-[#dfe4e0] bg-white">
           <div className="overflow-x-auto">

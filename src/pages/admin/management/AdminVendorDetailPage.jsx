@@ -37,7 +37,6 @@ export default function AdminVendorDetailPage() {
   const [storeVisibleSaving, setStoreVisibleSaving] = useState(false)
   const [activating, setActivating] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
-  const [dispatchSaving, setDispatchSaving] = useState(false)
   const [dispatchModeValue, setDispatchModeValue] = useState(null)
   const [branches, setBranches] = useState([])
   const [branchesCount, setBranchesCount] = useState(0)
@@ -321,7 +320,6 @@ export default function AdminVendorDetailPage() {
   const visible =
     storeVisible ??
     (typeof data.isCustomerVisible === 'boolean' ? data.isCustomerVisible : Boolean(online))
-  const dispatchMode = dispatchModeValue ?? data.dispatchModeValue ?? 'AUTO'
   const statusLower = String(data.status || '').toLowerCase()
   const accountStatusUpper = String(data.accountStatus || '').toUpperCase()
   const isDraft =
@@ -343,18 +341,20 @@ export default function AdminVendorDetailPage() {
     deactivating
   const storeVisibleHint = isDraft || isPending
     ? isPending
-      ? 'Approve the vendor before showing in the customer app'
-      : 'Activate the vendor before showing in the customer app'
+      ? 'Approve before showing in the customer app.'
+      : 'Activate before showing in the customer app.'
     : visible
-      ? 'Shown in customer search and category listings.'
+      ? 'Show in customer app search & listings.'
       : 'Hidden from the customer app.'
   const storeActiveHint = isDraft || isPending
     ? isPending
-      ? 'Approve the vendor before accepting orders'
-      : 'Activate the vendor before accepting orders'
+      ? 'Approve before accepting orders.'
+      : 'Activate before accepting orders.'
     : online
-      ? 'Vendor can receive orders; customers can check out.'
-      : 'Customers cannot place orders (can still browse if Visible is ON).'
+      ? 'Accept new orders.'
+      : 'Not accepting orders.'
+  const profileLocation = [data.area, data.city].filter(Boolean).join(', ') || '—'
+  const showMoveToDraft = isActiveAccount && !isForceClosed && !isSuspended
 
   let displayStatus = String(data.status || '').trim() || '—'
   if (isSuspended) displayStatus = 'Suspended'
@@ -675,17 +675,19 @@ export default function AdminVendorDetailPage() {
     }
   }
 
+  /** Dispatch control kept wired for API parity; UI removed from this panel. */
   const handleDispatchModeChange = async (nextMode) => {
     const normalized = String(nextMode || '').toUpperCase() === 'MANUAL' ? 'MANUAL' : 'AUTO'
-    if (normalized === dispatchMode || dispatchSaving) return
+    const current = dispatchModeValue ?? data.dispatchModeValue ?? 'AUTO'
+    if (normalized === current) return
 
+    const previous = current
     setDispatchModeValue(normalized)
     if (!isAdminRealApiFeature('vendors')) {
       showSuccess(`Dispatch mode set to ${normalized === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}.`)
       return
     }
 
-    setDispatchSaving(true)
     try {
       const response = await adminService.updateVendorStoreControls(vendorId, {
         dispatchMode: normalized,
@@ -694,10 +696,8 @@ export default function AdminVendorDetailPage() {
       if (!response?.data) await refetch()
       showSuccess(`Dispatch mode set to ${normalized === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}.`)
     } catch (err) {
-      setDispatchModeValue(data.dispatchModeValue || 'AUTO')
+      setDispatchModeValue(previous || 'AUTO')
       showError(formatApiErrorMessage(err, 'Failed to update dispatch mode.'))
-    } finally {
-      setDispatchSaving(false)
     }
   }
 
@@ -798,14 +798,16 @@ export default function AdminVendorDetailPage() {
             })}
           </div>
 
-          {/* Bottom cards: ~65% / ~35% */}
-          <div className="grid grid-cols-[minmax(0,1.7fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
+          {/* Bottom cards: profile + controls */}
+          <div className="grid grid-cols-[minmax(0,1.15fr)_minmax(340px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
             <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
               <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">Store profile</h3>
               {[
                 ['Legal name', data.legalName],
                 ['Category', data.category],
+                ['Location', profileLocation],
                 ['Delivery', data.delivery],
+                ['Branches', data.branchesLabel],
               ].map(([label, value]) => (
                 <div
                   key={label}
@@ -826,11 +828,6 @@ export default function AdminVendorDetailPage() {
                   <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
                     {storeVisibleHint}
                   </p>
-                  {isActiveAccount ? (
-                    <p className="mt-1 text-[11px] leading-[15px] text-[#9aa49d]">
-                      Controls customer-app discovery only. Does not deactivate the vendor account.
-                    </p>
-                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -853,17 +850,12 @@ export default function AdminVendorDetailPage() {
                 </button>
               </div>
 
-              <div className="mt-3 flex items-start justify-between gap-3 border-b border-[#f0f2f0] pb-3">
+              <div className="mt-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#17231c]">Active</p>
                   <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
                     {storeActiveHint}
                   </p>
-                  {isActiveAccount ? (
-                    <p className="mt-1 text-[11px] leading-[15px] text-[#9aa49d]">
-                      Controls order acceptance. Vendor can stay visible while Active is OFF.
-                    </p>
-                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -887,9 +879,9 @@ export default function AdminVendorDetailPage() {
               </div>
 
               {isDraft ? (
-                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                <div className="mt-4 border-t border-[#f0f2f0] pt-4">
                   <p className="text-[12px] leading-relaxed text-[#7c8780]">
-                    This vendor is still a draft. Activate it to make the store visible in the customer app.
+                    Draft vendor — activate to show in the customer app.
                   </p>
                   <button
                     type="button"
@@ -903,9 +895,9 @@ export default function AdminVendorDetailPage() {
               ) : null}
 
               {isPending ? (
-                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
+                <div className="mt-4 border-t border-[#f0f2f0] pt-4">
                   <p className="text-[12px] leading-relaxed text-[#7c8780]">
-                    This vendor is waiting for approval before it can go live.
+                    Waiting for approval before going live.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -928,79 +920,35 @@ export default function AdminVendorDetailPage() {
                 </div>
               ) : null}
 
-              <div className="mt-4 border-b border-[#f0f2f0] pb-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] font-bold text-[#17231c]">Dispatch mode</p>
-                    <p className="mt-0.5 text-[12px] text-[#7c8780]">
-                      {dispatchMode === 'MANUAL' ? 'Manual dispatch' : 'Auto-dispatch'}
-                    </p>
-                  </div>
-                  {dispatchSaving ? (
-                    <span className="text-[12px] text-[#7c8780]">Saving…</span>
-                  ) : null}
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {[
-                    { value: 'AUTO', label: 'Auto-dispatch' },
-                    { value: 'MANUAL', label: 'Manual dispatch' },
-                  ].map((option) => {
-                    const selected = dispatchMode === option.value
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={dispatchSaving || isDraft || isPending || isSuspended}
-                        onClick={() => handleDispatchModeChange(option.value)}
-                        className={cn(
-                          'inline-flex h-[34px] items-center rounded-full border px-3.5 text-[12.5px] font-medium transition disabled:cursor-not-allowed disabled:opacity-60',
-                          selected
-                            ? 'border-[#1aa054] bg-[#e8f7ed] text-[#147940]'
-                            : 'border-[#e1e5e2] bg-white text-[#455249] hover:border-[#c9d0cb]',
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {isActiveAccount && !isForceClosed && !isSuspended ? (
-                <div className="mt-4 border-b border-[#f0f2f0] pb-4">
-                  <p className="text-[12px] leading-relaxed text-[#7c8780]">
-                    Need to stop all activity? Move the vendor back to draft. This hides the store and disables the account until reactivated.
-                  </p>
+              <div className="mt-4 flex gap-2 border-t border-[#f0f2f0] pt-4">
+                {showMoveToDraft ? (
                   <button
                     type="button"
                     onClick={handleReturnToDraft}
                     disabled={deactivating}
-                    className="mt-3 inline-flex h-[36px] items-center rounded-full border border-[#d5dbd6] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7] disabled:opacity-60"
+                    className="inline-flex h-[40px] min-w-0 flex-1 items-center justify-center rounded-full bg-[#eff2f0] px-2 text-[11.5px] font-bold text-[#455249] hover:bg-[#e4e8e4] disabled:opacity-60"
                   >
                     {deactivating ? 'Updating…' : 'Move to draft'}
                   </button>
-                </div>
-              ) : null}
-
-              <div className="mt-5 flex flex-col gap-2.5">
+                ) : null}
                 {isForceClosed ? (
                   <button
                     type="button"
                     onClick={handleReopen}
                     disabled={reopening}
-                    className="inline-flex h-[42px] w-fit items-center justify-center gap-2 rounded-full bg-[#e8f7ed] px-4 text-[13px] font-bold text-[#147940] hover:bg-[#d8f1e1] disabled:opacity-60"
+                    className="inline-flex h-[40px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#1aa054] px-2 text-[11.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
                   >
-                    <Play size={15} className="fill-[#147940] text-[#147940]" strokeWidth={0} />
+                    <Play size={13} className="shrink-0 fill-white text-white" strokeWidth={0} />
                     {reopening ? 'Resuming…' : 'Resume'}
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={() => setForceCloseOpen(true)}
-                    className="inline-flex h-[42px] w-fit items-center justify-center gap-2 rounded-full bg-[#fff3d6] px-4 text-[13px] font-bold text-[#9E6B0D] hover:bg-[#ffecc0]"
+                    className="inline-flex h-[40px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-full bg-[#f0a020] px-2 text-[11.5px] font-bold text-white hover:bg-[#d98f14]"
                   >
-                    <Pause size={15} className="text-[#3b82f6]" fill="#3b82f6" strokeWidth={0} />
-                    Force close store
+                    <Pause size={13} className="shrink-0 text-white" fill="white" strokeWidth={0} />
+                    Force close
                   </button>
                 )}
                 {isSuspended ? (
@@ -1008,7 +956,7 @@ export default function AdminVendorDetailPage() {
                     type="button"
                     onClick={handleUnsuspend}
                     disabled={unsuspending}
-                    className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#e8f7ed] px-4 text-[13px] font-bold text-[#147940] hover:bg-[#d8f1e1] disabled:opacity-60"
+                    className="inline-flex h-[40px] min-w-0 flex-1 items-center justify-center rounded-full bg-[#1aa054] px-2 text-[11.5px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
                   >
                     {unsuspending ? 'Unsuspending…' : 'Unsuspend'}
                   </button>
@@ -1016,9 +964,9 @@ export default function AdminVendorDetailPage() {
                   <button
                     type="button"
                     onClick={() => setSuspendOpen(true)}
-                    className="inline-flex h-[42px] w-fit items-center justify-center rounded-full bg-[#fdebec] px-4 text-[13px] font-bold text-[#d64044] hover:bg-[#f9d9da]"
+                    className="inline-flex h-[40px] min-w-0 flex-1 items-center justify-center rounded-full bg-[#e14b42] px-2 text-[11.5px] font-bold text-white hover:bg-[#c93d36]"
                   >
-                    Suspend vendor
+                    Suspend
                   </button>
                 )}
               </div>

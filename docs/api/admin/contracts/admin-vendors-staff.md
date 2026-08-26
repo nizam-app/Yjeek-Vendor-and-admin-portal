@@ -82,4 +82,33 @@ UI maps: Vendor admin → `VENDOR_ADMIN`, Branch manager → `BRANCH_MANAGER`, S
 ### Skipped UI fields on create
 
 - **Status** — not in POST body (defaults Active)
-- **Permissions** toggles — not in POST body (`permissions: {}` in response)
+
+### Permissions (create / update)
+
+Send optional `permissions` object. Keys map to vendor-panel route guards:
+
+| UI toggle | API key | Guards |
+| --- | --- | --- |
+| Orders | `orders` | Orders, dashboard, notifications |
+| Catalog / menu | `catalog` | Catalog products/categories |
+| Working hours | `workingHours` | Open/close, opening hours |
+| Staff | `staff` | Staff management |
+| Delivery settings | `deliverySettings` | Radius / ETA / min order |
+| Promotions | `promotions` | Promotions |
+
+Example:
+
+```json
+{
+  "permissions": {
+    "orders": true,
+    "catalog": false,
+    "workingHours": true,
+    "staff": false,
+    "deliverySettings": false,
+    "promotions": false
+  }
+}
+```
+
+Stored flags are enforced for Branch manager, Staff, and Vendor admin staff. Vendor **owner** always has full access (`permissions: { all: true }`).

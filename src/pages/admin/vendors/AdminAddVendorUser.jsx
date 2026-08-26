@@ -32,16 +32,17 @@ function Field({ label, children, className = '' }) {
   )
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled = false }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={onChange}
       className={cn(
-        'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
+        'relative ml-auto h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50',
         checked ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
       )}
     >
@@ -273,11 +274,15 @@ export default function AdminAddVendorUser() {
     )
   }, [user, isNewUser])
 
+  const isOwnerUser = Boolean(user?.isOwner)
+  const permissionsLocked = isOwnerUser
+
   const updateField = (key) => (event) => {
     setForm((prev) => ({ ...prev, [key]: event.target.value }))
   }
 
   const setRole = (role) => {
+    if (permissionsLocked) return
     setForm((prev) => {
       const next = { ...prev, role }
       if (role === 'Vendor admin' && useRealStaffApi) {
@@ -295,6 +300,7 @@ export default function AdminAddVendorUser() {
   }
 
   const togglePermission = (id) => {
+    if (permissionsLocked) return
     setPermissions((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
@@ -337,7 +343,20 @@ export default function AdminAddVendorUser() {
     setSaveError(null)
     setSaving(true)
     try {
-      const payload = { ...form, permissions }
+      // Owner always keeps full access — don't send restrictive toggles.
+      const payload = {
+        ...form,
+        permissions: permissionsLocked
+          ? {
+              orders: true,
+              catalog: true,
+              hours: true,
+              staff: true,
+              delivery: true,
+              promotions: true,
+            }
+          : permissions,
+      }
       if (isNewUser) {
         await adminService.createVendorStaff(vendorId, payload, branchList)
       } else {
@@ -388,7 +407,7 @@ export default function AdminAddVendorUser() {
         </div>
       ) : null}
 
-      <div className="space-y-4">
+      <div className="mx-auto max-w-[920px] space-y-4">
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">User details</h3>
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
@@ -425,14 +444,15 @@ export default function AdminAddVendorUser() {
           <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Role &amp; scope</h3>
 
           <p className={labelClass}>Role</p>
-          <div className="mb-4 flex w-fit flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
+          <div className="mb-4 flex w-full flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
             {ROLES.map((role) => (
               <button
                 key={role}
                 type="button"
                 onClick={() => setRole(role)}
+                disabled={permissionsLocked}
                 className={cn(
-                  'h-[30px] rounded-[8px] px-3.5 text-[12px]',
+                  'h-[30px] flex-1 rounded-[8px] px-3.5 text-[12px] disabled:cursor-not-allowed disabled:opacity-60',
                   form.role === role
                     ? 'bg-white font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]'
                     : 'font-medium text-[#69756d]',
@@ -449,6 +469,7 @@ export default function AdminAddVendorUser() {
               value={form.branchId}
               onChange={(value) => setForm((prev) => ({ ...prev, branchId: value }))}
               options={resolvedBranchOptions}
+              disabled={permissionsLocked || form.role === 'Vendor admin'}
             />
             <SelectField
               label="Status"
@@ -462,22 +483,27 @@ export default function AdminAddVendorUser() {
 
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">Permissions</h3>
-          <p className="mb-4 text-[12px] text-[#7c8780]">Toggle what this user can access.</p>
+          <p className="mb-4 text-[12px] text-[#7c8780]">
+            {permissionsLocked
+              ? 'Vendor owner always has full access. These toggles cannot be restricted.'
+              : 'Toggle what this user can access in the vendor app. Saved with the user role.'}
+          </p>
 
-          <div className="space-y-0">
+          <div className="divide-y divide-[#f0f2f0] rounded-[10px] border border-[#edf0ee]">
             {PERMISSIONS.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center gap-4 border-b border-[#f0f2f0] py-3.5 last:border-0 last:pb-0"
+                className="flex items-center justify-between gap-4 px-4 py-3.5"
               >
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#17231c]">{item.label}</p>
                   <p className="mt-0.5 text-[12px] text-[#7c8780]">{item.hint}</p>
                 </div>
                 <Toggle
-                  checked={Boolean(permissions[item.id])}
+                  checked={permissionsLocked ? true : Boolean(permissions[item.id])}
                   onChange={() => togglePermission(item.id)}
                   label={item.label}
+                  disabled={permissionsLocked}
                 />
               </div>
             ))}

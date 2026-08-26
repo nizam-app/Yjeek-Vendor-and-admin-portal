@@ -120,11 +120,17 @@ export function useAdminUiEditorHomeCategories() {
   // Home grid must come only from home_entries (ref_id FK). Do not fall back to
   // getHomePreview().categories — that lists raw Store Management rows without home FK.
   const categories = useMemo(() => resource.data?.categories || [], [resource.data])
+  const unavailableCategories = useMemo(
+    () => resource.data?.unavailableCategories || [],
+    [resource.data],
+  )
 
   return {
     ...resource,
     enabled,
     categories,
+    unavailableCategories,
+    unavailableCount: resource.data?.unavailableCount ?? unavailableCategories.length,
     preview: previewResource.data,
     previewLoading: previewResource.isLoading,
     previewError: previewResource.error,

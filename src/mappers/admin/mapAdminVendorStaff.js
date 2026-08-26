@@ -229,8 +229,15 @@ export function mapAdminCreateStaffRequest(form = {}, branchOptions = []) {
     body.status = status
   }
 
-  const permissions = mapAdminStaffPermissionsToApi(form.permissions)
-  if (permissions) body.permissions = permissions
+  const permissions = mapAdminStaffPermissionsToApi(form.permissions) ?? {
+    orders: true,
+    catalog: role === 'VENDOR_ADMIN',
+    workingHours: role === 'VENDOR_ADMIN' || role === 'BRANCH_MANAGER',
+    staff: role === 'VENDOR_ADMIN',
+    deliverySettings: role === 'VENDOR_ADMIN',
+    promotions: role === 'VENDOR_ADMIN',
+  }
+  body.permissions = permissions
 
   return body
 }

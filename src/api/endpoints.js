@@ -105,8 +105,19 @@ export const endpoints = {
     search: {
       /** Confirmed: GET /admin/search?q=&limit= */
       global: '/admin/search',
-      /** Confirmed: GET /admin/search/notifications */
+      /** Confirmed: GET /admin/search/notifications?filter=all|unread */
       notifications: '/admin/search/notifications',
+      /** Confirmed: GET /admin/search/notifications/unread-count */
+      notificationsUnreadCount: '/admin/search/notifications/unread-count',
+      /** Confirmed: POST /admin/search/notifications/mark-all-read */
+      notificationsMarkAllRead: '/admin/search/notifications/mark-all-read',
+      /**
+       * Confirmed: PATCH /admin/search/notifications/:kind/:id/read
+       * @param {'incident'|'vendor_flag'} kind
+       * @param {string} id
+       */
+      notificationRead: (kind, id) =>
+        `/admin/search/notifications/${encodeURIComponent(kind)}/${encodeURIComponent(id)}/read`,
     },
     chats: {
       /**

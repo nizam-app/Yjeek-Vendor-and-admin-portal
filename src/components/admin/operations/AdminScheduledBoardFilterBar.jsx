@@ -1,54 +1,30 @@
 import { X } from 'lucide-react'
 import { AdminFilterDropdown } from './AdminFilterDropdown'
 import {
-  SCHEDULED_DATE_OPTIONS,
-  SCHEDULED_STAGE_OPTIONS,
-  SCHEDULED_TYPE_OPTIONS,
   removeScheduledBoardChip,
   scheduledBoardFilterChips,
-  scheduledBoardQueryIsActive,
   zonesFromOrders,
 } from '../../../lib/adminScheduledBoardQuery'
 
 /**
- * Scheduled Pipeline / Board filters: Date, Type, Stage, Zone.
- * Multi-select, AND across groups, live chips.
+ * Scheduled Pipeline / Board zone filter — sits in the right action cluster.
+ * Optional `trailing` (e.g. Auto-assign) shares the same baseline as Zone.
  */
 export function AdminScheduledBoardFilterBar({
   query,
   onChange,
   onClear,
   orders = [],
+  align = 'right',
+  trailing = null,
 }) {
   const zones = zonesFromOrders(orders)
-  const chips = scheduledBoardFilterChips(query, { zones })
-  const showCustom = (query?.dates || []).includes('custom')
-  const showClear = scheduledBoardQueryIsActive(query) || showCustom
+  const chips = scheduledBoardFilterChips(query, { zones }).filter((chip) => chip.group === 'zones')
+  const showClear = chips.length > 0
 
   return (
-    <div className="shrink-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <AdminFilterDropdown
-          label="Date"
-          allLabel="All"
-          options={SCHEDULED_DATE_OPTIONS}
-          selectedIds={query?.dates || []}
-          onChange={(dates) => onChange?.({ ...query, dates })}
-        />
-        <AdminFilterDropdown
-          label="Type"
-          searchable
-          searchPlaceholder="Search types…"
-          options={SCHEDULED_TYPE_OPTIONS}
-          selectedIds={query?.types || []}
-          onChange={(types) => onChange?.({ ...query, types })}
-        />
-        <AdminFilterDropdown
-          label="Stage"
-          options={SCHEDULED_STAGE_OPTIONS}
-          selectedIds={query?.stages || []}
-          onChange={(stages) => onChange?.({ ...query, stages })}
-        />
+    <div className="flex shrink-0 flex-col items-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <AdminFilterDropdown
           label="Zone"
           searchable
@@ -56,30 +32,14 @@ export function AdminScheduledBoardFilterBar({
           options={zones}
           selectedIds={query?.zones || []}
           onChange={(zonesNext) => onChange?.({ ...query, zones: zonesNext })}
+          align={align}
+          rounded="md"
         />
+        {trailing}
       </div>
 
-      {showCustom ? (
-        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
-          <span>From</span>
-          <input
-            type="date"
-            value={query?.dateFrom || ''}
-            onChange={(event) => onChange?.({ ...query, dateFrom: event.target.value })}
-            className="h-[29px] rounded-full border border-[#dfe4e0] bg-white px-2.5 text-[10px] outline-none"
-          />
-          <span>To</span>
-          <input
-            type="date"
-            value={query?.dateTo || ''}
-            onChange={(event) => onChange?.({ ...query, dateTo: event.target.value })}
-            className="h-[29px] rounded-full border border-[#dfe4e0] bg-white px-2.5 text-[10px] outline-none"
-          />
-        </div>
-      ) : null}
-
-      {chips.length > 0 || showClear ? (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {showClear ? (
+        <div className="flex flex-wrap items-center justify-end gap-1.5">
           {chips.map((chip) => (
             <button
               key={chip.key}
@@ -91,15 +51,13 @@ export function AdminScheduledBoardFilterBar({
               <X size={10} aria-hidden />
             </button>
           ))}
-          {showClear ? (
-            <button
-              type="button"
-              onClick={() => onClear?.()}
-              className="h-[22px] px-1 text-[10px] font-medium text-[#16854a] hover:underline"
-            >
-              Clear all
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={() => onClear?.()}
+            className="h-[22px] px-1 text-[10px] font-medium text-[#16854a] hover:underline"
+          >
+            Clear all
+          </button>
         </div>
       ) : null}
     </div>

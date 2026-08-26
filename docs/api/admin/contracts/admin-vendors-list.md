@@ -20,7 +20,7 @@ Confirmed from Postman "List vendors (KPIs + filters)". Real IDs and names may b
 | --- | --- | --- |
 | `search` | `""` | Vendor name / code search |
 | `status` | `all` | `all` · `active` · `pending` · `suspended` |
-| `category` | `""` | Category filter |
+| `category` | `""` | Exact category / store-type name match (case-insensitive; not substring) |
 | `limit` | `20` | Page size |
 | `page` | `1` | 1-based page index |
 | `sort` | `newest` | Newest vendors first (`createdAt` desc) |

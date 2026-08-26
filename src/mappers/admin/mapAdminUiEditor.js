@@ -324,67 +324,73 @@ export function mapAdminUiEditorBanners(data) {
 /**
  * GET /admin/ui-editor/home/categories
  * Backend presentCategory: { id, name, slug, iconUrl, sortOrder, isActive, isFeatured, publishStatus }
+ * Live SM refs → categories; inactive/unpublished refs → unavailableCategories.
  */
+function mapHomeCategoryItem(item, index = 0) {
+  if (!item || typeof item !== 'object') return null
+  const id = asString(item.id || item.categoryId || item.key).trim()
+  if (!id) return null
+  const isHidden = Boolean(item.isHidden || item.hidden || item.isActive === false)
+  const iconUrlRaw = pickMediaUrl(item.iconUrl, item.icon_url, item.imageUrl, item.image_url)
+  const iconUrl =
+    iconUrlRaw &&
+    (/^https?:\/\//i.test(iconUrlRaw) ||
+      iconUrlRaw.startsWith('/') ||
+      iconUrlRaw.includes('/uploads/'))
+      ? iconUrlRaw
+      : null
+  return {
+    id,
+    name: asString(item.name || item.label || 'Category'),
+    iconUrl: iconUrl || null,
+    sortOrder: asNumber(item.sortOrder ?? item.order ?? index, index),
+    isFeatured: item.isFeatured != null ? Boolean(item.isFeatured) : true,
+    isHidden,
+    isActive: item.isActive != null ? Boolean(item.isActive) : !isHidden,
+    kind: asString(item.kind || 'STORE_TYPE'),
+    refId: asString(item.refId || item.ref_id || id),
+    structure: asString(item.structure || 'SINGLE'),
+    code: asString(item.code || ''),
+    kindMismatch: Boolean(item.kindMismatch),
+    refActive: item.refActive != null ? Boolean(item.refActive) : null,
+    refPublishStatus: asString(item.refPublishStatus || ''),
+    parentName: asString(item.parentName || '').trim() || null,
+    children: Array.isArray(item.children)
+      ? item.children
+          .map((child, childIndex) => mapHomeCategoryItem(child, childIndex))
+          .filter(Boolean)
+      : [],
+    raw: item,
+  }
+}
+
 export function mapAdminUiEditorHomeCategories(data) {
   const src = asObject(data) || {}
-  const list = asArray(src.categories).length
-    ? asArray(src.categories)
-    : asArray(src.items).length
-      ? asArray(src.items)
-      : asArray(data)
+  const liveList = asArray(src.categories)
+  const unavailableList = asArray(src.unavailableCategories)
+  const legacyList =
+    liveList.length || unavailableList.length
+      ? []
+      : asArray(src.items).length
+        ? asArray(src.items)
+        : asArray(data)
 
-  const categories = list
-    .map((item, index) => {
-      if (!item || typeof item !== 'object') return null
-      const id = asString(item.id || item.categoryId || item.key).trim()
-      if (!id) return null
-      const isHidden = Boolean(
-        item.isHidden || item.hidden || item.isActive === false,
-      )
-      const iconUrlRaw = pickMediaUrl(
-        item.iconUrl,
-        item.icon_url,
-        item.imageUrl,
-        item.image_url,
-      )
-      const iconUrl =
-        iconUrlRaw &&
-        (/^https?:\/\//i.test(iconUrlRaw) ||
-          iconUrlRaw.startsWith('/') ||
-          iconUrlRaw.includes('/uploads/'))
-          ? iconUrlRaw
-          : null
-      return {
-        id,
-        name: asString(item.name || item.label || 'Category'),
-        iconUrl: iconUrl || null,
-        sortOrder: asNumber(item.sortOrder ?? item.order ?? index, index),
-        isFeatured: item.isFeatured != null ? Boolean(item.isFeatured) : true,
-        isHidden,
-        isActive: item.isActive != null ? Boolean(item.isActive) : !isHidden,
-        kind: asString(item.kind || 'STORE_TYPE'),
-        refId: asString(item.refId || item.ref_id || id),
-        structure: asString(item.structure || 'SINGLE'),
-        code: asString(item.code || ''),
-        kindMismatch: Boolean(item.kindMismatch),
-        children: Array.isArray(item.children)
-          ? item.children.map((child, childIndex) => ({
-              id: asString(child.id),
-              name: asString(child.name || child.label || 'Sub-type'),
-              kind: asString(child.kind || 'SUB_TYPE'),
-              refId: asString(child.refId || child.id),
-              iconUrl: child.iconUrl || null,
-              sortOrder: asNumber(child.sortOrder ?? childIndex, childIndex),
-              isHidden: child.isActive === false,
-            }))
-          : [],
-        raw: item,
-      }
-    })
+  const categories = (liveList.length ? liveList : legacyList)
+    .map((item, index) => mapHomeCategoryItem(item, index))
     .filter(Boolean)
     .sort((a, b) => a.sortOrder - b.sortOrder)
 
-  return { categories }
+  const unavailableCategories = unavailableList
+    .map((item, index) => mapHomeCategoryItem(item, index))
+    .filter(Boolean)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  return {
+    count: asNumber(src.count, categories.length),
+    unavailableCount: asNumber(src.unavailableCount, unavailableCategories.length),
+    categories,
+    unavailableCategories,
+  }
 }
 
 /**

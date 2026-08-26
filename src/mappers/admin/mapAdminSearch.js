@@ -58,9 +58,22 @@ export function mapAdminSearchNotificationsResponse(data) {
         priority: item.priority ? String(item.priority) : null,
         createdAt: item.createdAt ?? null,
         linkHint: item.linkHint ? String(item.linkHint) : null,
+        isRead: Boolean(item.isRead),
       }
     })
     .filter(Boolean)
 
-  return { items, unread: items.length }
+  const unreadFromItems = items.filter((item) => !item.isRead).length
+  const unreadCount = Number.isFinite(Number(data.unreadCount))
+    ? Number(data.unreadCount)
+    : unreadFromItems
+
+  return { items, unreadCount }
+}
+
+export function mapAdminSearchNotificationsUnreadCount(data) {
+  if (!data || typeof data !== 'object') {
+    throw new ApiError({ message: 'Invalid unread-count response from the server.' })
+  }
+  return { unreadCount: Number(data.unreadCount) || 0 }
 }

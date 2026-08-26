@@ -141,6 +141,7 @@ export default function AdminDashboardPage() {
           error={mapError}
           onRetry={refetchMap}
           focusTarget={mapFocusForPins}
+          onFocusClear={clearMapFocus}
           onPointClick={handlePointClick}
         />
 
