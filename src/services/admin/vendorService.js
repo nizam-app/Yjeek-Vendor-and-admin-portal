@@ -358,25 +358,37 @@ export const adminVendorService = {
   },
 
   /**
-   * List store types for Store type dropdown.
-   * Confirmed: GET /admin/store-types → { storeTypes[] }
+   * List store types for Store type dropdown (Visible in Store Management only).
+   * Pass `includeIds` to keep a currently assigned (possibly Hidden) type in the list.
+   * Confirmed: GET /admin/store-types?visibleOnly=true → { storeTypes[] }
    *
-   * @param {{ signal?: AbortSignal }} [options]
+   * @param {{ signal?: AbortSignal, params?: Record<string, unknown>, includeIds?: Array<string|number> }} [options]
    */
   async listStoreTypes(options = {}) {
     if (!isAdminRealApiFeature('vendors')) {
       return { data: { total: 0, storeTypes: [] }, meta: null }
     }
 
+    const includeIds = Array.isArray(options.includeIds) ? options.includeIds : []
+    // When preserving a current assignment, fetch full list then filter client-side.
+    const visibleOnly = includeIds.length === 0
+
     const response = await apiClient.get(endpoints.admin.storeTypes.list, {
       ...options,
       scope: 'admin',
       feature: 'vendors',
-      params: { limit: 50, ...(options.params || {}) },
+      params: {
+        limit: 50,
+        ...(visibleOnly ? { visibleOnly: true } : {}),
+        ...(options.params || {}),
+      },
     })
 
     return {
-      data: mapAdminStoreTypesResponse(response?.data),
+      data: mapAdminStoreTypesResponse(response?.data, {
+        visibleOnly: true,
+        includeIds,
+      }),
       meta: response?.meta ?? null,
     }
   },

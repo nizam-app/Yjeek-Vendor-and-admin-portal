@@ -24,6 +24,7 @@ import {
   Smartphone,
   Sparkles,
   Store,
+  Trash2,
   Upload,
   UserRound,
   UtensilsCrossed,
@@ -1815,7 +1816,13 @@ function AddToHomeModal({ open, onClose, onSubmit, isSubmitting }) {
                               </span>
                             </span>
                             <span className="text-[11px] font-bold text-[#8a948e]">
-                              {item.onHome ? 'On home' : active ? 'Selected' : 'Add'}
+                              {item.onHome
+                                ? item.onHomeVisible === false
+                                  ? 'On home (hidden)'
+                                  : 'On home'
+                                : active
+                                  ? 'Selected'
+                                  : 'Add'}
                             </span>
                           </button>
                         )
@@ -2016,6 +2023,56 @@ function CategoriesTab({ onMessage }) {
     }
   }
 
+  const removeFromHome = async (category) => {
+    if (!category?.id) return
+    if (!window.confirm(`Remove “${category.name}” from the home grid? Store Management is unchanged.`)) {
+      return
+    }
+    if (!enabled) {
+      setCategories((prev) => prev.filter((item) => item.id !== category.id))
+      return
+    }
+    setBusy(true)
+    setLocalError(null)
+    try {
+      await adminUiEditorService.deleteHomeCategory(category.id)
+      await refetch()
+      onMessage?.('Removed from home.')
+    } catch (err) {
+      setLocalError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runCleanup = async () => {
+    if (!enabled) return
+    if (
+      !window.confirm(
+        'Repair home categories? Fixes kind mismatches, removes duplicate rows for the same Store Management record, and hides tiles whose store type is inactive.',
+      )
+    ) {
+      return
+    }
+    setBusy(true)
+    setLocalError(null)
+    try {
+      const result = await adminUiEditorService.cleanupHomeCategories()
+      await refetch()
+      const raw = result?.raw || {}
+      const parts = [
+        raw.kindFixed ? `${raw.kindFixed} kind fix(es)` : null,
+        raw.duplicatesRemoved ? `${raw.duplicatesRemoved} duplicate(s) removed` : null,
+        raw.hiddenInactiveRefs ? `${raw.hiddenInactiveRefs} hidden (inactive SM)` : null,
+      ].filter(Boolean)
+      onMessage?.(parts.length ? `Cleanup done: ${parts.join(', ')}.` : 'Cleanup done — nothing to fix.')
+    } catch (err) {
+      setLocalError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const onDragStart = (index) => setDragIndex(index)
 
   const onDragOver = (event, index) => {
@@ -2057,6 +2114,14 @@ function CategoriesTab({ onMessage }) {
               Drag to reorder · rename · change icon · hide. Order here = order on the app home grid.
             </p>
           </div>
+          <button
+            type="button"
+            disabled={busy || !enabled}
+            onClick={runCleanup}
+            className="inline-flex h-[36px] shrink-0 items-center gap-1 rounded-full border border-[#d5dbd6] bg-white px-3 text-[12.5px] font-bold text-[#455249] hover:bg-[#f7f9f7] disabled:opacity-60"
+          >
+            Repair duplicates
+          </button>
           <button
             type="button"
             disabled={busy}
@@ -2133,6 +2198,15 @@ function CategoriesTab({ onMessage }) {
                 className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#455249]"
               >
                 {category.isHidden ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+              <button
+                type="button"
+                aria-label={`Remove ${category.name} from home`}
+                disabled={busy}
+                onClick={() => removeFromHome(category)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#c62828] disabled:opacity-60"
+              >
+                <Trash2 size={15} />
               </button>
             </div>
           ))}

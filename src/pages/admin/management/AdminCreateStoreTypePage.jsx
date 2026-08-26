@@ -606,9 +606,8 @@ function StoreTypeForm({
       return
     }
 
-    // List "Visible" = PUBLISHED + isActive. Keep that in sync with the
-    // "Visible in customer app" toggle so Save draft + Visible ON is not Hidden.
-    const nextVisible = intent === 'PUBLISHED' ? true : Boolean(visibleInApp)
+    // Toggle is the source of truth for customer-app visibility (list Visible = PUBLISHED + isActive).
+    const nextVisible = Boolean(visibleInApp)
     const publishStatus = nextVisible ? 'PUBLISHED' : 'DRAFT'
 
     if (nextVisible) {
@@ -619,7 +618,10 @@ function StoreTypeForm({
       }
     }
 
-    if (nextVisible !== visibleInApp) setVisibleInApp(nextVisible)
+    if (intent === 'PUBLISHED' && !nextVisible) {
+      setSaveError('Turn on "Visible in customer app" to publish this store type.')
+      return
+    }
 
     setSaving(true)
     setSaveError('')

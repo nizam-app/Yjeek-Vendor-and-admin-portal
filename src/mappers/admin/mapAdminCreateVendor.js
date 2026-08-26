@@ -99,6 +99,9 @@ function mapCreateBranches(branches = []) {
         item.operationalStatus = branch.branchOnline ? 'OPEN' : 'CLOSED'
       }
 
+      if (typeof branch.allowsPickup === 'boolean') item.allowsPickup = branch.allowsPickup
+      if (typeof branch.allowsDineIn === 'boolean') item.allowsDineIn = branch.allowsDineIn
+
       return item
     })
     .filter(Boolean)

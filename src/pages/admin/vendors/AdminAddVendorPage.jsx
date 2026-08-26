@@ -10,14 +10,13 @@ import {
 import houseIcon from '../../../assets/icon-house.png'
 import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
-import { AdminVendorSlaConfigs, buildAllowedModesFromStoreType } from '../../../components/admin/AdminVendorSlaConfigs'
+import { AdminVendorSlaConfigs, buildAllowedModesFromStoreType, mergeBranchModesIntoServiceModes } from '../../../components/admin/AdminVendorSlaConfigs'
 import AdminPasswordField from '../../../components/admin/AdminPasswordField'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import AdminVendorImageUpload from '../../../components/admin/AdminVendorImageUpload'
 import { showError, showFlashMessage, showInfo, showSuccess } from '../../../utils/toast'
 import {
-  flattenAdminMenuCategoryOptions,
   matchAdminStoreTypeId,
 } from '../../../mappers/admin/mapAdminStoreTypes'
 import {
@@ -634,7 +633,6 @@ export default function AdminAddVendorPage({ onBack }) {
   const [storeTypes, setStoreTypes] = useState([])
   const [storeTypesLoading, setStoreTypesLoading] = useState(false)
   const [storeTypesError, setStoreTypesError] = useState(null)
-  const [subCategories, setSubCategories] = useState([])
   const [slaModels, setSlaModels] = useState([])
   const [slaModelDefaults, setSlaModelDefaults] = useState(null)
   const [slaConfigs, setSlaConfigs] = useState({})
@@ -1016,8 +1014,7 @@ export default function AdminAddVendorPage({ onBack }) {
           setForm((prev) => {
             let next = prev
             if (!prev.storeTypeId) {
-              const matched =
-                types.find((t) => t.name === prev.storeType) || types[0]
+              const matched = types.find((t) => t.name === prev.storeType)
               if (matched) {
                 next = {
                   ...next,
@@ -1090,12 +1087,18 @@ export default function AdminAddVendorPage({ onBack }) {
     setStoreTypesError(null)
     setSlaError(null)
 
-    Promise.allSettled([
-      adminService.getVendorDetail(editVendorId),
-      adminService.listStoreTypes(),
-      adminService.listSlaModels({ limit: 50 }),
-    ])
-      .then(([vendorResult, typesResult, slaResult]) => {
+    adminService
+      .getVendorDetail(editVendorId)
+      .then(async (vendorPayload) => {
+        if (cancelled) return
+
+        const vendor = vendorPayload?.data || {}
+        const includeIds = vendor.storeTypeId ? [vendor.storeTypeId] : []
+
+        const [typesResult, slaResult] = await Promise.allSettled([
+          adminService.listStoreTypes({ includeIds }),
+          adminService.listSlaModels({ limit: 50 }),
+        ])
         if (cancelled) return
 
         const types =
@@ -1134,14 +1137,6 @@ export default function AdminAddVendorPage({ onBack }) {
           )
         }
 
-        if (vendorResult.status !== 'fulfilled') {
-          setProfileError(
-            formatApiErrorMessage(vendorResult.reason, 'Failed to load store profile.'),
-          )
-          return
-        }
-
-        const vendor = vendorResult.value?.data || {}
         const matchedTypeId =
           vendor.storeTypeId || matchAdminStoreTypeId(types, vendor.categoryLabel || vendor.storeType)
 
@@ -1187,6 +1182,11 @@ export default function AdminAddVendorPage({ onBack }) {
           setVendorActive(vendor.storeOnline)
         }
         setEditAccountStatus(vendor.accountStatus || null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setProfileError(formatApiErrorMessage(err, 'Failed to load store profile.'))
+        setStoreTypes([])
       })
       .finally(() => {
         if (!cancelled) {
@@ -1264,33 +1264,11 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }, [useRealStoreApi, editVendorId, location.key])
 
-  useEffect(() => {
-    const storeTypeId = form.storeTypeId
-    if (!storeTypeId || !useRealVendorsApi) {
-      setSubCategories([])
-      return undefined
-    }
-
-    let cancelled = false
-    adminService
-      .getAdminStoreType(storeTypeId)
-      .then((response) => {
-        if (cancelled) return
-        const cats = Array.isArray(response?.data?.categories) ? response.data.categories : []
-        setSubCategories(flattenAdminMenuCategoryOptions(cats))
-      })
-      .catch(() => {
-        if (!cancelled) setSubCategories([])
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [form.storeTypeId, useRealVendorsApi])
-
   const selectedStoreType = storeTypes.find((t) => String(t.id) === String(form.storeTypeId))
   const allowedServiceModes = buildAllowedModesFromStoreType(selectedStoreType)
   const storeSubTypes = Array.isArray(selectedStoreType?.subTypes) ? selectedStoreType.subTypes : []
+  const requiresStoreSubType =
+    selectedStoreType?.structure === 'TWO_LEVEL' && storeSubTypes.length > 0
   const servicesStoreType = storeTypes.find(
     (t) => String(t.slug) === 'services' || (t.structure === 'TWO_LEVEL' && String(t.slug).includes('service')),
   ) || storeTypes.find((t) => t.structure === 'TWO_LEVEL' && t.id !== selectedStoreType?.id)
@@ -1602,13 +1580,18 @@ export default function AdminAddVendorPage({ onBack }) {
     setCreateError(null)
     setCreateSaving(true)
     try {
+      const mergedServiceModes = mergeBranchModesIntoServiceModes(
+        serviceModes,
+        branches,
+        allowedServiceModes,
+      )
       const response = await adminService.createVendor({
         form,
         branches,
         users,
         customFees,
         commissionTiers,
-        serviceModes,
+        serviceModes: mergedServiceModes,
         slaConfigs,
         activate: Boolean(activate),
         submitForApproval: Boolean(submitForApproval) && !activate,
@@ -1663,7 +1646,7 @@ export default function AdminAddVendorPage({ onBack }) {
       return false
     }
 
-    if (selectedStoreType?.structure === 'TWO_LEVEL' && !String(form.storeSubTypeId || '').trim()) {
+    if (requiresStoreSubType && !String(form.storeSubTypeId || '').trim()) {
       const message = 'Select a sub-type for this two-level store type.'
       setCreateError(message)
       showError(message)
@@ -1677,6 +1660,7 @@ export default function AdminAddVendorPage({ onBack }) {
       return false
     }
 
+    setCreateError(null)
     return true
   }
 
@@ -2090,6 +2074,7 @@ export default function AdminAddVendorPage({ onBack }) {
                     onChange={(e) => {
                       const value = e.target.value
                       const primary = storeTypes.find((t) => String(t.id) === String(value))
+                      setCreateError(null)
                       setForm((prev) => ({
                         ...prev,
                         catalogIds: value ? [value] : [],
@@ -2120,13 +2105,14 @@ export default function AdminAddVendorPage({ onBack }) {
                   </div>
                 )}
               </VendorField>
-              {selectedStoreType?.structure === 'TWO_LEVEL' ? (
+              {requiresStoreSubType ? (
                 <VendorField label="Sub-type">
                   <VendorSelect
                     value={form.storeSubTypeId || ''}
                     onChange={(event) => {
                       const value = event.target.value
                       const matched = storeSubTypes.find((c) => c.id === value)
+                      setCreateError(null)
                       setForm((prev) => ({
                         ...prev,
                         storeSubTypeId: value,
@@ -2142,34 +2128,13 @@ export default function AdminAddVendorPage({ onBack }) {
                     ))}
                   </VendorSelect>
                 </VendorField>
-              ) : (
-                <VendorField label="Sub-category">
-                  <VendorSelect
-                    value={form.subcategoryId || ''}
-                    onChange={(event) => {
-                      const value = event.target.value
-                      const matched = subCategories.find((c) => c.id === value)
-                      setForm((prev) => ({
-                        ...prev,
-                        subcategoryId: value,
-                        subCategory: matched?.name || (value ? prev.subCategory : 'None'),
-                      }))
-                    }}
-                  >
-                    <option value="">None</option>
-                    {subCategories.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </VendorSelect>
-                </VendorField>
-              )}
+              ) : null}
               {showServiceSubType ? (
                 <VendorField label="Services sub-type">
                   <VendorSelect
                     value={form.serviceSubTypeId || ''}
                     onChange={(event) => {
+                      setCreateError(null)
                       setForm((prev) => ({ ...prev, serviceSubTypeId: event.target.value }))
                     }}
                   >
@@ -2658,6 +2623,7 @@ export default function AdminAddVendorPage({ onBack }) {
                     <VendorSelect
                       value={form.serviceSubTypeId || ''}
                       onChange={(event) => {
+                        setCreateError(null)
                         setForm((prev) => ({ ...prev, serviceSubTypeId: event.target.value }))
                       }}
                     >

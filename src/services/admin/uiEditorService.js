@@ -371,6 +371,41 @@ export const adminUiEditorService = {
     }
   },
 
+  async deleteHomeCategory(categoryId, options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+    const id = String(categoryId || '').trim()
+    if (!id) throw new Error('Category id is required.')
+
+    const response = await apiClient.delete(
+      endpoints.admin.uiEditor.home.category(id),
+      requestOptions(options),
+    )
+    return {
+      data: response?.data ?? { deleted: true, id },
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async cleanupHomeCategories(options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.uiEditor.home.categoriesCleanup,
+      {},
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorHomeCategories(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
   async publishHomeCategories(options = {}) {
     if (!useRealUiEditorApi()) {
       throw new Error('UI Editor API is not enabled.')

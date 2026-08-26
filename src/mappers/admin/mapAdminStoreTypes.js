@@ -59,24 +59,27 @@ export function mapAdminStoreTypesSummary(data) {
 
 /**
  * Map GET /admin/store-types → dropdown options for Store type.
+ * @param {object} data
+ * @param {{ visibleOnly?: boolean, includeIds?: Array<string|number> }} [options]
  */
-export function mapAdminStoreTypesResponse(data) {
+export function mapAdminStoreTypesResponse(data, options = {}) {
   const raw = extractStoreTypesRaw(data)
+  const includeIds = new Set(
+    (options.includeIds || []).map((id) => String(id)).filter(Boolean),
+  )
 
-  const storeTypes = raw
+  let storeTypes = raw
     .filter((item) => item && item.id && item.name)
     .map((item) => ({
       id: String(item.id),
       name: String(item.name),
       slug: item.slug ?? null,
-      visible: item.visible !== false,
-      isActive: item.isActive !== false,
+      visible: item.visible === true,
+      isActive: item.isActive === true,
       structure: item.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
       supportedOrderModes: Array.isArray(item.supportedOrderModes)
         ? item.supportedOrderModes.map((code) => String(code))
-        : Array.isArray(item.supportedOrderModes)
-          ? item.supportedOrderModes.map((code) => String(code))
-          : [],
+        : [],
       subTypes: Array.isArray(item.subTypes)
         ? item.subTypes
             .filter((sub) => sub && sub.id && sub.name)
@@ -86,17 +89,14 @@ export function mapAdminStoreTypesResponse(data) {
               slug: sub.slug ?? null,
               iconUrl: sub.iconUrl ?? null,
             }))
-        : Array.isArray(item.subTypes)
-          ? item.subTypes
-              .filter((sub) => sub && sub.id && sub.name)
-              .map((sub) => ({
-                id: String(sub.id),
-                name: String(sub.name),
-                slug: sub.slug ?? null,
-                iconUrl: sub.iconUrl ?? null,
-              }))
-          : [],
+        : [],
     }))
+
+  if (options.visibleOnly) {
+    storeTypes = storeTypes.filter(
+      (type) => type.visible || includeIds.has(String(type.id)),
+    )
+  }
 
   return {
     total: Number(data.totalStoreTypes) || storeTypes.length,
@@ -402,12 +402,17 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
 
   if (Array.isArray(form.subTypes)) {
     body.subTypes = form.subTypes
-      .map((sub, index) => ({
-        name: String(sub?.name || '').trim(),
-        slug: sub?.slug ? String(sub.slug).trim() : undefined,
-        iconUrl: sub?.iconUrl || null,
-        sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
-      }))
+      .map((sub, index) => {
+        const id = sub?.id ? String(sub.id).trim() : ''
+        const isNew = !id || id.startsWith('new-')
+        return {
+          ...(isNew ? {} : { id }),
+          name: String(sub?.name || '').trim(),
+          slug: sub?.slug ? String(sub.slug).trim() : undefined,
+          iconUrl: sub?.iconUrl || null,
+          sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
+        }
+      })
       .filter((sub) => sub.name)
   }
 
@@ -454,12 +459,17 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
 
   if (Array.isArray(form.subTypes)) {
     body.subTypes = form.subTypes
-      .map((sub, index) => ({
-        name: String(sub?.name || '').trim(),
-        slug: sub?.slug ? String(sub.slug).trim() : undefined,
-        iconUrl: sub?.iconUrl || null,
-        sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
-      }))
+      .map((sub, index) => {
+        const id = sub?.id ? String(sub.id).trim() : ''
+        const isNew = !id || id.startsWith('new-')
+        return {
+          ...(isNew ? {} : { id }),
+          name: String(sub?.name || '').trim(),
+          slug: sub?.slug ? String(sub.slug).trim() : undefined,
+          iconUrl: sub?.iconUrl || null,
+          sortOrder: Number.isFinite(Number(sub?.sortOrder)) ? Number(sub.sortOrder) : index,
+        }
+      })
       .filter((sub) => sub.name)
   }
 

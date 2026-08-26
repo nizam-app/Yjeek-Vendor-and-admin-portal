@@ -466,3 +466,46 @@ export function buildAllowedModesFromStoreType(storeType) {
     : []
   return labelsForSupportedOrderModes(codes)
 }
+
+/**
+ * Branch order-mode UI gate.
+ * Store type = which toggles may appear; vendor SLA = which may be enabled (except wizard draft).
+ */
+export function buildBranchModeGate({
+  storeType = null,
+  vendorModeLabels = [],
+  isWizardDraft = false,
+} = {}) {
+  const storeLabels = buildAllowedModesFromStoreType(storeType)
+  const showPickup = storeLabels.includes('Pickup')
+  const showDineIn = storeLabels.includes('Dine-in')
+  const vendorSupportsPickup = vendorModeLabels.includes('Pickup')
+  const vendorSupportsDineIn = vendorModeLabels.includes('Dine-in')
+  const vendorModesKnown = vendorModeLabels.length > 0
+
+  return {
+    ready: Boolean(storeType?.id || storeType?.supportedOrderModes?.length),
+    showPickup,
+    showDineIn,
+    canTogglePickup:
+      showPickup && (isWizardDraft || !vendorModesKnown || vendorSupportsPickup),
+    canToggleDineIn:
+      showDineIn && (isWizardDraft || !vendorModesKnown || vendorSupportsDineIn),
+    vendorSupportsPickup,
+    vendorSupportsDineIn,
+  }
+}
+
+export function mergeBranchModesIntoServiceModes(
+  selectedModes = [],
+  branches = [],
+  allowedModes = [],
+) {
+  const allowed = new Set(Array.isArray(allowedModes) ? allowedModes : [])
+  const merged = new Set(Array.isArray(selectedModes) ? selectedModes : [])
+  for (const branch of branches || []) {
+    if (branch?.allowsPickup && allowed.has('Pickup')) merged.add('Pickup')
+    if (branch?.allowsDineIn && allowed.has('Dine-in')) merged.add('Dine-in')
+  }
+  return [...merged]
+}

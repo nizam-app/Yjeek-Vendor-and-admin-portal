@@ -98,14 +98,17 @@ export const adminStoreTypeService = {
 
   /**
    * Store types for Add Champ chips / fleet category filter (name label, slug value).
-   * Filters to rows with a slug; does not invent hardcoded fallbacks.
+   * Only Visible (published) store types from Store Management; requires slug.
    *
    * @param {{ signal?: AbortSignal, params?: Record<string, unknown> }} [options]
    */
   async listStoreTypesForChampForm(options = {}) {
-    const result = await this.listStoreTypes(options)
+    const result = await this.listStoreTypes({
+      ...options,
+      params: { visibleOnly: true, ...(options.params || {}) },
+    })
     const storeTypes = (result?.data?.storeTypes || [])
-      .filter((item) => item && item.id && item.name && item.slug)
+      .filter((item) => item && item.id && item.name && item.slug && item.visible !== false)
       .map((item) => ({
         id: String(item.id),
         name: String(item.name),

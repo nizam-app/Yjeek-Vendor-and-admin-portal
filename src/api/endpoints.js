@@ -662,13 +662,15 @@ export const endpoints = {
         /** Confirmed: PATCH /admin/ui-editor/home/categories/reorder */
         categoriesReorder: '/admin/ui-editor/home/categories/reorder',
         /**
-         * Confirmed: PATCH /admin/ui-editor/home/categories/:categoryId
+         * Confirmed: PATCH + DELETE /admin/ui-editor/home/categories/:categoryId
          * @param {string} categoryId
          */
         category: (categoryId) =>
           `/admin/ui-editor/home/categories/${encodeURIComponent(String(categoryId || '').trim())}`,
         /** Confirmed: POST /admin/ui-editor/home/categories/publish */
         categoriesPublish: '/admin/ui-editor/home/categories/publish',
+        /** Confirmed: POST /admin/ui-editor/home/categories/cleanup */
+        categoriesCleanup: '/admin/ui-editor/home/categories/cleanup',
       },
     },
     reports: {

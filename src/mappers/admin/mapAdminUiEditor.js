@@ -366,6 +366,7 @@ export function mapAdminUiEditorHomeCategories(data) {
         refId: asString(item.refId || item.ref_id || id),
         structure: asString(item.structure || 'SINGLE'),
         code: asString(item.code || ''),
+        kindMismatch: Boolean(item.kindMismatch),
         children: Array.isArray(item.children)
           ? item.children.map((child, childIndex) => ({
               id: asString(child.id),

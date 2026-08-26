@@ -13,7 +13,8 @@ import {
   mapOpeningHoursToWizardHours,
   mapUiTimeTo24h,
 } from '../../../mappers/admin/mapAdminVendorBranches'
-import { buildAllowedModesFromStoreType } from '../../../components/admin/AdminVendorSlaConfigs'
+import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
+import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -51,15 +52,16 @@ function Field({ label, children, className = '' }) {
   )
 }
 
-function Toggle({ checked, onChange, label }) {
+function Toggle({ checked, onChange, label, disabled = false }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={onChange}
-      className={`box-border flex h-[22px] w-[38px] shrink-0 items-center rounded-[11px] px-[3px] transition-colors ${
+      disabled={disabled}
+      onClick={disabled ? undefined : onChange}
+      className={`box-border flex h-[22px] w-[38px] shrink-0 items-center rounded-[11px] px-[3px] transition-colors ${disabled ? 'opacity-50 cursor-not-allowed ' : ''}${
         checked ? 'justify-end bg-[#2E9E4D]' : 'justify-start bg-[#C7CFC7]'
       }`}
     >
@@ -448,10 +450,14 @@ export default function AdminAddVendorBrunchs() {
   const [branchOnline, setBranchOnline] = useState(true)
   const [allowPickup, setAllowPickup] = useState(false)
   const [allowDineIn, setAllowDineIn] = useState(false)
-  /** Gate F&B toggles: store-type caps ∩ vendor SLA (hidden until resolved). */
+  /** Gate F&B toggles: store-type ceiling for visibility; vendor SLA for enablement. */
   const [modeGate, setModeGate] = useState({
     showPickup: false,
     showDineIn: false,
+    canTogglePickup: false,
+    canToggleDineIn: false,
+    vendorSupportsPickup: false,
+    vendorSupportsDineIn: false,
     ready: false,
   })
   const [freeDeliveryEnabled, setFreeDeliveryEnabled] = useState(true)
@@ -543,13 +549,9 @@ export default function AdminAddVendorBrunchs() {
         const storeTypeId = detail?.storeTypeId ? String(detail.storeTypeId) : ''
         const storeType =
           storeTypes.find((row) => String(row.id) === storeTypeId) || null
-        const allowedLabels = buildAllowedModesFromStoreType(storeType)
         const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
-        setModeGate({
-          showPickup: allowedLabels.includes('Pickup') && Boolean(modes.pickup),
-          showDineIn: allowedLabels.includes('Dine-in') && Boolean(modes.dineIn),
-          ready: true,
-        })
+        const vendorModeLabels = mapAdminServiceModesToLabels(modes)
+        setModeGate(buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: false }))
       })
       .catch((err) => {
         if (!cancelled) setLoadError(err?.message || 'Failed to load branch.')
@@ -563,19 +565,40 @@ export default function AdminAddVendorBrunchs() {
     }
   }, [useRealBranchApi, vendorId, branchId, isNewBranch])
 
-  // Wizard / mock: gate from draft SLA labels (no flash of Food-only toggles).
+  // Wizard: gate from store-type ceiling; allow branch prefs before vendor SLA step.
   useEffect(() => {
     if (useRealBranchApi) return
+
+    let cancelled = false
     const draft = state?.wizardDraft
-    const selectedModes = Array.isArray(draft?.serviceModes) ? draft.serviceModes : []
-    const showPickup = selectedModes.includes('Pickup')
-    const showDineIn = selectedModes.includes('Dine-in')
-    setModeGate({ showPickup, showDineIn, ready: true })
-    if (isNewBranch) {
-      setAllowPickup(showPickup)
-      setAllowDineIn(showDineIn)
+    const draftStoreTypeId = draft?.form?.storeTypeId ? String(draft.form.storeTypeId) : ''
+    const vendorModeLabels = Array.isArray(draft?.serviceModes) ? draft.serviceModes : []
+
+    if (!draftStoreTypeId || !isAdminRealApiFeature('vendors')) {
+      setModeGate(buildBranchModeGate({ storeType: null, vendorModeLabels, isWizardDraft: true }))
+      return undefined
     }
-  }, [useRealBranchApi, state?.wizardDraft, isNewBranch])
+
+    adminService
+      .listStoreTypes()
+      .then((response) => {
+        if (cancelled) return
+        const storeTypes = response?.data?.storeTypes || []
+        const storeType = storeTypes.find((row) => String(row.id) === draftStoreTypeId) || null
+        setModeGate(
+          buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: true }),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setModeGate(buildBranchModeGate({ storeType: null, vendorModeLabels, isWizardDraft: true }))
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [useRealBranchApi, state?.wizardDraft])
 
   useEffect(() => {
     if (isNewBranch || !branch) return
@@ -610,14 +633,16 @@ export default function AdminAddVendorBrunchs() {
     if (typeof branch.allowsDineIn === 'boolean') setAllowDineIn(branch.allowsDineIn)
   }, [branch, isNewBranch])
 
-  // New branch defaults: ON only for modes the vendor currently offers.
+  // Hydrate wizard branch edit from navigation state.
   useEffect(() => {
-    if (!isNewBranch || !modeGate.ready) return
-    setAllowPickup(modeGate.showPickup)
-    setAllowDineIn(modeGate.showDineIn)
-  }, [isNewBranch, modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
+    if (useRealBranchApi || isNewBranch) return
+    const src = state?.branch
+    if (!src) return
+    if (typeof src.allowsPickup === 'boolean') setAllowPickup(src.allowsPickup)
+    if (typeof src.allowsDineIn === 'boolean') setAllowDineIn(src.allowsDineIn)
+  }, [useRealBranchApi, isNewBranch, state?.branch])
 
-  // If vendor SLA / store type drops a mode, force branch flags off in UI state.
+  // If store type drops a mode, force branch flags off in UI state.
   useEffect(() => {
     if (!modeGate.ready) return
     if (!modeGate.showPickup) setAllowPickup(false)
@@ -941,8 +966,8 @@ export default function AdminAddVendorBrunchs() {
           hours: form.hours,
           branchOnline,
           operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
-          allowsPickup: modeGate.showPickup ? allowPickup : false,
-          allowsDineIn: modeGate.showDineIn ? allowDineIn : false,
+          allowsPickup: modeGate.showPickup && modeGate.canTogglePickup ? allowPickup : false,
+          allowsDineIn: modeGate.showDineIn && modeGate.canToggleDineIn ? allowDineIn : false,
           customerRadiusKm: form.customerRadiusKm,
           deliveryContribution: form.deliveryContribution,
           maxDistanceKm: form.maxDistanceKm,
@@ -970,8 +995,8 @@ export default function AdminAddVendorBrunchs() {
         ...form,
         branchOnline,
         operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
-        allowsPickup: modeGate.showPickup ? allowPickup : false,
-        allowsDineIn: modeGate.showDineIn ? allowDineIn : false,
+        allowsPickup: modeGate.showPickup && modeGate.canTogglePickup ? allowPickup : false,
+        allowsDineIn: modeGate.showDineIn && modeGate.canToggleDineIn ? allowDineIn : false,
       }
       if (isNewBranch) {
         await adminService.createVendorBranch(vendorId, payload)
@@ -1472,10 +1497,18 @@ export default function AdminAddVendorBrunchs() {
             </div>
 
             {modeGate.showPickup ? (
-              <div className="flex items-center gap-6">
-                <p className="text-[13px] font-bold text-[#17231c]">Allow pickup</p>
+              <div className="flex items-start gap-6">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-[#17231c]">Allow pickup</p>
+                  {!modeGate.canTogglePickup ? (
+                    <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+                      Pickup is configured for this store type. Enable it on the vendor SLA to turn it on here.
+                    </p>
+                  ) : null}
+                </div>
                 <Toggle
                   checked={allowPickup}
+                  disabled={!modeGate.canTogglePickup}
                   onChange={() => setAllowPickup((prev) => !prev)}
                   label="Allow pickup"
                 />
@@ -1483,10 +1516,18 @@ export default function AdminAddVendorBrunchs() {
             ) : null}
 
             {modeGate.showDineIn ? (
-              <div className="flex items-center gap-6">
-                <p className="text-[13px] font-bold text-[#17231c]">Allow Dine-in</p>
+              <div className="flex items-start gap-6">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-[#17231c]">Allow Dine-in</p>
+                  {!modeGate.canToggleDineIn ? (
+                    <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+                      Dine-in is configured for this store type. Enable it on the vendor SLA to turn it on here.
+                    </p>
+                  ) : null}
+                </div>
                 <Toggle
                   checked={allowDineIn}
+                  disabled={!modeGate.canToggleDineIn}
                   onChange={() => setAllowDineIn((prev) => !prev)}
                   label="Allow Dine-in"
                 />
