@@ -118,7 +118,7 @@ export function AdminVendorFilterButton({
       )}
       {open ? (
         <div className={cn(
-          'absolute z-50 mt-1 w-[260px] overflow-hidden rounded-md border border-[#e1e5e2] bg-white shadow-[0_10px_26px_rgba(20,30,24,.16)]',
+          'absolute z-[80] mt-1 w-[260px] overflow-hidden rounded-md border border-[#e1e5e2] bg-white shadow-[0_10px_26px_rgba(20,30,24,.16)]',
           isPill ? 'left-0' : 'right-0',
         )}>
           <label className="flex h-[34px] items-center gap-2 border-b border-[#edf0ee] px-2.5">

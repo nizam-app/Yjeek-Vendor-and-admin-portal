@@ -17,6 +17,8 @@ export function AdminFilterDropdown({
   showAll = true,
   align = 'left',
   rounded = 'full',
+  /** Visual separator between label and value — image uses "Date: Today". */
+  separator = ' · ',
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -79,7 +81,7 @@ export function AdminFilterDropdown({
           rounded === 'md' ? 'rounded-md' : 'rounded-full',
         )}
       >
-        {label} · <b>{summary}</b>
+        {label}{separator}<b>{summary}</b>
         <ChevronDown size={11} className="ml-1 inline-block align-[-1px] text-[#7a857e]" aria-hidden />
       </button>
       {open ? (
@@ -112,7 +114,7 @@ export function AdminFilterDropdown({
                 )}>
                   {selected.length === 0 ? <Check size={10} strokeWidth={3} /> : null}
                 </span>
-                {label} · {allLabel}
+                {label}{separator}{allLabel}
               </button>
             ) : null}
             {visible.length === 0 ? (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
+import { ArrowUpRight, MessageCircle, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
@@ -20,11 +20,13 @@ import {
   filterOpsBoardLiveQuery,
   liveOrderQueryIsActive,
   parseLiveOrderQuery,
+  vendorsFromOrders,
   writeLiveOrderQuery,
 } from '../../../lib/adminLiveOrderQuery'
 import { ApiState } from '../ApiState'
 import { Button } from '../Button'
 import { cn } from '../cn'
+import { AdminVendorFilterButton } from '../AdminVendorFilterButton'
 import { AdminLiveOrderFilterBar } from './AdminLiveOrderFilterBar'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminChatPanel } from './AdminChatPanel'
@@ -383,48 +385,54 @@ export function AdminIncidentBoard({
     <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
         <div className="flex min-h-0 min-w-0 flex-col">
-          <div className="flex shrink-0 flex-wrap items-start justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h2 className="text-[14px] font-bold text-[#17231c]">
-                {headerOrderCount} {data.activeLabel}
-              </h2>
-              <AdminAutoRefreshBadge
-                intervalSeconds={data.refreshIntervalSeconds}
-                resetKey={refreshKey}
-              />
+          <div className="relative z-30 shrink-0 overflow-visible">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h2 className="text-[14px] font-bold text-[#17231c]">
+                  {headerOrderCount} {data.activeLabel}
+                </h2>
+                <AdminAutoRefreshBadge
+                  intervalSeconds={data.refreshIntervalSeconds}
+                  resetKey={refreshKey}
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <AdminVendorFilterButton
+                  selectedIds={boardQuery.vendorIds || []}
+                  onChange={(vendorIds) => patchBoardQuery({ ...boardQuery, vendorIds })}
+                  extraVendors={vendorsFromOrders(boardOrders)}
+                />
+                <Button className="h-[31px] px-4" onClick={refetch} disabled={isLoading}>
+                  <RefreshCw size={11} /> Refresh
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <Button className="h-[31px] px-4" onClick={refetch} disabled={isLoading}>
-                <RefreshCw size={11} /> Refresh
-              </Button>
+
+            <div className="mb-3 mt-3 flex flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
+              <span className="font-medium">Filter:</span>
+              {filters.map((item) => {
+                const active = filter === item
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setFilter(item)}
+                    aria-pressed={active}
+                    className={cn(
+                      'inline-flex h-[26px] items-center gap-1 rounded-full border px-3 font-medium transition',
+                      active
+                        ? 'border-[#15904a] bg-white text-[#14763f]'
+                        : 'border-[#d9dfdb] bg-white text-[#657068] hover:border-[#c5cdc7]',
+                    )}
+                  >
+                    {item !== 'All orders' ? (
+                      <MessageCircle size={11} className="shrink-0 opacity-80" aria-hidden />
+                    ) : null}
+                    {item}
+                  </button>
+                )
+              })}
             </div>
-          </div>
-
-          <div className="mb-3 mt-3 flex shrink-0 flex-wrap items-center gap-2 text-[10px] text-[#59655e]">
-            <span>Filter:</span>
-            {filters.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setFilter(item)}
-                className={cn(
-                  'h-[26px] rounded-full border px-3 font-medium',
-                  filter === item ? 'border-[#15904a] bg-white text-[#14763f]' : 'border-[#d9dfdb] bg-white text-[#657068]',
-                )}
-              >
-                {item !== 'All orders' ? '💬 ' : ''}{item}
-              </button>
-            ))}
-          </div>
-
-          <div className="relative z-30 mb-3 shrink-0 overflow-visible">
-            <AdminLiveOrderFilterBar
-              query={boardQuery}
-              onChange={patchBoardQuery}
-              onClear={clearBoardQuery}
-              orders={boardOrders}
-              showTypes={false}
-            />
           </div>
 
           <div className="grid min-h-0 flex-1 grid-cols-2 gap-3 max-[700px]:grid-cols-1">

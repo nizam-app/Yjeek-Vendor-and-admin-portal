@@ -915,15 +915,17 @@ function ScheduledDispatchBoard({
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_220px] items-start gap-3 max-[900px]:grid-cols-1">
       <div className="min-w-0">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="mb-3 space-y-2">
           <OperationsViewTabs view={view} onViewChange={onViewChange} />
           <AdminScheduledBoardFilterBar
+            variant="board"
             query={query}
             onChange={onQueryChange}
             onClear={onQueryClear}
             orders={data?.orders}
+            align="left"
             trailing={(
-              <Button primary className="h-[31px] shrink-0 px-4"><Zap size={11} /> Auto-assign</Button>
+              <Button primary className="h-[31px] shrink-0 rounded-full px-4"><Zap size={11} /> Auto-assign</Button>
             )}
           />
         </div>

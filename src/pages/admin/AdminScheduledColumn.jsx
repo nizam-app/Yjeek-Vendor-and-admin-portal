@@ -4,13 +4,33 @@ import { ArrowLeft, Bell, Check, Search, Zap } from 'lucide-react'
 import motoBike from '../../assets/moto_bike.png'
 import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
 import { ApiState } from '../../components/admin/ApiState'
+import { AdminFilterDropdown } from '../../components/admin/operations/AdminFilterDropdown'
+import {
+  SCHEDULED_TYPE_OPTIONS,
+  orderDispatchType,
+  orderZoneKeys,
+  zonesFromOrders,
+} from '../../lib/adminScheduledBoardQuery'
 import { AdminOrderDetailModal } from './operations/AdminLiveOrdersPage'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
-const FILTER_CLASS = 'inline-flex h-[34px] items-center gap-1 rounded-[8px] border border-[#dfe4e0] bg-white px-3 text-[11px] font-medium text-[#455249]'
-const SEARCH_CLASS = 'flex h-[34px] min-w-[200px] flex-1 items-center gap-2 rounded-[8px] border border-[#dfe4e0] bg-white px-3'
-const PILL_FILTER = 'inline-flex h-[32px] items-center gap-1 rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#455249]'
+const COLUMN_SORT_OPTIONS = [
+  { id: 'window', label: 'Window' },
+  { id: 'time_left', label: 'Time left' },
+  { id: 'newest', label: 'Newest' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'vendor', label: 'Vendor' },
+]
+
+const COLUMN_QUICK_FILTERS = [
+  { id: 'all', label: 'All' },
+  { id: 'unassigned', label: 'Unassigned' },
+  { id: 'special', label: 'Special' },
+  { id: 'incident', label: 'Has incident' },
+]
+
+const UNASSIGNED_CHAMP_ID = '__unassigned__'
 
 const columnMeta = {
   new: {
@@ -197,10 +217,133 @@ function ColumnOrderCard({ order, onAssign, onOrderClick }) {
   )
 }
 
+function vendorsFromColumnOrders(orders) {
+  const map = new Map()
+  for (const order of Array.isArray(orders) ? orders : []) {
+    const id = order?.vendorId != null ? String(order.vendorId) : ''
+    const name = String(order?.vendorName || order?.vendor || '').trim()
+    if (!id && !name) continue
+    const key = id || name
+    if (map.has(key)) continue
+    map.set(key, { id: key, label: name || key })
+  }
+  return [...map.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+}
+
+function champsFromColumnOrders(orders) {
+  const map = new Map()
+  let hasUnassigned = false
+  for (const order of Array.isArray(orders) ? orders : []) {
+    const name = String(order?.champ || '').trim()
+    const id = order?.champId != null ? String(order.champId) : ''
+    if (!id && (!name || name === '—' || /^unassigned$/i.test(name))) {
+      hasUnassigned = true
+      continue
+    }
+    const key = id || name
+    if (map.has(key)) continue
+    map.set(key, { id: key, label: name || key })
+  }
+  const items = [...map.values()].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  if (hasUnassigned) items.unshift({ id: UNASSIGNED_CHAMP_ID, label: 'Unassigned' })
+  return items
+}
+
+function isOrderUnassigned(order) {
+  const name = String(order?.champ || '').trim()
+  return !order?.champId && (!name || name === '—' || /^unassigned$/i.test(name))
+}
+
+function orderMatchesColumnFilters(order, filters) {
+  const q = String(filters.q || '').trim().toLowerCase()
+  if (q) {
+    const haystack = [
+      order.id,
+      order.orderId,
+      order.route,
+      order.champ,
+      order.vendorName,
+      order.vendorArea,
+      order.slot,
+      ...(order.tags || []),
+    ].join(' ').toLowerCase()
+    if (!haystack.includes(q)) return false
+  }
+
+  if (filters.quick === 'unassigned' && !isOrderUnassigned(order)) return false
+  if (filters.quick === 'special') {
+    const special = order.priorityLabel === 'Special' || (order.tags || []).some((tag) => String(tag).includes('Special'))
+    if (!special) return false
+  }
+  if (filters.quick === 'incident' && !order.hasIncident) return false
+
+  if (filters.vendorIds.length) {
+    const vendorKey = order.vendorId != null ? String(order.vendorId) : String(order.vendorName || order.vendor || '')
+    if (!filters.vendorIds.includes(vendorKey)) return false
+  }
+
+  if (filters.zones.length) {
+    const keys = orderZoneKeys(order)
+    if (!filters.zones.some((zone) => keys.includes(zone))) return false
+  }
+
+  if (filters.types.length) {
+    const type = orderDispatchType(order)
+    if (!type || !filters.types.includes(type)) return false
+  }
+
+  if (filters.champIds.length) {
+    const unassigned = isOrderUnassigned(order)
+    const champKey = unassigned
+      ? UNASSIGNED_CHAMP_ID
+      : (order.champId != null ? String(order.champId) : String(order.champ || ''))
+    if (!filters.champIds.includes(champKey)) return false
+  }
+
+  return true
+}
+
+function sortColumnOrders(orders, sort) {
+  const list = [...orders]
+  const key = sort || 'window'
+
+  list.sort((a, b) => {
+    if (key === 'vendor') {
+      return String(a.vendorName || a.route || '').localeCompare(String(b.vendorName || b.route || ''), undefined, { sensitivity: 'base' })
+    }
+    if (key === 'window') {
+      const aTime = a.windowStartAt ? Date.parse(a.windowStartAt) : NaN
+      const bTime = b.windowStartAt ? Date.parse(b.windowStartAt) : NaN
+      if (!Number.isNaN(aTime) && !Number.isNaN(bTime)) return aTime - bTime
+      return String(a.slot || '').localeCompare(String(b.slot || ''), undefined, { sensitivity: 'base' })
+    }
+    const aCreated = a.createdAt ? Date.parse(a.createdAt) : NaN
+    const bCreated = b.createdAt ? Date.parse(b.createdAt) : NaN
+    if (key === 'newest') {
+      if (!Number.isNaN(aCreated) && !Number.isNaN(bCreated)) return bCreated - aCreated
+      return (Number(a.elapsedMin) || 0) - (Number(b.elapsedMin) || 0)
+    }
+    if (key === 'oldest') {
+      if (!Number.isNaN(aCreated) && !Number.isNaN(bCreated)) return aCreated - bCreated
+      return (Number(b.elapsedMin) || 0) - (Number(a.elapsedMin) || 0)
+    }
+    // time_left — higher urgency (more elapsed) first
+    return (Number(b.elapsedMin) || 0) - (Number(a.elapsedMin) || 0)
+  })
+
+  return list
+}
+
 export function AdminScheduledColumn() {
   const { columnKey } = useParams()
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState('window')
+  const [quick, setQuick] = useState('all')
+  const [vendorIds, setVendorIds] = useState([])
+  const [zones, setZones] = useState([])
+  const [types, setTypes] = useState([])
+  const [champIds, setChampIds] = useState([])
   const [selectedOrder, setSelectedOrder] = useState(null)
   const { data, error, isLoading, refetch } = useAdminScheduledBoard({
     sort: 'time_left',
@@ -208,14 +351,26 @@ export function AdminScheduledColumn() {
   })
   const meta = columnMeta[columnKey]
 
-  const orders = useMemo(() => {
+  const columnOrders = useMemo(() => {
     if (!data?.orders) return []
-    return data.orders.filter((order) => {
-      if (order.column !== columnKey) return false
-      if (!query.trim()) return true
-      return [order.id, order.route, order.champ, ...(order.tags || [])].join(' ').toLowerCase().includes(query.toLowerCase())
-    })
-  }, [data, columnKey, query])
+    return data.orders.filter((order) => order.column === columnKey)
+  }, [data, columnKey])
+
+  const vendorOptions = useMemo(() => vendorsFromColumnOrders(columnOrders), [columnOrders])
+  const zoneOptions = useMemo(() => zonesFromOrders(columnOrders), [columnOrders])
+  const champOptions = useMemo(() => champsFromColumnOrders(columnOrders), [columnOrders])
+
+  const orders = useMemo(() => {
+    const filtered = columnOrders.filter((order) => orderMatchesColumnFilters(order, {
+      q,
+      quick,
+      vendorIds,
+      zones,
+      types,
+      champIds,
+    }))
+    return sortColumnOrders(filtered, sort)
+  }, [columnOrders, q, quick, vendorIds, zones, types, champIds, sort])
 
   const openAssignChamp = (order) => {
     const orderId = order?.orderId || String(order?.id || '').replace(/^#/, '')
@@ -239,6 +394,23 @@ export function AdminScheduledColumn() {
   }
 
   const ActionIcon = meta.action.icon === 'zap' ? Zap : meta.action.icon === 'bell' ? Bell : null
+  const filtersActive = Boolean(
+    q.trim()
+    || quick !== 'all'
+    || vendorIds.length
+    || zones.length
+    || types.length
+    || champIds.length,
+  )
+
+  function clearFilters() {
+    setQ('')
+    setQuick('all')
+    setVendorIds([])
+    setZones([])
+    setTypes([])
+    setChampIds([])
+  }
 
   return (
     <div className="px-7 pb-8 pt-[18px] max-[700px]:p-4">
@@ -246,63 +418,122 @@ export function AdminScheduledColumn() {
         <ArrowLeft size={14} /> Back to pipeline
       </Link>
 
-      <div className="mt-3 mb-4">
-        <h2 className="flex items-center gap-2 text-[20px] font-bold tracking-[-0.02em]">
-          {meta.title}
-          <span
-            className="grid h-[22px] min-w-[22px] place-items-center rounded-full px-1.5 text-[11px] font-bold text-white"
-            style={{ background: meta.tone }}
-          >
-            {orders.length}
-          </span>
-        </h2>
-        <p className="mt-1 text-[12px] text-[#7c8780]">{meta.subtitle}</p>
-      </div>
-
-      <div className="mb-2.5 flex flex-wrap items-center gap-2">
-        <label className={SEARCH_CLASS}>
-          <Search size={14} className="text-[#89938c]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="min-w-0 flex-1 border-0 bg-transparent text-[12px] outline-none"
-            placeholder="Search orders, vendors, champs…"
+      <div className="mt-3 mb-4 flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-[20px] font-bold tracking-[-0.02em]">
+            {meta.title}
+            <span
+              className="grid h-[22px] min-w-[22px] place-items-center rounded-full px-1.5 text-[11px] font-bold text-white"
+              style={{ background: meta.tone }}
+            >
+              {orders.length}
+            </span>
+          </h2>
+          <p className="mt-1 text-[12px] text-[#7c8780]">{meta.subtitle}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <AdminFilterDropdown
+            label="Sort"
+            multiple={false}
+            showAll={false}
+            align="right"
+            rounded="md"
+            separator=": "
+            options={COLUMN_SORT_OPTIONS}
+            selectedIds={[sort]}
+            onChange={(ids) => setSort(ids[0] || 'window')}
           />
-        </label>
-        <button type="button" className={FILTER_CLASS}>Sort: Window ▾</button>
-        <button type="button" className={FILTER_CLASS}>Filter: All ▾</button>
-        <button
-          type="button"
-          className={cn(
-            'inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[11px] font-medium',
-            meta.action.tone === 'green' && 'bg-[#19ad5b] text-white',
-            meta.action.tone === 'amber' && 'border border-[#f0dfb0] bg-[#fff3d6] text-[#a06d16]',
-            meta.action.tone === 'white' && 'border border-[#dfe4e0] bg-white text-[#455249]',
-          )}
-        >
-          {ActionIcon ? <ActionIcon size={13} /> : null}
-          {meta.action.label}
-        </button>
+          <AdminFilterDropdown
+            label="Filter"
+            multiple={false}
+            showAll={false}
+            align="right"
+            rounded="md"
+            separator=": "
+            options={COLUMN_QUICK_FILTERS}
+            selectedIds={[quick]}
+            onChange={(ids) => setQuick(ids[0] || 'all')}
+          />
+          <button
+            type="button"
+            className={cn(
+              'inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[11px] font-medium',
+              meta.action.tone === 'green' && 'bg-[#19ad5b] text-white',
+              meta.action.tone === 'amber' && 'border border-[#f0dfb0] bg-[#fff3d6] text-[#a06d16]',
+              meta.action.tone === 'white' && 'border border-[#dfe4e0] bg-white text-[#455249]',
+            )}
+          >
+            {ActionIcon ? <ActionIcon size={13} /> : null}
+            {meta.action.label}
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <label className="flex h-[32px] min-w-[150px] items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3">
+        <label className="flex h-[32px] min-w-[180px] flex-1 items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3 sm:max-w-[240px] sm:flex-none">
           <Search size={12} className="text-[#89938c]" />
-          <input className="min-w-0 flex-1 border-0 bg-transparent text-[11px] outline-none" placeholder="Search…" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            className="min-w-0 flex-1 border-0 bg-transparent text-[11px] outline-none"
+            placeholder="Search…"
+            aria-label="Search orders, vendors, champs"
+          />
         </label>
-        {['Vendor · All', 'Zone · All', 'Type · All', 'Champ · All'].map((filter) => (
-          <button key={filter} type="button" className={PILL_FILTER}>
-            {filter}▾
-          </button>
-        ))}
-        <span className="flex-1" />
-        <button type="button" className={PILL_FILTER}>
-          Sort · Time left▾
-        </button>
+        <AdminFilterDropdown
+          label="Vendor"
+          searchable
+          searchPlaceholder="Search vendors…"
+          options={vendorOptions}
+          selectedIds={vendorIds}
+          onChange={setVendorIds}
+          rounded="full"
+          separator=" · "
+        />
+        <AdminFilterDropdown
+          label="Zone"
+          searchable
+          searchPlaceholder="Search zones…"
+          options={zoneOptions}
+          selectedIds={zones}
+          onChange={setZones}
+          rounded="full"
+          separator=" · "
+        />
+        <AdminFilterDropdown
+          label="Type"
+          options={SCHEDULED_TYPE_OPTIONS}
+          selectedIds={types}
+          onChange={setTypes}
+          rounded="full"
+          separator=" · "
+        />
+        <AdminFilterDropdown
+          label="Champ"
+          searchable
+          searchPlaceholder="Search champs…"
+          options={champOptions}
+          selectedIds={champIds}
+          onChange={setChampIds}
+          rounded="full"
+          separator=" · "
+        />
       </div>
 
       {orders.length === 0 ? (
-        <div className="rounded-[12px] border border-[#e4e8e4] bg-white p-8 text-center text-[12px] text-[#78837c]">No orders in this column</div>
+        <div className="rounded-[12px] border border-[#e4e8e4] bg-white p-8 text-center text-[12px] text-[#78837c]">
+          {filtersActive ? (
+            <span>
+              No orders match
+              {' · '}
+              <button type="button" onClick={clearFilters} className="font-medium text-[#16854a] hover:underline">
+                Clear filters
+              </button>
+            </span>
+          ) : (
+            'No orders in this column'
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-4 gap-3.5 max-[1200px]:grid-cols-3 max-[900px]:grid-cols-2 max-[560px]:grid-cols-1">
           {orders.map((order, index) => (

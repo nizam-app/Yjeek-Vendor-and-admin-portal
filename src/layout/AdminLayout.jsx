@@ -49,7 +49,7 @@ const navItems = [
 
 const pageTitles = {
   '/admin/dashboard': 'Live Dashboard',
-  '/admin/live-orders': 'Live Orders',
+  '/admin/live-orders': 'Live Dashboard',
   '/admin/scheduled': 'Scheduled Orders',
   '/admin/pickup': 'Live Dashboard',
   '/admin/dine-in': 'Live Dashboard',
