@@ -1809,6 +1809,101 @@ export const adminHomeCategoriesMock = {
   ],
 }
 
+export const adminExclusiveOffersMock = {
+  section: {
+    id: 'customer_home',
+    title: 'Super Exclusive offers',
+    titleAr: 'عروض حصرية جداً',
+    isVisible: true,
+    publishStatus: 'PUBLISHED',
+    publishedAt: '2026-08-29T00:00:00.000Z',
+    itemCount: 2,
+  },
+  summary: {
+    itemCount: 2,
+    visibleCount: 2,
+    liveOnCustomerCount: 2,
+    unpublishedChanges: false,
+  },
+  items: [
+    {
+      id: 'exo-item-1',
+      productId: 'prod-airpods',
+      vendorId: 'vnd-sharaf',
+      title: 'Apple AirPods Gen5',
+      imageUrl: null,
+      originalPrice: 55,
+      offerPrice: 50,
+      discountType: 'PERCENT',
+      discountValue: 9.091,
+      badgeLabel: 'Save 5',
+      isVisible: true,
+      liveOnCustomer: true,
+      sortOrder: 0,
+      tapAction: 'OPEN_PRODUCT',
+      targetId: 'prod-airpods',
+      vendor: { id: 'vnd-sharaf', name: 'Sharaf DG', logoUrl: null },
+    },
+    {
+      id: 'exo-item-2',
+      productId: 'prod-roses',
+      vendorId: 'vnd-flowers',
+      title: 'Roses bouquet',
+      imageUrl: null,
+      originalPrice: 5,
+      offerPrice: 3.5,
+      discountType: 'PERCENT',
+      discountValue: 30,
+      badgeLabel: 'Save 1.5',
+      isVisible: true,
+      liveOnCustomer: true,
+      sortOrder: 1,
+      tapAction: 'OPEN_PRODUCT',
+      targetId: 'prod-roses',
+      vendor: { id: 'vnd-flowers', name: 'Flower Shop', logoUrl: null },
+    },
+  ],
+}
+
+export const adminExclusiveOfferProductsMock = {
+  page: 1,
+  limit: 20,
+  total: 3,
+  selectedProductIds: ['prod-airpods', 'prod-roses'],
+  products: [
+    {
+      id: 'prod-watch',
+      name: 'Smart Watch Pro',
+      imageUrl: null,
+      price: 120,
+      compareAtPrice: 150,
+      isAvailable: true,
+      alreadySelected: false,
+      vendor: { id: 'vnd-sharaf', name: 'Sharaf DG', logoUrl: null, isActive: true },
+    },
+    {
+      id: 'prod-airpods',
+      name: 'Apple AirPods Gen5',
+      imageUrl: null,
+      price: 50,
+      compareAtPrice: 55,
+      isAvailable: true,
+      alreadySelected: true,
+      vendor: { id: 'vnd-sharaf', name: 'Sharaf DG', logoUrl: null, isActive: true },
+    },
+    {
+      id: 'prod-roses',
+      name: 'Roses bouquet',
+      imageUrl: null,
+      price: 3.5,
+      compareAtPrice: 5,
+      isAvailable: true,
+      alreadySelected: true,
+      vendor: { id: 'vnd-flowers', name: 'Flower Shop', logoUrl: null, isActive: true },
+    },
+  ],
+}
+
 /**
  * Store-types list payload for mock API (GET /admin/store-types).
  * Excludes order-mode slugs (dine_in, pickup) and invalid test types (vape).

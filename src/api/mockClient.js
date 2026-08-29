@@ -8,6 +8,8 @@ import {
   adminServicesMock,
   adminHomeCatalogMock,
   adminHomeCategoriesMock,
+  adminExclusiveOffersMock,
+  adminExclusiveOfferProductsMock,
   buildAdminStoreTypesListMock,
   buildAdminVendorDetail,
   buildAdminCustomerDetail,
@@ -258,7 +260,7 @@ const mockRoutes = {
         key: 'home',
         label: 'Home Screen',
         shortLabel: 'Home',
-        slotCount: 3,
+        slotCount: 4,
         bannerTotal: 6,
         slots: [
           {
@@ -283,6 +285,18 @@ const mockRoutes = {
             banners: [
               { id: 'bnr-3', title: 'Ramadan offers', bannerType: 'STATIC', isActive: false },
             ],
+          },
+          {
+            key: 'home_exclusive_offers',
+            label: 'Super Exclusive offers',
+            displayType: 'Scroll',
+            bannerType: 'SCROLL',
+            slotKind: 'exclusive-offers',
+            bannerCount: 2,
+            productCount: 2,
+            activeCount: 2,
+            exclusiveItems: adminExclusiveOffersMock.items,
+            banners: [],
           },
           {
             key: 'home_below_picks',
@@ -496,6 +510,8 @@ const mockRoutes = {
   'GET /admin/ui-editor/home': () => ({
     title: 'Home',
     categories: adminHomeCategoriesMock.categories.slice(0, 2),
+    exclusiveOffersSection: adminExclusiveOffersMock.section,
+    exclusiveOffers: adminExclusiveOffersMock.items,
   }),
   'GET /admin/ui-editor/home/catalog': () => adminHomeCatalogMock,
   'GET /admin/ui-editor/home/categories': () => adminHomeCategoriesMock,
@@ -538,6 +554,63 @@ const mockRoutes = {
   'POST /admin/ui-editor/home/categories/publish': () => ({
     published: true,
     publishedAt: new Date().toISOString(),
+  }),
+  'GET /admin/ui-editor/home/exclusive-offers': () => adminExclusiveOffersMock,
+  'PATCH /admin/ui-editor/home/exclusive-offers': ({ body }) => ({
+    ...adminExclusiveOffersMock,
+    section: {
+      ...adminExclusiveOffersMock.section,
+      ...(body?.title != null ? { title: body.title } : {}),
+      ...(body?.titleAr != null ? { titleAr: body.titleAr } : {}),
+      ...(body?.isVisible != null ? { isVisible: body.isVisible } : {}),
+    },
+    summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: true },
+  }),
+  'GET /admin/ui-editor/home/exclusive-offers/products': () => adminExclusiveOfferProductsMock,
+  'POST /admin/ui-editor/home/exclusive-offers/items': ({ body }) => {
+    const ids = body?.productIds || body?.items?.map((item) => item.productId) || []
+    const newItems = ids
+      .filter((id) => !adminExclusiveOffersMock.items.some((item) => item.productId === id))
+      .map((productId, index) => ({
+        id: `exo-item-${Date.now()}-${index}`,
+        productId,
+        vendorId: 'vnd-mock',
+        title: `Product ${productId}`,
+        imageUrl: null,
+        originalPrice: 10,
+        offerPrice: 8,
+        isVisible: true,
+        liveOnCustomer: true,
+        sortOrder: adminExclusiveOffersMock.items.length + index,
+        tapAction: 'OPEN_PRODUCT',
+        targetId: productId,
+        vendor: { id: 'vnd-mock', name: 'Mock vendor', logoUrl: null },
+      }))
+    return {
+      ...adminExclusiveOffersMock,
+      items: [...adminExclusiveOffersMock.items, ...newItems],
+      summary: {
+        itemCount: adminExclusiveOffersMock.items.length + newItems.length,
+        visibleCount: adminExclusiveOffersMock.items.length + newItems.length,
+        liveOnCustomerCount: adminExclusiveOffersMock.items.length + newItems.length,
+        unpublishedChanges: true,
+      },
+    }
+  },
+  'PATCH /admin/ui-editor/home/exclusive-offers/items/reorder': ({ body }) => ({
+    ...adminExclusiveOffersMock,
+    items: (body?.items || []).map((item, index) => {
+      const existing = adminExclusiveOffersMock.items.find((row) => row.id === item.id)
+      return existing
+        ? { ...existing, sortOrder: item.sortOrder ?? index }
+        : { id: item.id, sortOrder: item.sortOrder ?? index }
+    }),
+  }),
+  'POST /admin/ui-editor/home/exclusive-offers/publish': () => ({
+    ...adminExclusiveOffersMock,
+    published: true,
+    publishedAt: new Date().toISOString(),
+    summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: false },
   }),
   'GET /admin/ui-editor/catalog': () => ({
     items: [
@@ -678,6 +751,38 @@ export const mockClient = {
             })
           } else if (method.toUpperCase() === 'DELETE') {
             route = () => ({ id: bannerId, deleted: true })
+          }
+        }
+      }
+    }
+
+    // Dynamic exclusive offer item patch/delete
+    if (!route) {
+      const exclusiveItemMatch = String(url).match(
+        /^\/admin\/ui-editor\/home\/exclusive-offers\/items\/([^/?]+)$/,
+      )
+      if (exclusiveItemMatch) {
+        const itemId = decodeURIComponent(exclusiveItemMatch[1])
+        if (itemId !== 'reorder') {
+          if (method.toUpperCase() === 'PATCH') {
+            route = ({ body: patchBody }) => ({
+              ...adminExclusiveOffersMock,
+              items: adminExclusiveOffersMock.items.map((item) =>
+                item.id === itemId ? { ...item, ...(patchBody || {}) } : item,
+              ),
+              summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: true },
+            })
+          } else if (method.toUpperCase() === 'DELETE') {
+            route = () => ({
+              ...adminExclusiveOffersMock,
+              items: adminExclusiveOffersMock.items.filter((item) => item.id !== itemId),
+              summary: {
+                itemCount: adminExclusiveOffersMock.items.length - 1,
+                visibleCount: adminExclusiveOffersMock.items.length - 1,
+                liveOnCustomerCount: adminExclusiveOffersMock.items.length - 1,
+                unpublishedChanges: true,
+              },
+            })
           }
         }
       }

@@ -15,14 +15,16 @@ Confirmed from Postman **17. UI Editor** mapping table (2026-08-02).
 | Preview | `GET /admin/ui-editor/preview?app=&screen=` |
 | Publish (Banners / Screen map) | `POST /admin/ui-editor/publish` body `{ "app": "CUSTOMER" }` |
 | Publish (Categories tab) | `POST /admin/ui-editor/home/categories/publish` |
+| Publish (Exclusive offers tab) | `POST /admin/ui-editor/home/exclusive-offers/publish` |
 
 ## Tabs
 
 | Tab | APIs |
 | --- | --- |
-| Screen map | `GET /admin/ui-editor/screen-map?app=` |
+| Screen map | `GET /admin/ui-editor/screen-map?app=` (Home includes **Super Exclusive offers** slot) |
 | Banners & ads | Placements + preview + banners CRUD (see prior section) |
 | Categories | See below |
+| Exclusive offers | See below |
 
 ## Categories tab
 
@@ -112,6 +114,25 @@ Rule 1: `kind` + `refId` required — no free-text entity creation.
 ```
 
 `isActive: false` = hidden in the UI.
+
+## Exclusive offers tab
+
+Curated **product carousel** on customer home (not banners). Same UX pattern as Categories: list editor + phone preview + dedicated publish.
+
+| UI | API |
+| --- | --- |
+| Load section + products | `GET /admin/ui-editor/home/exclusive-offers` |
+| Section title / visibility | `PATCH /admin/ui-editor/home/exclusive-offers` |
+| Product picker | `GET /admin/ui-editor/home/exclusive-offers/products?search=` |
+| Add products | `POST /admin/ui-editor/home/exclusive-offers/items` body `{ "productIds": [] }` |
+| Drag reorder | `PATCH /admin/ui-editor/home/exclusive-offers/items/reorder` |
+| Edit price / visibility | `PATCH /admin/ui-editor/home/exclusive-offers/items/:itemId` |
+| Remove from section | `DELETE /admin/ui-editor/home/exclusive-offers/items/:itemId` |
+| Publish carousel | `POST /admin/ui-editor/home/exclusive-offers/publish` (header **Publish exclusive offers**) |
+
+Also surfaced on **Screen map** and **Banners & ads → Home** as slot `home_exclusive_offers` (`+ Add` opens product picker, not banner modal).
+
+Full contract: backend `docs/super-exclusive-offers-api.md`.
 
 ## CMS / pages (service ready; no dedicated tab UI yet)
 

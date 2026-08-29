@@ -682,6 +682,22 @@ export const endpoints = {
         categoriesPublish: '/admin/ui-editor/home/categories/publish',
         /** Confirmed: POST /admin/ui-editor/home/categories/cleanup */
         categoriesCleanup: '/admin/ui-editor/home/categories/cleanup',
+        /** Confirmed: GET + PATCH /admin/ui-editor/home/exclusive-offers */
+        exclusiveOffers: '/admin/ui-editor/home/exclusive-offers',
+        /** Confirmed: GET /admin/ui-editor/home/exclusive-offers/products */
+        exclusiveOffersProducts: '/admin/ui-editor/home/exclusive-offers/products',
+        /** Confirmed: POST /admin/ui-editor/home/exclusive-offers/items */
+        exclusiveOffersItems: '/admin/ui-editor/home/exclusive-offers/items',
+        /** Confirmed: PATCH /admin/ui-editor/home/exclusive-offers/items/reorder */
+        exclusiveOffersItemsReorder: '/admin/ui-editor/home/exclusive-offers/items/reorder',
+        /**
+         * Confirmed: PATCH + DELETE /admin/ui-editor/home/exclusive-offers/items/:itemId
+         * @param {string} itemId
+         */
+        exclusiveOfferItem: (itemId) =>
+          `/admin/ui-editor/home/exclusive-offers/items/${encodeURIComponent(String(itemId || '').trim())}`,
+        /** Confirmed: POST /admin/ui-editor/home/exclusive-offers/publish */
+        exclusiveOffersPublish: '/admin/ui-editor/home/exclusive-offers/publish',
       },
     },
     reports: {
