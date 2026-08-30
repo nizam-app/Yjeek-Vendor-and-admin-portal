@@ -42,11 +42,11 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import {
   useAdminUiEditorApps,
   useAdminUiEditorBanners,
-  useAdminUiEditorExclusiveOffers,
   useAdminUiEditorHomeCategories,
   useAdminUiEditorPlacements,
   useAdminUiEditorScreenMap,
 } from '../../../hooks/admin/useAdminUiEditor'
+import { useExclusiveOffersEditor } from '../../../hooks/admin/useExclusiveOffersEditor'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
@@ -60,6 +60,7 @@ import {
   injectExclusiveOffersSlot,
 } from '../../../mappers/admin/mapAdminUiEditor'
 import ExclusiveOffersTab from '../../../components/admin/ui-editor/ExclusiveOffersTab'
+import ExclusiveOffersSlotPanel from '../../../components/admin/ui-editor/ExclusiveOffersSlotPanel'
 import AddExclusiveProductsModal from '../../../components/admin/ui-editor/AddExclusiveProductsModal'
 import iconHouse from '../../../assets/icon-house.png'
 import motoBike from '../../../assets/moto_bike.png'
@@ -907,7 +908,7 @@ function enrichScreensWithBanners(screens, banners = []) {
   })
 }
 
-function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading, onAddExclusive, onManageExclusive }) {
+function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading, onAddExclusive, exclusiveEditor }) {
   const [open, setOpen] = useState(true)
   const [openSlots, setOpenSlots] = useState(() => {
     const initial = {}
@@ -1043,60 +1044,31 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
                           onEdit={() => onEdit?.(primaryBanner)}
                           onDelete={() => onDelete?.(primaryBanner)}
                         />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onManageExclusive?.()}
-                          className="inline-flex h-[30px] shrink-0 items-center rounded-full border border-[#d5dbd6] bg-white px-3 text-[11.5px] font-bold text-[#455249] hover:bg-[#f7f9f7]"
-                        >
-                          Manage
-                        </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
-                  {slotOpen && exclusive && exclusiveItems.length > 0 ? (
-                    <div className="relative ml-[11px] space-y-0.5 border-l border-[#d5ddd7] pb-1 pl-4">
-                      {exclusiveItems.map((item, index) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-2 hover:bg-[#f7f9f7]"
-                        >
-                          <span className="w-7 shrink-0 text-center text-[11px] font-bold text-[#8a948e]">
-                            #{index + 1}
-                          </span>
-                          <span
-                            className={cn(
-                              'h-[7px] w-[7px] shrink-0 rounded-full',
-                              item.liveOnCustomer && item.isVisible
-                                ? 'bg-[#1aa054]'
-                                : 'bg-[#9e9e9e]',
-                            )}
-                            aria-hidden
-                          />
-                          {item.imageUrl ? (
-                            <AdminMediaImage
-                              src={item.imageUrl}
-                              className="h-9 w-9 shrink-0 rounded-[8px] object-cover"
-                              fallbackClassName="h-9 w-9 shrink-0 rounded-[8px] bg-[#eceeec]"
-                              iconSize={14}
-                            />
-                          ) : (
-                            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[#eceeec]">
-                              <Package size={14} className="text-[#9e9e9e]" />
-                            </span>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-[13px] font-semibold text-[#17231c]">
-                              {item.title}
-                            </p>
-                            <p className="mt-0.5 text-[11.5px] text-[#8a948e]">
-                              BHD {formatExclusiveBhd(item.offerPrice)}
-                              {!item.isVisible ? ' · Hidden' : ''}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
+                  {slotOpen && exclusive && exclusiveEditor ? (
+                    <div className="relative ml-[11px] border-l border-[#d5ddd7] pb-2 pl-4">
+                      <ExclusiveOffersSlotPanel
+                        variant="compact"
+                        section={exclusiveEditor.section}
+                        items={exclusiveEditor.items}
+                        summary={exclusiveEditor.summary}
+                        busy={exclusiveEditor.busy}
+                        dragIndex={exclusiveEditor.dragIndex}
+                        onSectionChange={exclusiveEditor.handleSectionChange}
+                        onSectionToggle={exclusiveEditor.handleSectionToggle}
+                        onAdd={onAddExclusive}
+                        onDragStart={exclusiveEditor.onDragStart}
+                        onDragOver={exclusiveEditor.onDragOver}
+                        onDragEnd={exclusiveEditor.onDragEnd}
+                        onToggleVisible={exclusiveEditor.handleToggleVisible}
+                        onPriceChange={exclusiveEditor.handlePriceChange}
+                        onTitleChange={exclusiveEditor.handleTitleChange}
+                        onImageChange={exclusiveEditor.handleImageChange}
+                        onRemove={exclusiveEditor.handleRemove}
+                      />
                     </div>
                   ) : null}
 
@@ -1245,6 +1217,7 @@ function PhoneLivePreview({
   const visibleExclusive = exclusiveItems.filter((item) => item.isVisible)
   const showExclusive =
     exclusiveSection?.isVisible !== false && visibleExclusive.length > 0
+  const hiddenExclusiveCount = exclusiveItems.length - visibleExclusive.length
 
   const bannerForSlot = (slot) => {
     if (!slot?.id) return null
@@ -1321,7 +1294,7 @@ function PhoneLivePreview({
                 {exclusiveSection?.title || 'Super Exclusive offers'}
               </p>
               <div className="flex gap-2 overflow-x-auto pb-1">
-                {visibleExclusive.slice(0, 4).map((item) => (
+                {visibleExclusive.map((item) => (
                   <div
                     key={item.id}
                     className="w-[88px] shrink-0 rounded-[10px] border border-[#c8e6c9] bg-white p-1.5"
@@ -1347,6 +1320,11 @@ function PhoneLivePreview({
                   </div>
                 ))}
               </div>
+              {hiddenExclusiveCount > 0 ? (
+                <p className="mt-1.5 text-[10px] font-medium text-[#8a948e]">
+                  {hiddenExclusiveCount} hidden from carousel
+                </p>
+              ) : null}
             </div>
           ) : (
             <button
@@ -1383,10 +1361,8 @@ function BannersAdsTab({
   onDelete,
   onScreenChange,
   bannersRefreshKey = 0,
-  exclusiveSection,
-  exclusiveItems = [],
+  exclusiveEditor,
   onAddExclusive,
-  onManageExclusive,
 }) {
   const [screenId, setScreenId] = useState('home')
   const [menuId, setMenuId] = useState(null)
@@ -1441,6 +1417,8 @@ function BannersAdsTab({
   const slots =
     apiSlots.length > 0 ? apiSlots : BANNER_SLOTS_BY_SCREEN[screenId] || BANNER_SLOTS_BY_SCREEN.home
   const banners = bannersEnabled ? apiBanners : apiBanners.length > 0 ? apiBanners : ALL_BANNERS
+  const exclusiveSection = exclusiveEditor?.section
+  const exclusiveItems = exclusiveEditor?.items ?? []
 
   const slotsWithBanners = useMemo(() => {
     const normalizePlacement = (value) =>
@@ -1533,7 +1511,7 @@ function BannersAdsTab({
           <div>
             <h3 className="text-[15px] font-bold text-[#17231c]">Live preview — point where to place</h3>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Tap a highlighted slot on the app to add a banner / ad there
+              Tap a slot to add banners, or manage Super Exclusive offers inline on the right
             </p>
             <div className="mt-4 flex items-center justify-center">
               <PhoneLivePreview
@@ -1653,59 +1631,30 @@ function BannersAdsTab({
                           onEdit={() => onEdit?.(primaryBanner)}
                           onDelete={() => onDelete?.(primaryBanner)}
                         />
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onManageExclusive?.()}
-                          className="inline-flex h-[30px] shrink-0 items-center rounded-full border border-[#d5dbd6] bg-white px-3 text-[11.5px] font-bold text-[#455249] hover:bg-[#f7f9f7]"
-                        >
-                          Manage
-                        </button>
-                      )}
+                      ) : null}
                     </div>
 
-                    {slotOpen && exclusive && exclusiveItemsForSlot.length > 0 ? (
-                      <div className="space-y-0.5 border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-1.5">
-                        {exclusiveItemsForSlot.map((item, index) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-2.5 rounded-[10px] px-1.5 py-2 hover:bg-white"
-                          >
-                            <span className="w-7 shrink-0 text-center text-[11px] font-bold text-[#8a948e]">
-                              #{index + 1}
-                            </span>
-                            <span
-                              className={cn(
-                                'h-[7px] w-[7px] shrink-0 rounded-full',
-                                item.liveOnCustomer && item.isVisible
-                                  ? 'bg-[#1aa054]'
-                                  : 'bg-[#9e9e9e]',
-                              )}
-                              aria-hidden
-                            />
-                            {item.imageUrl ? (
-                              <AdminMediaImage
-                                src={item.imageUrl}
-                                className="h-9 w-9 shrink-0 rounded-[8px] object-cover"
-                                fallbackClassName="h-9 w-9 shrink-0 rounded-[8px] bg-[#eceeec]"
-                                iconSize={14}
-                              />
-                            ) : (
-                              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[8px] bg-[#eceeec]">
-                                <Package size={14} className="text-[#9e9e9e]" />
-                              </span>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-[13px] font-semibold text-[#17231c]">
-                                {item.title}
-                              </p>
-                              <p className="mt-0.5 text-[11.5px] text-[#8a948e]">
-                                BHD {formatExclusiveBhd(item.offerPrice)}
-                                {!item.isVisible ? ' · Hidden' : ''}
-                              </p>
-                            </div>
-                          </div>
-                        ))}
+                    {slotOpen && exclusive && exclusiveEditor ? (
+                      <div className="border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-2">
+                        <ExclusiveOffersSlotPanel
+                          variant="compact"
+                          section={exclusiveEditor.section}
+                          items={exclusiveEditor.items}
+                          summary={exclusiveEditor.summary}
+                          busy={exclusiveEditor.busy}
+                          dragIndex={exclusiveEditor.dragIndex}
+                          onSectionChange={exclusiveEditor.handleSectionChange}
+                          onSectionToggle={exclusiveEditor.handleSectionToggle}
+                          onAdd={onAddExclusive}
+                          onDragStart={exclusiveEditor.onDragStart}
+                          onDragOver={exclusiveEditor.onDragOver}
+                          onDragEnd={exclusiveEditor.onDragEnd}
+                          onToggleVisible={exclusiveEditor.handleToggleVisible}
+                          onPriceChange={exclusiveEditor.handlePriceChange}
+                          onTitleChange={exclusiveEditor.handleTitleChange}
+                          onImageChange={exclusiveEditor.handleImageChange}
+                          onRemove={exclusiveEditor.handleRemove}
+                        />
                       </div>
                     ) : null}
 
@@ -2891,16 +2840,12 @@ export default function AdminUiEditorPage() {
   })
   const [actionMessage, setActionMessage] = useState(null)
   const [exclusiveModalOpen, setExclusiveModalOpen] = useState(false)
-  const [exclusiveBusy, setExclusiveBusy] = useState(false)
-
+  const exclusiveEditor = useExclusiveOffersEditor({ onMessage: setActionMessage })
+  const exclusiveSection = exclusiveEditor.section
+  const exclusiveItems = exclusiveEditor.items
   const { apps, isLoading: appsLoading, error: appsError, refetch: refetchApps } =
     useAdminUiEditorApps()
   const appKey = platform === 'champ' ? 'CHAMP' : 'CUSTOMER'
-  const {
-    section: exclusiveSection,
-    items: exclusiveItems,
-    refetch: refetchExclusiveOffers,
-  } = useAdminUiEditorExclusiveOffers()
   const {
     screens: apiScreens,
     apps: screenMapApps,
@@ -3188,19 +3133,14 @@ export default function AdminUiEditorPage() {
     }
   }
 
-  const handleAddExclusiveProducts = async ({ productIds }) => {
-    setExclusiveBusy(true)
+  const handleAddExclusiveProducts = async (payload) => {
     setActionMessage(null)
     try {
-      await adminUiEditorService.addExclusiveOfferItems({ productIds })
-      await refetchExclusiveOffers()
+      await exclusiveEditor.handleAddProducts(payload)
       setExclusiveModalOpen(false)
-      setActionMessage('Products added to Super Exclusive offers.')
     } catch (err) {
       setActionMessage(err?.message || 'Unable to add products.')
       throw err
-    } finally {
-      setExclusiveBusy(false)
     }
   }
 
@@ -3217,7 +3157,7 @@ export default function AdminUiEditorPage() {
       }
       if (tab === 'exclusive-offers') {
         await adminUiEditorService.publishExclusiveOffers()
-        await refetchExclusiveOffers()
+        await exclusiveEditor.refetch()
         setActionMessage(
           'Published Super Exclusive offers. The customer home carousel is now live (respects visibility and product availability).',
         )
@@ -3374,7 +3314,7 @@ export default function AdminUiEditorPage() {
                 screen={screen}
                 onAdd={openBannerModal}
                 onAddExclusive={() => setExclusiveModalOpen(true)}
-                onManageExclusive={() => setTab('exclusive-offers')}
+                exclusiveEditor={exclusiveEditor}
                 onEdit={openEditBannerModal}
                 onDelete={handleDeleteBanner}
                 onPreview={handlePreview}
@@ -3396,10 +3336,8 @@ export default function AdminUiEditorPage() {
           onDelete={handleDeleteBanner}
           onScreenChange={setBannerScreenId}
           bannersRefreshKey={bannersRefreshKey}
-          exclusiveSection={exclusiveSection}
-          exclusiveItems={exclusiveItems}
+          exclusiveEditor={exclusiveEditor}
           onAddExclusive={() => setExclusiveModalOpen(true)}
-          onManageExclusive={() => setTab('exclusive-offers')}
         />
       ) : null}
 
@@ -3408,13 +3346,13 @@ export default function AdminUiEditorPage() {
       ) : null}
 
       {tab === 'exclusive-offers' ? (
-        <ExclusiveOffersTab onMessage={setActionMessage} />
+        <ExclusiveOffersTab editor={exclusiveEditor} />
       ) : null}
 
       <AddExclusiveProductsModal
         open={exclusiveModalOpen}
-        onClose={() => !exclusiveBusy && setExclusiveModalOpen(false)}
-        isSubmitting={exclusiveBusy}
+        onClose={() => !exclusiveEditor.busy && setExclusiveModalOpen(false)}
+        isSubmitting={exclusiveEditor.busy}
         onSubmit={handleAddExclusiveProducts}
       />
 

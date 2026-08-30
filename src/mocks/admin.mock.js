@@ -1868,9 +1868,19 @@ export const adminExclusiveOffersMock = {
 export const adminExclusiveOfferProductsMock = {
   page: 1,
   limit: 20,
-  total: 3,
+  total: 5,
   selectedProductIds: ['prod-airpods', 'prod-roses'],
   products: [
+    {
+      id: 'prod-burger',
+      name: 'Classic Burger',
+      imageUrl: null,
+      price: 2,
+      compareAtPrice: 2.5,
+      isAvailable: true,
+      alreadySelected: false,
+      vendor: { id: 'vnd-green-kitchen', name: 'Green Kitchen', logoUrl: null, isActive: true },
+    },
     {
       id: 'prod-watch',
       name: 'Smart Watch Pro',

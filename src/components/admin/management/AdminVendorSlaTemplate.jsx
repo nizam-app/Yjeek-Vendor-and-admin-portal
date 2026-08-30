@@ -70,10 +70,18 @@ function OperatorSelect({ value, onChange }) {
   )
 }
 
-function DurationInput({ value, onChange, showOperator = true, showUnits = false, hourMax = 23 }) {
+function DurationInput({ value, onChange, showOperator = true, showUnits = false, hourMax = 23, tone = 'default' }) {
   const safe = value || { operator: '≤', h: '00', m: '00', s: '00' }
+  const toneClass =
+    tone === 'risk'
+      ? '[&_input]:border-[#E3B341] [&_input]:bg-[#FFF4DE] [&_input]:text-[#9A6B00]'
+      : tone === 'critical'
+        ? '[&_input]:border-[#E3A1A1] [&_input]:bg-[#FDECEC] [&_input]:text-[#B3261E]'
+        : tone === 'target'
+          ? '[&_input]:border-[rgba(0,0,0,0.08)] [&_input]:bg-[#f8faf8] [&_input]:text-[#455249]'
+          : ''
   return (
-    <div className="flex flex-nowrap items-center gap-1.5">
+    <div className={cn('flex flex-nowrap items-center gap-1.5', toneClass)}>
       {showOperator ? (
         <OperatorSelect
           value={safe.operator || '≤'}
@@ -86,6 +94,128 @@ function DurationInput({ value, onChange, showOperator = true, showUnits = false
       {showUnits ? <span className="text-[12px] text-[#7c8780]">m</span> : null}
       <TimeBox value={safe.s} label="Seconds" onChange={(s) => onChange({ ...safe, s })} />
       {showUnits ? <span className="text-[12px] text-[#7c8780]">s</span> : null}
+    </div>
+  )
+}
+
+function DurationTierInput({ value, onChange, showUnits = true }) {
+  const safe = value || {
+    target: { operator: '≤', h: '00', m: '00', s: '00' },
+    atRisk: { operator: '≤', h: '00', m: '00', s: '00' },
+    critical: { operator: '≤', h: '00', m: '00', s: '00' },
+  }
+  return (
+    <div className="grid grid-cols-1 gap-2 min-[900px]:grid-cols-3">
+      <DurationInput
+        value={safe.target}
+        showUnits={showUnits}
+        tone="target"
+        onChange={(target) => onChange({ ...safe, target })}
+      />
+      <DurationInput
+        value={safe.atRisk}
+        showUnits={showUnits}
+        tone="risk"
+        onChange={(atRisk) => onChange({ ...safe, atRisk })}
+      />
+      <DurationInput
+        value={safe.critical}
+        showUnits={showUnits}
+        tone="critical"
+        onChange={(critical) => onChange({ ...safe, critical })}
+      />
+    </div>
+  )
+}
+
+function StatusFlags() {
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <span className="h-[7px] w-[7px] rounded-full bg-[#3E9B4F]" title="Within target" />
+      <span className="h-[7px] w-[7px] rounded-full bg-[#E3B341]" title="At risk" />
+      <span className="h-[7px] w-[7px] rounded-full bg-[#D64545]" title="Critical" />
+    </div>
+  )
+}
+
+function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
+  return (
+    <div className="overflow-x-auto">
+      <div className="min-w-[720px]">
+        <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_0.6fr] gap-2.5 border-b border-[#eceeec] px-1 pb-2 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-[#7c8780]">
+          <span>{metricLabel}</span>
+          <span>Target</span>
+          <span className="text-[#9A6B00]">At-risk threshold</span>
+          <span className="text-[#B3261E]">Critical threshold</span>
+          <span className="text-center">Flags</span>
+        </div>
+        {fields.map((field) => (
+          <div
+            key={field.key}
+            className="grid grid-cols-[1.5fr_1fr_1fr_1fr_0.6fr] items-center gap-2.5 border-b border-[#eceeec] px-1 py-3 last:border-b-0"
+          >
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-medium text-[#17231c]">{field.label}</div>
+              {field.hint ? (
+                <div className="mt-0.5 text-[11px] leading-snug text-[#7c8780]">{field.hint}</div>
+              ) : null}
+            </div>
+            <DurationInput
+              value={values?.[field.key]?.target}
+              showUnits={field.showUnits !== false}
+              tone="target"
+              onChange={(target) =>
+                onChange({
+                  ...values,
+                  [field.key]: { ...values?.[field.key], target },
+                })
+              }
+            />
+            <DurationInput
+              value={values?.[field.key]?.atRisk}
+              showUnits={field.showUnits !== false}
+              tone="risk"
+              onChange={(atRisk) =>
+                onChange({
+                  ...values,
+                  [field.key]: { ...values?.[field.key], atRisk },
+                })
+              }
+            />
+            <DurationInput
+              value={values?.[field.key]?.critical}
+              showUnits={field.showUnits !== false}
+              tone="critical"
+              onChange={(critical) =>
+                onChange({
+                  ...values,
+                  [field.key]: { ...values?.[field.key], critical },
+                })
+              }
+            />
+            <StatusFlags />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function SlaLegend() {
+  return (
+    <div className="mt-3 flex flex-wrap gap-4 text-[12px] text-[#7c8780]">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-[7px] w-[7px] rounded-full bg-[#3E9B4F]" />
+        Within target — on track
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-[7px] w-[7px] rounded-full bg-[#E3B341]" />
+        Past at-risk threshold
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-[7px] w-[7px] rounded-full bg-[#D64545]" />
+        Past critical threshold
+      </span>
     </div>
   )
 }
@@ -480,6 +610,9 @@ function FieldControl({ field, value, onChange }) {
   if (field.type === 'duration') {
     return <DurationInput value={value} onChange={onChange} showUnits={showUnits} />
   }
+  if (field.type === 'durationTier') {
+    return <DurationTierInput value={value} onChange={onChange} showUnits={showUnits} />
+  }
   if (field.type === 'priorityDuration') {
     return <PriorityDurationInput value={value} onChange={onChange} readOnly={readOnly} />
   }
@@ -532,30 +665,170 @@ function FieldRow({ field, value, onChange }) {
   )
 }
 
+const TIER_GRID_FIELD_TYPES = new Set(['duration', 'durationTier'])
+const STANDARD_TIER_SUBTITLE =
+  'Each metric carries three values: the operational target, the point it flips to At risk, and the point it flips to Critical.'
+
+export const SLA_TIER_FOOTNOTES = {
+  vendor:
+    'Crossing the at-risk value flags the order At risk on Live Dashboard. Crossing critical flags it Critical. Flags are computed live from elapsed time — not editable directly.',
+  champ:
+    'Champ breaches at critical apply the At Risk / At Risk Champ 0.20× dispatch penalty per the CPI framework — suspension stays a dispatcher decision.',
+  dispatcher:
+    "An order sitting unassigned past critical should surface at the top of the dispatcher's live queue, sorted above At risk orders.",
+}
+
+function durationPartsToSec(parts) {
+  const safe = parts || { h: '00', m: '00', s: '00' }
+  const h = Number.parseInt(safe.h, 10) || 0
+  const m = Number.parseInt(safe.m, 10) || 0
+  const s = Number.parseInt(safe.s, 10) || 0
+  return h * 3600 + m * 60 + s
+}
+
+function secToDurationParts(totalSec, operator = '≤') {
+  const total = Math.max(0, Math.round(totalSec))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  return { operator, h: pad2(h), m: pad2(m), s: pad2(s) }
+}
+
+function durationDefaultToTier(defaultValue) {
+  if (defaultValue?.target) return structuredClone(defaultValue)
+  const operator = defaultValue?.operator || '≤'
+  const targetSec = durationPartsToSec(defaultValue)
+  const atRiskSec = Math.max(targetSec, Math.round(targetSec * 1.67))
+  const criticalSec = Math.max(atRiskSec, Math.round(targetSec * 2.5))
+  return {
+    target: secToDurationParts(targetSec, operator),
+    atRisk: secToDurationParts(atRiskSec, operator),
+    critical: secToDurationParts(criticalSec, operator),
+  }
+}
+
+function fieldToGridField(field) {
+  return {
+    key: field.key,
+    label: field.label,
+    hint: field.hint,
+    showUnits: field.showUnits !== false,
+    default:
+      field.type === 'durationTier'
+        ? structuredClone(field.default)
+        : durationDefaultToTier(field.default),
+  }
+}
+
+function resolveTierGridFields(section) {
+  const explicit = section.tierGridFields ?? []
+  const usedKeys = new Set(explicit.map((field) => field.key))
+  const auto = (section.fields ?? [])
+    .filter((field) => TIER_GRID_FIELD_TYPES.has(field.type) && !usedKeys.has(field.key))
+    .map(fieldToGridField)
+  return [...explicit, ...auto]
+}
+
+function nonTierFields(section) {
+  return (section.fields ?? []).filter((field) => !TIER_GRID_FIELD_TYPES.has(field.type))
+}
+
+function defaultValueForField(field) {
+  if (field.type === 'duration') return durationDefaultToTier(field.default)
+  return structuredClone(field.default)
+}
+
+function TierGridSection({ tierGridFields, values, onChange, metricLabel }) {
+  if (!tierGridFields.length) return null
+  return (
+    <TierGrid
+      fields={tierGridFields}
+      values={values}
+      metricLabel={metricLabel}
+      onChange={onChange}
+    />
+  )
+}
+
+export function SlaTierPageFooter({ footnote }) {
+  if (!footnote) return null
+  return (
+    <div className="mb-24 mt-2 space-y-3">
+      <p className="rounded-[8px] border border-[#eceeec] bg-[#F8FDF8] px-3 py-2.5 text-[12px] leading-relaxed text-[#7c8780]">
+        {footnote}
+      </p>
+      <SlaLegend />
+    </div>
+  )
+}
+
 export function AdminVendorSlaTemplate({ sections, values, onChange }) {
   return (
     <div className="space-y-4">
-      {sections.map((section) => (
+      {sections.map((section) => {
+        const tierGridFields = resolveTierGridFields(section)
+        const otherFields = nonTierFields(section)
+        const subtitle =
+          section.subtitle ?? (tierGridFields.length ? STANDARD_TIER_SUBTITLE : null)
+
+        return (
         <section
           key={section.id}
           className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)] max-[700px]:p-4"
         >
-          <h3 className={cn('text-[15px] font-bold text-[#17231c]', section.subtitle ? 'mb-1' : 'mb-3')}>
+          <h3 className={cn('text-[15px] font-bold text-[#17231c]', subtitle ? 'mb-1' : 'mb-3')}>
             {section.title}
           </h3>
-          {section.subtitle ? (
-            <p className="mb-3 text-[12.5px] leading-[1.4] text-[#7c8780]">{section.subtitle}</p>
+          {subtitle ? (
+            <p className="mb-3 text-[12.5px] leading-[1.4] text-[#7c8780]">{subtitle}</p>
           ) : null}
+
+          <TierGridSection
+            tierGridFields={tierGridFields}
+            values={values[section.id]}
+            metricLabel={section.metricLabel || 'Metric'}
+            onChange={(next) =>
+              onChange({
+                ...values,
+                [section.id]: {
+                  ...values[section.id],
+                  ...next,
+                },
+              })
+            }
+          />
 
           {section.tiers ? (
             <div className="space-y-5">
-              {section.tiers.map((tier) => (
+              {section.tiers.map((tier) => {
+                const tierGrid = resolveTierGridFields({ fields: tier.fields })
+                const tierOther = (tier.fields ?? []).filter(
+                  (field) => !TIER_GRID_FIELD_TYPES.has(field.type),
+                )
+                return (
                 <div key={tier.id}>
                   <span className="mb-2 inline-flex rounded-full bg-[#e8f7ed] px-2.5 py-1 text-[11px] font-bold text-[#147940]">
                     {tier.label}
                   </span>
+                  <TierGridSection
+                    tierGridFields={tierGrid}
+                    values={values[section.id]?.[tier.id]}
+                    metricLabel="Metric"
+                    onChange={(next) =>
+                      onChange({
+                        ...values,
+                        [section.id]: {
+                          ...values[section.id],
+                          [tier.id]: {
+                            ...values[section.id]?.[tier.id],
+                            ...next,
+                          },
+                        },
+                      })
+                    }
+                  />
                   <div>
-                    {tier.fields.map((field) => (
+                    {tierOther.map((field) => (
                       <FieldRow
                         key={`${tier.id}-${field.key}`}
                         field={field}
@@ -576,7 +849,7 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                     ))}
                   </div>
                 </div>
-              ))}
+              )})}
               {section.allTiers?.length ? (
                 <div>
                   <div
@@ -589,8 +862,27 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                   >
                     {section.allTiersLabel || 'All tiers'}
                   </div>
+                  <TierGridSection
+                    tierGridFields={resolveTierGridFields({ fields: section.allTiers })}
+                    values={values[section.id]?.all}
+                    metricLabel="Metric"
+                    onChange={(next) =>
+                      onChange({
+                        ...values,
+                        [section.id]: {
+                          ...values[section.id],
+                          all: {
+                            ...values[section.id]?.all,
+                            ...next,
+                          },
+                        },
+                      })
+                    }
+                  />
                   <div>
-                    {section.allTiers.map((field) => (
+                    {(section.allTiers ?? [])
+                      .filter((field) => !TIER_GRID_FIELD_TYPES.has(field.type))
+                      .map((field) => (
                       <FieldRow
                         key={`all-${field.key}`}
                         field={field}
@@ -613,9 +905,9 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                 </div>
               ) : null}
             </div>
-          ) : (
+          ) : otherFields.length ? (
             <div>
-              {section.fields.map((field) => (
+              {otherFields.map((field) => (
                 <FieldRow
                   key={field.key}
                   field={field}
@@ -632,9 +924,9 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                 />
               ))}
             </div>
-          )}
+          ) : null}
         </section>
-      ))}
+      )})}
     </div>
   )
 }
@@ -647,23 +939,42 @@ export function buildSlaDefaults(sections) {
       section.tiers.forEach((tier) => {
         defaults[section.id][tier.id] = {}
         tier.fields.forEach((field) => {
-          defaults[section.id][tier.id][field.key] = structuredClone(field.default)
+          defaults[section.id][tier.id][field.key] = defaultValueForField(field)
         })
       })
       section.allTiers?.forEach((field) => {
-        defaults[section.id].all[field.key] = structuredClone(field.default)
+        defaults[section.id].all[field.key] = defaultValueForField(field)
       })
       return
     }
     defaults[section.id] = {}
-    section.fields.forEach((field) => {
+    section.tierGridFields?.forEach((field) => {
       defaults[section.id][field.key] = structuredClone(field.default)
+    })
+    section.fields?.forEach((field) => {
+      defaults[section.id][field.key] = defaultValueForField(field)
     })
   })
   return defaults
 }
 
 const duration = (h, m, s, operator = '≤') => ({ operator, h, m, s })
+const durationTier = (
+  targetH,
+  targetM,
+  targetS,
+  atRiskH,
+  atRiskM,
+  atRiskS,
+  criticalH,
+  criticalM,
+  criticalS,
+  operator = '≤',
+) => ({
+  target: duration(targetH, targetM, targetS, operator),
+  atRisk: duration(atRiskH, atRiskM, atRiskS, operator),
+  critical: duration(criticalH, criticalM, criticalS, operator),
+})
 const priorityDuration = (priority, h, m, s) => ({ priority: String(priority), h, m, s })
 const percent = (amount, operator = '≥') => ({ operator, amount })
 const number = (amount, operator = '≤') => ({ operator, amount })
@@ -680,6 +991,38 @@ const peakHours = (h, m, s, amount = '90') => ({
 })
 
 const withUnits = (field) => ({ ...field, showUnits: true })
+const tierField = (key, label, targetH, targetM, targetS, atRiskH, atRiskM, atRiskS, critH, critM, critS, extras = {}) =>
+  withUnits({
+    key,
+    label,
+    type: 'durationTier',
+    default: durationTier(targetH, targetM, targetS, atRiskH, atRiskM, atRiskS, critH, critM, critS),
+    ...extras,
+  })
+const gridField = (
+  key,
+  label,
+  targetH,
+  targetM,
+  targetS,
+  atRiskH,
+  atRiskM,
+  atRiskS,
+  critH,
+  critM,
+  critS,
+  extras = {},
+) => {
+  const operator = extras.operator || '≤'
+  const { operator: _ignored, ...rest } = extras
+  return {
+    key,
+    label,
+    showUnits: true,
+    default: durationTier(targetH, targetM, targetS, atRiskH, atRiskM, atRiskS, critH, critM, critS, operator),
+    ...rest,
+  }
+}
 const pd = (key, label, priority, h, m, s, extras = {}) => ({
   key,
   label,
@@ -719,8 +1062,8 @@ const refMoney = (key, label, amount, currency = 'BHD', operator = '≥') => ({
 })
 
 const scheduledTierFields = [
-  withUnits({ key: 'acceptance', label: 'Acceptance time', type: 'duration', default: duration('00', '05', '00') }),
-  withUnits({ key: 'champCollection', label: 'Champ collection time', type: 'duration', default: duration('00', '20', '00') }),
+  tierField('acceptance', 'Acceptance time', '00', '05', '00', '00', '08', '00', '00', '12', '00'),
+  tierField('champCollection', 'Champ collection time', '00', '20', '00', '00', '28', '00', '00', '40', '00'),
   withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') }),
   { key: 'cutoff', label: 'Cutoff time', type: 'clock', default: clock('12:00:00', 'PM') },
   { key: 'prepMax', label: 'Prepare time (max)', type: 'clock', default: clock('08:00:00', 'PM', '≤') },
@@ -736,17 +1079,30 @@ export const VENDOR_SLA_SECTIONS = [
   {
     id: 'hot-food',
     title: '1) Hot food — on demand',
+    subtitle:
+      'Each metric carries three values: the operational target, the point it flips to At risk, and the point it flips to Critical.',
+    tierGridFields: [
+      gridField('acceptance', 'Acceptance time', '00', '03', '00', '00', '05', '00', '00', '08', '00', {
+        hint: 'Time for vendor to accept a new order',
+      }),
+      gridField('champCollection', 'Champ collection time', '00', '10', '00', '00', '14', '00', '00', '20', '00', {
+        hint: 'Time from order-ready to champ pickup',
+      }),
+      gridField('prepMax', 'Prep time (max)', '00', '15', '00', '00', '20', '00', '00', '28', '00', {
+        hint: 'Kitchen prep window for hot food',
+      }),
+      gridField('dailyOnline', 'Daily online hours', '10', '00', '00', '08', '00', '00', '06', '00', '00', {
+        hint: 'Minimum hours vendor must be online',
+        operator: '≥',
+      }),
+    ],
     fields: [
-      { key: 'acceptance', label: 'Acceptance time', type: 'duration', default: duration('00', '02', '00') },
-      { key: 'champCollection', label: 'Champ collection time', type: 'duration', default: duration('00', '10', '00') },
-      { key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') },
       {
         key: 'fullWindow',
         label: 'Full delivery window',
         type: 'window',
         default: makeWindow(duration('00', '00', '00'), duration('00', '00', '00')),
       },
-      { key: 'prepMax', label: 'Prep time (max)', type: 'duration', default: duration('00', '18', '00') },
       { key: 'maxChampWait', label: 'Max champ wait at vendor', type: 'duration', default: duration('00', '04', '00') },
       { key: 'vendorIssue', label: 'Vendor issue response', type: 'duration', default: duration('02', '00', '00') },
       { key: 'orderAccuracy', label: 'Order accuracy', type: 'percent', default: percent('100') },
@@ -874,16 +1230,18 @@ export const CHAMP_SLA_SECTIONS = [
   {
     id: 'acceptance',
     title: 'Acceptance time (per mode)',
-    fields: [
-      withUnits({ key: 'hotFood', label: 'Hot food', type: 'duration', default: duration('00', '01', '30') }),
-      withUnits({ key: 'sameDay', label: 'Same day', type: 'duration', default: duration('00', '05', '00') }),
-      withUnits({ key: 'nextDay', label: 'Next day', type: 'duration', default: duration('00', '10', '00') }),
-      withUnits({ key: 'standard', label: 'Standard', type: 'duration', default: duration('00', '15', '00') }),
-      withUnits({ key: 'economy', label: 'Economy', type: 'duration', default: duration('00', '20', '00') }),
-      withUnits({ key: 'acceptFood', label: 'Acceptance — Food', type: 'duration', default: duration('00', '01', '30') }),
-      withUnits({ key: 'acceptGrocery', label: 'Acceptance — Grocery/Pharmacy', type: 'duration', default: duration('00', '03', '00') }),
-      withUnits({ key: 'acceptFlowers', label: 'Acceptance — Flowers', type: 'duration', default: duration('00', '03', '00') }),
-      withUnits({ key: 'acceptElectronics', label: 'Acceptance — Electronics', type: 'duration', default: duration('00', '05', '00') }),
+    subtitle: 'Performance thresholds feeding CPI scoring for champs — now with at-risk and critical breakpoints.',
+    metricLabel: 'Mode',
+    tierGridFields: [
+      gridField('hotFood', 'Hot food', '00', '01', '59', '00', '03', '00', '00', '05', '00'),
+      gridField('sameDay', 'Same day', '00', '05', '00', '00', '08', '00', '00', '12', '00'),
+      gridField('nextDay', 'Next day', '00', '05', '00', '00', '10', '00', '00', '20', '00'),
+      gridField('standard', 'Standard', '00', '05', '00', '00', '08', '00', '00', '15', '00'),
+      gridField('economy', 'Economy', '00', '05', '00', '00', '08', '00', '00', '15', '00'),
+      gridField('acceptFood', 'Acceptance — Food', '00', '01', '59', '00', '03', '00', '00', '05', '00'),
+      gridField('acceptGrocery', 'Acceptance — Grocery/Pharmacy', '00', '01', '30', '00', '03', '00', '00', '05', '00'),
+      gridField('acceptFlowers', 'Acceptance — Flowers', '00', '01', '30', '00', '03', '00', '00', '05', '00'),
+      gridField('acceptElectronics', 'Acceptance — Electronics', '00', '01', '30', '00', '03', '00', '00', '05', '00'),
     ],
   },
   {
@@ -990,11 +1348,13 @@ export const DISPATCHER_SLA_SECTIONS = [
   {
     id: 'assignment',
     title: 'Order assignment time (per mode)',
-    fields: [
-      withUnits({ key: 'sameDay', label: 'Same day', type: 'duration', default: duration('00', '02', '00') }),
-      withUnits({ key: 'nextDay', label: 'Next day', type: 'duration', default: duration('00', '05', '00') }),
-      withUnits({ key: 'standard', label: 'Standard', type: 'duration', default: duration('00', '10', '00') }),
-      withUnits({ key: 'economy', label: 'Economy', type: 'duration', default: duration('00', '15', '00') }),
+    subtitle: 'Assignment thresholds per delivery mode — target, at-risk, and critical breakpoints.',
+    metricLabel: 'Mode',
+    tierGridFields: [
+      gridField('sameDay', 'Same day', '00', '03', '00', '00', '05', '00', '00', '08', '00'),
+      gridField('nextDay', 'Next day', '00', '05', '00', '00', '08', '00', '00', '12', '00'),
+      gridField('standard', 'Standard', '00', '05', '00', '00', '09', '00', '00', '15', '00'),
+      gridField('economy', 'Economy', '00', '10', '00', '00', '15', '00', '00', '25', '00'),
     ],
   },
   {

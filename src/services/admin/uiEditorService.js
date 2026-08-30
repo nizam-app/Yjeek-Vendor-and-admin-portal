@@ -586,6 +586,8 @@ export const adminUiEditorService = {
           page: params.page || 1,
           limit: params.limit || 20,
           vendorId: params.vendorId || undefined,
+          storeTypeId: params.storeTypeId || undefined,
+          availableOnly: params.availableOnly === false ? false : params.availableOnly || undefined,
           includeSelected: params.includeSelected || undefined,
           ...(options.params || {}),
         },

@@ -1084,6 +1084,8 @@ export function mapAdminPatchExclusiveOfferItemRequest(input = {}) {
   if (src.sortOrder != null) body.sortOrder = asNumber(src.sortOrder, 0)
   if (src.originalPrice != null) body.originalPrice = asNumber(src.originalPrice, 0)
   if (src.offerPrice != null) body.offerPrice = asNumber(src.offerPrice, 0)
+  if (src.title != null) body.title = asString(src.title).trim() || null
+  if (src.imageUrl != null) body.imageUrl = asString(src.imageUrl).trim() || null
   if (src.badgeLabel != null) body.badgeLabel = asString(src.badgeLabel).trim() || null
   if (src.discountType != null) body.discountType = asString(src.discountType).trim()
   if (src.discountValue != null) body.discountValue = asNumber(src.discountValue, 0)

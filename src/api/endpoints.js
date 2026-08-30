@@ -334,6 +334,11 @@ export const endpoints = {
        */
       setDefault: (slaModelId) =>
         `/admin/sla-models/${encodeURIComponent(slaModelId)}/set-default`,
+      /**
+       * @param {string} slaModelId
+       */
+      reset: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/reset`,
     },
     /**
      * Confirmed Customers — Postman folder 08.

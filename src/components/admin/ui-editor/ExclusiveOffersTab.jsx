@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { GripVertical, Package, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Package, Plus } from 'lucide-react'
 import { cn } from '../cn'
 import AdminMediaImage from '../AdminMediaImage'
 import { formatApiErrorMessage } from '../../../api/errors'
-import { useAdminUiEditorExclusiveOffers } from '../../../hooks/admin/useAdminUiEditor'
-import { adminUiEditorService } from '../../../services/admin/uiEditorService'
 import AddExclusiveProductsModal from './AddExclusiveProductsModal'
+import ExclusiveOfferRow, { ToggleSwitch } from './ExclusiveOfferRow'
 
 function formatBhd(value) {
   const n = Number(value)
@@ -13,146 +12,7 @@ function formatBhd(value) {
   return n.toFixed(3)
 }
 
-function ToggleSwitch({ checked, onChange, label, disabled = false }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange?.(!checked)}
-      className={cn(
-        'relative h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
-      )}
-    >
-      <span
-        className={cn(
-          'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
-          checked ? 'left-[23px]' : 'left-[3px]',
-        )}
-      />
-    </button>
-  )
-}
-
-function ExclusiveOfferRow({
-  item,
-  indexLabel,
-  rowIndex,
-  dragIndex,
-  busy,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
-  onToggleVisible,
-  onPriceChange,
-  onRemove,
-}) {
-  const isDragging = dragIndex === rowIndex
-
-  return (
-    <div
-      draggable={!busy}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDragEnd={onDragEnd}
-      className={cn(
-        'flex flex-wrap items-center gap-2 rounded-[12px] border border-[#e7ebe8] bg-[#fafbfa] px-2.5 py-2.5',
-        isDragging && 'ring-1 ring-[#1aa054] bg-[#eaf6ee]',
-        !item.isVisible && 'opacity-70',
-      )}
-    >
-      <button
-        type="button"
-        aria-label="Drag to reorder"
-        className="grid h-8 w-6 shrink-0 cursor-grab place-items-center text-[#8a948e] active:cursor-grabbing"
-        disabled={busy}
-      >
-        <GripVertical size={16} />
-      </button>
-
-      <span className="w-9 shrink-0 text-center text-[12px] font-bold text-[#8a948e]">{indexLabel}</span>
-
-      {item.imageUrl ? (
-        <AdminMediaImage
-          src={item.imageUrl}
-          className="h-11 w-11 shrink-0 rounded-[10px] object-cover"
-          fallbackClassName="h-11 w-11 shrink-0 rounded-[10px] bg-[#eceeec]"
-          iconSize={16}
-        />
-      ) : (
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-[10px] bg-[#eceeec] text-[#8a948e]">
-          <Package size={16} />
-        </span>
-      )}
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-bold text-[#17231c]">{item.title}</p>
-        <p className="mt-0.5 truncate text-[11.5px] text-[#8a948e]">
-          {item.vendor?.name || 'Vendor'}
-          {!item.liveOnCustomer ? ' · Not live on customer app' : ''}
-        </p>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-1.5">
-        <label className="text-[10px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
-          Was
-        </label>
-        <input
-          type="number"
-          min="0"
-          step="0.001"
-          disabled={busy}
-          value={item.originalPrice}
-          onChange={(event) =>
-            onPriceChange(item, { originalPrice: Number(event.target.value) })
-          }
-          className="h-[32px] w-[72px] rounded-[8px] border border-[#e4e8e4] bg-white px-2 text-[12px] text-[#17231c]"
-        />
-        <label className="text-[10px] font-bold uppercase tracking-[0.04em] text-[#8a948e]">
-          Offer
-        </label>
-        <input
-          type="number"
-          min="0"
-          step="0.001"
-          disabled={busy}
-          value={item.offerPrice}
-          onChange={(event) =>
-            onPriceChange(item, { offerPrice: Number(event.target.value) })
-          }
-          className="h-[32px] w-[72px] rounded-[8px] border border-[#e4e8e4] bg-white px-2 text-[12px] font-bold text-[#137333]"
-        />
-      </div>
-
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="text-[11px] font-semibold text-[#8a948e]">
-          {item.isVisible ? 'Visible' : 'Hidden'}
-        </span>
-        <ToggleSwitch
-          checked={item.isVisible}
-          disabled={busy}
-          label={item.isVisible ? `Hide ${item.title}` : `Show ${item.title}`}
-          onChange={() => onToggleVisible(item)}
-        />
-      </div>
-
-      <button
-        type="button"
-        aria-label={`Remove ${item.title}`}
-        disabled={busy}
-        onClick={() => onRemove(item)}
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[#8a948e] hover:bg-white hover:text-[#c62828] disabled:opacity-60"
-      >
-        <Trash2 size={15} />
-      </button>
-    </div>
-  )
-}
-
-function ExclusiveOffersPhonePreview({ section, items }) {
+export function ExclusiveOffersPhonePreview({ section, items }) {
   const visible = items.filter((item) => item.isVisible)
   return (
     <div className="mx-auto w-full max-w-[280px]">
@@ -221,188 +81,35 @@ function ExclusiveOffersPhonePreview({ section, items }) {
   )
 }
 
-export default function ExclusiveOffersTab({ onMessage }) {
+export default function ExclusiveOffersTab({ editor }) {
+  const [addOpen, setAddOpen] = useState(false)
+
   const {
-    section: apiSection,
+    section,
+    items,
     summary,
-    items: apiItems,
+    dragIndex,
+    busy,
     isLoading,
     error,
-    refetch,
     enabled,
-  } = useAdminUiEditorExclusiveOffers()
+    refetch,
+    handleSectionChange,
+    handleSectionToggle,
+    handleAddProducts,
+    handleToggleVisible,
+    handlePriceChange,
+    handleTitleChange,
+    handleImageChange,
+    handleRemove,
+    onDragStart,
+    onDragOver,
+    onDragEnd,
+  } = editor
 
-  const [section, setSection] = useState({
-    title: 'Super Exclusive offers',
-    titleAr: '',
-    isVisible: true,
-  })
-  const [items, setItems] = useState([])
-  const itemsRef = useRef(items)
-  const [dragIndex, setDragIndex] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [localError, setLocalError] = useState(null)
-  const [addOpen, setAddOpen] = useState(false)
-  const sectionSaveTimer = useRef(null)
-  const priceSaveTimers = useRef({})
-
-  useEffect(() => {
-    itemsRef.current = items
-  }, [items])
-
-  useEffect(() => {
-    if (!enabled) return
-    setSection({
-      title: apiSection.title || 'Super Exclusive offers',
-      titleAr: apiSection.titleAr || '',
-      isVisible: apiSection.isVisible !== false,
-    })
-    setItems(apiItems)
-  }, [apiSection, apiItems, enabled])
-
-  const persistSection = async (patch) => {
-    if (!enabled) return
-    setLocalError(null)
-    try {
-      await adminUiEditorService.updateExclusiveOffersSection(patch)
-      await refetch()
-    } catch (err) {
-      setLocalError(err)
-    }
-  }
-
-  const scheduleSectionSave = (nextSection) => {
-    if (!enabled) return
-    if (sectionSaveTimer.current) clearTimeout(sectionSaveTimer.current)
-    sectionSaveTimer.current = setTimeout(() => {
-      persistSection({
-        title: nextSection.title,
-        titleAr: nextSection.titleAr,
-        isVisible: nextSection.isVisible,
-      })
-    }, 500)
-  }
-
-  const handleSectionChange = (patch) => {
-    setSection((prev) => {
-      const next = { ...prev, ...patch }
-      scheduleSectionSave(next)
-      return next
-    })
-  }
-
-  const handleSectionToggle = (isVisible) => {
-    handleSectionChange({ isVisible })
-    onMessage?.(
-      isVisible
-        ? 'Section will show on customer home after publish.'
-        : 'Section hidden from customer home after publish.',
-    )
-  }
-
-  const handleAddProducts = async ({ productIds }) => {
-    setBusy(true)
-    setLocalError(null)
-    try {
-      await adminUiEditorService.addExclusiveOfferItems({ productIds })
-      await refetch()
-      setAddOpen(false)
-      onMessage?.('Products added to Super Exclusive offers.')
-    } catch (err) {
-      setLocalError(err)
-      throw err
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleToggleVisible = async (item) => {
-    const nextVisible = !item.isVisible
-    setItems((prev) =>
-      prev.map((row) => (row.id === item.id ? { ...row, isVisible: nextVisible } : row)),
-    )
-    if (!enabled) return
-    setLocalError(null)
-    try {
-      await adminUiEditorService.patchExclusiveOfferItem(item.id, { isVisible: nextVisible })
-      await refetch()
-    } catch (err) {
-      setLocalError(err)
-      await refetch()
-    }
-  }
-
-  const handlePriceChange = (item, patch) => {
-    setItems((prev) =>
-      prev.map((row) => (row.id === item.id ? { ...row, ...patch } : row)),
-    )
-  }
-
-  const schedulePriceSave = (item, patch) => {
-    handlePriceChange(item, patch)
-    if (!enabled) return
-    if (priceSaveTimers.current[item.id]) clearTimeout(priceSaveTimers.current[item.id])
-    priceSaveTimers.current[item.id] = setTimeout(async () => {
-      setLocalError(null)
-      try {
-        await adminUiEditorService.patchExclusiveOfferItem(item.id, patch)
-        await refetch()
-      } catch (err) {
-        setLocalError(err)
-        await refetch()
-      }
-    }, 450)
-  }
-
-  const handleRemove = async (item) => {
-    if (!window.confirm(`Remove “${item.title}” from Super Exclusive offers?`)) return
-    if (!enabled) {
-      setItems((prev) => prev.filter((row) => row.id !== item.id))
-      return
-    }
-    setBusy(true)
-    setLocalError(null)
-    try {
-      await adminUiEditorService.deleteExclusiveOfferItem(item.id)
-      await refetch()
-      onMessage?.('Product removed.')
-    } catch (err) {
-      setLocalError(err)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const onDragStart = (index) => setDragIndex(index)
-
-  const onDragOver = (event, index) => {
-    event.preventDefault()
-    if (dragIndex === null || dragIndex === index) return
-    setItems((prev) => {
-      const next = [...prev]
-      const [moved] = next.splice(dragIndex, 1)
-      next.splice(index, 0, moved)
-      const ordered = next.map((row, sortOrder) => ({ ...row, sortOrder }))
-      itemsRef.current = ordered
-      return ordered
-    })
-    setDragIndex(index)
-  }
-
-  const onDragEnd = async () => {
-    setDragIndex(null)
-    if (!enabled) return
-    setLocalError(null)
-    const ordered = itemsRef.current.map((row, sortOrder) => ({ ...row, sortOrder }))
-    setItems(ordered)
-    try {
-      await adminUiEditorService.reorderExclusiveOfferItems(ordered)
-      await refetch()
-      onMessage?.('Serial order updated.')
-    } catch (err) {
-      setLocalError(err)
-      await refetch()
-    }
+  const handleAdd = async (payload) => {
+    await handleAddProducts(payload)
+    setAddOpen(false)
   }
 
   return (
@@ -485,12 +192,12 @@ export default function ExclusiveOffersTab({ onMessage }) {
           </button>
         </div>
 
-        {enabled && isLoading && apiItems.length === 0 ? (
+        {enabled && isLoading && items.length === 0 ? (
           <p className="mb-3 text-[13px] text-[#8a948e]">Loading exclusive offers…</p>
         ) : null}
-        {enabled && (error || localError) ? (
+        {enabled && error ? (
           <p className="mb-3 text-[13px] text-[#c91a24]">
-            {formatApiErrorMessage(localError || error, 'Unable to load exclusive offers.')}{' '}
+            {formatApiErrorMessage(error, 'Unable to load exclusive offers.')}{' '}
             <button type="button" className="underline" onClick={refetch}>
               Retry
             </button>
@@ -527,7 +234,9 @@ export default function ExclusiveOffersTab({ onMessage }) {
                 onDragOver={(event) => onDragOver(event, index)}
                 onDragEnd={onDragEnd}
                 onToggleVisible={handleToggleVisible}
-                onPriceChange={schedulePriceSave}
+                onPriceChange={handlePriceChange}
+                onTitleChange={handleTitleChange}
+                onImageChange={handleImageChange}
                 onRemove={handleRemove}
               />
             ))
@@ -536,8 +245,8 @@ export default function ExclusiveOffersTab({ onMessage }) {
 
         <p className="mt-3 text-[12px] text-[#8a948e]">
           {summary.liveOnCustomerCount ?? items.filter((i) => i.liveOnCustomer).length} live on
-          customer app · {summary.visibleCount ?? items.filter((i) => i.isVisible).length} visible
-          · {items.length} in serial order
+          customer app · {summary.visibleCount ?? items.filter((i) => i.isVisible).length} visible ·{' '}
+          {items.length} in serial order
         </p>
       </section>
 
@@ -553,7 +262,7 @@ export default function ExclusiveOffersTab({ onMessage }) {
         open={addOpen}
         onClose={() => !busy && setAddOpen(false)}
         isSubmitting={busy}
-        onSubmit={handleAddProducts}
+        onSubmit={handleAdd}
       />
     </div>
   )

@@ -16,6 +16,8 @@ import {
   buildAdminChampDetail,
 } from '../mocks/admin.mock'
 
+const MOCK_SLA_TIER = (target, atRisk, critical) => ({ target, atRisk, critical })
+
 const MOCK_SLA_CONFIG = {
   schemaVersion: 2,
   acceptanceCutoffMin: 2,
@@ -25,12 +27,12 @@ const MOCK_SLA_CONFIG = {
   vpiWeights: { accuracy: 20, packing: 5, prepTime: 25, reliability: 50 },
   vendor: {
     hotFoodOnDemand: {
-      acceptanceTimeSec: 120,
-      champCollectionTimeSec: 600,
-      earlyOnlineHoursSec: 3600,
+      acceptanceTimeSec: MOCK_SLA_TIER(180, 300, 480),
+      champCollectionTimeSec: MOCK_SLA_TIER(600, 840, 1200),
+      earlyOnlineHoursSec: MOCK_SLA_TIER(36000, 28800, 21600),
       fullDeliveryWindowStart: '00:00:00',
       fullDeliveryWindowEnd: '23:59:59',
-      prepTimeLimitSec: 1080,
+      prepTimeLimitSec: MOCK_SLA_TIER(900, 1200, 1680),
       customerIssueResponseSec: 7200,
       orderAccuracyPct: 100,
       orderRatingPct: 90,
@@ -45,15 +47,15 @@ const MOCK_SLA_CONFIG = {
   },
   champ: {
     acceptanceTimeByMode: {
-      hotFood: 90,
-      sameDay: 300,
-      nextDay: 600,
-      standard: 900,
-      economy: 1200,
-      food: 90,
-      groceryPharmacy: 180,
-      flowers: 180,
-      electronics: 300,
+      hotFood: MOCK_SLA_TIER(119, 180, 300),
+      sameDay: MOCK_SLA_TIER(300, 480, 720),
+      nextDay: MOCK_SLA_TIER(300, 600, 1200),
+      standard: MOCK_SLA_TIER(300, 480, 900),
+      economy: MOCK_SLA_TIER(300, 480, 900),
+      food: MOCK_SLA_TIER(119, 180, 300),
+      groceryPharmacy: MOCK_SLA_TIER(90, 180, 300),
+      flowers: MOCK_SLA_TIER(90, 180, 300),
+      electronics: MOCK_SLA_TIER(90, 180, 300),
     },
     performance: {
       doubleConfirmationSec: 30,
@@ -73,10 +75,10 @@ const MOCK_SLA_CONFIG = {
   },
   dispatcher: {
     assignmentTimeByMode: {
-      sameDay: 120,
-      nextDay: 300,
-      standard: 600,
-      economy: 900,
+      sameDay: MOCK_SLA_TIER(180, 300, 480),
+      nextDay: MOCK_SLA_TIER(300, 480, 720),
+      standard: MOCK_SLA_TIER(300, 540, 900),
+      economy: MOCK_SLA_TIER(600, 900, 1500),
     },
     incidentAckSecByPriority: { P1: 300, P2: 300, P3: 120, P4: 1800 },
     incidentResolveSecByPriority: { P1: 1800, P2: 1800, P3: 300, P4: 86400 },
@@ -566,7 +568,43 @@ const mockRoutes = {
     },
     summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: true },
   }),
-  'GET /admin/ui-editor/home/exclusive-offers/products': () => adminExclusiveOfferProductsMock,
+  'GET /admin/ui-editor/home/exclusive-offers/products': ({ params }) => {
+    const search = String(params?.search || '').trim().toLowerCase()
+    const vendorId = params?.vendorId ? String(params.vendorId) : ''
+    const storeTypeId = params?.storeTypeId ? String(params.storeTypeId) : ''
+    const availableOnly = params?.availableOnly === true || params?.availableOnly === 'true'
+    const includeSelected = params?.includeSelected === true || params?.includeSelected === 'true'
+    let products = [...adminExclusiveOfferProductsMock.products]
+    if (search) {
+      products = products.filter((product) => {
+        const haystack = `${product.name} ${product.vendor?.name || ''}`.toLowerCase()
+        return haystack.includes(search)
+      })
+    }
+    if (vendorId) {
+      products = products.filter((product) => product.vendor?.id === vendorId)
+    }
+    if (storeTypeId) {
+      const storeTypeVendors = {
+        'st-food': ['vnd-green-kitchen'],
+        'st-electronics': ['vnd-sharaf'],
+        'st-flowers': ['vnd-flowers'],
+      }
+      const allowed = storeTypeVendors[storeTypeId] || []
+      products = products.filter((product) => allowed.includes(product.vendor?.id))
+    }
+    if (availableOnly) {
+      products = products.filter((product) => product.isAvailable !== false)
+    }
+    if (!includeSelected) {
+      products = products.filter((product) => !product.alreadySelected)
+    }
+    return {
+      ...adminExclusiveOfferProductsMock,
+      total: products.length,
+      products,
+    }
+  },
   'POST /admin/ui-editor/home/exclusive-offers/items': ({ body }) => {
     const ids = body?.productIds || body?.items?.map((item) => item.productId) || []
     const newItems = ids
@@ -812,7 +850,7 @@ export const mockClient = {
 
     // Dynamic SLA model detail / update / publish / set-default
     if (!route) {
-      const slaMatch = String(url).match(/^\/admin\/sla-models\/([^/?]+)(?:\/(publish|set-default))?$/)
+      const slaMatch = String(url).match(/^\/admin\/sla-models\/([^/?]+)(?:\/(publish|set-default|reset))?$/)
       if (slaMatch && slaMatch[1] !== 'template') {
         const slaModelId = decodeURIComponent(slaMatch[1])
         const action = slaMatch[2] || null
@@ -892,6 +930,30 @@ export const mockClient = {
               config: structuredClone(MOCK_SLA_CONFIG),
             }
             return presentMockSlaModel({ ...current, isDefault: true })
+          }
+        } else if (action === 'reset' && methodName === 'POST') {
+          route = () => {
+            const current = existing || {
+              id: slaModelId,
+              name: 'Platform default SLA',
+              categoryLabel: 'Food & Beverage',
+              description: '',
+              status: 'DRAFT',
+              isDefault: false,
+              isActive: true,
+              currentVersion: 0,
+              config: structuredClone(MOCK_SLA_CONFIG),
+            }
+            const reset = {
+              ...current,
+              draftConfig: structuredClone(MOCK_SLA_CONFIG),
+              hasUnpublishedChanges: true,
+            }
+            mockSlaStore.models = [
+              reset,
+              ...mockSlaStore.models.filter((item) => item.id !== slaModelId),
+            ]
+            return presentMockSlaModel(reset)
           }
         }
       }

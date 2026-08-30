@@ -123,7 +123,7 @@ Curated **product carousel** on customer home (not banners). Same UX pattern as 
 | --- | --- |
 | Load section + products | `GET /admin/ui-editor/home/exclusive-offers` |
 | Section title / visibility | `PATCH /admin/ui-editor/home/exclusive-offers` |
-| Product picker | `GET /admin/ui-editor/home/exclusive-offers/products?search=` |
+| Product picker | `GET /admin/ui-editor/home/exclusive-offers/products?search=&vendorId=&storeTypeId=&availableOnly=` |
 | Add products | `POST /admin/ui-editor/home/exclusive-offers/items` body `{ "productIds": [] }` |
 | Drag reorder | `PATCH /admin/ui-editor/home/exclusive-offers/items/reorder` |
 | Edit price / visibility | `PATCH /admin/ui-editor/home/exclusive-offers/items/:itemId` |

@@ -35,7 +35,8 @@ function readConfig(model) {
  *   POST /admin/sla-models
  *   PATCH /admin/sla-models/:id
  *   POST /admin/sla-models/:id/publish
- *   POST /admin/sla-models/:id/set-default
+   *   POST /admin/sla-models/:id/set-default
+   *   POST /admin/sla-models/:id/reset
  *
  * Feature flag: `sla-models` (also on when VITE_ADMIN_USE_MOCK_API=false)
  */
@@ -176,6 +177,21 @@ export const adminSlaModelsService = {
 
     const response = await apiClient.post(
       endpoints.admin.slaModels.setDefault(id),
+      {},
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminSlaModelRecord(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async reset(slaModelId, options = {}) {
+    const id = String(slaModelId || '').trim()
+    if (!id) throw new Error('SLA model id is required.')
+
+    const response = await apiClient.post(
+      endpoints.admin.slaModels.reset(id),
       {},
       requestOptions(options),
     )
