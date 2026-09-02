@@ -163,10 +163,11 @@ export function useExclusiveOffersEditor({ onMessage } = {}) {
   )
 
   const handleImageChange = useCallback(
-    (item, imageUrl) => {
-      scheduleItemSave(item, { imageUrl })
+    async (item, imageUrl) => {
+      setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, imageUrl } : row)))
+      await patchItem(item.id, { imageUrl })
     },
-    [scheduleItemSave],
+    [patchItem],
   )
 
   const handleRemove = useCallback(

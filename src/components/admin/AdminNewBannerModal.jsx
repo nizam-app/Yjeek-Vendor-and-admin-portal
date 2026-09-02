@@ -24,6 +24,9 @@ const DEFAULT_TAP_ACTIONS = [
   'Open URL',
   'No action',
 ]
+
+export const CHAMP_TAP_ACTIONS = ['Open Champ screen', 'Open URL', 'No action']
+
 const DEFAULT_TARGETS = ['Green Kitchen', 'All stores', 'Pharmacy near you', 'Custom']
 export const BANNER_PLACEMENTS = [
   'Home top · scroll banner',
@@ -40,15 +43,23 @@ const DEFAULT_AUDIENCES = [
   'Vendors',
 ]
 
+export const CHAMP_AUDIENCES = ['All champs']
+
 const TAP_ACTION_TO_API = {
   'Open store': 'OPEN_STORE',
   'Open category': 'OPEN_CATEGORY',
   'Open offer': 'OPEN_OFFER',
+  'Open Champ screen': 'OPEN_CHAMP_SCREEN',
   'Open URL': 'OPEN_URL',
   'No action': 'NONE',
 }
 
-const TAP_ACTIONS_NEEDING_TARGET = new Set(['Open store', 'Open category', 'Open offer'])
+const TAP_ACTIONS_NEEDING_TARGET = new Set([
+  'Open store',
+  'Open category',
+  'Open offer',
+  'Open Champ screen',
+])
 
 const labelClass = 'block text-[12px] font-semibold leading-[15px] text-[#6B736E]'
 const inputClass =
@@ -127,6 +138,7 @@ function buildBannerForm({
   placement = '',
   placementKey = '',
   placements = BANNER_PLACEMENTS,
+  tapActions = DEFAULT_TAP_ACTIONS,
   initial = null,
 } = {}) {
   const placementLabels = placements.map((item) =>
@@ -138,8 +150,9 @@ function buildBannerForm({
       type: initial.type || 'static',
       title: initial.title || '',
       subtitle: initial.subtitle || '',
+      ctaLabel: initial.ctaLabel || '',
       imageUrl: initial.imageUrl || '',
-      tapAction: initial.tapAction || DEFAULT_TAP_ACTIONS[0],
+      tapAction: initial.tapAction || tapActions[0] || DEFAULT_TAP_ACTIONS[0],
       target: initial.target || '',
       targetId: initial.targetId || '',
       ctaUrl: initial.ctaUrl || '',
@@ -156,8 +169,9 @@ function buildBannerForm({
     type: 'static',
     title: 'Ramadan offers',
     subtitle: 'Up to 30% off',
+    ctaLabel: '',
     imageUrl: '',
-    tapAction: DEFAULT_TAP_ACTIONS[0],
+    tapAction: tapActions[0] || DEFAULT_TAP_ACTIONS[0],
     target: '',
     targetId: '',
     ctaUrl: '',
@@ -196,7 +210,7 @@ export default function AdminNewBannerModal({
   const fileInputRef = useRef(null)
   const localPreviewRef = useRef(null)
   const [form, setForm] = useState(() =>
-    buildBannerForm({ placement, placementKey, placements, initial: initialBanner }),
+    buildBannerForm({ placement, placementKey, placements, tapActions, initial: initialBanner }),
   )
   const [localPreviewUrl, setLocalPreviewUrl] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -215,10 +229,10 @@ export default function AdminNewBannerModal({
       revokeLocalPreview()
       setUploadError(null)
       setIsUploading(false)
-      setForm(buildBannerForm({ placement, placementKey, placements, initial: initialBanner }))
+      setForm(buildBannerForm({ placement, placementKey, placements, tapActions, initial: initialBanner }))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when modal opens / seed changes
-  }, [open, placement, placementKey, placements, initialBanner])
+  }, [open, placement, placementKey, placements, tapActions, initialBanner])
 
   useEffect(() => {
     if (!open) return undefined
@@ -528,7 +542,7 @@ export default function AdminNewBannerModal({
               />
             </label>
             <label className="flex min-w-0 flex-col items-start gap-1.5">
-              <FieldLabel>Subtitle / CTA</FieldLabel>
+              <FieldLabel>Subtitle</FieldLabel>
               <TextInput
                 value={form.subtitle}
                 disabled={busy}
@@ -536,6 +550,15 @@ export default function AdminNewBannerModal({
               />
             </label>
           </div>
+
+          <label className="flex w-full flex-col items-start gap-1.5">
+            <FieldLabel>Button label</FieldLabel>
+            <TextInput
+              value={form.ctaLabel}
+              disabled={busy}
+              onChange={(value) => setField('ctaLabel', value)}
+            />
+          </label>
 
           <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
             <label className="flex min-w-0 flex-col items-start gap-1.5">
@@ -558,7 +581,10 @@ export default function AdminNewBannerModal({
               </label>
             ) : needsTarget ? (
               <label className="flex min-w-0 flex-col items-start gap-1.5">
-                <FieldLabel>Target{targetsLoading ? '…' : ''}</FieldLabel>
+                <FieldLabel>
+                  {form.tapAction === 'Open Champ screen' ? 'Champ screen' : 'Target'}
+                  {targetsLoading ? '…' : ''}
+                </FieldLabel>
                 <SelectField
                   value={form.targetId || form.target}
                   disabled={busy || targetsLoading || targetOptions.length === 0}

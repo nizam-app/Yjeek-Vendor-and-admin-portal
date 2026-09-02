@@ -37,6 +37,8 @@ import { cn } from '../../../components/admin/cn'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import AdminNewBannerModal, {
   BANNER_PLACEMENTS,
+  CHAMP_AUDIENCES,
+  CHAMP_TAP_ACTIONS,
 } from '../../../components/admin/AdminNewBannerModal'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
@@ -275,14 +277,14 @@ const CUSTOMER_SCREENS = [
 
 const CHAMP_SCREENS = [
   {
-    id: 'champ-home',
+    id: 'home',
     name: 'Champ home',
     iconSrc: iconHouse,
     slots: [
       {
         id: 'champ_home_top',
         label: 'Champ home top · scroll',
-        banners: 2,
+        banners: 0,
         type: 'Scroll',
         displayType: 'Scroll',
       },
@@ -296,26 +298,26 @@ const CHAMP_SCREENS = [
     ],
   },
   {
-    id: 'champ-orders',
-    name: 'Active orders',
+    id: 'jobs',
+    name: 'Jobs',
     Icon: Package,
     slots: [
       {
         id: 'champ_orders_banner',
-        label: 'Active orders banner',
-        banners: 1,
+        label: 'Jobs banner',
+        banners: 0,
         type: 'Static',
         displayType: 'Static',
       },
     ],
   },
   {
-    id: 'champ-earnings',
+    id: 'earnings',
     name: 'Earnings',
     Icon: Wallet,
     slots: [
       {
-        id: 'champ_earnings_top',
+        id: 'champ_earnings_banner',
         label: 'Earnings top · scroll',
         banners: 0,
         type: 'Scroll',
@@ -324,34 +326,82 @@ const CHAMP_SCREENS = [
     ],
   },
   {
-    id: 'champ-account',
-    name: 'Account',
-    Icon: UserRound,
-    slots: [
-      {
-        id: 'champ_account_promo',
-        label: 'Account promo',
-        banners: 1,
-        type: 'Static',
-        displayType: 'Static',
-      },
-    ],
-  },
-  {
-    id: 'champ-global',
+    id: 'global',
     name: 'Global',
     Icon: Globe2,
     slots: [
       {
         id: 'champ_app_open_popup',
         label: 'Pop-up ad (on open)',
-        banners: 1,
+        banners: 0,
         type: 'Pop-up',
         displayType: 'Pop-up',
       },
     ],
   },
 ]
+
+const CHAMP_BANNER_SCREEN_CHIPS = [
+  { id: 'home', label: 'Home', iconSrc: iconHouse },
+  { id: 'jobs', label: 'Jobs', Icon: Package },
+  { id: 'earnings', label: 'Earnings', Icon: Wallet },
+  { id: 'global', label: 'Pop-up', Icon: Sparkles },
+]
+
+const CHAMP_BANNER_SLOTS_BY_SCREEN = {
+  home: [
+    {
+      id: 'champ_home_top',
+      label: 'Champ home top · scroll',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Champ home top · scroll',
+    },
+    {
+      id: 'champ_home_mid',
+      label: 'Champ home mid',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Champ home mid',
+    },
+  ],
+  orders: [
+    {
+      id: 'champ_orders_banner',
+      label: 'Jobs banner',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Jobs banner',
+    },
+  ],
+  jobs: [
+    {
+      id: 'champ_orders_banner',
+      label: 'Jobs banner',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Jobs banner',
+    },
+  ],
+  earnings: [
+    {
+      id: 'champ_earnings_banner',
+      label: 'Earnings top · scroll',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Earnings top · scroll',
+    },
+  ],
+  global: [
+    {
+      id: 'champ_app_open_popup',
+      label: 'Pop-up ad (on open)',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Pop-up on app open',
+    },
+  ],
+}
 
 const BANNER_SCREEN_CHIPS = [
   { id: 'home', label: 'Home', Icon: null, iconSrc: iconHouse },
@@ -1137,13 +1187,26 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
   )
 }
 
-function PreviewSlot({ label, placementKey, onAdd, banner }) {
-  const hasBanner = Boolean(banner?.imageUrl || banner?.name)
+function PreviewSlot({ label, placementKey, onAdd, onEdit, banner }) {
+  const hasBanner = Boolean(banner?.imageUrl || banner?.name || banner?.title)
+
+  const handleSlotClick = () => {
+    if (banner?.id && hasBanner) {
+      onEdit?.(banner)
+      return
+    }
+    onAdd?.({ placement: label, placementKey: placementKey || '' })
+  }
+
+  const handleAddAnother = (event) => {
+    event.stopPropagation()
+    onAdd?.({ placement: label, placementKey: placementKey || '' })
+  }
 
   return (
     <button
       type="button"
-      onClick={() => onAdd?.({ placement: label, placementKey: placementKey || '' })}
+      onClick={handleSlotClick}
       className={cn(
         'relative flex w-full flex-col items-center overflow-hidden rounded-[10px] border border-dashed border-[#81c784] text-center hover:bg-[#e8f5e9]',
         hasBanner
@@ -1174,7 +1237,7 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
               banner?.imageUrl ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]' : 'text-[#137333]',
             )}
           >
-            {banner.name}
+            {banner.name || banner.title}
           </span>
           {banner.subtitle ? (
             <span
@@ -1187,8 +1250,17 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
             </span>
           ) : null}
           <span
+            role="button"
+            tabIndex={0}
+            onClick={handleAddAnother}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleAddAnother(event)
+              }
+            }}
             className={cn(
-              'mt-0.5 text-[9px] font-semibold',
+              'mt-0.5 text-[9px] font-semibold underline-offset-2 hover:underline',
               banner?.imageUrl ? 'text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]' : 'text-[#2e7d32]',
             )}
           >
@@ -1205,14 +1277,198 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
   )
 }
 
+function normalizeChampPreviewScreenId(screenId) {
+  const key = String(screenId || 'home').toLowerCase()
+  if (key === 'orders') return 'jobs'
+  return key
+}
+
+function bannerForPreviewSlot(slot, banners = []) {
+  if (slot?.slotBanners?.length) {
+    return slot.slotBanners.find((banner) => banner.imageUrl) || slot.slotBanners[0]
+  }
+  if (!slot?.id) return null
+  const matches = banners.filter(
+    (banner) =>
+      banner.placementKey === slot.id ||
+      normalizePlacementKey(banner.placementKey) === normalizePlacementKey(slot.id),
+  )
+  if (!matches.length) return null
+  return matches.find((banner) => banner.imageUrl) || matches[0]
+}
+
+function ChampPhoneLivePreview({ screenId = 'home', slots, onAdd, onEdit, banners = [] }) {
+  const previewScreenId = normalizeChampPreviewScreenId(screenId)
+  const previewSlots = slots.filter((slot) => slot.showInPreview !== false)
+
+  const bannerForSlot = (slot) => bannerForPreviewSlot(slot, banners)
+
+  const topSlot = previewSlots[0] || null
+  const midSlot = previewSlots[1] || null
+
+  return (
+    <div className="mx-auto w-full max-w-[280px]">
+      <div className="h-[720px] overflow-hidden rounded-[28px] border-[5px] border-[#1a1a1a] bg-white shadow-[0_12px_32px_rgba(20,40,28,.12)]">
+        <div className="flex items-center justify-between bg-[#f7f8f7] px-4 py-2 text-[11px] font-semibold text-[#17231c]">
+          <span>9:41</span>
+          <span className="font-bold tracking-wide">Champ</span>
+          <span className="inline-flex items-center gap-0.5 text-[10px]">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#17231c]/30" />
+            <span className="h-[7px] w-[7px] rounded-full bg-[#17231c]/55" />
+            <span className="h-[7px] w-[10px] rounded-[2px] bg-[#17231c]/80" />
+          </span>
+        </div>
+
+        <div className="space-y-3 bg-[#fafbfa] p-3">
+          {previewScreenId === 'home' ? (
+            <>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] border border-[#e7ebe8] bg-white px-3 py-2 text-[10px] text-[#7c8780]">
+                Scheduled orders · map · status cards
+              </div>
+              <div className="h-[120px] rounded-[12px] bg-[#e8edf0]" />
+              {midSlot ? (
+                <PreviewSlot
+                  label={midSlot.previewLabel || midSlot.label}
+                  placementKey={midSlot.id}
+                  banner={bannerForSlot(midSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] border border-[#e7ebe8] bg-white p-2">
+                <p className="text-[10px] font-bold text-[#17231c]">Today&apos;s summary</p>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                </div>
+              </div>
+              <div className="h-10 rounded-full bg-[#1aa054]" />
+            </>
+          ) : null}
+
+          {previewScreenId === 'jobs' ? (
+            <>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="flex rounded-full bg-[#edf0ed] p-1">
+                <span className="flex-1 rounded-full bg-white py-1.5 text-center text-[10px] font-bold text-[#17231c]">
+                  Instant
+                </span>
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">
+                  Scheduled
+                </span>
+              </div>
+              <div className="rounded-[12px] border border-[#c8e6c9] bg-white p-3">
+                <p className="text-[10px] font-bold text-[#137333]">ON THE WAY</p>
+                <p className="mt-1 text-[11px] font-bold text-[#17231c]">Active delivery card</p>
+                <p className="mt-1 text-[10px] text-[#7c8780]">Live order data (not a banner)</p>
+              </div>
+            </>
+          ) : null}
+
+          {previewScreenId === 'earnings' ? (
+            <>
+              <div className="flex rounded-full bg-[#edf0ed] p-1">
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">Today</span>
+                <span className="flex-1 rounded-full bg-white py-1.5 text-center text-[10px] font-bold text-[#17231c]">
+                  This week
+                </span>
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">Month</span>
+              </div>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] bg-[#1b5e3b] p-3 text-white">
+                <p className="text-[10px] opacity-80">This week · earnings</p>
+                <p className="text-[18px] font-bold">BHD 0.000</p>
+              </div>
+              <div className="rounded-[10px] bg-[#fff8e1] px-2 py-2 text-[9px] text-[#9a6510]">
+                Earnings breakdown (live data)
+              </div>
+            </>
+          ) : null}
+
+          {previewScreenId === 'global' ? (
+            <div className="relative flex h-[560px] items-center justify-center rounded-[12px] bg-[#eef2ef]">
+              <p className="text-[11px] font-medium text-[#7c8780]">App home (dimmed)</p>
+              {topSlot ? (
+                <div className="absolute inset-x-4 top-1/2 -translate-y-1/2">
+                  <PreviewSlot
+                    label={topSlot.previewLabel || topSlot.label}
+                    placementKey={topSlot.id}
+                    banner={bannerForSlot(topSlot)}
+                    onAdd={onAdd}
+                  onEdit={onEdit}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!['home', 'jobs', 'earnings', 'global'].includes(previewScreenId) && previewSlots.length > 0
+            ? previewSlots.map((slot) => (
+                <PreviewSlot
+                  key={slot.id}
+                  label={slot.previewLabel || slot.label}
+                  placementKey={slot.id}
+                  banner={bannerForSlot(slot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ))
+            : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PhoneLivePreview({
+  platform = 'customer',
+  screenId = 'home',
   slots,
   onAdd,
+  onEdit,
   banners = [],
   exclusiveSection,
   exclusiveItems = [],
   onAddExclusive,
 }) {
+  if (platform === 'champ') {
+    return (
+      <ChampPhoneLivePreview
+        screenId={screenId}
+        slots={slots}
+        onAdd={onAdd}
+        onEdit={onEdit}
+        banners={banners}
+      />
+    )
+  }
+
   const previewSlots = slots.filter((slot) => slot.showInPreview !== false && !isExclusiveOffersSlot(slot))
   const visibleExclusive = exclusiveItems.filter((item) => item.isVisible)
   const showExclusive =
@@ -1220,6 +1476,8 @@ function PhoneLivePreview({
   const hiddenExclusiveCount = exclusiveItems.length - visibleExclusive.length
 
   const bannerForSlot = (slot) => {
+    const fromSlot = bannerForPreviewSlot(slot, banners)
+    if (fromSlot) return fromSlot
     if (!slot?.id) return null
     const matches = banners.filter(
       (banner) =>
@@ -1230,7 +1488,6 @@ function PhoneLivePreview({
             String(slot.label).toLowerCase().replace(/[—–-]/g, '·')),
     )
     if (!matches.length) return null
-    // Prefer a banner that has an image so the live preview reflects uploaded creatives.
     return matches.find((banner) => banner.imageUrl) || matches[0]
   }
 
@@ -1254,6 +1511,7 @@ function PhoneLivePreview({
               placementKey={previewSlots[0].id}
               banner={bannerForSlot(previewSlots[0])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
 
@@ -1277,6 +1535,7 @@ function PhoneLivePreview({
               placementKey={previewSlots[1].id}
               banner={bannerForSlot(previewSlots[1])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
 
@@ -1345,8 +1604,104 @@ function PhoneLivePreview({
               placementKey={previewSlots[2].id}
               banner={bannerForSlot(previewSlots[2])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MobilePreviewModal({
+  open,
+  onClose,
+  platform,
+  screenId,
+  screenChips = [],
+  onScreenChange,
+  slots,
+  banners,
+  onAdd,
+  onEdit,
+  exclusiveSection,
+  exclusiveItems,
+  onAddExclusive,
+}) {
+  if (!open) return null
+
+  const appLabel = platform === 'champ' ? 'Champ app' : 'Customer app'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-[rgba(26,28,26,0.5)]"
+        aria-label="Close preview"
+        onClick={onClose}
+      />
+      <div className="relative flex max-h-[95vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_18px_40px_rgba(26,28,26,0.2)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#eceeec] px-4 py-3">
+          <div>
+            <h3 className="text-[15px] font-bold text-[#17231c]">Mobile preview</h3>
+            <p className="text-[12px] text-[#7c8780]">
+              {appLabel} · reflects your current banner changes
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-[#8a948e] hover:bg-[#f7f9f7]"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {screenChips.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-[#eceeec] px-4 py-2.5">
+            {screenChips.map((chip) => {
+              const active = screenId === chip.id
+              const Icon = chip.Icon
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => onScreenChange?.(chip.id)}
+                  className={cn(
+                    'inline-flex h-[30px] items-center gap-1 rounded-full border px-2.5 text-[11px] font-bold transition',
+                    active
+                      ? 'border-[#1aa054] bg-[#e8f7ed] text-[#137333]'
+                      : 'border-[#e4e8e4] bg-white text-[#637068] hover:border-[#cfd6d1]',
+                  )}
+                >
+                  {chip.iconSrc ? (
+                    <img src={chip.iconSrc} alt="" className="h-3 w-3 object-contain" />
+                  ) : Icon ? (
+                    <Icon size={12} strokeWidth={2.2} />
+                  ) : null}
+                  {chip.label}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <div className="overflow-y-auto px-4 py-5">
+          <p className="mb-3 text-center text-[11.5px] text-[#7c8780]">
+            Tap a banner to edit · empty slot to add
+          </p>
+          <PhoneLivePreview
+            platform={platform}
+            screenId={screenId}
+            slots={slots}
+            banners={banners}
+            onAdd={onAdd}
+            onEdit={onEdit}
+            exclusiveSection={exclusiveSection}
+            exclusiveItems={exclusiveItems}
+            onAddExclusive={onAddExclusive}
+          />
         </div>
       </div>
     </div>
@@ -1363,20 +1718,20 @@ function BannersAdsTab({
   bannersRefreshKey = 0,
   exclusiveEditor,
   onAddExclusive,
+  mobilePreviewOpen = false,
+  onMobilePreviewClose,
 }) {
   const [screenId, setScreenId] = useState('home')
   const [menuId, setMenuId] = useState(null)
   const [openSlots, setOpenSlots] = useState({})
   const {
     slots: apiSlots,
-    screens: apiScreens,
     isLoading: placementsLoading,
     error: placementsError,
     refetch: refetchPlacements,
   } = useAdminUiEditorPlacements(appKey, screenId)
   const {
     banners: apiBanners,
-    meta,
     isLoading: bannersLoading,
     error: bannersError,
     refetch: refetchBanners,
@@ -1390,19 +1745,16 @@ function BannersAdsTab({
     }
   }, [bannersRefreshKey, refetchBanners, refetchPlacements])
 
-  const screenChips = useMemo(() => {
-    const fromMeta = meta?.screens || []
-    const source = fromMeta.length > 0 ? fromMeta : apiScreens.length > 0 ? apiScreens : null
-    if (source) {
-      return source.map((screen) => ({
-        id: screen.id,
-        label: screen.label,
-        Icon: screen.id === 'home' ? null : LayoutGrid,
-        iconSrc: screen.id === 'home' ? iconHouse : null,
-      }))
-    }
-    return BANNER_SCREEN_CHIPS
-  }, [apiScreens, meta])
+  useEffect(() => {
+    setScreenId(platform === 'champ' ? 'home' : 'home')
+    setOpenSlots({})
+    setMenuId(null)
+  }, [platform, appKey])
+
+  const screenChips = useMemo(
+    () => (platform === 'champ' ? CHAMP_BANNER_SCREEN_CHIPS : BANNER_SCREEN_CHIPS),
+    [platform],
+  )
 
   useEffect(() => {
     if (!screenChips.some((chip) => chip.id === screenId)) {
@@ -1414,9 +1766,22 @@ function BannersAdsTab({
     onScreenChange?.(screenId)
   }, [screenId, onScreenChange])
 
-  const slots =
-    apiSlots.length > 0 ? apiSlots : BANNER_SLOTS_BY_SCREEN[screenId] || BANNER_SLOTS_BY_SCREEN.home
-  const banners = bannersEnabled ? apiBanners : apiBanners.length > 0 ? apiBanners : ALL_BANNERS
+  const slotFallback =
+    platform === 'champ'
+      ? CHAMP_BANNER_SLOTS_BY_SCREEN[screenId] || CHAMP_BANNER_SLOTS_BY_SCREEN.home
+      : BANNER_SLOTS_BY_SCREEN[screenId] || BANNER_SLOTS_BY_SCREEN.home
+  const slots = apiSlots.length > 0 ? apiSlots : slotFallback
+  const rawBanners = bannersEnabled
+    ? apiBanners
+    : platform === 'champ'
+      ? apiBanners
+      : apiBanners.length > 0
+        ? apiBanners
+        : ALL_BANNERS
+  const banners = useMemo(() => {
+    const app = String(appKey || 'CUSTOMER').toUpperCase()
+    return rawBanners.filter((banner) => !banner.appTarget || banner.appTarget === app)
+  }, [rawBanners, appKey])
   const exclusiveSection = exclusiveEditor?.section
   const exclusiveItems = exclusiveEditor?.items ?? []
 
@@ -1485,6 +1850,11 @@ function BannersAdsTab({
     setOpenSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }))
   }
 
+  const handlePreviewEdit = (banner) => {
+    onMobilePreviewClose?.()
+    onEdit?.(banner)
+  }
+
   return (
     <div className="space-y-3">
       {(placementsError || bannersError) && (
@@ -1511,13 +1881,18 @@ function BannersAdsTab({
           <div>
             <h3 className="text-[15px] font-bold text-[#17231c]">Live preview — point where to place</h3>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Tap a slot to add banners, or manage Super Exclusive offers inline on the right
+              {platform === 'champ'
+                ? 'Champ app preview — tap a slot to add or edit banners for that screen'
+                : 'Tap a slot to add banners, or manage Super Exclusive offers inline on the right'}
             </p>
             <div className="mt-4 flex items-center justify-center">
               <PhoneLivePreview
+                platform={platform}
+                screenId={screenId}
                 slots={slotsWithBanners}
                 banners={banners}
                 onAdd={onAdd}
+                onEdit={handlePreviewEdit}
                 exclusiveSection={exclusiveSection}
                 exclusiveItems={exclusiveItems}
                 onAddExclusive={onAddExclusive}
@@ -1719,8 +2094,9 @@ function BannersAdsTab({
             <div className="mt-3 flex items-start gap-2 rounded-[10px] border border-[#f3e0a8] bg-[#fff8e1] px-3 py-2.5 text-[12px] text-[#9a6510]">
               <Lightbulb size={14} className="mt-0.5 shrink-0" />
               <p>
-                Switch screens above (Store page / Category / Pop-up / Champ) to place banners there too.
-                {platform === 'champ' ? ' Champ slots shown when Champ app is selected.' : null}
+                {platform === 'champ'
+                  ? 'Switch Champ screens above (Home / Orders / Earnings / Pop-up) to manage banners per screen. All content comes from the API after publish.'
+                  : 'Switch screens above (Store page / Category / Pop-up) to place banners there too.'}
               </p>
             </div>
           </div>
@@ -1853,6 +2229,22 @@ function BannersAdsTab({
           </table>
         </div>
       </section>
+
+      <MobilePreviewModal
+        open={mobilePreviewOpen}
+        onClose={onMobilePreviewClose}
+        platform={platform}
+        screenId={screenId}
+        screenChips={screenChips}
+        onScreenChange={setScreenId}
+        slots={slotsWithBanners}
+        banners={banners}
+        onAdd={onAdd}
+        onEdit={handlePreviewEdit}
+        exclusiveSection={exclusiveSection}
+        exclusiveItems={exclusiveItems}
+        onAddExclusive={onAddExclusive}
+      />
     </div>
   )
 }
@@ -2827,6 +3219,7 @@ export default function AdminUiEditorPage() {
     initialBanner: null,
   })
   const [bannerScreenId, setBannerScreenId] = useState('home')
+  const [bannersMobilePreviewOpen, setBannersMobilePreviewOpen] = useState(false)
   const [bannersRefreshKey, setBannersRefreshKey] = useState(0)
   const [bannerTargets, setBannerTargets] = useState([])
   const [bannerTargetsLoading, setBannerTargetsLoading] = useState(false)
@@ -2846,6 +3239,20 @@ export default function AdminUiEditorPage() {
   const { apps, isLoading: appsLoading, error: appsError, refetch: refetchApps } =
     useAdminUiEditorApps()
   const appKey = platform === 'champ' ? 'CHAMP' : 'CUSTOMER'
+
+  const visibleTabs = useMemo(
+    () =>
+      platform === 'champ'
+        ? TABS.filter((item) => item.id === 'screen-map' || item.id === 'banners')
+        : TABS,
+    [platform],
+  )
+
+  useEffect(() => {
+    if (platform === 'champ' && (tab === 'categories' || tab === 'exclusive-offers')) {
+      setTab('banners')
+    }
+  }, [platform, tab])
   const {
     screens: apiScreens,
     apps: screenMapApps,
@@ -2943,7 +3350,9 @@ export default function AdminUiEditorPage() {
   const loadBannerTargets = async (tapAction = 'OPEN_STORE') => {
     setBannerTargetsLoading(true)
     try {
-      const result = await adminUiEditorService.getBannerTargets(tapAction)
+      const result = await adminUiEditorService.getBannerTargets(tapAction, {
+        params: { app: appKey },
+      })
       setBannerTargets(result?.data?.targets || [])
     } catch {
       setBannerTargets([])
@@ -2995,6 +3404,7 @@ export default function AdminUiEditorPage() {
               : 'static',
         title: banner.name || '',
         subtitle: banner.subtitle || '',
+        ctaLabel: banner.ctaLabel || banner.raw?.ctaLabel || '',
         imageUrl: banner.imageUrl || '',
         tapAction: (() => {
           const raw = String(banner.tapAction || banner.raw?.tapAction || '').trim()
@@ -3002,11 +3412,12 @@ export default function AdminUiEditorPage() {
             OPEN_STORE: 'Open store',
             OPEN_CATEGORY: 'Open category',
             OPEN_OFFER: 'Open offer',
+            OPEN_CHAMP_SCREEN: 'Open Champ screen',
             OPEN_URL: 'Open URL',
             NONE: 'No action',
             NO_ACTION: 'No action',
           }
-          return map[raw.toUpperCase()] || raw || 'Open store'
+          return map[raw.toUpperCase()] || raw || (platform === 'champ' ? 'Open URL' : 'Open store')
         })(),
         target: banner.target || '',
         targetId: banner.targetId || '',
@@ -3020,7 +3431,7 @@ export default function AdminUiEditorPage() {
       },
     })
     loadBannerTargets(
-      String(banner.tapActionKey || banner.raw?.tapAction || 'OPEN_STORE').toUpperCase(),
+      String(banner.tapActionKey || banner.raw?.tapAction || (platform === 'champ' ? 'OPEN_URL' : 'OPEN_STORE')).toUpperCase(),
     )
     try {
       const result = await adminUiEditorService.getBanner(banner.id)
@@ -3222,15 +3633,23 @@ export default function AdminUiEditorPage() {
                 ? 'Customer home category grid — shared across the customer app'
                 : tab === 'exclusive-offers'
                   ? 'Curated product carousel on customer home — prices & visibility'
-                  : 'Banners, ads, categories & screens for the customer / champ app'}
+                  : platform === 'champ'
+                    ? 'Banners & screens for the Champ driver app'
+                    : 'Banners, ads, categories & screens for the customer app'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <PreviewButton
-            loading={previewState.loading || previewLoading}
-            onClick={() => handlePreview(headerPreviewScreen)}
+            loading={tab !== 'banners' && (previewState.loading || previewLoading)}
+            onClick={() => {
+              if (tab === 'banners') {
+                setBannersMobilePreviewOpen(true)
+                return
+              }
+              handlePreview(headerPreviewScreen)
+            }}
           />
           <button
             type="button"
@@ -3268,7 +3687,7 @@ export default function AdminUiEditorPage() {
       {actionMessage ? <p className="mb-3 text-[13px] text-[#147940]">{actionMessage}</p> : null}
 
       <div className="mb-3 flex items-center gap-1 rounded-[10px] bg-[#e8f0ea] p-[3px]">
-        {TABS.map((item) => (
+        {visibleTabs.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -3338,6 +3757,8 @@ export default function AdminUiEditorPage() {
           bannersRefreshKey={bannersRefreshKey}
           exclusiveEditor={exclusiveEditor}
           onAddExclusive={() => setExclusiveModalOpen(true)}
+          mobilePreviewOpen={bannersMobilePreviewOpen}
+          onMobilePreviewClose={() => setBannersMobilePreviewOpen(false)}
         />
       ) : null}
 
@@ -3365,6 +3786,8 @@ export default function AdminUiEditorPage() {
         initialBanner={bannerModal.initialBanner}
         targets={bannerTargets}
         targetsLoading={bannerTargetsLoading}
+        tapActions={platform === 'champ' ? CHAMP_TAP_ACTIONS : undefined}
+        audiences={platform === 'champ' ? CHAMP_AUDIENCES : undefined}
         onTapActionChange={loadBannerTargets}
         onClose={closeBannerModal}
         onSubmit={handleBannerSubmit}

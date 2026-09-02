@@ -135,6 +135,8 @@ export const endpoints = {
        * @param {string} conversationId
        */
       messages: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/messages`,
+      status: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/status`,
+      orderConversations: (orderId) => `/admin/chats/orders/${encodeURIComponent(orderId)}/conversations`,
     },
     vendors: {
       /**

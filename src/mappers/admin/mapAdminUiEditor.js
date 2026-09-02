@@ -653,11 +653,13 @@ const TAP_ACTION_UI_TO_API = {
   'Open store': 'OPEN_STORE',
   'Open category': 'OPEN_CATEGORY',
   'Open offer': 'OPEN_OFFER',
+  'Open Champ screen': 'OPEN_CHAMP_SCREEN',
   'Open URL': 'OPEN_URL',
   'No action': 'NONE',
   OPEN_STORE: 'OPEN_STORE',
   OPEN_CATEGORY: 'OPEN_CATEGORY',
   OPEN_OFFER: 'OPEN_OFFER',
+  OPEN_CHAMP_SCREEN: 'OPEN_CHAMP_SCREEN',
   OPEN_URL: 'OPEN_URL',
   NONE: 'NONE',
   NO_ACTION: 'NONE',
@@ -667,6 +669,7 @@ const TAP_ACTION_API_TO_UI = {
   OPEN_STORE: 'Open store',
   OPEN_CATEGORY: 'Open category',
   OPEN_OFFER: 'Open offer',
+  OPEN_CHAMP_SCREEN: 'Open Champ screen',
   OPEN_URL: 'Open URL',
   NONE: 'No action',
   NO_ACTION: 'No action',
@@ -674,6 +677,7 @@ const TAP_ACTION_API_TO_UI = {
 
 const AUDIENCE_UI_TO_API = {
   'All customers': 'ALL',
+  'All champs': 'ALL',
   'New customers': 'NEW_CUSTOMERS',
   'Returning customers': 'INACTIVE',
   'Inactive customers': 'INACTIVE',
@@ -781,6 +785,7 @@ export function mapAdminUiEditorBannerDetail(data) {
     type: mapBannerTypeToUiId(src.bannerType || src.type),
     title: asString(src.title || src.name || ''),
     subtitle: asString(src.subtitle || src.cta || ''),
+    ctaLabel: asString(src.ctaLabel || ''),
     // Do not use src.url here — that can be a CTA link, not the banner image.
     imageUrl: pickMediaUrl(
       src.imageUrl,
@@ -828,6 +833,7 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   const body = {
     title: asString(src.title).trim(),
     subtitle: asString(src.subtitle).trim(),
+    ctaLabel: asString(src.ctaLabel).trim() || null,
     bannerType: BANNER_TYPE_UI_TO_API[src.type] || 'STATIC',
     placementKey,
     appTarget: String(appTarget || 'CUSTOMER').toUpperCase(),
@@ -861,6 +867,10 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   } else if (tapAction === 'OPEN_STORE') {
     body.targetId = targetId || null
     body.vendorId = targetId || null
+    body.ctaUrl = null
+  } else if (tapAction === 'OPEN_CHAMP_SCREEN') {
+    body.targetId = targetId || null
+    body.vendorId = null
     body.ctaUrl = null
   } else if (tapAction === 'OPEN_CATEGORY' || tapAction === 'OPEN_OFFER') {
     body.targetId = targetId || null

@@ -5,6 +5,7 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
 import { ADMIN_BOARD_FULL_LIMIT } from '../../../lib/adminBoardLimits'
 import {
   ADMIN_OPS_BOARD_FILTERS,
@@ -29,7 +30,7 @@ import { cn } from '../cn'
 import { AdminVendorFilterButton } from '../AdminVendorFilterButton'
 import { AdminLiveOrderFilterBar } from './AdminLiveOrderFilterBar'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
-import { AdminChatPanel } from './AdminChatPanel'
+import { AdminActiveChatPanels } from './AdminActiveChatPanels'
 import { AdminOpenChats } from './AdminOpenChats'
 import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import { OpsIncidentsSidebar } from './OpsIncidentsSidebar'
@@ -108,6 +109,7 @@ function ModeBoardFullView({
           onClear={onQueryClear}
           orders={chatOrders}
           showTypes={false}
+          showIncidentPrioritySort={column.id === 'incident'}
         />
       </div>
 
@@ -189,7 +191,7 @@ export function AdminIncidentBoard({
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('All orders')
-  const [activeChat, setActiveChat] = useState(null)
+  const [activeChats, setActiveChats] = useState([])
   const [fullView, setFullView] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [incidentOrder, setIncidentOrder] = useState(null)
@@ -224,7 +226,7 @@ export function AdminIncidentBoard({
     setSelectedOrder(null)
     setIncidentOrder(null)
     setSelectedIncident(null)
-    setActiveChat(null)
+    setActiveChats([])
     setFilter('All orders')
   }, [boardTitle])
 
@@ -300,11 +302,23 @@ export function AdminIncidentBoard({
     refetchChats()
   }
 
+  function openChatPanel(chat) {
+    if (!chat?.conversationId) return
+    setActiveChats((prev) => {
+      const without = prev.filter((item) => item.conversationId !== chat.conversationId)
+      return [...without, chat].slice(-2)
+    })
+  }
+
+  function closeChatPanel(conversationId) {
+    setActiveChats((prev) => prev.filter((item) => item.conversationId !== conversationId))
+  }
+
   function openOrderChat(order, preferredRole) {
-    const conversationId = order?.conversationId
+    const role = preferredRole || order.contactType || 'Customer'
+    const conversationId = resolveOrderConversationId(order, role)
     if (!conversationId) return
 
-    const role = preferredRole || order.contactType || 'Customer'
     const name =
       role === 'Champ'
         ? order.rider?.name || order.champ?.name || 'Champ'
@@ -312,13 +326,14 @@ export function AdminIncidentBoard({
 
     const matchingChat = chats.find((chat) => chat.conversationId === conversationId)
 
-    setActiveChat({
+    openChatPanel({
       ...(matchingChat || {}),
       id: conversationId,
       conversationId,
       orderId: order.orderId || matchingChat?.orderId || null,
       orderNumber: order.id || matchingChat?.orderNumber || null,
       role,
+      channel: role === 'Champ' ? 'driver' : 'customer',
       name: matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
       initials: initialsFromPeerName(
         matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
@@ -345,14 +360,11 @@ export function AdminIncidentBoard({
           }}
         />
       ) : null}
-      {activeChat ? (
-        <AdminChatPanel
-          key={`${activeChat.id}-${activeChat.orderId || ''}`}
-          chat={activeChat}
-          onClose={() => setActiveChat(null)}
-          onMarkedRead={handleChatMarkedRead}
-        />
-      ) : null}
+      <AdminActiveChatPanels
+        chats={activeChats}
+        onClose={closeChatPanel}
+        onMarkedRead={handleChatMarkedRead}
+      />
     </>
   )
 
@@ -369,7 +381,7 @@ export function AdminIncidentBoard({
           onQueryChange={patchBoardQuery}
           onQueryClear={clearBoardQuery}
           onBack={() => setFullView(null)}
-          onChatClick={setActiveChat}
+          onChatClick={openChatPanel}
           onIncidentClick={setIncidentOrder}
           onContactClick={openOrderChat}
           onOrderClick={setSelectedOrder}
@@ -499,7 +511,7 @@ export function AdminIncidentBoard({
         chats={visibleChats}
         activeCount={visibleChatsActive}
         unreadCount={visibleChatsUnread}
-        onChatClick={setActiveChat}
+        onChatClick={openChatPanel}
         groupByRole={isOpsChatFilter(filter)}
       />
       {modals}

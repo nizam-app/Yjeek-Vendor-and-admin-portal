@@ -58,7 +58,9 @@ function ExclusiveOfferImage({
     try {
       const result = await adminUploadService.uploadImage(file, { feature: 'ui-editor' })
       const url = result?.data?.url
-      if (url) onImageChange(item, url)
+      if (url) await onImageChange(item, url)
+    } catch {
+      // Upload or persist failed — keep the previous thumbnail.
     } finally {
       setUploading(false)
     }

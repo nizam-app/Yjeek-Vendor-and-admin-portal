@@ -13,7 +13,7 @@ import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { Button } from '../../../components/admin/Button'
 import { cn } from '../../../components/admin/cn'
-import { AdminChatPanel } from '../../../components/admin/operations/AdminChatPanel'
+import { AdminActiveChatPanels } from '../../../components/admin/operations/AdminActiveChatPanels'
 import { AdminOpenChats } from '../../../components/admin/operations/AdminOpenChats'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
@@ -27,6 +27,7 @@ import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal
 import { adminOrderService } from '../../../services/admin/orderService'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
 import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
 import { AdminOpsOrderCard } from '../../../components/admin/operations/AdminOpsOrderCard'
 import { AdminLiveOrderFilterBar } from '../../../components/admin/operations/AdminLiveOrderFilterBar'
@@ -743,7 +744,7 @@ export default function AdminLiveOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [incidentOrder, setIncidentOrder] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
-  const [activeChat, setActiveChat] = useState(null)
+  const [activeChats, setActiveChats] = useState([])
   const boardQuery = useMemo(() => parseLiveOrderQuery(searchParams), [searchParams])
 
   function patchBoardQuery(nextQuery) {
@@ -843,26 +844,38 @@ export default function AdminLiveOrdersPage() {
     if (column) setFullView(column)
   }, [searchParams, data?.columns])
 
+  function openChatPanel(chat) {
+    if (!chat?.conversationId) return
+    setActiveChats((prev) => {
+      const without = prev.filter((item) => item.conversationId !== chat.conversationId)
+      return [...without, chat].slice(-2)
+    })
+  }
+
+  function closeChatPanel(conversationId) {
+    setActiveChats((prev) => prev.filter((item) => item.conversationId !== conversationId))
+  }
+
   const openOrderChat = (order, preferredRole) => {
-    const conversationId = order?.conversationId
+    const role = preferredRole || order.contactType || 'Customer'
+    const conversationId = resolveOrderConversationId(order, role)
     if (!conversationId) return
 
-    const role = preferredRole || order.contactType || 'Customer'
     const name =
       role === 'Champ'
         ? order.rider?.name || 'Champ'
         : 'Customer'
 
-    // Prefer this order's conversation — never open a random open-chats strip item.
     const matchingChat = chats.find((chat) => chat.conversationId === conversationId)
 
-    setActiveChat({
+    openChatPanel({
       ...(matchingChat || {}),
       id: conversationId,
       conversationId,
       orderId: order.orderId || matchingChat?.orderId || null,
       orderNumber: order.id || matchingChat?.orderNumber || null,
       role,
+      channel: role === 'Champ' ? 'driver' : 'customer',
       name: matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
       initials: initialsFromPeerName(
         matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
@@ -890,7 +903,7 @@ export default function AdminLiveOrdersPage() {
           onIncidentClick={setIncidentOrder}
           onContactClick={openOrderChat}
           onOrderClick={setSelectedOrder}
-          onChatClick={setActiveChat}
+          onChatClick={openChatPanel}
         />
         {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
         {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
@@ -904,14 +917,11 @@ export default function AdminLiveOrdersPage() {
             }}
           />
         ) : null}
-        {activeChat ? (
-          <AdminChatPanel
-            key={`${activeChat.id}-${activeChat.orderId || ''}`}
-            chat={activeChat}
-            onClose={() => setActiveChat(null)}
-            onMarkedRead={handleChatMarkedRead}
-          />
-        ) : null}
+        <AdminActiveChatPanels
+          chats={activeChats}
+          onClose={closeChatPanel}
+          onMarkedRead={handleChatMarkedRead}
+        />
       </>
     )
   }
@@ -1044,7 +1054,7 @@ export default function AdminLiveOrdersPage() {
         unreadCount={isOpsChatFilter(filter)
           ? visibleChats.reduce((sum, chat) => sum + (Number(chat.unreadCount) || 0), 0)
           : chatsUnread}
-        onChatClick={setActiveChat}
+        onChatClick={openChatPanel}
         groupByRole={isOpsChatFilter(filter)}
       />
       {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
@@ -1059,14 +1069,11 @@ export default function AdminLiveOrdersPage() {
           }}
         />
       ) : null}
-      {activeChat ? (
-        <AdminChatPanel
-          key={`${activeChat.id}-${activeChat.orderId || ''}`}
-          chat={activeChat}
-          onClose={() => setActiveChat(null)}
-          onMarkedRead={handleChatMarkedRead}
-        />
-      ) : null}
+      <AdminActiveChatPanels
+        chats={activeChats}
+        onClose={closeChatPanel}
+        onMarkedRead={handleChatMarkedRead}
+      />
     </div>
   )
 }

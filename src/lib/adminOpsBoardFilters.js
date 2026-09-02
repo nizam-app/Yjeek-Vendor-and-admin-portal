@@ -56,11 +56,15 @@ export function orderMatchesOpsFilter(order, filter) {
   const key = normalizeOpsChatFilter(filter)
   if (key === 'all_orders') return true
   const types = orderContactTypes(order)
-  const hasChat = Boolean(order?.conversationId) || types.length > 0
+  const hasChat =
+    Boolean(order?.customerConversationId) ||
+    Boolean(order?.driverConversationId) ||
+    Boolean(order?.conversationId) ||
+    types.length > 0
 
   if (key === 'all_chats') return hasChat
-  if (key === 'champ') return types.includes('Champ')
-  if (key === 'customer') return types.includes('Customer')
+  if (key === 'champ') return types.includes('Champ') || Boolean(order?.driverConversationId)
+  if (key === 'customer') return types.includes('Customer') || Boolean(order?.customerConversationId)
   return true
 }
 
@@ -161,8 +165,12 @@ export function buildOpsBoardChats(chats, orders, filter) {
 
   const orderByConversation = new Map()
   for (const order of orderList) {
-    const id = order?.conversationId ? String(order.conversationId) : ''
-    if (id) orderByConversation.set(id, order)
+    const customerId = order?.customerConversationId ? String(order.customerConversationId) : ''
+    const driverId = order?.driverConversationId ? String(order.driverConversationId) : ''
+    const legacyId = order?.conversationId ? String(order.conversationId) : ''
+    if (customerId) orderByConversation.set(customerId, order)
+    if (driverId) orderByConversation.set(driverId, order)
+    if (legacyId) orderByConversation.set(legacyId, order)
   }
 
   const chatByConversation = new Map()

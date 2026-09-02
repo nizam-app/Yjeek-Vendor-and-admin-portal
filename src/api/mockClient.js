@@ -136,6 +136,90 @@ function findMockSlaModel(id) {
   return mockSlaStore.models.find((item) => item.id === id) || null
 }
 
+const CHAMP_UI_EDITOR_SCREENS = [
+  {
+    key: 'home',
+    label: 'Champ Home',
+    shortLabel: 'Home',
+    slotCount: 2,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_home_top',
+        label: 'Champ home top',
+        displayType: 'Scroll',
+        bannerType: 'SCROLL',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+      {
+        key: 'champ_home_mid',
+        label: 'Champ home mid',
+        displayType: 'Static',
+        bannerType: 'STATIC',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'jobs',
+    label: 'Jobs',
+    shortLabel: 'Jobs',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_orders_banner',
+        label: 'Jobs banner',
+        displayType: 'Static',
+        bannerType: 'STATIC',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'earnings',
+    label: 'Earnings',
+    shortLabel: 'Earn',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_earnings_banner',
+        label: 'Earnings banner',
+        displayType: 'Scroll',
+        bannerType: 'SCROLL',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'global',
+    label: 'Global',
+    shortLabel: 'Pop-up',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_app_open_popup',
+        label: 'Pop-up ad (on open)',
+        displayType: 'Pop-up',
+        bannerType: 'POPUP',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+]
+
 const mockRoutes = {
   'GET /admin/dashboard': () => adminDashboardMock,
   'GET /admin/live-orders': () => adminLiveOrdersMock,
@@ -251,12 +335,18 @@ const mockRoutes = {
       { key: 'CHAMP', label: 'Champ app' },
     ],
   }),
-  'GET /admin/ui-editor/screen-map': ({ params }) => ({
-    app: params?.app || 'CUSTOMER',
-    apps: [
+  'GET /admin/ui-editor/screen-map': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    const apps = [
       { key: 'CUSTOMER', label: 'Customer app' },
       { key: 'CHAMP', label: 'Champ app' },
-    ],
+    ]
+    if (app === 'CHAMP') {
+      return { app: 'CHAMP', apps, screens: CHAMP_UI_EDITOR_SCREENS }
+    }
+    return {
+    app: params?.app || 'CUSTOMER',
+    apps,
     screens: [
       {
         key: 'home',
@@ -357,8 +447,28 @@ const mockRoutes = {
         ],
       },
     ],
-  }),
-  'GET /admin/ui-editor/placements': ({ params }) => ({
+    }
+  },
+  'GET /admin/ui-editor/placements': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    const screen = params?.screen || 'home'
+    if (app === 'CHAMP') {
+      const screenDef = CHAMP_UI_EDITOR_SCREENS.find((item) => item.key === screen) || CHAMP_UI_EDITOR_SCREENS[0]
+      return {
+        app: 'CHAMP',
+        screen: screenDef.key,
+        screens: CHAMP_UI_EDITOR_SCREENS.map((item) => ({
+          key: item.key,
+          label: item.shortLabel || item.label,
+        })),
+        placements: screenDef.slots.map((slot) => ({
+          ...slot,
+          screenKey: screenDef.key,
+          screenLabel: screenDef.label,
+        })),
+      }
+    }
+    return {
     app: params?.app || 'CUSTOMER',
     screen: params?.screen || 'home',
     screens: [
@@ -373,8 +483,14 @@ const mockRoutes = {
       { key: 'home_below', label: 'Below a section', activeCount: 0, type: 'STATIC' },
       { key: 'app_open_popup', label: 'Pop-up ad (on open)', activeCount: 1, type: 'POPUP' },
     ],
-  }),
-  'GET /admin/ui-editor/banners': () => ({
+    }
+  },
+  'GET /admin/ui-editor/banners': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    if (app === 'CHAMP') {
+      return { count: 0, banners: [] }
+    }
+    return {
     count: 2,
     banners: [
       {
@@ -414,8 +530,44 @@ const mockRoutes = {
         isActive: true,
       },
     ],
-  }),
-  'GET /admin/ui-editor/banners/meta': ({ params }) => ({
+    }
+  },
+  'GET /admin/ui-editor/banners/meta': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    if (app === 'CHAMP') {
+      return {
+        app: 'CHAMP',
+        screens: CHAMP_UI_EDITOR_SCREENS.map((item) => ({
+          key: item.key,
+          label: item.shortLabel || item.label,
+        })),
+        placements: CHAMP_UI_EDITOR_SCREENS.flatMap((screen) =>
+          screen.slots.map((slot) => ({
+            key: slot.key,
+            label: slot.label,
+            type: slot.bannerType,
+          })),
+        ),
+        bannerTypes: [
+          { key: 'SCROLL', label: 'Scroll' },
+          { key: 'STATIC', label: 'Static' },
+          { key: 'POPUP', label: 'Pop-up' },
+        ],
+        tapActions: [
+          { value: 'OPEN_CHAMP_SCREEN', label: 'Open Champ screen' },
+          { value: 'OPEN_URL', label: 'Open URL' },
+          { value: 'NONE', label: 'None' },
+        ],
+        audiences: [{ value: 'ALL', label: 'All champs' }],
+        statuses: [
+          { key: 'ACTIVE', label: 'Active' },
+          { key: 'SCHEDULED', label: 'Scheduled' },
+          { key: 'EXPIRED', label: 'Expired' },
+          { key: 'INACTIVE', label: 'Inactive' },
+        ],
+      }
+    }
+    return {
     app: params?.app || 'CUSTOMER',
     screens: [
       { key: 'home', label: 'Home' },
@@ -441,7 +593,8 @@ const mockRoutes = {
       { key: 'SCHEDULED', label: 'Scheduled' },
       { key: 'DRAFT', label: 'Draft' },
     ],
-  }),
+    }
+  },
   'GET /admin/ui-editor/banners/targets': ({ params }) => {
     const tapAction = String(params?.tapAction || 'OPEN_STORE').toUpperCase()
     if (tapAction === 'OPEN_CATEGORY') {
@@ -462,6 +615,17 @@ const mockRoutes = {
         targets: [
           { id: 'offer-ramadan', name: 'Ramadan deals' },
           { id: 'offer-free-delivery', name: 'Free delivery' },
+        ],
+      }
+    }
+    if (tapAction === 'OPEN_CHAMP_SCREEN') {
+      return {
+        tapAction,
+        targets: [
+          { id: 'home', label: 'Home' },
+          { id: 'orders', label: 'Active orders' },
+          { id: 'earnings', label: 'Earnings' },
+          { id: 'incentives', label: 'Incentives & rewards' },
         ],
       }
     }

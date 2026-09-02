@@ -1,6 +1,8 @@
 import { ApiError } from '../../api/errors'
 
-function mapPeerRole(peerRole) {
+function mapPeerRole(peerRole, channel) {
+  if (channel === 'customer') return 'Customer'
+  if (channel === 'driver') return 'Champ'
   switch (String(peerRole || '').toUpperCase()) {
     case 'CUSTOMER':
       return 'Customer'
@@ -37,13 +39,16 @@ export function mapAdminChatItem(item) {
   if (!conversationId) return null
 
   const peerName = item.peerName ? String(item.peerName) : '—'
-  const role = mapPeerRole(item.peerRole)
+  const role = mapPeerRole(item.peerRole, item.channel)
 
   return {
     id: String(conversationId),
     conversationId: String(conversationId),
     orderId: item.orderId ?? null,
     orderNumber: item.orderNumber ? String(item.orderNumber) : null,
+    channel: item.channel ? String(item.channel) : null,
+    channelLabel: item.channelLabel ? String(item.channelLabel) : null,
+    status: item.status ? String(item.status) : null,
     name: peerName,
     role,
     peerRole: item.peerRole ? String(item.peerRole) : null,
