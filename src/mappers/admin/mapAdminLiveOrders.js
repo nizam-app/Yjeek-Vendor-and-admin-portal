@@ -57,7 +57,10 @@ export function mapAdminLiveOrderItem(item) {
     slaBreached: Boolean(item.slaBreached),
     hasIncident: Boolean(item.hasIncident),
     incidentCount: Number(item.incidentCount) || 0,
-    conversationId: item.conversationId ?? null,
+    incidentPriority: item.incidentPriority ?? null,
+    conversationId: item.conversationId ?? item.customerConversationId ?? item.driverConversationId ?? null,
+    customerConversationId: item.customerConversationId ?? null,
+    driverConversationId: item.driverConversationId ?? null,
     tags,
     contactTypes,
     // Badge only when API tags say Champ/Customer (peer messaged) — never from champ assigned alone.

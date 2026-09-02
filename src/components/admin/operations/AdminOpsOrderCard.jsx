@@ -1,6 +1,7 @@
 import motoBike from '../../../assets/moto_bike.png'
 import { Clock3 } from 'lucide-react'
 import { cn } from '../cn'
+import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
 
 /**
  * Shared Live-Orders-style card for Live / Pickup / Dine-in / Services boards.
@@ -141,18 +142,20 @@ export function AdminOpsOrderCard({
             }}
             className="rounded-[9px] bg-[#fdebec] px-2 py-1 text-[9px] font-medium text-[#DB2626] transition hover:bg-[#f9d9da] focus:outline-none focus:ring-2 focus:ring-danger/25"
           >
-            Incident
+            {order.incidentPriority ? `Incident · ${order.incidentPriority}` : 'Incident'}
           </button>
         ) : null}
-        {contactTypes.map((contactType) => (
+        {contactTypes.map((contactType) => {
+          const threadId = resolveOrderConversationId(order, contactType)
+          return (
           <button
             key={contactType}
             type="button"
-            disabled={!order.conversationId}
-            title={order.conversationId ? `Open ${contactType} chat` : 'No conversation yet'}
+            disabled={!threadId}
+            title={threadId ? `Open ${contactType} support chat` : 'No conversation yet'}
             onClick={(event) => {
               event.stopPropagation()
-              if (!order.conversationId) return
+              if (!threadId) return
               onContactClick?.(order, contactType)
             }}
             className={cn(
@@ -162,7 +165,8 @@ export function AdminOpsOrderCard({
           >
             💬 {contactType}
           </button>
-        ))}
+          )
+        })}
       </div>
 
       <p className="mt-1 flex min-w-0 items-center gap-1 text-[9px] font-medium text-[#2f3933]">

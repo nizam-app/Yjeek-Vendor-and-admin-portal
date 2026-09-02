@@ -2,6 +2,7 @@ import { Search, X } from 'lucide-react'
 import {
   LIVE_ORDER_SORTS,
   LIVE_ORDER_TYPES,
+  LIVE_INCIDENT_PRIORITY_SORTS,
   champsFromOrders,
   liveOrderFilterChips,
   liveOrderQueryIsActive,
@@ -22,12 +23,17 @@ export function AdminLiveOrderFilterBar({
   orders = [],
   extraVendors = [],
   showTypes = true,
+  showIncidentPrioritySort = false,
 }) {
   const champs = champsFromOrders(orders)
   const vendors = [...vendorsFromOrders(orders), ...extraVendors]
   const chips = liveOrderFilterChips(query, { vendors, champs })
   const active = liveOrderQueryIsActive(query)
   const sort = query?.sort || 'time_left'
+  const incidentPrioritySort = LIVE_INCIDENT_PRIORITY_SORTS.some((item) => item.id === sort)
+    ? sort
+    : null
+  const standardSort = incidentPrioritySort ? 'time_left' : sort
 
   return (
     <div className="shrink-0">
@@ -66,6 +72,18 @@ export function AdminLiveOrderFilterBar({
           selectedIds={query?.champIds || []}
           onChange={(champIds) => onChange?.({ ...query, champIds })}
         />
+        {showIncidentPrioritySort ? (
+          <AdminFilterDropdown
+            label="Priority"
+            multiple={false}
+            showAll
+            allLabel="Any"
+            align="right"
+            options={LIVE_INCIDENT_PRIORITY_SORTS}
+            selectedIds={incidentPrioritySort ? [incidentPrioritySort] : []}
+            onChange={(ids) => onChange?.({ ...query, sort: ids[0] || 'time_left' })}
+          />
+        ) : null}
         <div className="ml-auto">
           <AdminFilterDropdown
             label="Sort"
@@ -73,7 +91,7 @@ export function AdminLiveOrderFilterBar({
             showAll={false}
             align="right"
             options={LIVE_ORDER_SORTS}
-            selectedIds={[sort]}
+            selectedIds={[incidentPrioritySort ? 'time_left' : standardSort]}
             onChange={(ids) => onChange?.({ ...query, sort: ids[0] || 'time_left' })}
           />
         </div>

@@ -37,6 +37,8 @@ import { cn } from '../../../components/admin/cn'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import AdminNewBannerModal, {
   BANNER_PLACEMENTS,
+  CHAMP_AUDIENCES,
+  CHAMP_TAP_ACTIONS,
 } from '../../../components/admin/AdminNewBannerModal'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
@@ -46,6 +48,7 @@ import {
   useAdminUiEditorPlacements,
   useAdminUiEditorScreenMap,
 } from '../../../hooks/admin/useAdminUiEditor'
+import { useExclusiveOffersEditor } from '../../../hooks/admin/useExclusiveOffersEditor'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
@@ -54,6 +57,13 @@ import {
   validateAdminImageFile,
 } from '../../../services/admin/uploadService'
 import { adminUiEditorService } from '../../../services/admin/uiEditorService'
+import {
+  EXCLUSIVE_OFFERS_SLOT_ID,
+  injectExclusiveOffersSlot,
+} from '../../../mappers/admin/mapAdminUiEditor'
+import ExclusiveOffersTab from '../../../components/admin/ui-editor/ExclusiveOffersTab'
+import ExclusiveOffersSlotPanel from '../../../components/admin/ui-editor/ExclusiveOffersSlotPanel'
+import AddExclusiveProductsModal from '../../../components/admin/ui-editor/AddExclusiveProductsModal'
 import iconHouse from '../../../assets/icon-house.png'
 import motoBike from '../../../assets/moto_bike.png'
 
@@ -61,6 +71,7 @@ const TABS = [
   { id: 'screen-map', label: 'Screen map' },
   { id: 'banners', label: 'Banners & ads' },
   { id: 'categories', label: 'Categories' },
+  { id: 'exclusive-offers', label: 'Exclusive offers' },
 ]
 
 const SLOT_TYPE_STYLE = {
@@ -97,6 +108,14 @@ const CUSTOMER_SCREENS = [
         banners: 1,
         type: 'Static',
         displayType: 'Static',
+      },
+      {
+        id: 'home_exclusive_offers',
+        label: 'Super Exclusive offers',
+        banners: 0,
+        type: 'Scroll',
+        displayType: 'Scroll',
+        slotKind: 'exclusive-offers',
       },
       {
         id: 'home_below_picks',
@@ -258,14 +277,14 @@ const CUSTOMER_SCREENS = [
 
 const CHAMP_SCREENS = [
   {
-    id: 'champ-home',
+    id: 'home',
     name: 'Champ home',
     iconSrc: iconHouse,
     slots: [
       {
         id: 'champ_home_top',
         label: 'Champ home top · scroll',
-        banners: 2,
+        banners: 0,
         type: 'Scroll',
         displayType: 'Scroll',
       },
@@ -279,26 +298,26 @@ const CHAMP_SCREENS = [
     ],
   },
   {
-    id: 'champ-orders',
-    name: 'Active orders',
+    id: 'jobs',
+    name: 'Jobs',
     Icon: Package,
     slots: [
       {
         id: 'champ_orders_banner',
-        label: 'Active orders banner',
-        banners: 1,
+        label: 'Jobs banner',
+        banners: 0,
         type: 'Static',
         displayType: 'Static',
       },
     ],
   },
   {
-    id: 'champ-earnings',
+    id: 'earnings',
     name: 'Earnings',
     Icon: Wallet,
     slots: [
       {
-        id: 'champ_earnings_top',
+        id: 'champ_earnings_banner',
         label: 'Earnings top · scroll',
         banners: 0,
         type: 'Scroll',
@@ -307,34 +326,82 @@ const CHAMP_SCREENS = [
     ],
   },
   {
-    id: 'champ-account',
-    name: 'Account',
-    Icon: UserRound,
-    slots: [
-      {
-        id: 'champ_account_promo',
-        label: 'Account promo',
-        banners: 1,
-        type: 'Static',
-        displayType: 'Static',
-      },
-    ],
-  },
-  {
-    id: 'champ-global',
+    id: 'global',
     name: 'Global',
     Icon: Globe2,
     slots: [
       {
         id: 'champ_app_open_popup',
         label: 'Pop-up ad (on open)',
-        banners: 1,
+        banners: 0,
         type: 'Pop-up',
         displayType: 'Pop-up',
       },
     ],
   },
 ]
+
+const CHAMP_BANNER_SCREEN_CHIPS = [
+  { id: 'home', label: 'Home', iconSrc: iconHouse },
+  { id: 'jobs', label: 'Jobs', Icon: Package },
+  { id: 'earnings', label: 'Earnings', Icon: Wallet },
+  { id: 'global', label: 'Pop-up', Icon: Sparkles },
+]
+
+const CHAMP_BANNER_SLOTS_BY_SCREEN = {
+  home: [
+    {
+      id: 'champ_home_top',
+      label: 'Champ home top · scroll',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Champ home top · scroll',
+    },
+    {
+      id: 'champ_home_mid',
+      label: 'Champ home mid',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Champ home mid',
+    },
+  ],
+  orders: [
+    {
+      id: 'champ_orders_banner',
+      label: 'Jobs banner',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Jobs banner',
+    },
+  ],
+  jobs: [
+    {
+      id: 'champ_orders_banner',
+      label: 'Jobs banner',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Jobs banner',
+    },
+  ],
+  earnings: [
+    {
+      id: 'champ_earnings_banner',
+      label: 'Earnings top · scroll',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Earnings top · scroll',
+    },
+  ],
+  global: [
+    {
+      id: 'champ_app_open_popup',
+      label: 'Pop-up ad (on open)',
+      active: 0,
+      showInPreview: true,
+      previewLabel: 'Pop-up on app open',
+    },
+  ],
+}
 
 const BANNER_SCREEN_CHIPS = [
   { id: 'home', label: 'Home', Icon: null, iconSrc: iconHouse },
@@ -546,6 +613,30 @@ function toEditableBanner(banner, slot) {
   }
 }
 
+function isExclusiveOffersSlot(slot) {
+  return slot?.slotKind === 'exclusive-offers' || slot?.id === EXCLUSIVE_OFFERS_SLOT_ID
+}
+
+function formatExclusiveBhd(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '0.000'
+  return n.toFixed(3)
+}
+
+function exclusiveSlotCount(slot) {
+  if (Array.isArray(slot.exclusiveItems) && slot.exclusiveItems.length > 0) {
+    return slot.exclusiveItems.length
+  }
+  return Number(slot.bannerCount ?? slot.banners ?? 0)
+}
+
+function exclusiveSlotLiveCount(slot) {
+  if (Array.isArray(slot.exclusiveItems) && slot.exclusiveItems.length > 0) {
+    return slot.exclusiveItems.filter((item) => item.liveOnCustomer).length
+  }
+  return Number(slot.activeCount ?? slot.active ?? 0)
+}
+
 function screenSummary(screen) {
   const slots =
     screen.slotCount != null
@@ -667,7 +758,29 @@ function PreviewModal({ open, onClose, preview, error }) {
               {' · '}
               {preview.banners?.length || 0} banner
               {(preview.banners?.length || 0) === 1 ? '' : 's'}
+              {preview.exclusiveOffers?.length
+                ? ` · ${preview.exclusiveOffers.length} exclusive offer product${
+                    preview.exclusiveOffers.length === 1 ? '' : 's'
+                  }`
+                : ''}
             </p>
+            {preview.exclusiveOffers?.length > 0 ? (
+              <div className="rounded-[10px] border border-[#edf0ee] p-3">
+                <p className="mb-2 text-[12px] font-bold text-[#17231c]">
+                  {preview.exclusiveOffersSection?.title || 'Super Exclusive offers'}
+                </p>
+                <ul className="max-h-[160px] space-y-1.5 overflow-auto">
+                  {preview.exclusiveOffers.map((item) => (
+                    <li key={item.id} className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="truncate font-medium text-[#17231c]">{item.title}</span>
+                      <span className="shrink-0 text-[#137333]">
+                        BHD {formatExclusiveBhd(item.offerPrice)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
             {preview.banners?.length > 0 ? (
               <ul className="max-h-[220px] space-y-1.5 overflow-auto rounded-[10px] border border-[#edf0ee] p-3">
                 {preview.banners.map((banner) => (
@@ -845,7 +958,7 @@ function enrichScreensWithBanners(screens, banners = []) {
   })
 }
 
-function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading }) {
+function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading, onAddExclusive, exclusiveEditor }) {
   const [open, setOpen] = useState(true)
   const [openSlots, setOpenSlots] = useState(() => {
     const initial = {}
@@ -923,8 +1036,10 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
           <div className="space-y-1">
             {(screen.slots || []).map((slot) => {
               const nestedBanners = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
-              const count = slotBannerCount(slot)
-              const active = slotActiveCount(slot)
+              const exclusiveItems = Array.isArray(slot.exclusiveItems) ? slot.exclusiveItems : []
+              const exclusive = isExclusiveOffersSlot(slot)
+              const count = exclusive ? exclusiveSlotCount(slot) : slotBannerCount(slot)
+              const active = exclusive ? exclusiveSlotLiveCount(slot) : slotActiveCount(slot)
               const primaryBanner = toEditableBanner(nestedBanners[0], slot)
               const slotLabel = slotDisplayLabel(slot)
               const slotMenuKey = `slot:${slot.id}`
@@ -945,8 +1060,9 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
                           {slotLabel}
                         </p>
                         <p className="mt-[3px] text-[12px] leading-none text-[#707070]">
-                          {count} banner{count === 1 ? '' : 's'}
-                          {active > 0 ? ` · ${active} active` : ''}
+                          {exclusive
+                            ? `${count} product${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} live` : ''}`
+                            : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
                         </p>
                       </div>
                     </button>
@@ -955,30 +1071,58 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
                       <button
                         type="button"
                         onClick={() =>
-                          onAdd?.({
-                            placement: slotLabel,
-                            placementKey: slot.id,
-                          })
+                          exclusive
+                            ? onAddExclusive?.()
+                            : onAdd?.({
+                                placement: slotLabel,
+                                placementKey: slot.id,
+                              })
                         }
                         className="inline-flex h-[30px] items-center gap-1 rounded-full bg-[#e8f5e9] px-3 text-[12px] font-bold text-[#2e7d32] hover:bg-[#dcedc8]"
                       >
                         <Plus size={13} strokeWidth={2.8} />
                         Add
                       </button>
-                      <SlotActionMenu
-                        menuId={menuId}
-                        setMenuId={setMenuId}
-                        itemId={slotMenuKey}
-                        label={slotLabel}
-                        canEdit={Boolean(primaryBanner)}
-                        canDelete={Boolean(primaryBanner)}
-                        onEdit={() => onEdit?.(primaryBanner)}
-                        onDelete={() => onDelete?.(primaryBanner)}
-                      />
+                      {!exclusive ? (
+                        <SlotActionMenu
+                          menuId={menuId}
+                          setMenuId={setMenuId}
+                          itemId={slotMenuKey}
+                          label={slotLabel}
+                          canEdit={Boolean(primaryBanner)}
+                          canDelete={Boolean(primaryBanner)}
+                          onEdit={() => onEdit?.(primaryBanner)}
+                          onDelete={() => onDelete?.(primaryBanner)}
+                        />
+                      ) : null}
                     </div>
                   </div>
 
-                  {slotOpen && nestedBanners.length > 0 ? (
+                  {slotOpen && exclusive && exclusiveEditor ? (
+                    <div className="relative ml-[11px] border-l border-[#d5ddd7] pb-2 pl-4">
+                      <ExclusiveOffersSlotPanel
+                        variant="compact"
+                        section={exclusiveEditor.section}
+                        items={exclusiveEditor.items}
+                        summary={exclusiveEditor.summary}
+                        busy={exclusiveEditor.busy}
+                        dragIndex={exclusiveEditor.dragIndex}
+                        onSectionChange={exclusiveEditor.handleSectionChange}
+                        onSectionToggle={exclusiveEditor.handleSectionToggle}
+                        onAdd={onAddExclusive}
+                        onDragStart={exclusiveEditor.onDragStart}
+                        onDragOver={exclusiveEditor.onDragOver}
+                        onDragEnd={exclusiveEditor.onDragEnd}
+                        onToggleVisible={exclusiveEditor.handleToggleVisible}
+                        onPriceChange={exclusiveEditor.handlePriceChange}
+                        onTitleChange={exclusiveEditor.handleTitleChange}
+                        onImageChange={exclusiveEditor.handleImageChange}
+                        onRemove={exclusiveEditor.handleRemove}
+                      />
+                    </div>
+                  ) : null}
+
+                  {slotOpen && !exclusive && nestedBanners.length > 0 ? (
                     <div className="relative ml-[11px] space-y-0.5 border-l border-[#d5ddd7] pb-1 pl-4">
                       {nestedBanners.map((banner) => {
                         const editable = toEditableBanner(banner, slot)
@@ -1043,13 +1187,26 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
   )
 }
 
-function PreviewSlot({ label, placementKey, onAdd, banner }) {
-  const hasBanner = Boolean(banner?.imageUrl || banner?.name)
+function PreviewSlot({ label, placementKey, onAdd, onEdit, banner }) {
+  const hasBanner = Boolean(banner?.imageUrl || banner?.name || banner?.title)
+
+  const handleSlotClick = () => {
+    if (banner?.id && hasBanner) {
+      onEdit?.(banner)
+      return
+    }
+    onAdd?.({ placement: label, placementKey: placementKey || '' })
+  }
+
+  const handleAddAnother = (event) => {
+    event.stopPropagation()
+    onAdd?.({ placement: label, placementKey: placementKey || '' })
+  }
 
   return (
     <button
       type="button"
-      onClick={() => onAdd?.({ placement: label, placementKey: placementKey || '' })}
+      onClick={handleSlotClick}
       className={cn(
         'relative flex w-full flex-col items-center overflow-hidden rounded-[10px] border border-dashed border-[#81c784] text-center hover:bg-[#e8f5e9]',
         hasBanner
@@ -1080,7 +1237,7 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
               banner?.imageUrl ? 'text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.65)]' : 'text-[#137333]',
             )}
           >
-            {banner.name}
+            {banner.name || banner.title}
           </span>
           {banner.subtitle ? (
             <span
@@ -1093,8 +1250,17 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
             </span>
           ) : null}
           <span
+            role="button"
+            tabIndex={0}
+            onClick={handleAddAnother}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                handleAddAnother(event)
+              }
+            }}
             className={cn(
-              'mt-0.5 text-[9px] font-semibold',
+              'mt-0.5 text-[9px] font-semibold underline-offset-2 hover:underline',
               banner?.imageUrl ? 'text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]' : 'text-[#2e7d32]',
             )}
           >
@@ -1111,10 +1277,207 @@ function PreviewSlot({ label, placementKey, onAdd, banner }) {
   )
 }
 
-function PhoneLivePreview({ slots, onAdd, banners = [] }) {
-  const previewSlots = slots.filter((slot) => slot.showInPreview)
+function normalizeChampPreviewScreenId(screenId) {
+  const key = String(screenId || 'home').toLowerCase()
+  if (key === 'orders') return 'jobs'
+  return key
+}
+
+function bannerForPreviewSlot(slot, banners = []) {
+  if (slot?.slotBanners?.length) {
+    return slot.slotBanners.find((banner) => banner.imageUrl) || slot.slotBanners[0]
+  }
+  if (!slot?.id) return null
+  const matches = banners.filter(
+    (banner) =>
+      banner.placementKey === slot.id ||
+      normalizePlacementKey(banner.placementKey) === normalizePlacementKey(slot.id),
+  )
+  if (!matches.length) return null
+  return matches.find((banner) => banner.imageUrl) || matches[0]
+}
+
+function ChampPhoneLivePreview({ screenId = 'home', slots, onAdd, onEdit, banners = [] }) {
+  const previewScreenId = normalizeChampPreviewScreenId(screenId)
+  const previewSlots = slots.filter((slot) => slot.showInPreview !== false)
+
+  const bannerForSlot = (slot) => bannerForPreviewSlot(slot, banners)
+
+  const topSlot = previewSlots[0] || null
+  const midSlot = previewSlots[1] || null
+
+  return (
+    <div className="mx-auto w-full max-w-[280px]">
+      <div className="h-[720px] overflow-hidden rounded-[28px] border-[5px] border-[#1a1a1a] bg-white shadow-[0_12px_32px_rgba(20,40,28,.12)]">
+        <div className="flex items-center justify-between bg-[#f7f8f7] px-4 py-2 text-[11px] font-semibold text-[#17231c]">
+          <span>9:41</span>
+          <span className="font-bold tracking-wide">Champ</span>
+          <span className="inline-flex items-center gap-0.5 text-[10px]">
+            <span className="h-[7px] w-[7px] rounded-full bg-[#17231c]/30" />
+            <span className="h-[7px] w-[7px] rounded-full bg-[#17231c]/55" />
+            <span className="h-[7px] w-[10px] rounded-[2px] bg-[#17231c]/80" />
+          </span>
+        </div>
+
+        <div className="space-y-3 bg-[#fafbfa] p-3">
+          {previewScreenId === 'home' ? (
+            <>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] border border-[#e7ebe8] bg-white px-3 py-2 text-[10px] text-[#7c8780]">
+                Scheduled orders · map · status cards
+              </div>
+              <div className="h-[120px] rounded-[12px] bg-[#e8edf0]" />
+              {midSlot ? (
+                <PreviewSlot
+                  label={midSlot.previewLabel || midSlot.label}
+                  placementKey={midSlot.id}
+                  banner={bannerForSlot(midSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] border border-[#e7ebe8] bg-white p-2">
+                <p className="text-[10px] font-bold text-[#17231c]">Today&apos;s summary</p>
+                <div className="mt-2 grid grid-cols-3 gap-1">
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                  <div className="h-8 rounded-[8px] bg-[#eef2ef]" />
+                </div>
+              </div>
+              <div className="h-10 rounded-full bg-[#1aa054]" />
+            </>
+          ) : null}
+
+          {previewScreenId === 'jobs' ? (
+            <>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="flex rounded-full bg-[#edf0ed] p-1">
+                <span className="flex-1 rounded-full bg-white py-1.5 text-center text-[10px] font-bold text-[#17231c]">
+                  Instant
+                </span>
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">
+                  Scheduled
+                </span>
+              </div>
+              <div className="rounded-[12px] border border-[#c8e6c9] bg-white p-3">
+                <p className="text-[10px] font-bold text-[#137333]">ON THE WAY</p>
+                <p className="mt-1 text-[11px] font-bold text-[#17231c]">Active delivery card</p>
+                <p className="mt-1 text-[10px] text-[#7c8780]">Live order data (not a banner)</p>
+              </div>
+            </>
+          ) : null}
+
+          {previewScreenId === 'earnings' ? (
+            <>
+              <div className="flex rounded-full bg-[#edf0ed] p-1">
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">Today</span>
+                <span className="flex-1 rounded-full bg-white py-1.5 text-center text-[10px] font-bold text-[#17231c]">
+                  This week
+                </span>
+                <span className="flex-1 py-1.5 text-center text-[10px] font-medium text-[#7c8780]">Month</span>
+              </div>
+              {topSlot ? (
+                <PreviewSlot
+                  label={topSlot.previewLabel || topSlot.label}
+                  placementKey={topSlot.id}
+                  banner={bannerForSlot(topSlot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ) : null}
+              <div className="rounded-[12px] bg-[#1b5e3b] p-3 text-white">
+                <p className="text-[10px] opacity-80">This week · earnings</p>
+                <p className="text-[18px] font-bold">BHD 0.000</p>
+              </div>
+              <div className="rounded-[10px] bg-[#fff8e1] px-2 py-2 text-[9px] text-[#9a6510]">
+                Earnings breakdown (live data)
+              </div>
+            </>
+          ) : null}
+
+          {previewScreenId === 'global' ? (
+            <div className="relative flex h-[560px] items-center justify-center rounded-[12px] bg-[#eef2ef]">
+              <p className="text-[11px] font-medium text-[#7c8780]">App home (dimmed)</p>
+              {topSlot ? (
+                <div className="absolute inset-x-4 top-1/2 -translate-y-1/2">
+                  <PreviewSlot
+                    label={topSlot.previewLabel || topSlot.label}
+                    placementKey={topSlot.id}
+                    banner={bannerForSlot(topSlot)}
+                    onAdd={onAdd}
+                  onEdit={onEdit}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {!['home', 'jobs', 'earnings', 'global'].includes(previewScreenId) && previewSlots.length > 0
+            ? previewSlots.map((slot) => (
+                <PreviewSlot
+                  key={slot.id}
+                  label={slot.previewLabel || slot.label}
+                  placementKey={slot.id}
+                  banner={bannerForSlot(slot)}
+                  onAdd={onAdd}
+                  onEdit={onEdit}
+                />
+              ))
+            : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhoneLivePreview({
+  platform = 'customer',
+  screenId = 'home',
+  slots,
+  onAdd,
+  onEdit,
+  banners = [],
+  exclusiveSection,
+  exclusiveItems = [],
+  onAddExclusive,
+}) {
+  if (platform === 'champ') {
+    return (
+      <ChampPhoneLivePreview
+        screenId={screenId}
+        slots={slots}
+        onAdd={onAdd}
+        onEdit={onEdit}
+        banners={banners}
+      />
+    )
+  }
+
+  const previewSlots = slots.filter((slot) => slot.showInPreview !== false && !isExclusiveOffersSlot(slot))
+  const visibleExclusive = exclusiveItems.filter((item) => item.isVisible)
+  const showExclusive =
+    exclusiveSection?.isVisible !== false && visibleExclusive.length > 0
+  const hiddenExclusiveCount = exclusiveItems.length - visibleExclusive.length
 
   const bannerForSlot = (slot) => {
+    const fromSlot = bannerForPreviewSlot(slot, banners)
+    if (fromSlot) return fromSlot
     if (!slot?.id) return null
     const matches = banners.filter(
       (banner) =>
@@ -1125,7 +1488,6 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
             String(slot.label).toLowerCase().replace(/[—–-]/g, '·')),
     )
     if (!matches.length) return null
-    // Prefer a banner that has an image so the live preview reflects uploaded creatives.
     return matches.find((banner) => banner.imageUrl) || matches[0]
   }
 
@@ -1149,6 +1511,7 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
               placementKey={previewSlots[0].id}
               banner={bannerForSlot(previewSlots[0])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
 
@@ -1172,6 +1535,7 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
               placementKey={previewSlots[1].id}
               banner={bannerForSlot(previewSlots[1])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
 
@@ -1183,12 +1547,64 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
             </div>
           </div>
 
+          {showExclusive ? (
+            <div>
+              <p className="mb-2 text-[12px] font-bold text-[#17231c]">
+                {exclusiveSection?.title || 'Super Exclusive offers'}
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {visibleExclusive.map((item) => (
+                  <div
+                    key={item.id}
+                    className="w-[88px] shrink-0 rounded-[10px] border border-[#c8e6c9] bg-white p-1.5"
+                  >
+                    {item.imageUrl ? (
+                      <AdminMediaImage
+                        src={item.imageUrl}
+                        className="mb-1 h-[48px] w-full rounded-[8px] object-cover"
+                        fallbackClassName="mb-1 h-[48px] w-full rounded-[8px] bg-[#eceeec]"
+                        iconSize={14}
+                      />
+                    ) : (
+                      <div className="mb-1 grid h-[48px] w-full place-items-center rounded-[8px] bg-[#eceeec] text-[#8a948e]">
+                        <Package size={14} />
+                      </div>
+                    )}
+                    <p className="line-clamp-2 text-[9px] font-semibold leading-tight text-[#17231c]">
+                      {item.title}
+                    </p>
+                    <p className="mt-0.5 text-[9.5px] font-bold text-[#137333]">
+                      BHD {formatExclusiveBhd(item.offerPrice)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {hiddenExclusiveCount > 0 ? (
+                <p className="mt-1.5 text-[10px] font-medium text-[#8a948e]">
+                  {hiddenExclusiveCount} hidden from carousel
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onAddExclusive?.()}
+              className="flex w-full flex-col items-center justify-center rounded-[10px] border border-dashed border-[#81c784] bg-[#e8f5e9]/70 px-2 py-3 text-center hover:bg-[#e8f5e9]"
+            >
+              <span className="text-[12px] font-bold text-[#2e7d32]">+ Add products here</span>
+              <span className="mt-0.5 text-[10px] font-medium text-[#66a06a]">
+                {exclusiveSection?.title || 'Super Exclusive offers'}
+              </span>
+            </button>
+          )}
+
           {previewSlots[2] ? (
             <PreviewSlot
               label={previewSlots[2].previewLabel || previewSlots[2].label}
               placementKey={previewSlots[2].id}
               banner={bannerForSlot(previewSlots[2])}
               onAdd={onAdd}
+              onEdit={onEdit}
             />
           ) : null}
         </div>
@@ -1197,20 +1613,125 @@ function PhoneLivePreview({ slots, onAdd, banners = [] }) {
   )
 }
 
-function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChange, bannersRefreshKey = 0 }) {
+function MobilePreviewModal({
+  open,
+  onClose,
+  platform,
+  screenId,
+  screenChips = [],
+  onScreenChange,
+  slots,
+  banners,
+  onAdd,
+  onEdit,
+  exclusiveSection,
+  exclusiveItems,
+  onAddExclusive,
+}) {
+  if (!open) return null
+
+  const appLabel = platform === 'champ' ? 'Champ app' : 'Customer app'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-[rgba(26,28,26,0.5)]"
+        aria-label="Close preview"
+        onClick={onClose}
+      />
+      <div className="relative flex max-h-[95vh] w-full max-w-[420px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_18px_40px_rgba(26,28,26,0.2)]">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#eceeec] px-4 py-3">
+          <div>
+            <h3 className="text-[15px] font-bold text-[#17231c]">Mobile preview</h3>
+            <p className="text-[12px] text-[#7c8780]">
+              {appLabel} · reflects your current banner changes
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-[8px] text-[#8a948e] hover:bg-[#f7f9f7]"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {screenChips.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap gap-1.5 border-b border-[#eceeec] px-4 py-2.5">
+            {screenChips.map((chip) => {
+              const active = screenId === chip.id
+              const Icon = chip.Icon
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => onScreenChange?.(chip.id)}
+                  className={cn(
+                    'inline-flex h-[30px] items-center gap-1 rounded-full border px-2.5 text-[11px] font-bold transition',
+                    active
+                      ? 'border-[#1aa054] bg-[#e8f7ed] text-[#137333]'
+                      : 'border-[#e4e8e4] bg-white text-[#637068] hover:border-[#cfd6d1]',
+                  )}
+                >
+                  {chip.iconSrc ? (
+                    <img src={chip.iconSrc} alt="" className="h-3 w-3 object-contain" />
+                  ) : Icon ? (
+                    <Icon size={12} strokeWidth={2.2} />
+                  ) : null}
+                  {chip.label}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
+
+        <div className="overflow-y-auto px-4 py-5">
+          <p className="mb-3 text-center text-[11.5px] text-[#7c8780]">
+            Tap a banner to edit · empty slot to add
+          </p>
+          <PhoneLivePreview
+            platform={platform}
+            screenId={screenId}
+            slots={slots}
+            banners={banners}
+            onAdd={onAdd}
+            onEdit={onEdit}
+            exclusiveSection={exclusiveSection}
+            exclusiveItems={exclusiveItems}
+            onAddExclusive={onAddExclusive}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BannersAdsTab({
+  appKey,
+  platform,
+  onAdd,
+  onEdit,
+  onDelete,
+  onScreenChange,
+  bannersRefreshKey = 0,
+  exclusiveEditor,
+  onAddExclusive,
+  mobilePreviewOpen = false,
+  onMobilePreviewClose,
+}) {
   const [screenId, setScreenId] = useState('home')
   const [menuId, setMenuId] = useState(null)
   const [openSlots, setOpenSlots] = useState({})
   const {
     slots: apiSlots,
-    screens: apiScreens,
     isLoading: placementsLoading,
     error: placementsError,
     refetch: refetchPlacements,
   } = useAdminUiEditorPlacements(appKey, screenId)
   const {
     banners: apiBanners,
-    meta,
     isLoading: bannersLoading,
     error: bannersError,
     refetch: refetchBanners,
@@ -1224,19 +1745,16 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
     }
   }, [bannersRefreshKey, refetchBanners, refetchPlacements])
 
-  const screenChips = useMemo(() => {
-    const fromMeta = meta?.screens || []
-    const source = fromMeta.length > 0 ? fromMeta : apiScreens.length > 0 ? apiScreens : null
-    if (source) {
-      return source.map((screen) => ({
-        id: screen.id,
-        label: screen.label,
-        Icon: screen.id === 'home' ? null : LayoutGrid,
-        iconSrc: screen.id === 'home' ? iconHouse : null,
-      }))
-    }
-    return BANNER_SCREEN_CHIPS
-  }, [apiScreens, meta])
+  useEffect(() => {
+    setScreenId(platform === 'champ' ? 'home' : 'home')
+    setOpenSlots({})
+    setMenuId(null)
+  }, [platform, appKey])
+
+  const screenChips = useMemo(
+    () => (platform === 'champ' ? CHAMP_BANNER_SCREEN_CHIPS : BANNER_SCREEN_CHIPS),
+    [platform],
+  )
 
   useEffect(() => {
     if (!screenChips.some((chip) => chip.id === screenId)) {
@@ -1248,9 +1766,24 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
     onScreenChange?.(screenId)
   }, [screenId, onScreenChange])
 
-  const slots =
-    apiSlots.length > 0 ? apiSlots : BANNER_SLOTS_BY_SCREEN[screenId] || BANNER_SLOTS_BY_SCREEN.home
-  const banners = bannersEnabled ? apiBanners : apiBanners.length > 0 ? apiBanners : ALL_BANNERS
+  const slotFallback =
+    platform === 'champ'
+      ? CHAMP_BANNER_SLOTS_BY_SCREEN[screenId] || CHAMP_BANNER_SLOTS_BY_SCREEN.home
+      : BANNER_SLOTS_BY_SCREEN[screenId] || BANNER_SLOTS_BY_SCREEN.home
+  const slots = apiSlots.length > 0 ? apiSlots : slotFallback
+  const rawBanners = bannersEnabled
+    ? apiBanners
+    : platform === 'champ'
+      ? apiBanners
+      : apiBanners.length > 0
+        ? apiBanners
+        : ALL_BANNERS
+  const banners = useMemo(() => {
+    const app = String(appKey || 'CUSTOMER').toUpperCase()
+    return rawBanners.filter((banner) => !banner.appTarget || banner.appTarget === app)
+  }, [rawBanners, appKey])
+  const exclusiveSection = exclusiveEditor?.section
+  const exclusiveItems = exclusiveEditor?.items ?? []
 
   const slotsWithBanners = useMemo(() => {
     const normalizePlacement = (value) =>
@@ -1260,7 +1793,7 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
         .replace(/\s+/g, ' ')
         .trim()
 
-    return slots.map((slot) => {
+    const mapped = slots.map((slot) => {
       const matched = banners.filter(
         (banner) =>
           banner.placementKey === slot.id ||
@@ -1296,7 +1829,12 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
         bannerCount: count > 0 ? count : slot.bannerCount || slot.banners || 0,
       }
     })
-  }, [slots, banners])
+
+    if (platform === 'customer' && screenId === 'home') {
+      return injectExclusiveOffersSlot(mapped, exclusiveSection, exclusiveItems)
+    }
+    return mapped
+  }, [slots, banners, platform, screenId, exclusiveSection, exclusiveItems])
 
   useEffect(() => {
     setOpenSlots((prev) => {
@@ -1310,6 +1848,11 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
 
   const toggleSlot = (slotId) => {
     setOpenSlots((prev) => ({ ...prev, [slotId]: !prev[slotId] }))
+  }
+
+  const handlePreviewEdit = (banner) => {
+    onMobilePreviewClose?.()
+    onEdit?.(banner)
   }
 
   return (
@@ -1338,10 +1881,22 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
           <div>
             <h3 className="text-[15px] font-bold text-[#17231c]">Live preview — point where to place</h3>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              Tap a highlighted slot on the app to add a banner / ad there
+              {platform === 'champ'
+                ? 'Champ app preview — tap a slot to add or edit banners for that screen'
+                : 'Tap a slot to add banners, or manage Super Exclusive offers inline on the right'}
             </p>
             <div className="mt-4 flex items-center justify-center">
-              <PhoneLivePreview slots={slotsWithBanners} banners={banners} onAdd={onAdd} />
+              <PhoneLivePreview
+                platform={platform}
+                screenId={screenId}
+                slots={slotsWithBanners}
+                banners={banners}
+                onAdd={onAdd}
+                onEdit={handlePreviewEdit}
+                exclusiveSection={exclusiveSection}
+                exclusiveItems={exclusiveItems}
+                onAddExclusive={onAddExclusive}
+              />
             </div>
           </div>
 
@@ -1377,9 +1932,15 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
             <div className="space-y-1.5">
               {slotsWithBanners.map((slot) => {
                 const nestedBanners = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
+                const exclusiveItemsForSlot = Array.isArray(slot.exclusiveItems)
+                  ? slot.exclusiveItems
+                  : []
+                const exclusive = isExclusiveOffersSlot(slot)
                 const slotOpen = openSlots[slot.id] !== false
-                const count = Number(slot.bannerCount ?? slot.banners ?? nestedBanners.length ?? 0)
-                const active = Number(slot.activeCount ?? slot.active ?? 0)
+                const count = exclusive ? exclusiveSlotCount(slot) : Number(slot.bannerCount ?? slot.banners ?? nestedBanners.length ?? 0)
+                const active = exclusive
+                  ? exclusiveSlotLiveCount(slot)
+                  : Number(slot.activeCount ?? slot.active ?? 0)
                 const primaryBanner = nestedBanners[0] || null
                 const slotLabel = slot.label || slotDisplayLabel(slot)
                 const slotMenuKey = `ads-slot:${slot.id}`
@@ -1404,42 +1965,75 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
                       >
                         <CollapseChevron open={slotOpen} />
                         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#eef2ef] text-[#637068]">
-                          <ImageIcon size={16} strokeWidth={2} />
+                          {exclusive ? (
+                            <Package size={16} strokeWidth={2} />
+                          ) : (
+                            <ImageIcon size={16} strokeWidth={2} />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-[13px] font-bold text-[#17231c]">{slotLabel}</p>
                           <p className="mt-0.5 text-[12px] text-[#7c8780]">
-                            {count} banner{count === 1 ? '' : 's'}
-                            {active > 0 ? ` · ${active} active` : ''}
+                            {exclusive
+                              ? `${count} product${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} live` : ''}`
+                              : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
                           </p>
                         </div>
                       </button>
                       <button
                         type="button"
                         onClick={() =>
-                          onAdd?.({
-                            placement: slotLabel,
-                            placementKey: slot.id,
-                          })
+                          exclusive
+                            ? onAddExclusive?.()
+                            : onAdd?.({
+                                placement: slotLabel,
+                                placementKey: slot.id,
+                              })
                         }
                         className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
                       >
                         <Plus size={13} strokeWidth={2.8} />
                         Add
                       </button>
-                      <SlotActionMenu
-                        menuId={menuId}
-                        setMenuId={setMenuId}
-                        itemId={slotMenuKey}
-                        label={slotLabel}
-                        canEdit={Boolean(primaryBanner)}
-                        canDelete={Boolean(primaryBanner)}
-                        onEdit={() => onEdit?.(primaryBanner)}
-                        onDelete={() => onDelete?.(primaryBanner)}
-                      />
+                      {!exclusive ? (
+                        <SlotActionMenu
+                          menuId={menuId}
+                          setMenuId={setMenuId}
+                          itemId={slotMenuKey}
+                          label={slotLabel}
+                          canEdit={Boolean(primaryBanner)}
+                          canDelete={Boolean(primaryBanner)}
+                          onEdit={() => onEdit?.(primaryBanner)}
+                          onDelete={() => onDelete?.(primaryBanner)}
+                        />
+                      ) : null}
                     </div>
 
-                    {slotOpen && nestedBanners.length > 0 ? (
+                    {slotOpen && exclusive && exclusiveEditor ? (
+                      <div className="border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-2">
+                        <ExclusiveOffersSlotPanel
+                          variant="compact"
+                          section={exclusiveEditor.section}
+                          items={exclusiveEditor.items}
+                          summary={exclusiveEditor.summary}
+                          busy={exclusiveEditor.busy}
+                          dragIndex={exclusiveEditor.dragIndex}
+                          onSectionChange={exclusiveEditor.handleSectionChange}
+                          onSectionToggle={exclusiveEditor.handleSectionToggle}
+                          onAdd={onAddExclusive}
+                          onDragStart={exclusiveEditor.onDragStart}
+                          onDragOver={exclusiveEditor.onDragOver}
+                          onDragEnd={exclusiveEditor.onDragEnd}
+                          onToggleVisible={exclusiveEditor.handleToggleVisible}
+                          onPriceChange={exclusiveEditor.handlePriceChange}
+                          onTitleChange={exclusiveEditor.handleTitleChange}
+                          onImageChange={exclusiveEditor.handleImageChange}
+                          onRemove={exclusiveEditor.handleRemove}
+                        />
+                      </div>
+                    ) : null}
+
+                    {slotOpen && !exclusive && nestedBanners.length > 0 ? (
                       <div className="space-y-0.5 border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-1.5">
                         {nestedBanners.map((banner) => {
                           const status = resolveBannerStatus(banner)
@@ -1500,8 +2094,9 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
             <div className="mt-3 flex items-start gap-2 rounded-[10px] border border-[#f3e0a8] bg-[#fff8e1] px-3 py-2.5 text-[12px] text-[#9a6510]">
               <Lightbulb size={14} className="mt-0.5 shrink-0" />
               <p>
-                Switch screens above (Store page / Category / Pop-up / Champ) to place banners there too.
-                {platform === 'champ' ? ' Champ slots shown when Champ app is selected.' : null}
+                {platform === 'champ'
+                  ? 'Switch Champ screens above (Home / Orders / Earnings / Pop-up) to manage banners per screen. All content comes from the API after publish.'
+                  : 'Switch screens above (Store page / Category / Pop-up) to place banners there too.'}
               </p>
             </div>
           </div>
@@ -1634,6 +2229,22 @@ function BannersAdsTab({ appKey, platform, onAdd, onEdit, onDelete, onScreenChan
           </table>
         </div>
       </section>
+
+      <MobilePreviewModal
+        open={mobilePreviewOpen}
+        onClose={onMobilePreviewClose}
+        platform={platform}
+        screenId={screenId}
+        screenChips={screenChips}
+        onScreenChange={setScreenId}
+        slots={slotsWithBanners}
+        banners={banners}
+        onAdd={onAdd}
+        onEdit={handlePreviewEdit}
+        exclusiveSection={exclusiveSection}
+        exclusiveItems={exclusiveItems}
+        onAddExclusive={onAddExclusive}
+      />
     </div>
   )
 }
@@ -2608,6 +3219,7 @@ export default function AdminUiEditorPage() {
     initialBanner: null,
   })
   const [bannerScreenId, setBannerScreenId] = useState('home')
+  const [bannersMobilePreviewOpen, setBannersMobilePreviewOpen] = useState(false)
   const [bannersRefreshKey, setBannersRefreshKey] = useState(0)
   const [bannerTargets, setBannerTargets] = useState([])
   const [bannerTargetsLoading, setBannerTargetsLoading] = useState(false)
@@ -2620,10 +3232,27 @@ export default function AdminUiEditorPage() {
     screen: 'home',
   })
   const [actionMessage, setActionMessage] = useState(null)
-
+  const [exclusiveModalOpen, setExclusiveModalOpen] = useState(false)
+  const exclusiveEditor = useExclusiveOffersEditor({ onMessage: setActionMessage })
+  const exclusiveSection = exclusiveEditor.section
+  const exclusiveItems = exclusiveEditor.items
   const { apps, isLoading: appsLoading, error: appsError, refetch: refetchApps } =
     useAdminUiEditorApps()
   const appKey = platform === 'champ' ? 'CHAMP' : 'CUSTOMER'
+
+  const visibleTabs = useMemo(
+    () =>
+      platform === 'champ'
+        ? TABS.filter((item) => item.id === 'screen-map' || item.id === 'banners')
+        : TABS,
+    [platform],
+  )
+
+  useEffect(() => {
+    if (platform === 'champ' && (tab === 'categories' || tab === 'exclusive-offers')) {
+      setTab('banners')
+    }
+  }, [platform, tab])
   const {
     screens: apiScreens,
     apps: screenMapApps,
@@ -2666,8 +3295,16 @@ export default function AdminUiEditorPage() {
         : platform === 'customer'
           ? CUSTOMER_SCREENS
           : CHAMP_SCREENS
-    return enrichScreensWithBanners(base, allBanners)
-  }, [apiScreens, platform, allBanners])
+    const enriched = enrichScreensWithBanners(base, allBanners)
+    if (platform !== 'customer') return enriched
+    return enriched.map((screen) => {
+      if (screen.id !== 'home') return screen
+      return {
+        ...screen,
+        slots: injectExclusiveOffersSlot(screen.slots, exclusiveSection, exclusiveItems),
+      }
+    })
+  }, [apiScreens, platform, allBanners, exclusiveSection, exclusiveItems])
 
   const modalPlacements = useMemo(() => {
     const fromMeta = bannersMeta?.placements || []
@@ -2713,7 +3350,9 @@ export default function AdminUiEditorPage() {
   const loadBannerTargets = async (tapAction = 'OPEN_STORE') => {
     setBannerTargetsLoading(true)
     try {
-      const result = await adminUiEditorService.getBannerTargets(tapAction)
+      const result = await adminUiEditorService.getBannerTargets(tapAction, {
+        params: { app: appKey },
+      })
       setBannerTargets(result?.data?.targets || [])
     } catch {
       setBannerTargets([])
@@ -2723,10 +3362,14 @@ export default function AdminUiEditorPage() {
   }
 
   const openBannerModal = (input = '') => {
-    const placement =
-      typeof input === 'string' ? input : input?.placement || input?.label || ''
     const placementKey =
       typeof input === 'string' ? '' : input?.placementKey || input?.id || ''
+    if (placementKey === EXCLUSIVE_OFFERS_SLOT_ID) {
+      setExclusiveModalOpen(true)
+      return
+    }
+    const placement =
+      typeof input === 'string' ? input : input?.placement || input?.label || ''
     setBannerSaveError(null)
     setBannerModal({
       open: true,
@@ -2761,6 +3404,7 @@ export default function AdminUiEditorPage() {
               : 'static',
         title: banner.name || '',
         subtitle: banner.subtitle || '',
+        ctaLabel: banner.ctaLabel || banner.raw?.ctaLabel || '',
         imageUrl: banner.imageUrl || '',
         tapAction: (() => {
           const raw = String(banner.tapAction || banner.raw?.tapAction || '').trim()
@@ -2768,11 +3412,12 @@ export default function AdminUiEditorPage() {
             OPEN_STORE: 'Open store',
             OPEN_CATEGORY: 'Open category',
             OPEN_OFFER: 'Open offer',
+            OPEN_CHAMP_SCREEN: 'Open Champ screen',
             OPEN_URL: 'Open URL',
             NONE: 'No action',
             NO_ACTION: 'No action',
           }
-          return map[raw.toUpperCase()] || raw || 'Open store'
+          return map[raw.toUpperCase()] || raw || (platform === 'champ' ? 'Open URL' : 'Open store')
         })(),
         target: banner.target || '',
         targetId: banner.targetId || '',
@@ -2786,7 +3431,7 @@ export default function AdminUiEditorPage() {
       },
     })
     loadBannerTargets(
-      String(banner.tapActionKey || banner.raw?.tapAction || 'OPEN_STORE').toUpperCase(),
+      String(banner.tapActionKey || banner.raw?.tapAction || (platform === 'champ' ? 'OPEN_URL' : 'OPEN_STORE')).toUpperCase(),
     )
     try {
       const result = await adminUiEditorService.getBanner(banner.id)
@@ -2899,6 +3544,17 @@ export default function AdminUiEditorPage() {
     }
   }
 
+  const handleAddExclusiveProducts = async (payload) => {
+    setActionMessage(null)
+    try {
+      await exclusiveEditor.handleAddProducts(payload)
+      setExclusiveModalOpen(false)
+    } catch (err) {
+      setActionMessage(err?.message || 'Unable to add products.')
+      throw err
+    }
+  }
+
   const handlePublish = async () => {
     setActionMessage(null)
     resetPublish()
@@ -2910,27 +3566,41 @@ export default function AdminUiEditorPage() {
         )
         return
       }
+      if (tab === 'exclusive-offers') {
+        await adminUiEditorService.publishExclusiveOffers()
+        await exclusiveEditor.refetch()
+        setActionMessage(
+          'Published Super Exclusive offers. The customer home carousel is now live (respects visibility and product availability).',
+        )
+        return
+      }
       await publishUi(appKey)
       setActionMessage(`Published ${appKey === 'CHAMP' ? 'Champ' : 'Customer'} app UI.`)
     } catch {
       // surfaced via publishError for UI publish; categories use actionMessage
       if (tab === 'categories') {
         setActionMessage('Unable to publish categories.')
+      } else if (tab === 'exclusive-offers') {
+        setActionMessage('Unable to publish exclusive offers.')
       }
     }
   }
 
   const headerPreviewScreen =
-    tab === 'banners' ? bannerScreenId : tab === 'categories' ? 'home' : screens[0]?.id || 'home'
+    tab === 'banners'
+      ? bannerScreenId
+      : tab === 'categories' || tab === 'exclusive-offers'
+        ? 'home'
+        : screens[0]?.id || 'home'
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          {tab === 'categories' ? (
+          {tab === 'categories' || tab === 'exclusive-offers' ? (
             <div className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] bg-white px-3 text-[12px] font-bold text-[#17231c] shadow-[0_1px_3px_rgba(20,40,28,.12)]">
               <Smartphone size={14} strokeWidth={2.1} />
-              Customer app home grid
+              {tab === 'categories' ? 'Customer app home grid' : 'Customer app exclusive offers'}
             </div>
           ) : (
             <div className="inline-flex items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
@@ -2961,15 +3631,25 @@ export default function AdminUiEditorPage() {
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
               {tab === 'categories'
                 ? 'Customer home category grid — shared across the customer app'
-                : 'Banners, ads, categories & screens for the customer / champ app'}
+                : tab === 'exclusive-offers'
+                  ? 'Curated product carousel on customer home — prices & visibility'
+                  : platform === 'champ'
+                    ? 'Banners & screens for the Champ driver app'
+                    : 'Banners, ads, categories & screens for the customer app'}
             </p>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <PreviewButton
-            loading={previewState.loading || previewLoading}
-            onClick={() => handlePreview(headerPreviewScreen)}
+            loading={tab !== 'banners' && (previewState.loading || previewLoading)}
+            onClick={() => {
+              if (tab === 'banners') {
+                setBannersMobilePreviewOpen(true)
+                return
+              }
+              handlePreview(headerPreviewScreen)
+            }}
           />
           <button
             type="button"
@@ -2981,7 +3661,9 @@ export default function AdminUiEditorPage() {
               ? 'Publishing…'
               : tab === 'categories'
                 ? 'Publish home grid'
-                : 'Publish'}
+                : tab === 'exclusive-offers'
+                  ? 'Publish exclusive offers'
+                  : 'Publish'}
           </button>
         </div>
       </div>
@@ -3005,7 +3687,7 @@ export default function AdminUiEditorPage() {
       {actionMessage ? <p className="mb-3 text-[13px] text-[#147940]">{actionMessage}</p> : null}
 
       <div className="mb-3 flex items-center gap-1 rounded-[10px] bg-[#e8f0ea] p-[3px]">
-        {TABS.map((item) => (
+        {visibleTabs.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -3027,8 +3709,8 @@ export default function AdminUiEditorPage() {
           <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-[#f3e0a8] bg-[#fff8e1] px-3.5 py-2.5 text-[12.5px] text-[#9a6510]">
             <Lightbulb size={15} className="mt-0.5 shrink-0" />
             <p>
-              Each screen exposes fixed &quot;slots&quot;. Add or arrange banners/ads in any slot — schedule &amp; audience
-              set per banner.
+              Each screen exposes fixed &quot;slots&quot;. Add banners/ads per slot, or curated products in
+              Super Exclusive offers on the customer home screen.
             </p>
           </div>
 
@@ -3050,6 +3732,8 @@ export default function AdminUiEditorPage() {
                 key={screen.id}
                 screen={screen}
                 onAdd={openBannerModal}
+                onAddExclusive={() => setExclusiveModalOpen(true)}
+                exclusiveEditor={exclusiveEditor}
                 onEdit={openEditBannerModal}
                 onDelete={handleDeleteBanner}
                 onPreview={handlePreview}
@@ -3071,12 +3755,27 @@ export default function AdminUiEditorPage() {
           onDelete={handleDeleteBanner}
           onScreenChange={setBannerScreenId}
           bannersRefreshKey={bannersRefreshKey}
+          exclusiveEditor={exclusiveEditor}
+          onAddExclusive={() => setExclusiveModalOpen(true)}
+          mobilePreviewOpen={bannersMobilePreviewOpen}
+          onMobilePreviewClose={() => setBannersMobilePreviewOpen(false)}
         />
       ) : null}
 
       {tab === 'categories' ? (
         <CategoriesTab onMessage={setActionMessage} />
       ) : null}
+
+      {tab === 'exclusive-offers' ? (
+        <ExclusiveOffersTab editor={exclusiveEditor} />
+      ) : null}
+
+      <AddExclusiveProductsModal
+        open={exclusiveModalOpen}
+        onClose={() => !exclusiveEditor.busy && setExclusiveModalOpen(false)}
+        isSubmitting={exclusiveEditor.busy}
+        onSubmit={handleAddExclusiveProducts}
+      />
 
       <AdminNewBannerModal
         open={bannerModal.open}
@@ -3087,6 +3786,8 @@ export default function AdminUiEditorPage() {
         initialBanner={bannerModal.initialBanner}
         targets={bannerTargets}
         targetsLoading={bannerTargetsLoading}
+        tapActions={platform === 'champ' ? CHAMP_TAP_ACTIONS : undefined}
+        audiences={platform === 'champ' ? CHAMP_AUDIENCES : undefined}
         onTapActionChange={loadBannerTargets}
         onClose={closeBannerModal}
         onSubmit={handleBannerSubmit}

@@ -17,6 +17,11 @@ export const LIVE_ORDER_SORTS = [
   { id: 'vendor', label: 'Vendor' },
 ]
 
+export const LIVE_INCIDENT_PRIORITY_SORTS = [
+  { id: 'incident_priority', label: 'P1 → P4' },
+  { id: 'incident_priority_desc', label: 'P4 → P1' },
+]
+
 export const EMPTY_LIVE_ORDER_QUERY = {
   q: '',
   vendorIds: [],
@@ -26,7 +31,10 @@ export const EMPTY_LIVE_ORDER_QUERY = {
 }
 
 const TYPE_IDS = new Set(LIVE_ORDER_TYPES.map((item) => item.id))
-const SORT_IDS = new Set(LIVE_ORDER_SORTS.map((item) => item.id))
+const SORT_IDS = new Set([
+  ...LIVE_ORDER_SORTS.map((item) => item.id),
+  ...LIVE_INCIDENT_PRIORITY_SORTS.map((item) => item.id),
+])
 
 function splitCsv(value) {
   return String(value || '')
@@ -152,6 +160,14 @@ export function orderMatchesLiveQuery(order, query) {
   return true
 }
 
+const INCIDENT_PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 }
+
+function incidentPriorityRank(order) {
+  const priority = order?.incidentPriority
+  if (!priority) return 99
+  return INCIDENT_PRIORITY_RANK[priority] ?? 99
+}
+
 export function sortLiveOrders(orders, sort) {
   const list = Array.isArray(orders) ? [...orders] : []
   const key = SORT_IDS.has(sort) ? sort : 'time_left'
@@ -168,6 +184,16 @@ export function sortLiveOrders(orders, sort) {
     }
     if (key === 'oldest') {
       if (!Number.isNaN(aCreated) && !Number.isNaN(bCreated)) return aCreated - bCreated
+      return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
+    }
+    if (key === 'incident_priority') {
+      const byPriority = incidentPriorityRank(a) - incidentPriorityRank(b)
+      if (byPriority !== 0) return byPriority
+      return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
+    }
+    if (key === 'incident_priority_desc') {
+      const byPriority = incidentPriorityRank(b) - incidentPriorityRank(a)
+      if (byPriority !== 0) return byPriority
       return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
     }
     return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)

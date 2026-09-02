@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   AdminVendorSlaTemplate,
+  SLA_TIER_FOOTNOTES,
+  SlaTierPageFooter,
   VENDOR_SLA_SECTIONS,
   CHAMP_SLA_SECTIONS,
   DISPATCHER_SLA_SECTIONS,
@@ -10,6 +12,7 @@ import {
 import { ApiErrorBanner } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 import { useAdminSlaModels } from '../../../hooks/admin/useAdminSlaModels'
+import { mapSlaConfigToForm } from '../../../mappers/admin/mapAdminSlaModels'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
 
@@ -28,11 +31,11 @@ function tabFromPath(pathname) {
 const TAB_COPY = {
   vendor: {
     title: 'Vendor SLA',
-    subtitle: 'Service-level rules per fulfillment mode — choose operator and time/limit',
+    subtitle: 'Service-level rules per fulfillment mode — target, at-risk, and critical thresholds per metric.',
   },
   champ: {
     title: 'Champ SLA',
-    subtitle: 'Performance thresholds and CPI scoring for champs',
+    subtitle: 'Performance thresholds and CPI scoring for champs — now with at-risk and critical breakpoints.',
   },
   dispatcher: {
     title: 'Dispatcher SLA',
@@ -57,6 +60,9 @@ export default function AdminSlaModelsPage() {
   const { pageData, error, isLoading, enabled, refetch } = useAdminSlaModels()
   const { mutate: saveForm, isLoading: isSaving, error: saveError, reset: resetSave } = useApiMutation(
     (payload) => adminSlaModelsService.saveForm(payload),
+  )
+  const { mutate: resetDraft, isLoading: isResetting, error: resetError, reset: resetResetMutation } = useApiMutation(
+    (modelId) => adminSlaModelsService.reset(modelId),
   )
 
   const [vendorValues, setVendorValues] = useState(vendorDefaults)
@@ -90,9 +96,34 @@ export default function AdminSlaModelsPage() {
     setConfig(pageData.config || {})
   }, [pageData, vendorDefaults, champDefaults, dispatcherDefaults])
 
-  function handleReset() {
+  async function handleReset() {
     setSaveMessage(null)
     resetSave()
+    resetResetMutation()
+
+    if (model?.id && enabled) {
+      try {
+        const result = await resetDraft(model.id)
+        const next = result?.data
+        const nextConfig = next?.config && typeof next.config === 'object' ? next.config : config
+        const nextForm = mapSlaConfigToForm(nextConfig)
+        setVendorValues(cloneValues(nextForm.vendorValues))
+        setChampValues(cloneValues(nextForm.champValues))
+        setDispatcherValues(cloneValues(nextForm.dispatcherValues))
+        setSnapshot({
+          vendor: cloneValues(nextForm.vendorValues),
+          champ: cloneValues(nextForm.champValues),
+          dispatcher: cloneValues(nextForm.dispatcherValues),
+        })
+        if (next) setModel(next)
+        setConfig(nextConfig)
+        setSaveMessage('SLA reset to platform defaults.')
+        return
+      } catch {
+        // Fall back to reverting unsaved tab edits below.
+      }
+    }
+
     if (tab === 'vendor') setVendorValues(cloneValues(snapshot.vendor))
     if (tab === 'champ') setChampValues(cloneValues(snapshot.champ))
     if (tab === 'dispatcher') setDispatcherValues(cloneValues(snapshot.dispatcher))
@@ -136,7 +167,7 @@ export default function AdminSlaModelsPage() {
     ? saveError.draftSaved
       ? `Draft saved, but publish failed${saveError.message ? `: ${saveError.message}` : '.'}`
       : saveError.message || 'Unable to save SLA.'
-    : null
+    : resetError?.message || null
 
   return (
     <div className="px-5 py-4 pb-24 max-[700px]:px-3">
@@ -207,20 +238,22 @@ export default function AdminSlaModelsPage() {
         />
       ) : null}
 
+      <SlaTierPageFooter footnote={SLA_TIER_FOOTNOTES[tab]} />
+
       <div className="fixed bottom-0 left-[250px] right-0 z-20 border-t border-[#eceeec] bg-white/95 px-5 py-3 backdrop-blur max-[900px]:left-0">
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={handleReset}
-            disabled={isSaving}
+            disabled={isSaving || isResetting}
             className="inline-flex h-[36px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12.5px] font-bold text-[#455249] hover:bg-[#f8faf8] disabled:opacity-60"
           >
-            Reset
+            {isResetting ? 'Resetting…' : 'Reset'}
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving || isLoading}
+            disabled={isSaving || isLoading || isResetting}
             className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[12.5px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47] disabled:opacity-60"
           >
             {isSaving ? 'Saving…' : 'Save SLA'}
