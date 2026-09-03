@@ -52,10 +52,12 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
 
     let cancelled = false
 
-    async function loadConversation() {
-      setIsLoading(true)
-      setError(null)
-      setSendError(null)
+    async function loadConversation({ silent = false } = {}) {
+      if (!silent) {
+        setIsLoading(true)
+        setError(null)
+        setSendError(null)
+      }
 
       try {
         const response = await adminChatService.getConversation(conversationId)
@@ -64,28 +66,37 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
         setMessages(response.data?.messages || [])
         setStatusDraft(response.data?.status || response.data?.lifecycle?.status || 'OPEN')
 
-        try {
-          await adminChatService.markRead(conversationId)
-          if (!cancelled) onMarkedReadRef.current?.(conversationId)
-        } catch {
-          // Opening the thread still succeeds if mark-read fails.
+        if (!silent) {
+          try {
+            await adminChatService.markRead(conversationId)
+            if (!cancelled) onMarkedReadRef.current?.(conversationId)
+          } catch {
+            // Opening the thread still succeeds if mark-read fails.
+          }
         }
       } catch (err) {
         if (cancelled) return
-        setError(err)
-        setMessages(
-          chat?.message
-            ? [{ id: 'preview', text: chat.message, time: '', own: false }]
-            : [],
-        )
+        if (!silent) {
+          setError(err)
+          setMessages(
+            chat?.message
+              ? [{ id: 'preview', text: chat.message, time: '', own: false }]
+              : [],
+          )
+        }
       } finally {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled && !silent) setIsLoading(false)
       }
     }
 
     loadConversation()
+    const pollId = window.setInterval(() => {
+      loadConversation({ silent: true })
+    }, 3000)
+
     return () => {
       cancelled = true
+      window.clearInterval(pollId)
     }
   }, [useReal, conversationId, chat?.message])
 
@@ -277,7 +288,28 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
                   {item.senderRole === 'DRIVER' ? 'Champ' : item.senderRole}
                 </p>
               ) : null}
-              <p className="text-[12px] leading-[16px] text-[#354039]">{item.text}</p>
+              {item.text ? (
+                <p className="text-[12px] leading-[16px] text-[#354039]">{item.text}</p>
+              ) : null}
+              {Array.isArray(item.attachments) && item.attachments.length > 0 ? (
+                <div className="mt-1.5 space-y-1.5">
+                  {item.attachments.map((url) => (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block overflow-hidden rounded-md border border-[#e3e8e4]"
+                    >
+                      <img
+                        src={url}
+                        alt="Attachment"
+                        className="max-h-40 w-full object-cover"
+                      />
+                    </a>
+                  ))}
+                </div>
+              ) : null}
               <p className="mt-0.5 text-[8px] text-[#929b95]">{item.time}</p>
             </div>
           </div>

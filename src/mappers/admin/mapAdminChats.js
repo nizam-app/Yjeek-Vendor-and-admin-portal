@@ -46,6 +46,7 @@ export function mapAdminChatItem(item) {
   const peerName = item.peerName ? String(item.peerName) : '—'
   const role = mapPeerRole(item.peerRole, item.channel)
   const ticketDisplayCode = item.ticketDisplayCode ? String(item.ticketDisplayCode) : ''
+  const ticketId = item.ticketId ? String(item.ticketId) : ''
   const issueType = formatIssueType(item.issueType)
   const baseMessage = item.lastMessage ? String(item.lastMessage) : ''
   const message =
@@ -54,8 +55,9 @@ export function mapAdminChatItem(item) {
       : ticketDisplayCode || baseMessage
 
   return {
-    id: String(conversationId),
+    id: ticketDisplayCode ? `${conversationId}:${ticketDisplayCode}` : String(conversationId),
     conversationId: String(conversationId),
+    ticketId: ticketId || null,
     orderId: item.orderId ?? null,
     orderNumber: item.orderNumber ? String(item.orderNumber) : null,
     channel: item.channel ? String(item.channel) : null,
