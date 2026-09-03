@@ -1,4 +1,9 @@
 import { ApiError } from '../../api/errors'
+import {
+  enrichIncidentRow,
+  buildIncidentHistoryRows,
+  INCIDENT_PRIORITY_RANK,
+} from '../../lib/adminIncidentPresentation'
 
 const PRIORITY_TONE = {
   P1: 'red',
@@ -43,11 +48,14 @@ export function mapAdminIncidentItem(item) {
   if (!item || typeof item !== 'object') return null
   if (!item.id && !item.title && !item.type) return null
 
-  const priority = item.priorityLabel
+  const priorityRaw = item.priorityLabel
     ? String(item.priorityLabel)
     : item.priority
       ? String(item.priority)
-      : 'P4'
+      : null
+  const priority = priorityRaw && INCIDENT_PRIORITY_RANK[priorityRaw.toUpperCase()]
+    ? priorityRaw.toUpperCase()
+    : null
   const statusRaw = item.status ? String(item.status) : ''
   const statusLabel = mapStatusLabel(statusRaw, item.statusLabel)
   const statusLower = statusLabel ? statusLabel.toLowerCase() : statusRaw.toLowerCase()
@@ -55,10 +63,10 @@ export function mapAdminIncidentItem(item) {
   const title = item.title || item.type || 'Incident'
   const detail = orderNumber ? `#${orderNumber} · ${statusLower}` : statusLower
 
-  return {
-    id: item.id ? String(item.id) : `${priority}-${title}-${detail}`,
+  return enrichIncidentRow({
+    id: item.id ? String(item.id) : `inc-${String(title)}-${detail}`,
     priority,
-    tone: PRIORITY_TONE[priority] || 'gray',
+    tone: priority ? (PRIORITY_TONE[priority] || 'gray') : 'gray',
     title: String(title),
     /** Alias for IncidentLog (scheduled) which uses `name`. */
     name: String(title),
@@ -88,7 +96,33 @@ export function mapAdminIncidentItem(item) {
       ? String(item.createdLabel)
       : formatAdminIncidentRelativeTime(item.createdAt),
     metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : null,
-  }
+    lifecycleState: item.lifecycleState ?? null,
+    source: item.source ?? null,
+    incidentClass: item.incidentClass ?? null,
+    category: item.category ?? null,
+    subCategory: item.subCategory ?? null,
+    severity: item.severity ?? null,
+    openedAt: item.openedAt ?? null,
+    firstResponseAt: item.firstResponseAt ?? null,
+    assignedToUserId: item.assignedToUserId ?? null,
+    evidenceHoldAt: item.evidenceHoldAt ?? null,
+    partyNotifiedAt: item.partyNotifiedAt ?? null,
+    partyRespondedAt: item.partyRespondedAt ?? null,
+    customerRemedy: item.customerRemedy ?? null,
+    costBearer: item.costBearer ?? null,
+    bearerWasOverridden: item.bearerWasOverridden ?? false,
+    resolutionActionCode: item.resolutionActionCode ?? null,
+    previousResolutionActionCode: item.previousResolutionActionCode ?? null,
+    compensationAmountBhd: item.compensationAmountBhd ?? null,
+    compensationType: item.compensationType ?? null,
+    recurredWithin14Days: item.recurredWithin14Days ?? false,
+    recurrenceCount14d: item.recurrenceCount14d ?? null,
+    recurrenceContext: item.recurrenceContext ?? null,
+    evidenceCount: item.evidenceCount ?? item._count?.evidence ?? 0,
+    resolutionSummary: item.resolutionSummary ?? null,
+    incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
+    readinessManaged: item.readinessManaged ?? false,
+  })
 }
 
 function mapSummary(summary) {
@@ -170,34 +204,21 @@ function formatWhen(iso) {
  */
 export function mapAdminIncidentHistory(incident) {
   if (!incident) return []
-  const rows = []
-
-  if (incident.createdAt) {
-    rows.push({
-      id: 'created',
-      label: 'Opened',
-      actor: incident.customerName ? `Reported · ${incident.customerName}` : 'System',
-      at: formatWhen(incident.createdAt),
-    })
-  }
-  if (incident.acknowledgedAt) {
-    rows.push({
-      id: 'acknowledged',
-      label: 'Acknowledged',
-      actor: incident.acknowledgedByName || 'Admin',
-      at: formatWhen(incident.acknowledgedAt),
-    })
-  }
-  if (incident.resolvedAt) {
-    rows.push({
-      id: 'resolved',
-      label: 'Resolved',
-      actor: incident.resolvedByName || 'Admin',
-      at: formatWhen(incident.resolvedAt),
-    })
-  }
-
-  return rows
+  const enriched = enrichIncidentRow(incident)
+  return buildIncidentHistoryRows(enriched).map((row, index) => ({
+    id: row.id || `event-${index}`,
+    label: row.label,
+    actor: row.actor,
+    at: row.at
+      ? new Date(row.at).toLocaleString([], {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      : null,
+  }))
 }
 
 /**
@@ -212,6 +233,10 @@ export function mapAdminIncidentDetail(data) {
   return {
     ...item,
     order: data?.order && typeof data.order === 'object' ? data.order : null,
+    evidence: Array.isArray(data?.evidence) ? data.evidence : [],
+    typedActions: Array.isArray(data?.typedActions) ? data.typedActions : [],
+    availableActions: Array.isArray(data?.availableActions) ? data.availableActions : [],
+    chatConversationId: data?.chatConversationId ?? null,
     canResolve: Boolean(data?.canResolve),
     history: mapAdminIncidentHistory(item),
   }

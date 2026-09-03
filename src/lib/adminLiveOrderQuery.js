@@ -1,6 +1,17 @@
 /** Live Orders search / vendor / type / champ / sort — client-side AND filters. */
 
+import { orderMatchesIncidentFilters } from './adminOrderIncidentIndex.js'
+import { INCIDENT_PRIORITY_RANK } from './adminIncidentPresentation.js'
+
 export const UNASSIGNED_CHAMP_ID = '__unassigned__'
+
+export const INCIDENT_SEVERITIES = [
+  { id: 'P1', label: 'P1' },
+  { id: 'P2', label: 'P2' },
+  { id: 'P3', label: 'P3' },
+  { id: 'P4', label: 'P4' },
+  { id: 'UNCLASSIFIED', label: 'Unclassified' },
+]
 
 export const LIVE_ORDER_TYPES = [
   { id: 'hot_food', label: 'Hot food' },
@@ -22,11 +33,19 @@ export const LIVE_INCIDENT_PRIORITY_SORTS = [
   { id: 'incident_priority_desc', label: 'P4 → P1' },
 ]
 
+export const LIVE_INCIDENT_AGE_SORTS = [
+  { id: 'incident_age_oldest', label: 'Incident age · oldest' },
+  { id: 'incident_age_newest', label: 'Incident age · newest' },
+]
+
 export const EMPTY_LIVE_ORDER_QUERY = {
   q: '',
   vendorIds: [],
   types: [],
   champIds: [],
+  incidentSeverities: [],
+  incidentCategories: [],
+  incidentUnattended: false,
   sort: 'time_left',
 }
 
@@ -34,6 +53,7 @@ const TYPE_IDS = new Set(LIVE_ORDER_TYPES.map((item) => item.id))
 const SORT_IDS = new Set([
   ...LIVE_ORDER_SORTS.map((item) => item.id),
   ...LIVE_INCIDENT_PRIORITY_SORTS.map((item) => item.id),
+  ...LIVE_INCIDENT_AGE_SORTS.map((item) => item.id),
 ])
 
 function splitCsv(value) {
@@ -50,11 +70,15 @@ function setOrDelete(params, key, value) {
 
 export function parseLiveOrderQuery(searchParams) {
   const sort = String(searchParams?.get?.('sort') || 'time_left')
+  const incidentUnattended = String(searchParams?.get?.('unattended') || '') === '1'
   return {
     q: String(searchParams?.get?.('q') || ''),
     vendorIds: splitCsv(searchParams?.get?.('vendor')),
     types: splitCsv(searchParams?.get?.('type')).filter((id) => TYPE_IDS.has(id)),
     champIds: splitCsv(searchParams?.get?.('champ')),
+    incidentSeverities: splitCsv(searchParams?.get?.('isev')).filter((id) => INCIDENT_SEVERITIES.some((s) => s.id === id)),
+    incidentCategories: splitCsv(searchParams?.get?.('icat')),
+    incidentUnattended,
     sort: SORT_IDS.has(sort) ? sort : 'time_left',
   }
 }
@@ -66,12 +90,18 @@ export function writeLiveOrderQuery(searchParams, query) {
   const vendorIds = Array.isArray(query?.vendorIds) ? query.vendorIds.filter(Boolean) : []
   const types = Array.isArray(query?.types) ? query.types.filter((id) => TYPE_IDS.has(id)) : []
   const champIds = Array.isArray(query?.champIds) ? query.champIds.filter(Boolean) : []
+  const incidentSeverities = Array.isArray(query?.incidentSeverities) ? query.incidentSeverities.filter(Boolean) : []
+  const incidentCategories = Array.isArray(query?.incidentCategories) ? query.incidentCategories.filter(Boolean) : []
   const sort = SORT_IDS.has(query?.sort) ? query.sort : 'time_left'
 
   setOrDelete(next, 'q', q)
   setOrDelete(next, 'vendor', vendorIds.join(','))
   setOrDelete(next, 'type', types.join(','))
   setOrDelete(next, 'champ', champIds.join(','))
+  setOrDelete(next, 'isev', incidentSeverities.join(','))
+  setOrDelete(next, 'icat', incidentCategories.join(','))
+  if (query?.incidentUnattended) next.set('unattended', '1')
+  else next.delete('unattended')
   if (sort && sort !== 'time_left') next.set('sort', sort)
   else next.delete('sort')
   return next
@@ -83,7 +113,10 @@ export function liveOrderQueryIsActive(query) {
     String(query.q || '').trim()
     || (query.vendorIds && query.vendorIds.length)
     || (query.types && query.types.length)
-    || (query.champIds && query.champIds.length),
+    || (query.champIds && query.champIds.length)
+    || (query.incidentSeverities && query.incidentSeverities.length)
+    || (query.incidentCategories && query.incidentCategories.length)
+    || query.incidentUnattended,
   )
 }
 
@@ -157,13 +190,13 @@ export function orderMatchesLiveQuery(order, query) {
     if (!idMatch && !(allowUnassigned && unassigned)) return false
   }
 
+  if (!orderMatchesIncidentFilters(order, query)) return false
+
   return true
 }
 
-const INCIDENT_PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 }
-
 function incidentPriorityRank(order) {
-  const priority = order?.incidentPriority
+  const priority = order?.incidentSummary?.highestPriority ?? order?.incidentPriority ?? null
   if (!priority) return 99
   return INCIDENT_PRIORITY_RANK[priority] ?? 99
 }
@@ -195,6 +228,14 @@ export function sortLiveOrders(orders, sort) {
       const byPriority = incidentPriorityRank(b) - incidentPriorityRank(a)
       if (byPriority !== 0) return byPriority
       return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
+    }
+    if (key === 'incident_age_oldest' || key === 'incident_age_newest') {
+      const aTs = a?.incidentSummary?.oldestOpenedAt ? Date.parse(a.incidentSummary.oldestOpenedAt) : NaN
+      const bTs = b?.incidentSummary?.oldestOpenedAt ? Date.parse(b.incidentSummary.oldestOpenedAt) : NaN
+      if (Number.isNaN(aTs) && Number.isNaN(bTs)) return 0
+      if (Number.isNaN(aTs)) return 1
+      if (Number.isNaN(bTs)) return -1
+      return key === 'incident_age_newest' ? bTs - aTs : aTs - bTs
     }
     return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
   })
@@ -267,6 +308,18 @@ export function liveOrderFilterChips(query, { vendors = [], champs = [] } = {}) 
     })
   }
 
+  for (const id of query?.incidentSeverities || []) {
+    chips.push({ key: `isev:${id}`, label: `Severity · ${id}`, group: 'isev', id })
+  }
+
+  for (const id of query?.incidentCategories || []) {
+    chips.push({ key: `icat:${id}`, label: `Incident · ${id}`, group: 'icat', id })
+  }
+
+  if (query?.incidentUnattended) {
+    chips.push({ key: 'unattended', label: 'Unattended', group: 'unattended' })
+  }
+
   return chips
 }
 
@@ -277,6 +330,8 @@ export function removeLiveOrderChip(query, chip) {
     vendorIds: [...(query.vendorIds || [])],
     types: [...(query.types || [])],
     champIds: [...(query.champIds || [])],
+    incidentSeverities: [...(query.incidentSeverities || [])],
+    incidentCategories: [...(query.incidentCategories || [])],
   }
   if (chip.key === 'q') {
     next.q = ''
@@ -285,5 +340,8 @@ export function removeLiveOrderChip(query, chip) {
   if (chip.group === 'vendor') next.vendorIds = next.vendorIds.filter((id) => id !== chip.id)
   if (chip.group === 'type') next.types = next.types.filter((id) => id !== chip.id)
   if (chip.group === 'champ') next.champIds = next.champIds.filter((id) => id !== chip.id)
+  if (chip.group === 'isev') next.incidentSeverities = next.incidentSeverities.filter((id) => id !== chip.id)
+  if (chip.group === 'icat') next.incidentCategories = next.incidentCategories.filter((id) => id !== chip.id)
+  if (chip.group === 'unattended') next.incidentUnattended = false
   return next
 }

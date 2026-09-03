@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { ArrowUpRight, MessageCircle, RefreshCw } from 'lucide-react'
 import { useAdminLiveOrders } from '../../../hooks/admin/useAdminLiveOrders'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
+import { useAdminRefundApprovals } from '../../../hooks/admin/useAdminRefundApprovals'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { useAdminOrderDetail } from '../../../hooks/admin/useAdminOrderDetail'
 import { useAdminOrderActionOptions } from '../../../hooks/admin/useAdminOrderActionOptions'
@@ -17,15 +18,21 @@ import { AdminActiveChatPanels } from '../../../components/admin/operations/Admi
 import { AdminOpenChats } from '../../../components/admin/operations/AdminOpenChats'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
+import { AdminIncidentDetailContent } from '../../../components/admin/operations/AdminIncidentDetailContent'
 import { AdminOrderTakeActionPanel } from '../../../components/admin/operations/AdminOrderTakeActionPanel'
 import AdminReassignChampModal from '../../../components/admin/AdminReassignChampModal'
 import AdminRedispatchOrderModal from '../../../components/admin/AdminRedispatchOrderModal'
 import AdminRefundModal from '../../../components/admin/AdminRefundModal'
+import AdminRefundApprovalsPanel from '../../../components/admin/AdminRefundApprovalsPanel'
+import AdminMarkResolvedModal from '../../../components/admin/AdminMarkResolvedModal'
 import AdminCancelOrderModal from '../../../components/admin/AdminCancelOrderModal'
 import AdminOrderSuspendChampModal from '../../../components/admin/AdminOrderSuspendChampModal'
 import AdminFlagVendorModal from '../../../components/admin/AdminFlagVendorModal'
+import AdminGoodwillModal from '../../../components/admin/AdminGoodwillModal'
+import AdminRedeliverModal from '../../../components/admin/AdminRedeliverModal'
 import { adminOrderService } from '../../../services/admin/orderService'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { useAuth } from '../../../context/AuthContext'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
 import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
 import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
@@ -50,6 +57,13 @@ import {
   vendorsFromOrders,
   writeLiveOrderQuery,
 } from '../../../lib/adminLiveOrderQuery'
+import {
+  buildOrderIncidentIndex,
+  countUnattendedIncidents,
+  incidentCategoriesFromIndex,
+  mergeBoardOrdersWithIncidents,
+  mergeOrderIncidentSummary,
+} from '../../../lib/adminOrderIncidentIndex'
 
 const DEFAULT_RESOLVE_OUTCOME = 'Resolved with refund'
 
@@ -234,7 +248,7 @@ export function AdminOrderDetailModal({ order, onClose, preference = 'live' }) {
 }
 
 export function IncidentOrderModal({ order, onClose }) {
-  const [openActionMenu, setOpenActionMenu] = useState(null)
+  const [detailIncident, setDetailIncident] = useState(null)
   const [activeAction, setActiveAction] = useState(null)
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState(null)
@@ -255,14 +269,14 @@ export function IncidentOrderModal({ order, onClose }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        if (activeAction) setActiveAction(null)
-        else if (openActionMenu) setOpenActionMenu(null)
+        if (detailIncident) setDetailIncident(null)
+        else if (activeAction) setActiveAction(null)
         else onClose()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose, openActionMenu, activeAction])
+  }, [onClose, activeAction, detailIncident])
 
   if (!order) return null
 
@@ -277,10 +291,20 @@ export function IncidentOrderModal({ order, onClose }) {
     )
   }
 
-  const canMarkResolved = detail?.availableActions?.includes('MARK_RESOLVED')
   const openIncidents = (detail?.incidents || []).filter(
     (incident) => incident.id && String(incident.status || '').toLowerCase() !== 'resolved',
   )
+  const legacyOpenIncidents = openIncidents.filter((incident) => !incident.readinessManaged)
+  const readinessOpenIncidents = openIncidents.filter((incident) => incident.readinessManaged)
+  const canMarkResolvedLegacy =
+    detail?.availableActions?.includes('MARK_RESOLVED') && legacyOpenIncidents.length > 0
+  const canMarkResolvedReadiness = readinessOpenIncidents.length > 0
+  const activeIncidentId =
+    activeAction?.incidentId ||
+    legacyOpenIncidents[0]?.id ||
+    readinessOpenIncidents[0]?.id ||
+    openIncidents[0]?.id ||
+    null
 
   async function markResolved(incidentId) {
     const id = String(incidentId || '').trim()
@@ -291,7 +315,6 @@ export function IncidentOrderModal({ order, onClose }) {
 
     setResolveError(null)
     setResolving(true)
-    setOpenActionMenu(null)
     try {
       await adminOrderService.resolveIncident(id, { outcome: DEFAULT_RESOLVE_OUTCOME })
       await refetch()
@@ -303,9 +326,15 @@ export function IncidentOrderModal({ order, onClose }) {
   }
 
   function startAction(code, incidentId = null) {
-    setOpenActionMenu(null)
     if (code === 'MARK_RESOLVED') {
-      void markResolved(incidentId || openIncidents[0]?.id || null)
+      const targetId =
+        incidentId || legacyOpenIncidents[0]?.id || readinessOpenIncidents[0]?.id || null
+      const targetIncident = openIncidents.find((row) => row.id === targetId)
+      if (targetIncident?.readinessManaged) {
+        setActiveAction({ code: 'MARK_RESOLVED_TYPED', incidentId: targetId })
+        return
+      }
+      void markResolved(targetId)
       return
     }
     setActiveAction({ code, incidentId })
@@ -421,46 +450,20 @@ export function IncidentOrderModal({ order, onClose }) {
                   <p className="py-3 text-center text-[9px] text-[#78827c]">No incidents</p>
                 ) : detail.incidents.map((incident) => (
                   <article key={incident.id || incident.title} className="relative mb-2 rounded-[9px] border border-[#e0e5e1] bg-[#fafbfa] p-2.5 last:mb-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-[9px] font-bold">{incident.title}</h4>
-                      <Badge tone={incident.statusTone}>{incident.status}</Badge>
-                    </div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {incident.badges.map(([label, tone]) => <Badge key={label} tone={tone}>{label}</Badge>)}
-                    </div>
-                    <p className="mt-1.5 text-[8px] text-[#515c55]">{incident.detail}</p>
-                    {incident.meta ? <p className="mt-1 text-[8px] text-[#929a95]">{incident.meta}</p> : null}
-                    {detail.actionGroups.length > 0 ? (
-                      <>
-                        <button
-                          type="button"
-                          aria-expanded={openActionMenu === (incident.id || incident.title)}
-                          onClick={() => setOpenActionMenu((current) => current === (incident.id || incident.title) ? null : (incident.id || incident.title))}
-                          className="mt-2 rounded-full bg-[#18a653] px-3 py-1.5 text-[8px] font-medium text-white hover:bg-[#128944]"
-                        >
-                          ⚡ &nbsp; Take action &nbsp;⌄
-                        </button>
-                        {openActionMenu === (incident.id || incident.title) ? (
-                          <div className="absolute left-2.5 top-[calc(100%-2px)] z-30 w-[262px] overflow-hidden rounded-[9px] border border-[#e1e5e2] bg-white text-[10px] shadow-[0_10px_26px_rgba(20,30,24,.18)]">
-                            {detail.actionGroups.map((group) => (
-                              <div key={group.title}>
-                                <div className="bg-[#f5f6f7] px-3 py-1.5 text-[8px] font-bold uppercase tracking-wide text-[#929ba6]">{group.title}</div>
-                                {group.actions.map((action) => (
-                                  <button
-                                    key={action.code}
-                                    type="button"
-                                    onClick={() => startAction(action.code, incident.id)}
-                                    className="flex h-[30px] w-full items-center gap-2.5 px-3 text-left font-medium text-[#29332d] hover:bg-[#f5f8f6]"
-                                  >
-                                    <span className={cn('w-3 text-center text-[13px]', action.tone)}>{action.icon}</span>
-                                    <span className={action.code === 'CANCEL' || action.code === 'SUSPEND_CHAMP' ? 'text-[#d92f35]' : ''}>{action.label}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </>
+                    <AdminIncidentDetailContent
+                      incident={incident}
+                      compact
+                      actionGroups={detail.actionGroups}
+                      onAction={(code, incidentId) => startAction(code, incidentId)}
+                    />
+                    {incident.id ? (
+                      <button
+                        type="button"
+                        className="mt-2 text-[8px] font-medium text-[#16854a] hover:underline"
+                        onClick={() => setDetailIncident(incident)}
+                      >
+                        Open full incident detail
+                      </button>
                     ) : null}
                   </article>
                 ))}
@@ -473,12 +476,25 @@ export function IncidentOrderModal({ order, onClose }) {
               ) : null}
               <div className="flex justify-end gap-2">
                 <Button onClick={onClose} className="h-[28px] rounded-full px-3" disabled={resolving}>Close</Button>
-                {canMarkResolved ? (
+                {canMarkResolvedReadiness ? (
                   <Button
                     primary
                     className="h-[28px] rounded-full px-3"
-                    disabled={resolving || openIncidents.length === 0}
-                    onClick={() => markResolved(openIncidents[0]?.id || null)}
+                    onClick={() =>
+                      setActiveAction({
+                        code: 'MARK_RESOLVED_TYPED',
+                        incidentId: readinessOpenIncidents[0]?.id || null,
+                      })
+                    }
+                  >
+                    Mark resolved
+                  </Button>
+                ) : canMarkResolvedLegacy ? (
+                  <Button
+                    primary
+                    className="h-[28px] rounded-full px-3"
+                    disabled={resolving || legacyOpenIncidents.length === 0}
+                    onClick={() => markResolved(legacyOpenIncidents[0]?.id || null)}
                   >
                     {resolving ? 'Resolving…' : 'Mark resolved'}
                   </Button>
@@ -490,6 +506,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminReassignChampModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 orderNumber={detail.orderNumber || detail.id}
                 orderStatus={detail.stageLabel || detail.status}
                 currentChamp={detail.champ}
@@ -504,6 +521,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminRedispatchOrderModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 orderNumber={detail.orderNumber || detail.id}
                 orderStatus={detail.stageLabel || detail.status}
                 vendorName={detail.vendor?.name}
@@ -519,6 +537,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminRefundModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 orderValueLabel={detail.orderValue}
                 orderValueAmount={detail.orderValueAmount}
                 remainingRefundable={detail.remainingRefundable}
@@ -526,7 +545,10 @@ export function IncidentOrderModal({ order, onClose }) {
                 currency={detail.currency || 'BHD'}
                 reasons={actionOptions?.refundReasons || []}
                 destinations={actionOptions?.refundDestinations || []}
-                onClose={() => setActiveAction(null)}
+                onClose={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
                 onSuccess={async () => {
                   setActiveAction(null)
                   await refetch()
@@ -536,6 +558,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminCancelOrderModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 orderNumber={detail.orderNumber || detail.id}
                 orderValueLabel={detail.orderValue}
                 causes={actionOptions?.cancelCauses || []}
@@ -550,6 +573,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminOrderSuspendChampModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 champ={detail.champ}
                 champId={detail.champ?.id || null}
                 types={actionOptions?.suspendTypes || []}
@@ -565,6 +589,7 @@ export function IncidentOrderModal({ order, onClose }) {
               <AdminFlagVendorModal
                 open
                 orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
                 orderNumber={detail.orderNumber || detail.id}
                 vendorName={detail.vendor?.name}
                 vendorBranch={detail.vendor?.branch}
@@ -572,6 +597,51 @@ export function IncidentOrderModal({ order, onClose }) {
                 severities={actionOptions?.flagSeverities || []}
                 actions={actionOptions?.flagActions || []}
                 reasons={actionOptions?.flagReasons || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'REDELIVER' ? (
+              <AdminRedeliverModal
+                open
+                incidentId={activeIncidentId}
+                mode="REDELIVER"
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'REPLACE' ? (
+              <AdminRedeliverModal
+                open
+                incidentId={activeIncidentId}
+                mode="REPLACE"
+                items={detail.items || []}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'GOODWILL_CREDIT' ? (
+              <AdminGoodwillModal
+                open
+                orderId={detail.orderId || orderId}
+                incidentId={activeIncidentId}
+                currency={detail.currency || 'BHD'}
+                onClose={() => setActiveAction(null)}
+                onSuccess={async () => {
+                  setActiveAction(null)
+                  await refetch()
+                }}
+              />
+            ) : activeAction?.code === 'MARK_RESOLVED_TYPED' ? (
+              <AdminMarkResolvedModal
+                open
+                incidentId={activeIncidentId}
                 onClose={() => setActiveAction(null)}
                 onSuccess={async () => {
                   setActiveAction(null)
@@ -596,6 +666,13 @@ export function IncidentOrderModal({ order, onClose }) {
           </>
         )}
       </div>
+      {detailIncident ? (
+        <AdminIncidentDetailModal
+          incident={detailIncident}
+          onClose={() => setDetailIncident(null)}
+          onAction={(code, incidentId) => startAction(code, incidentId)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -612,6 +689,8 @@ function AdminLiveOrdersFullView({
   filter,
   chats,
   query,
+  incidentIndex,
+  incidentCategoryOptions = [],
   onQueryChange,
   onQueryClear,
   onBack,
@@ -631,7 +710,9 @@ function AdminLiveOrdersFullView({
     data?.columns?.find((item) => item.id === column.id) ||
     data?.columns?.find((item) => item.tone === column.tone)
 
-  const rawOrders = bucketColumn?.orders || []
+  const rawOrders = (bucketColumn?.orders || []).map((order) =>
+    mergeOrderIncidentSummary(order, incidentIndex),
+  )
   const chatOrders = isOpsChatFilter(filter)
     ? rawOrders.filter((order) => orderMatchesOpsFilter(order, filter))
     : rawOrders
@@ -670,6 +751,8 @@ function AdminLiveOrdersFullView({
           onChange={onQueryChange}
           onClear={onQueryClear}
           orders={chatOrders}
+          incidentCategories={incidentCategoryOptions}
+          showIncidentFilters
         />
       </div>
 
@@ -738,6 +821,7 @@ function AdminLiveOrdersFullView({
 }
 
 export default function AdminLiveOrdersPage() {
+  const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('All orders')
   const [fullView, setFullView] = useState(null)
@@ -778,8 +862,54 @@ export default function AdminLiveOrdersPage() {
     // Load the full bucket pool so each column can scroll independently.
     limit: ADMIN_BOARD_FULL_LIMIT,
   })
-  const { data: incidentsData } = useAdminIncidents()
-  const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+  const { data: sidebarIncidentsData } = useAdminIncidents({ status: 'OPEN', limit: 100 })
+  const {
+    data: refundApprovalsData,
+    isLoading: refundApprovalsLoading,
+    refetch: refetchRefundApprovals,
+  } = useAdminRefundApprovals({ status: 'PENDING_APPROVAL', limit: 50 })
+  const boardOrderIds = useMemo(() => {
+    const columns = Array.isArray(data?.columns) && data.columns.length
+      ? data.columns
+      : []
+    const ids = []
+    const seen = new Set()
+    for (const column of columns) {
+      for (const order of column.orders || []) {
+        const orderId = order.orderId || order.id
+        if (!orderId || seen.has(orderId)) continue
+        seen.add(orderId)
+        ids.push(String(orderId))
+      }
+    }
+    return ids
+  }, [data?.columns])
+  const boardOrderIdsKey = boardOrderIds.join(',')
+  const { data: boardIncidentsData } = useAdminIncidents({
+    enabled: boardOrderIds.length > 0,
+    orderIds: boardOrderIdsKey,
+    status: 'all',
+    limit: 500,
+  })
+  const incidents = useMemo(() => {
+    const byId = new Map()
+    for (const item of [
+      ...(Array.isArray(sidebarIncidentsData?.items) ? sidebarIncidentsData.items : []),
+      ...(Array.isArray(boardIncidentsData?.items) ? boardIncidentsData.items : []),
+    ]) {
+      if (item?.id) byId.set(item.id, item)
+    }
+    return [...byId.values()]
+  }, [sidebarIncidentsData, boardIncidentsData])
+  const incidentIndex = useMemo(() => buildOrderIncidentIndex(incidents), [incidents])
+  const incidentCategoryOptions = useMemo(
+    () => incidentCategoriesFromIndex(incidentIndex),
+    [incidentIndex],
+  )
+  const unattendedIncidentCount = useMemo(
+    () => countUnattendedIncidents(incidents),
+    [incidents],
+  )
   const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats({
     refreshSeconds: data?.refreshIntervalSeconds,
   })
@@ -819,11 +949,16 @@ export default function AdminLiveOrdersPage() {
         ]
   ), [data?.columns])
 
+  const mergedRawColumns = useMemo(
+    () => mergeBoardOrdersWithIncidents(rawColumns, incidentIndex),
+    [rawColumns, incidentIndex],
+  )
+
   const columns = useMemo(() => {
-    const byChat = filterOpsBoardColumns(rawColumns, filter)
+    const byChat = filterOpsBoardColumns(mergedRawColumns, filter)
     return filterOpsBoardLiveQuery(byChat, boardQuery)
-  }, [rawColumns, filter, boardQuery])
-  const boardOrders = useMemo(() => flattenOpsBoardOrders(rawColumns), [rawColumns])
+  }, [mergedRawColumns, filter, boardQuery])
+  const boardOrders = useMemo(() => flattenOpsBoardOrders(mergedRawColumns), [mergedRawColumns])
   const visibleChats = useMemo(
     () => buildOpsBoardChats(chats, boardOrders, filter),
     [chats, boardOrders, filter],
@@ -897,6 +1032,8 @@ export default function AdminLiveOrdersPage() {
           filter={filter}
           chats={chats}
           query={boardQuery}
+          incidentIndex={incidentIndex}
+          incidentCategoryOptions={incidentCategoryOptions}
           onQueryChange={patchBoardQuery}
           onQueryClear={clearBoardQuery}
           onBack={closeFullView}
@@ -1041,11 +1178,23 @@ export default function AdminLiveOrdersPage() {
           </div>
         </div>
 
-        <OpsIncidentsSidebar
-          fillHeight
-          incidents={incidents}
-          onIncidentClick={setSelectedIncident}
-        />
+        <div className="flex min-h-0 flex-col gap-0">
+          <AdminRefundApprovalsPanel
+            approvals={Array.isArray(refundApprovalsData) ? refundApprovalsData : []}
+            loading={refundApprovalsLoading}
+            currentUserId={user?.id ?? null}
+            onDecision={() => {
+              refetchRefundApprovals()
+              refetch()
+            }}
+          />
+          <OpsIncidentsSidebar
+            fillHeight
+            incidents={incidents}
+            unattendedCount={unattendedIncidentCount}
+            onIncidentClick={setSelectedIncident}
+          />
+        </div>
       </div>
 
       <AdminOpenChats
@@ -1063,6 +1212,16 @@ export default function AdminLiveOrdersPage() {
         <AdminIncidentDetailModal
           incident={selectedIncident}
           onClose={() => setSelectedIncident(null)}
+          onOpenChat={(conversationId) => {
+            openChatPanel({
+              id: conversationId,
+              conversationId,
+              name: 'Customer',
+              role: 'Customer',
+              channel: 'customer',
+              peerRole: 'CUSTOMER',
+            })
+          }}
           onOpenOrder={(order) => {
             setSelectedIncident(null)
             setSelectedOrder(order)
