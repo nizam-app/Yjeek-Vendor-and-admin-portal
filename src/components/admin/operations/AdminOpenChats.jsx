@@ -1,5 +1,11 @@
 import { cn } from '../cn'
 
+/** Card height + one gap — keep in sync with ChatCard / ChatGrid classes. */
+const CHAT_CARD_H = 54
+const CHAT_GRID_GAP = 10
+/** Exactly two visible chat rows; remaining rows scroll inside the panel. */
+const CHAT_GRID_MAX_H = CHAT_CARD_H * 2 + CHAT_GRID_GAP
+
 function ChatCard({ chat, onChatClick }) {
   const { initials, name, role, message, unreadCount } = chat
 
@@ -56,8 +62,11 @@ export function AdminOpenChats({
   const shouldGroup = groupByRole && (champChats.length > 0 || customerChats.length > 0)
 
   return (
-    <section className="sticky bottom-0 z-20 shrink-0 rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-3 pt-2.5 shadow-[0_-4px_16px_rgba(20,40,28,.06)]">
-      <div className="mb-2 flex items-center justify-between text-[11px]">
+    <section
+      className="sticky bottom-0 z-20 flex shrink-0 flex-col overflow-hidden rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-3 pt-2.5 shadow-[0_-4px_16px_rgba(20,40,28,.06)]"
+      style={{ maxHeight: CHAT_GRID_MAX_H + 52 }}
+    >
+      <div className="mb-2 flex shrink-0 items-center justify-between text-[11px]">
         <span className="flex items-center gap-2">
           <b>chats</b>
           {unread > 0 ? (
@@ -68,7 +77,7 @@ export function AdminOpenChats({
         </span>
         <span className="text-[#657169]">{count} active</span>
       </div>
-      <div className="max-h-[132px] overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto overscroll-contain" style={{ maxHeight: CHAT_GRID_MAX_H }}>
         {list.length === 0 ? (
           <div className="py-4 text-center text-[11px] text-[#78837c]">No open chats</div>
         ) : shouldGroup ? (
