@@ -654,7 +654,27 @@ function FieldControl({ field, value, onChange }) {
   return null
 }
 
-function FieldRow({ field, value, onChange }) {
+function FieldRow({ field, value, onChange, alignWithTier = false }) {
+  if (alignWithTier) {
+    // Same 5-column grid as TierGrid — single-value controls sit under Target.
+    return (
+      <div className="grid min-w-[720px] grid-cols-[1.5fr_1fr_1fr_1fr_0.6fr] items-center gap-2.5 border-b border-[#eceeec] px-1 py-3 last:border-b-0">
+        <div className="min-w-0">
+          <div className="text-[13.5px] font-medium text-[#17231c]">{field.label}</div>
+          {field.hint ? (
+            <div className="mt-0.5 text-[11px] leading-snug text-[#7c8780]">{field.hint}</div>
+          ) : null}
+        </div>
+        <div className="min-w-0 justify-self-start">
+          <FieldControl field={field} value={value} onChange={onChange} />
+        </div>
+        <div aria-hidden="true" />
+        <div aria-hidden="true" />
+        <StatusFlags />
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center justify-between gap-4 py-2.5">
       <span className="min-w-0 flex-1 text-[13px] text-[#455249]">{field.label}</span>
@@ -770,6 +790,7 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
         const otherFields = nonTierFields(section)
         const subtitle =
           section.subtitle ?? (tierGridFields.length ? STANDARD_TIER_SUBTITLE : null)
+        const alignOtherWithTier = tierGridFields.length > 0
 
         return (
         <section
@@ -805,6 +826,7 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                 const tierOther = (tier.fields ?? []).filter(
                   (field) => !TIER_GRID_FIELD_TYPES.has(field.type),
                 )
+                const alignTierOther = tierGrid.length > 0
                 return (
                 <div key={tier.id}>
                   <span className="mb-2 inline-flex rounded-full bg-[#e8f7ed] px-2.5 py-1 text-[11px] font-bold text-[#147940]">
@@ -827,27 +849,30 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                       })
                     }
                   />
-                  <div>
-                    {tierOther.map((field) => (
-                      <FieldRow
-                        key={`${tier.id}-${field.key}`}
-                        field={field}
-                        value={values[section.id]?.[tier.id]?.[field.key]}
-                        onChange={(next) =>
-                          onChange({
-                            ...values,
-                            [section.id]: {
-                              ...values[section.id],
-                              [tier.id]: {
-                                ...values[section.id][tier.id],
-                                [field.key]: next,
+                  {tierOther.length ? (
+                    <div className="overflow-x-auto">
+                      {tierOther.map((field) => (
+                        <FieldRow
+                          key={`${tier.id}-${field.key}`}
+                          field={field}
+                          alignWithTier={alignTierOther}
+                          value={values[section.id]?.[tier.id]?.[field.key]}
+                          onChange={(next) =>
+                            onChange({
+                              ...values,
+                              [section.id]: {
+                                ...values[section.id],
+                                [tier.id]: {
+                                  ...values[section.id][tier.id],
+                                  [field.key]: next,
+                                },
                               },
-                            },
-                          })
-                        }
-                      />
-                    ))}
-                  </div>
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               )})}
               {section.allTiers?.length ? (
@@ -879,13 +904,16 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                       })
                     }
                   />
-                  <div>
+                  <div className="overflow-x-auto">
                     {(section.allTiers ?? [])
                       .filter((field) => !TIER_GRID_FIELD_TYPES.has(field.type))
                       .map((field) => (
                       <FieldRow
                         key={`all-${field.key}`}
                         field={field}
+                        alignWithTier={
+                          resolveTierGridFields({ fields: section.allTiers }).length > 0
+                        }
                         value={values[section.id]?.all?.[field.key]}
                         onChange={(next) =>
                           onChange({
@@ -905,12 +933,15 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                 </div>
               ) : null}
             </div>
-          ) : otherFields.length ? (
-            <div>
+          ) : null}
+
+          {otherFields.length ? (
+            <div className={cn(tierGridFields.length || section.tiers ? 'mt-0' : '', 'overflow-x-auto')}>
               {otherFields.map((field) => (
                 <FieldRow
                   key={field.key}
                   field={field}
+                  alignWithTier={alignOtherWithTier}
                   value={values[section.id]?.[field.key]}
                   onChange={(next) =>
                     onChange({

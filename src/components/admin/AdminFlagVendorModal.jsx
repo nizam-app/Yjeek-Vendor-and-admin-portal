@@ -42,6 +42,7 @@ export default function AdminFlagVendorModal({
   severities = [],
   actions = [],
   reasons = [],
+  incidentId = null,
   onSuccess,
 }) {
   const [metric, setMetric] = useState('')
@@ -128,6 +129,7 @@ export default function AdminFlagVendorModal({
         action: String(flagAction).trim(),
         reason: String(reason).trim(),
         notifyVendor,
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
       })
       onSuccess?.()
       onClose?.()

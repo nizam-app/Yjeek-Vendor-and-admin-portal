@@ -10,22 +10,14 @@ import {
 
 /**
  * Admin incidents service.
- *
- * Confirmed:
- * - GET /admin/incidents?status=&priority=&limit=
- * - GET /admin/incidents/:incidentId
- * - POST /admin/incidents/:incidentId/resolve (also used from order take-action)
  */
 export const adminIncidentService = {
-  /**
-   * GET /admin/incidents
-   * @param {{ status?: string, priority?: string, limit?: number, signal?: AbortSignal, params?: object }} [options]
-   */
   async list(options = {}) {
     const {
       status = 'all',
       priority = 'all',
       limit = 50,
+      orderIds,
       params,
       ...requestOptions
     } = options
@@ -40,6 +32,7 @@ export const adminIncidentService = {
         status,
         priority,
         limit,
+        ...(orderIds ? { orderIds } : {}),
         ...params,
       },
       scope: 'admin',
@@ -52,10 +45,6 @@ export const adminIncidentService = {
     }
   },
 
-  /**
-   * GET /admin/incidents/:incidentId
-   * @param {string} incidentId
-   */
   async get(incidentId, options = {}) {
     const id = String(incidentId || '').trim()
     if (!id) {
@@ -74,11 +63,6 @@ export const adminIncidentService = {
     }
   },
 
-  /**
-   * POST /admin/incidents/:incidentId/resolve
-   * @param {string} incidentId
-   * @param {{ outcome: string }} body
-   */
   async resolve(incidentId, body, options = {}) {
     const id = String(incidentId || '').trim()
     if (!id) {
@@ -89,5 +73,140 @@ export const adminIncidentService = {
       scope: 'admin',
       feature: 'dashboard',
     })
+  },
+
+  async startInvestigation(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.startInvestigation(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: mapAdminIncidentDetail(response?.data), meta: response?.meta ?? null }
+  },
+
+  async requestPartyResponse(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.requestPartyResponse(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: mapAdminIncidentDetail(response?.data), meta: response?.meta ?? null }
+  },
+
+  async escalateSeverity(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.escalateSeverity(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: mapAdminIncidentDetail(response?.data), meta: response?.meta ?? null }
+  },
+
+  async addEvidence(incidentId, body, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.addEvidence(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: mapAdminIncidentDetail(response?.data), meta: response?.meta ?? null }
+  },
+
+  async runAction(incidentId, body, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.actions(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async getRefundContext(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.get(endpoints.admin.incidents.refundContext(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listRefundApprovals(options = {}) {
+    const { status = 'PENDING_APPROVAL', limit = 50, ...requestOptions } = options
+    const response = await apiClient.get(endpoints.admin.incidents.refundApprovals, {
+      ...requestOptions,
+      params: { status, limit },
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? [], meta: response?.meta ?? null }
+  },
+
+  async approveRefund(approvalId, options = {}) {
+    const id = String(approvalId || '').trim()
+    if (!id) throw new ApiError({ message: 'Approval id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.approveRefund(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async rejectRefund(approvalId, body, options = {}) {
+    const id = String(approvalId || '').trim()
+    if (!id) throw new ApiError({ message: 'Approval id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.rejectRefund(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getResolveContext(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.get(endpoints.admin.incidents.resolveContext(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async resolveTyped(incidentId, body, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.resolveTyped(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async seniorSignOff(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.seniorSignOff(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
 }

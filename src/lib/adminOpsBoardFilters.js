@@ -163,6 +163,11 @@ export function buildOpsBoardChats(chats, orders, filter) {
 
   if (key === 'all_orders') return chatList
 
+  const fromFeed = chatList.filter((chat) => chatMatchesOpsFilter(chat, filter))
+  const seen = new Set(
+    fromFeed.map((chat) => `${chat?.conversationId || chat?.id || ''}:${chat?.role || ''}`),
+  )
+
   const orderByConversation = new Map()
   for (const order of orderList) {
     const customerId = order?.customerConversationId ? String(order.customerConversationId) : ''
@@ -179,16 +184,9 @@ export function buildOpsBoardChats(chats, orders, filter) {
     if (id) chatByConversation.set(id, chat)
   }
 
-  const conversationIds = new Set([
-    ...chatByConversation.keys(),
-    ...orderByConversation.keys(),
-  ])
-
-  const items = []
-
-  for (const conversationId of conversationIds) {
+  const extras = []
+  for (const [conversationId, order] of orderByConversation.entries()) {
     const chat = chatByConversation.get(conversationId) || null
-    const order = orderByConversation.get(conversationId) || null
     const categories = conversationCategories(order, chat)
     const wantedRoles = key === 'champ'
       ? ['Champ']
@@ -198,13 +196,16 @@ export function buildOpsBoardChats(chats, orders, filter) {
 
     for (const role of wantedRoles) {
       if (!categories.includes(role)) continue
+      const seenKey = `${conversationId}:${role}`
+      if (seen.has(seenKey)) continue
+      seen.add(seenKey)
 
       const champName = order?.rider?.name || order?.champ?.name || 'Champ'
       const customerName = chat?.role === 'Customer' && chat?.name ? chat.name : 'Customer'
       const name = role === 'Champ' ? champName : customerName
-      const fromFeed = Boolean(chat && chat.role === role)
+      const fromChat = Boolean(chat && chat.role === role)
 
-      items.push({
+      extras.push({
         ...(chat || {}),
         id: `${conversationId}:${role}`,
         conversationId,
@@ -213,12 +214,12 @@ export function buildOpsBoardChats(chats, orders, filter) {
         name,
         role,
         peerRole: role === 'Champ' ? 'CHAMP' : 'CUSTOMER',
-        message: fromFeed ? (chat.message || '') : (chat?.message || ''),
-        unreadCount: fromFeed ? (Number(chat.unreadCount) || 0) : 0,
+        message: fromChat ? (chat.message || '') : (chat?.message || ''),
+        unreadCount: fromChat ? (Number(chat.unreadCount) || 0) : 0,
         initials: initialsFromName(name),
       })
     }
   }
 
-  return items
+  return [...fromFeed, ...extras]
 }

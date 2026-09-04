@@ -201,6 +201,82 @@ export const adminSlaModelsService = {
     }
   },
 
+  async rollback(slaModelId, payload = {}, options = {}) {
+    const id = String(slaModelId || '').trim()
+    if (!id) throw new Error('SLA model id is required.')
+    const version = Number(payload.version)
+    if (!Number.isFinite(version) || version < 1) {
+      throw new Error('SLA version is required.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.slaModels.rollback(id),
+      {
+        version,
+        note: payload.note || `Applied SLA version ${version} from Admin preview`,
+        updateActiveAssignments: payload.updateActiveAssignments !== false,
+      },
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminSlaModelRecord(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async getChangelog(slaModelId, options = {}) {
+    const id = String(slaModelId || '').trim()
+    if (!id) throw new Error('SLA model id is required.')
+    const response = await apiClient.get(endpoints.admin.slaModels.changelog(id), {
+      ...requestOptions(options),
+        params: { limit: options.limit ?? 100 },
+    })
+    return {
+      data: {
+        modelId: response?.data?.modelId ?? id,
+        changes: Array.isArray(response?.data?.changes) ? response.data.changes : [],
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async getVersionUsage(slaModelId, options = {}) {
+    const id = String(slaModelId || '').trim()
+    if (!id) throw new Error('SLA model id is required.')
+    const response = await apiClient.get(
+      endpoints.admin.slaModels.versionUsage(id),
+      requestOptions(options),
+    )
+    return {
+      data: response?.data ?? {
+        modelId: id,
+        version: 0,
+        incidentCount: 0,
+        breachCount: 0,
+        orderCount: 0,
+        message: 'No published version yet.',
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async getVersions(slaModelId, options = {}) {
+    const id = String(slaModelId || '').trim()
+    if (!id) throw new Error('SLA model id is required.')
+    const response = await apiClient.get(
+      endpoints.admin.slaModels.versions(id),
+      requestOptions(options),
+    )
+    return {
+      data: {
+        modelId: response?.data?.modelId ?? id,
+        currentVersion: Number(response?.data?.currentVersion ?? 0) || 0,
+        versions: Array.isArray(response?.data?.versions) ? response.data.versions : [],
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
   /**
    * Persist the three-tab form: POST when no model exists, otherwise PATCH.
    * Then publish so the rules go live, and set default on first create.

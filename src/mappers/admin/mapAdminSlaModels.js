@@ -759,6 +759,7 @@ export function mapAdminSlaModelRecord(raw) {
     isActive: source.isActive !== false,
     hasUnpublishedChanges: Boolean(source.hasUnpublishedChanges),
     currentVersion: num(source.currentVersion) ?? 0,
+    publishedAt: source.publishedAt || null,
     config,
     // Live published rules for vendor inheritance (ignore unpublished draft).
     publishedConfig: asRecord(source.publishedConfig || source.config),

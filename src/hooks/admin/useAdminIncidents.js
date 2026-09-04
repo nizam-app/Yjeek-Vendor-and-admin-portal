@@ -12,14 +12,16 @@ import { emptyAdminIncidents } from '../../mappers/admin/mapAdminIncidents'
  */
 export function useAdminIncidents(query = {}) {
   const useReal = isAdminRealApiFeature('dashboard')
+  const enabled = query.enabled !== false
   const status = query.status ?? 'all'
   const priority = query.priority ?? 'all'
   const limit = query.limit ?? 50
+  const orderIds = query.orderIds ?? null
 
   return useApiResource(() => {
-    if (!useReal) {
+    if (!enabled || !useReal) {
       return Promise.resolve({ data: emptyAdminIncidents(), meta: null })
     }
-    return adminIncidentService.list({ status, priority, limit })
-  }, [useReal, status, priority, limit])
+    return adminIncidentService.list({ status, priority, limit, orderIds })
+  }, [useReal, enabled, status, priority, limit, orderIds])
 }
