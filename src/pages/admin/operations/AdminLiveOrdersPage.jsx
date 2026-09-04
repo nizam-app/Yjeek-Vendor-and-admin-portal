@@ -35,6 +35,8 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import { useAuth } from '../../../context/AuthContext'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
 import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
+import { formatOpenDuration, isOpenIncident } from '../../../lib/adminIncidentPresentation'
+import { adminIncidentService } from '../../../services/admin/incidentService'
 import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
 import { AdminOpsOrderCard } from '../../../components/admin/operations/AdminOpsOrderCard'
 import { AdminLiveOrderFilterBar } from '../../../components/admin/operations/AdminLiveOrderFilterBar'
@@ -247,11 +249,13 @@ export function AdminOrderDetailModal({ order, onClose, preference = 'live' }) {
   )
 }
 
-export function IncidentOrderModal({ order, onClose }) {
+export function IncidentOrderModal({ order, onClose, onOpenChat }) {
+  const { user } = useAuth()
   const [detailIncident, setDetailIncident] = useState(null)
   const [activeAction, setActiveAction] = useState(null)
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState(null)
+  const [presenceViewers, setPresenceViewers] = useState([])
   const orderId = order?.orderId || null
   const { data: detail, error, isLoading, refetch } = useAdminOrderDetail(orderId)
   const {
@@ -266,6 +270,9 @@ export function IncidentOrderModal({ order, onClose }) {
     refetch: refetchDispatchAttempts,
   } = useAdminDispatchAttempts(orderId)
 
+  const presenceIncidentId =
+    detail?.incidents?.find((row) => row.id && isOpenIncident(row))?.id || null
+
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -277,6 +284,38 @@ export function IncidentOrderModal({ order, onClose }) {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose, activeAction, detailIncident])
+
+  useEffect(() => {
+    if (!presenceIncidentId) {
+      setPresenceViewers([])
+      return undefined
+    }
+    let cancelled = false
+    const myId = user?.id || user?.userId || null
+
+    async function beat() {
+      try {
+        const response = await adminIncidentService.heartbeatPresence(presenceIncidentId)
+        if (cancelled) return
+        const viewers = Array.isArray(response?.data?.activeViewers)
+          ? response.data.activeViewers
+          : []
+        setPresenceViewers(
+          myId ? viewers.filter((viewer) => viewer.userId !== myId) : viewers,
+        )
+      } catch {
+        // best-effort
+      }
+    }
+
+    void beat()
+    const timer = window.setInterval(beat, 15000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      void adminIncidentService.leavePresence(presenceIncidentId).catch(() => undefined)
+    }
+  }, [presenceIncidentId, user?.id, user?.userId])
 
   if (!order) return null
 
@@ -292,7 +331,7 @@ export function IncidentOrderModal({ order, onClose }) {
   }
 
   const openIncidents = (detail?.incidents || []).filter(
-    (incident) => incident.id && String(incident.status || '').toLowerCase() !== 'resolved',
+    (incident) => incident.id && isOpenIncident(incident),
   )
   const legacyOpenIncidents = openIncidents.filter((incident) => !incident.readinessManaged)
   const readinessOpenIncidents = openIncidents.filter((incident) => incident.readinessManaged)
@@ -340,6 +379,32 @@ export function IncidentOrderModal({ order, onClose }) {
     setActiveAction({ code, incidentId })
   }
 
+  const incidentCount = detail?.incidentCount || detail?.incidents?.length || 0
+  const isCritical =
+    detail?.bucket === 'critical' ||
+    (detail?.incidents || []).some((row) => String(row.priority || '').toUpperCase() === 'P1')
+  const itemsLine = [
+    `${detail?.itemCount ?? detail?.items?.length ?? 0} item${(detail?.itemCount ?? detail?.items?.length ?? 0) === 1 ? '' : 's'}`,
+    detail?.orderValue,
+    detail?.paymentLabel,
+  ]
+    .filter((part) => part && part !== '—')
+    .join(' · ')
+  const routeLine = [detail?.pickupLabel, detail?.dropoffLabel]
+    .filter((part) => part && part !== '—')
+    .join(' → ')
+  const customerLine = [detail?.customer?.name, detail?.customer?.phone]
+    .filter((part) => part && part !== '—')
+    .join(' · ')
+  const champLine = [
+    detail?.champ?.name,
+    detail?.champ?.vehicle && detail.champ.vehicle !== '—' ? detail.champ.vehicle : null,
+    detail?.champ?.status && detail.champ.status !== '—' ? detail.champ.status : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const acceptElapsed = detail?.vendorAcceptance?.elapsedSeconds
+
   return (
     <div
       className="fixed inset-0 z-120 flex items-center justify-center overflow-y-auto bg-[rgba(20,25,22,.47)] p-4"
@@ -350,7 +415,7 @@ export function IncidentOrderModal({ order, onClose }) {
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      <div className="relative flex max-h-[calc(100vh-32px)] w-full max-w-[532px] flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_18px_55px_rgba(8,18,12,.28)]">
+      <div className="relative flex max-h-[calc(100vh-32px)] w-full max-w-[620px] flex-col overflow-hidden rounded-[11px] bg-white shadow-[0_18px_55px_rgba(0,0,0,.32)]">
         {!detail ? (
           <div className="p-6">
             <ApiState isLoading={isLoading || (!error && !detail)} error={error} onRetry={refetch} />
@@ -358,83 +423,147 @@ export function IncidentOrderModal({ order, onClose }) {
           </div>
         ) : (
           <>
-            <div className="overflow-y-auto px-[14px] pb-2 pt-[14px]">
+            <div className="overflow-y-auto px-[22px] pb-3 pt-[18px]">
               <header className="relative pr-8">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 id="incident-order-title" className="text-[13px] font-bold text-[#202722]">Order #{detail.orderNumber || detail.id}</h2>
-                  {detail.bucket ? <Badge tone="red">{humanizeBucket(detail.bucket)}</Badge> : null}
-                  {detail.incidentCount > 0 ? <Badge tone="yellow">{detail.incidentCount} incident{detail.incidentCount === 1 ? '' : 's'}</Badge> : null}
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <h2 id="incident-order-title" className="text-[16px] font-bold text-[#101a14]">
+                    Order #{detail.orderNumber || detail.id}
+                  </h2>
+                  {isCritical ? (
+                    <span className="rounded bg-[#8C3A2B] px-2 py-0.5 text-[9px] font-bold text-white">
+                      Critical
+                    </span>
+                  ) : detail.bucket ? (
+                    <span className="rounded bg-[#fdf1de] px-2 py-0.5 text-[9px] font-bold text-[#a97013]">
+                      {humanizeBucket(detail.bucket)}
+                    </span>
+                  ) : null}
+                  {incidentCount > 0 ? (
+                    <span className="rounded bg-[#fbe9e6] px-2 py-0.5 text-[9px] font-bold text-[#c45c4a]">
+                      {incidentCount} incident{incidentCount === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-1 text-[9px] text-[#78827c]">
-                  {detail.vendor.name}
-                  {detail.category ? ` · ${detail.category}` : ''}
-                  {detail.fulfillmentLabel ? ` — ${detail.fulfillmentLabel}` : ''}
-                  {detail.placedClock && detail.placedClock !== '—' ? ` · placed ${detail.placedClock}` : ''}
+                <p className="text-[11.5px] text-[#6b7a71]">
+                  {[
+                    detail.vendor?.name,
+                    [detail.category, detail.fulfillmentLabel].filter(Boolean).join(' — '),
+                    detail.placedClock && detail.placedClock !== '—'
+                      ? `placed ${detail.placedClock}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
-                <button type="button" onClick={onClose} aria-label="Close incident details" className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full text-[19px] font-light text-[#77817b] hover:bg-[#f1f3f1]">×</button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close incident details"
+                  className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full text-[17px] text-[#6b7a71] hover:bg-[#f1f3f1]"
+                >
+                  ✕
+                </button>
               </header>
 
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <Badge tone="blue">Stage: {detail.stageLabel}</Badge>
-                {detail.slaBreached ? <Badge tone="red">SLA: Breached</Badge> : null}
-                {detail.reported ? <Badge tone="yellow">Reported: Yes</Badge> : null}
+              {presenceViewers.length > 0 ? (
+                <div className="mt-3 flex items-start gap-2 rounded-[7px] border border-[#ecd9ac] bg-[#fdf6e7] px-3 py-2 text-[12px] text-[#7a5f1d]">
+                  <span aria-hidden>👤</span>
+                  <div>
+                    {presenceViewers.map((viewer) => {
+                      const duration = formatOpenDuration(viewer.openForMs)
+                      return (
+                        <p key={viewer.userId || viewer.displayName}>
+                          <b>Open by {viewer.displayName || 'Dispatcher'}</b>
+                          {duration ? ` — for ${duration}` : ''}. Opening actions here will be
+                          visible to them.
+                        </p>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-3 grid grid-cols-[auto_1fr] gap-x-3.5 gap-y-1 rounded-[8px] border border-[#e4e7e5] bg-[#fafbfa] px-3.5 py-2.5 text-[11.5px]">
+                <span className="text-[#6b7a71]">Items</span>
+                <span className="font-medium text-[#101a14]">{itemsLine || '—'}</span>
+                <span className="text-[#6b7a71]">Route</span>
+                <span className="font-medium text-[#101a14]">{routeLine || '—'}</span>
+                <span className="text-[#6b7a71]">Customer</span>
+                <span className="font-medium text-[#101a14]">{customerLine || '—'}</span>
+                <span className="text-[#6b7a71]">Champ</span>
+                <span className="font-medium text-[#101a14]">{champLine || 'Unassigned'}</span>
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2 max-[520px]:grid-cols-1">
-                <section className="rounded-md border border-[#dfe4e0] p-2.5">
-                  <h3 className="text-[10px] font-bold">Order details</h3>
-                  <div className="mt-2 grid grid-cols-2 gap-x-5 gap-y-1 text-[9px]">
-                    {detail.summaryRows.map(([label, value]) => (
-                      <div key={label}><p className="text-[#7d8781]">{label}</p><p className="font-medium text-[#202722]">{value}</p></div>
-                    ))}
-                  </div>
-                  <h4 className="mt-2 text-[9px] font-medium">Items</h4>
-                  <div className="mt-1 space-y-1 text-[9px]">
-                    {detail.items.length === 0 ? (
-                      <p className="text-[#78827c]">No items</p>
-                    ) : detail.items.map((item) => (
-                      <div key={item.id || item.name} className="flex justify-between gap-3"><span>{item.name}</span><b>{item.price}</b></div>
-                    ))}
-                  </div>
-                  <div className="mt-2 border-t border-[#e5e8e6] pt-1.5 text-[9px]">
-                    {detail.totalsRows.map(([label, value]) => (
-                      <div key={label} className={cn('flex justify-between py-0.5', label === 'Total' ? 'font-bold' : 'text-[#78827c]')}><span>{label}</span><span>{value}</span></div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="rounded-md border border-[#dfe4e0] p-2.5">
-                  <h3 className="text-[10px] font-bold">Timeline</h3>
-                  <div className="mt-2">
-                    {detail.timeline.length === 0 ? (
-                      <p className="text-[9px] text-[#78827c]">No timeline events</p>
-                    ) : detail.timeline.map((entry, index) => (
-                      <div key={`${entry.status}-${entry.at || index}`} className={cn('relative flex gap-2', index < detail.timeline.length - 1 && 'min-h-[28px]')}>
-                        {index < detail.timeline.length - 1 ? <span className="absolute bottom-[-6px] left-[3.5px] top-[8px] w-px bg-[#d9dfdb]" /> : null}
-                        <span className={cn(
-                          'relative z-10 mt-0.5 h-2 w-2 shrink-0 rounded-full',
-                          entry.state === 'pending' ? 'bg-[#c9cfcb]' : entry.state === 'active' ? 'bg-[#f58b19]' : 'bg-[#20a653]',
-                        )} />
-                        <div className="-mt-0.5"><p className="text-[9px] font-medium leading-3">{entry.label}</p><p className="text-[8px] leading-3 text-[#89928c]">{entry.time}</p></div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
+              <div className="mt-3 flex flex-wrap gap-x-2.5 gap-y-1 text-[10.5px] text-[#6b7a71]">
+                {(detail.timeline || []).length === 0 ? (
+                  <span>No timeline events</span>
+                ) : (
+                  detail.timeline.map((entry) => {
+                    const isAccept =
+                      String(entry.status || entry.label || '')
+                        .toUpperCase()
+                        .includes('ACCEPT')
+                    const breach =
+                      isAccept && acceptElapsed != null && Number(acceptElapsed) > 0
+                        ? ` ▲+${Math.round(Number(acceptElapsed))}s`
+                        : ''
+                    const pending =
+                      entry.state === 'pending' ||
+                      !entry.time ||
+                      entry.time === '—' ||
+                      String(entry.time).toLowerCase() === 'pending'
+                    return (
+                      <span key={`${entry.status}-${entry.at || entry.label}`}>
+                        {entry.label}{' '}
+                        <b
+                          className={cn(
+                            'font-semibold',
+                            breach ? 'text-[#c45c4a]' : 'text-[#101a14]',
+                          )}
+                        >
+                          {pending ? 'pending' : entry.time}
+                          {breach}
+                        </b>
+                      </span>
+                    )
+                  })
+                )}
               </div>
 
-              <div className="mt-2 grid grid-cols-3 gap-2 max-[520px]:grid-cols-1">
-                {[
-                  { title: 'Customer', rows: [['Name', detail.customer.name], ['Phone', detail.customer.phone], ['Address', detail.customer.address], ['Member since', detail.customer.memberSince]] },
-                  { title: 'Vendor', rows: [['Store', detail.vendor.name], ['Branch', detail.vendor.branch], ['Phone', detail.vendor.phone], ['Prep time', detail.vendor.prepTimeMin]] },
-                  { title: 'Champ', rows: [['Name', detail.champ.name], ['Vehicle', detail.champ.vehicle], ['Phone', detail.champ.phone], ['Status', detail.champ.status]] },
-                ].map(({ title, rows }) => (
-                  <section key={title} className="rounded-md border border-[#dfe4e0] p-2.5">
-                    <h3 className="mb-2 text-[10px] font-bold">{title}</h3>
-                    <div className="space-y-1.5">
-                      {rows.map(([label, value]) => <div key={label}><p className="text-[8px] text-[#7d8781]">{label}</p><p className="text-[9px] font-medium">{value}</p></div>)}
-                    </div>
-                  </section>
-                ))}
+              <div className="mt-3 space-y-2.5">
+                {detail.incidents.length === 0 ? (
+                  <p className="py-3 text-center text-[11px] text-[#78827c]">No incidents</p>
+                ) : (
+                  detail.incidents.map((incident) => (
+                    <article
+                      key={incident.id || incident.title}
+                      className="rounded-[8px] border border-[#e4e7e5] bg-[#fafbfa] px-3.5 py-3"
+                    >
+                      <AdminIncidentDetailContent
+                        incident={incident}
+                        compact
+                        actionGroups={
+                          isOpenIncident(incident)
+                            ? (detail.actionGroups || []).map((group) => ({
+                                ...group,
+                                actions: group.actions.filter(
+                                  (action) => action.code !== 'MARK_RESOLVED',
+                                ),
+                              })).filter((group) => group.actions.length > 0)
+                            : []
+                        }
+                        onAction={(code, incidentId) => startAction(code, incidentId)}
+                        onOpenChat={
+                          onOpenChat && (incident.chatConversationId || detail.conversationId)
+                            ? (conversationId) =>
+                                onOpenChat(conversationId || detail.conversationId)
+                            : undefined
+                        }
+                        onRefresh={refetch}
+                      />
+                    </article>
+                  ))
+                )}
               </div>
 
               <AdminOrderDispatchAttempts
@@ -443,60 +572,32 @@ export function IncidentOrderModal({ order, onClose }) {
                 error={dispatchAttemptsError}
                 onRetry={refetchDispatchAttempts}
               />
-
-              <section className="mt-2 rounded-md border border-[#dfe4e0] p-2.5">
-                <h3 className="mb-2 text-[10px] font-bold">Incidents</h3>
-                {detail.incidents.length === 0 ? (
-                  <p className="py-3 text-center text-[9px] text-[#78827c]">No incidents</p>
-                ) : detail.incidents.map((incident) => (
-                  <article key={incident.id || incident.title} className="relative mb-2 rounded-[9px] border border-[#e0e5e1] bg-[#fafbfa] p-2.5 last:mb-0">
-                    <AdminIncidentDetailContent
-                      incident={incident}
-                      compact
-                      actionGroups={detail.actionGroups}
-                      onAction={(code, incidentId) => startAction(code, incidentId)}
-                    />
-                    {incident.id ? (
-                      <button
-                        type="button"
-                        className="mt-2 text-[8px] font-medium text-[#16854a] hover:underline"
-                        onClick={() => setDetailIncident(incident)}
-                      >
-                        Open full incident detail
-                      </button>
-                    ) : null}
-                  </article>
-                ))}
-              </section>
             </div>
 
-            <footer className="flex shrink-0 flex-col gap-2 border-t border-[#e3e7e4] bg-white px-[14px] py-2.5">
+            <footer className="flex shrink-0 flex-col gap-2 border-t border-[#e4e7e5] bg-white px-[22px] py-3">
               {resolveError ? (
                 <p className="text-right text-[10px] text-[#d92f35]">{resolveError}</p>
               ) : null}
               <div className="flex justify-end gap-2">
-                <Button onClick={onClose} className="h-[28px] rounded-full px-3" disabled={resolving}>Close</Button>
-                {canMarkResolvedReadiness ? (
+                <Button onClick={onClose} className="h-[32px] rounded-full px-4" disabled={resolving}>
+                  Close
+                </Button>
+                {canMarkResolvedReadiness || canMarkResolvedLegacy ? (
                   <Button
                     primary
-                    className="h-[28px] rounded-full px-3"
+                    className="h-[32px] rounded-full px-4"
                     onClick={() =>
                       setActiveAction({
                         code: 'MARK_RESOLVED_TYPED',
-                        incidentId: readinessOpenIncidents[0]?.id || null,
+                        incidentId:
+                          readinessOpenIncidents[0]?.id ||
+                          legacyOpenIncidents[0]?.id ||
+                          openIncidents[0]?.id ||
+                          null,
                       })
                     }
                   >
                     Mark resolved
-                  </Button>
-                ) : canMarkResolvedLegacy ? (
-                  <Button
-                    primary
-                    className="h-[28px] rounded-full px-3"
-                    disabled={resolving || legacyOpenIncidents.length === 0}
-                    onClick={() => markResolved(legacyOpenIncidents[0]?.id || null)}
-                  >
-                    {resolving ? 'Resolving…' : 'Mark resolved'}
                   </Button>
                 ) : null}
               </div>
@@ -1043,7 +1144,22 @@ export default function AdminLiveOrdersPage() {
           onChatClick={openChatPanel}
         />
         {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
-        {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
+        {incidentOrder ? (
+          <IncidentOrderModal
+            order={incidentOrder}
+            onClose={() => setIncidentOrder(null)}
+            onOpenChat={(conversationId) => {
+              openChatPanel({
+                id: conversationId,
+                conversationId,
+                name: 'Customer',
+                role: 'Customer',
+                channel: 'customer',
+                peerRole: 'CUSTOMER',
+              })
+            }}
+          />
+        ) : null}
         {selectedIncident ? (
           <AdminIncidentDetailModal
             incident={selectedIncident}
@@ -1207,7 +1323,22 @@ export default function AdminLiveOrdersPage() {
         groupByRole={isOpsChatFilter(filter)}
       />
       {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
-      {incidentOrder ? <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} /> : null}
+      {incidentOrder ? (
+        <IncidentOrderModal
+          order={incidentOrder}
+          onClose={() => setIncidentOrder(null)}
+          onOpenChat={(conversationId) => {
+            openChatPanel({
+              id: conversationId,
+              conversationId,
+              name: 'Customer',
+              role: 'Customer',
+              channel: 'customer',
+              peerRole: 'CUSTOMER',
+            })
+          }}
+        />
+      ) : null}
       {selectedIncident ? (
         <AdminIncidentDetailModal
           incident={selectedIncident}

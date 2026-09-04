@@ -14,9 +14,9 @@ const ACTION_LABELS = {
   ESCALATE_SEVERITY: { group: 'Investigate', icon: '⬆', label: 'Escalate severity', tone: 'text-[#c68618]' },
   SUSPEND_CHAMP: { group: 'Enforcement', icon: '⊘', label: 'Suspend champ', tone: 'text-[#dc2931]' },
   FLAG_VENDOR: { group: 'Enforcement', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
-  APPLY_VPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]', deferred: true },
-  APPLY_CPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]', deferred: true },
-  MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]', deferred: true },
+  APPLY_VPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]' },
+  APPLY_CPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]' },
+  MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]' },
 }
 
 export function humanizeAdminStatus(status) {
@@ -94,31 +94,41 @@ function mapOrderIncidents(incidents) {
   return incidents
     .map((item) => {
       if (!item || typeof item !== 'object') return null
-      const statusRaw = String(item.status || '').toUpperCase()
-      const statusLabel =
-        statusRaw === 'RESOLVED' ? 'Resolved' : statusRaw === 'PENDING' ? 'Pending' : statusRaw === 'OPEN' ? 'Open' : humanizeAdminStatus(item.status)
-      const statusTone = statusRaw === 'RESOLVED' ? 'green' : statusRaw === 'PENDING' ? 'yellow' : 'red'
-      const badges = []
-      if (item.cause) badges.push([`Cause: ${humanizeAdminStatus(item.cause)}`, 'yellow'])
-      if (item.stage) badges.push([`Stage: ${item.stage}`, 'gray'])
-      if (item.reportedByCustomer) badges.push(['Reported', 'blue'])
+      const statusRaw = String(item.status || item.lifecycleState || '').toUpperCase()
+      const resolved =
+        statusRaw === 'RESOLVED' || statusRaw === 'CLOSED' || item.resolvedAt != null
+      const statusLabel = resolved
+        ? 'Solved'
+        : statusRaw === 'PENDING' || statusRaw === 'OPEN' || statusRaw === 'REOPENED'
+          ? 'Pending'
+          : humanizeAdminStatus(item.status || item.lifecycleState)
+      const statusTone = resolved ? 'green' : 'yellow'
+      const openedClock = item.openedAt
+        ? formatClock(item.openedAt)
+        : item.createdAt
+          ? formatClock(item.createdAt)
+          : null
+      const metaParts = []
+      if (item.reportedByCustomer) metaParts.push('Reported by customer')
+      else if (item.source) metaParts.push(String(item.source).replace(/_/g, ' '))
+      else metaParts.push('Auto')
+      if (openedClock) metaParts.push(openedClock)
+      if (resolved && item.resolvedAt) {
+        metaParts.push(
+          `resolved ${formatClock(item.resolvedAt)}${item.resolvedByName ? ` by ${item.resolvedByName}` : ''}`,
+        )
+      } else if (!resolved) {
+        metaParts.push(item.acknowledgedByName ? `with ${item.acknowledgedByName}` : 'awaiting Ops action')
+      }
 
       return enrichIncidentRow({
         id: item.id ? String(item.id) : null,
         title: item.title || item.type || 'Incident',
         status: statusLabel,
-        statusRaw,
+        statusRaw: resolved ? 'RESOLVED' : statusRaw || 'OPEN',
         statusTone,
-        badges,
         detail: item.note || '—',
-        meta: [
-          item.cause ? humanizeAdminStatus(item.cause) : null,
-          item.createdAt ? formatClock(item.createdAt) : null,
-          item.resolvedByName ? `resolved by ${item.resolvedByName}` : null,
-          item.resolvedAt ? `resolved ${formatClock(item.resolvedAt)}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
+        meta: metaParts.filter(Boolean).join(' · '),
         priority: item.priority ?? null,
         type: item.type ?? null,
         note: item.note ?? null,
@@ -131,6 +141,7 @@ function mapOrderIncidents(incidents) {
         lifecycleState: item.lifecycleState ?? null,
         source: item.source ?? null,
         category: item.category ?? null,
+        categoryLabel: item.categoryLabel ?? null,
         openedAt: item.openedAt ?? null,
         firstResponseAt: item.firstResponseAt ?? null,
         acknowledgedAt: item.acknowledgedAt ?? null,
@@ -138,7 +149,8 @@ function mapOrderIncidents(incidents) {
         recurredWithin14Days: item.recurredWithin14Days ?? false,
         recurrenceCount14d: item.recurrenceCount14d ?? null,
         recurrenceContext: item.recurrenceContext ?? null,
-        evidenceCount: item.evidenceCount ?? 0,
+        evidenceCount: item.evidenceCount ?? (Array.isArray(item.evidence) ? item.evidence.length : 0),
+        evidence: Array.isArray(item.evidence) ? item.evidence : [],
         resolutionActionCode: item.resolutionActionCode ?? null,
         previousResolutionActionCode: item.previousResolutionActionCode ?? null,
         costBearer: item.costBearer ?? null,
@@ -147,6 +159,9 @@ function mapOrderIncidents(incidents) {
         incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
         readinessManaged: item.readinessManaged ?? false,
         evidenceHoldAt: item.evidenceHoldAt ?? null,
+        chatConversationId: item.chatConversationId ?? null,
+        openedBy: item.openedBy ?? null,
+        slaBreached: Boolean(item.slaBreached),
       })
     })
     .filter(Boolean)
@@ -349,7 +364,10 @@ export function mapAdminOrderDetailResponse(data) {
     champ: {
       id: champ?.id ? String(champ.id) : null,
       name: champ?.name || 'Unassigned',
-      vehicle: champ?.vehicle || champ?.vehicleType || '—',
+      vehicle:
+        [champ?.vehicleType, champ?.plateNumber].filter(Boolean).join(' ') ||
+        champ?.vehicle ||
+        '—',
       phone: champ?.phone || '—',
       status: champ?.status || (champ?.name ? 'Assigned' : 'Unassigned'),
     },
@@ -385,5 +403,12 @@ export function mapAdminOrderDetailResponse(data) {
     }),
     availableActions: Array.isArray(data.availableActions) ? data.availableActions.map(String) : [],
     conversationId: data.conversationId ?? null,
+    pickupLabel: formatPickup(locations.pickup),
+    dropoffLabel: formatDropoff(locations.dropoff),
+    itemCount,
+    vendorAcceptance:
+      data.vendorAcceptance && typeof data.vendorAcceptance === 'object'
+        ? data.vendorAcceptance
+        : null,
   }
 }

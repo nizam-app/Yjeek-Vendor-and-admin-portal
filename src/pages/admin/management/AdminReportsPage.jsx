@@ -15,6 +15,7 @@ import {
   mapReportsVendorFilterToApi,
   mapReportsZoneFilterToApi,
 } from '../../../mappers/admin/mapAdminOrdersReport'
+import { AdminVendorCostRecoveryPanel } from '../../../components/admin/AdminVendorCostRecoveryPanel'
 
 const PAGE_SIZE_OPTIONS = [10, 50, 100]
 
@@ -255,6 +256,7 @@ function toIsoEnd(dateYmd) {
 }
 
 export default function AdminReportsPage() {
+  const [reportTab, setReportTab] = useState('orders')
   const [period, setPeriod] = useState('Last 7 days')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -299,6 +301,7 @@ export default function AdminReportsPage() {
   )
 
   useEffect(() => {
+    if (reportTab !== 'orders') return undefined
     let cancelled = false
     const controller = new AbortController()
 
@@ -324,7 +327,7 @@ export default function AdminReportsPage() {
       cancelled = true
       controller.abort()
     }
-  }, [requestFilters, reloadToken])
+  }, [requestFilters, reloadToken, reportTab])
 
   const filterOptions = useMemo(() => {
     const vendorNames = new Set()
@@ -378,6 +381,37 @@ export default function AdminReportsPage() {
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setReportTab('orders')}
+          className={cn(
+            'h-8 rounded-full px-3 text-[12px] font-semibold',
+            reportTab === 'orders'
+              ? 'bg-[#1aa054] text-white'
+              : 'border border-[#e3e7e4] bg-white text-[#17231c]',
+          )}
+        >
+          Orders
+        </button>
+        <button
+          type="button"
+          onClick={() => setReportTab('recovery')}
+          className={cn(
+            'h-8 rounded-full px-3 text-[12px] font-semibold',
+            reportTab === 'recovery'
+              ? 'bg-[#1aa054] text-white'
+              : 'border border-[#e3e7e4] bg-white text-[#17231c]',
+          )}
+        >
+          Vendor cost recovery
+        </button>
+      </div>
+
+      {reportTab === 'recovery' ? <AdminVendorCostRecoveryPanel /> : null}
+
+      {reportTab === 'orders' ? (
+      <>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Orders report</h2>
@@ -652,6 +686,8 @@ export default function AdminReportsPage() {
           Showing {shownFrom}–{shownTo} of {totalOrders.toLocaleString()}
         </span>
       </div>
+      </>
+      ) : null}
     </div>
   )
 }

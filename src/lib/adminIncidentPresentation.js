@@ -1,5 +1,14 @@
 /** Centralized incident presentation for Live Orders / Admin incident UI. */
 
+import {
+  INCIDENT_CATEGORY_LABELS,
+  RESOLUTION_ACTION_LABELS,
+  incidentCategoryLabel,
+  resolutionActionLabel,
+} from './incidentTaxonomy.js'
+
+export { RESOLUTION_ACTION_LABELS, INCIDENT_CATEGORY_LABELS }
+
 export const INCIDENT_PRIORITY_RANK = { P1: 1, P2: 2, P3: 3, P4: 4 }
 
 export const INCIDENT_SEVERITY_UNCLASSIFIED = 'UNCLASSIFIED'
@@ -9,31 +18,6 @@ export const INCIDENT_PRIORITY_TONE = {
   P2: 'yellow',
   P3: 'blue',
   P4: 'gray',
-}
-
-export const RESOLUTION_ACTION_LABELS = {
-  REDELIVERED_SAME_ORDER: 'Redelivered',
-  REFUND_FULL: 'Full refund',
-  REFUND_PARTIAL: 'Partial refund',
-  WALLET_CREDIT_GOODWILL: 'Goodwill credit',
-  WALLET_CREDIT_SLA_BREACH: 'SLA breach credit',
-  VOUCHER_ISSUED: 'Voucher issued',
-  ITEM_REPLACED_BY_VENDOR: 'Item replaced',
-  ORDER_CANCELLED_NO_CHARGE: 'Order cancelled',
-  REASSIGNED_TO_NEW_CHAMP: 'Reassigned champ',
-  DISPATCH_MANUAL_OVERRIDE: 'Redispatched',
-  VENDOR_WARNED: 'Vendor flagged',
-  VENDOR_SUSPENDED_TEMP: 'Vendor suspended',
-  ITEM_SUSPENDED_PENDING_REVIEW: 'Item suspended',
-  PENALTY_APPLIED_VPI: 'VPI penalty applied',
-  PENALTY_APPLIED_CPI: 'CPI penalty applied',
-  CHAMP_WARNED: 'Champ warned',
-  CHAMP_SUSPENDED_TEMP: 'Champ suspended',
-  ESCALATED_TO_AGENCY: 'Escalated to agency',
-  ESCALATED_TO_INVESTIGATION: 'Escalated to investigation',
-  CUSTOMER_EDUCATED_NO_ACTION: 'Customer educated',
-  NO_ACTION_UNFOUNDED: 'No action — unfounded',
-  PENDING_EXTERNAL: 'Pending external',
 }
 
 const LIFECYCLE_LABELS = {
@@ -149,6 +133,8 @@ export function highestIncidentPriority(incidents) {
 export function formatIncidentCategory(incident) {
   if (!incident) return null
   if (incident.categoryLabel) return String(incident.categoryLabel)
+  const fromTaxonomy = incidentCategoryLabel(incident.category)
+  if (fromTaxonomy) return fromTaxonomy
   if (incident.category) return humanizeEnum(incident.category)
   if (incident.type) return String(incident.type)
   if (incident.title) return String(incident.title)
@@ -191,6 +177,11 @@ export function formatAttentionState(incident) {
   if (!isOpenIncident(incident)) {
     return incident.resolvedByName ? `Resolved · ${incident.resolvedByName}` : 'Resolved'
   }
+  const openedBy = incident.openedBy
+  if (openedBy?.displayName) {
+    const duration = formatOpenDuration(openedBy.openForMs)
+    return duration ? `Open · ${openedBy.displayName} · ${duration}` : `Open · ${openedBy.displayName}`
+  }
   if (isIncidentUnattended(incident)) return 'Unattended'
   if (incident.acknowledgedByName) return `Acknowledged · ${incident.acknowledgedByName}`
   if (incident.lifecycleState === 'UNDER_INVESTIGATION') return 'Under investigation'
@@ -198,6 +189,41 @@ export function formatAttentionState(incident) {
   if (incident.partyRespondedAt) return 'Party responded'
   if (incident.firstResponseAt) return 'In progress'
   return formatLifecycleLabel(incident) || 'Open'
+}
+
+export function formatOpenDuration(ms) {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n < 0) return null
+  const totalSec = Math.floor(n / 1000)
+  if (totalSec < 60) return `${totalSec}s`
+  const mins = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  if (mins < 60) return `${mins}m ${String(sec).padStart(2, '0')}s`
+  const hours = Math.floor(mins / 60)
+  return `${hours}h ${mins % 60}m`
+}
+
+/** Live countdown chip: `04:12 to SLA` or `Overdue 01:20`. */
+export function formatSlaCountdown(deadlineIso, now = Date.now()) {
+  if (!deadlineIso) return null
+  const end = new Date(deadlineIso).getTime()
+  if (Number.isNaN(end)) return null
+  const diff = end - now
+  const abs = Math.abs(diff)
+  const totalSec = Math.floor(abs / 1000)
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0')
+  const ss = String(totalSec % 60).padStart(2, '0')
+  if (diff < 0) return `Overdue ${mm}:${ss}`
+  return `${mm}:${ss} to SLA`
+}
+
+export function formatIncidentStatusWithSla(incident, now = Date.now()) {
+  if (!isOpenIncident(incident)) {
+    return incident?.lifecycleLabel || incident?.status || 'Resolved'
+  }
+  const countdown = formatSlaCountdown(incident?.incidentSlaDeadlineAt, now)
+  const base = incident?.lifecycleLabel || incident?.status || 'Pending'
+  return countdown ? `${base} · ${countdown}` : base
 }
 
 export function formatRecurrenceOrdinal(count) {
@@ -243,7 +269,7 @@ export function pickBestRecurrenceLabel(incidents) {
 
 export function formatResolutionLabel(code) {
   if (!code) return null
-  return RESOLUTION_ACTION_LABELS[code] || humanizeEnum(code)
+  return resolutionActionLabel(code) || RESOLUTION_ACTION_LABELS[code] || humanizeEnum(code)
 }
 
 export function formatCostBearerLabel(bearer) {
@@ -264,6 +290,7 @@ export function enrichIncidentRow(item) {
   if (!item || typeof item !== 'object') return item
   const priority = normalizeIncidentPriority(item)
   const openedAt = incidentOpenedAt(item)
+  const slaCountdownLabel = formatSlaCountdown(item.incidentSlaDeadlineAt)
   return {
     ...item,
     priority,
@@ -277,6 +304,8 @@ export function enrichIncidentRow(item) {
     attentionLabel: formatAttentionState(item),
     unattended: isIncidentUnattended(item),
     recurrenceLabel: formatRecurrenceLabel(item),
+    slaCountdownLabel,
+    statusWithSlaLabel: formatIncidentStatusWithSla(item),
     resolutionLabel: isOpenIncident(item)
       ? null
       : formatResolutionLabel(item.resolutionActionCode),

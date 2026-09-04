@@ -10,9 +10,11 @@ export function AdminOrderDispatchAttempts({
 }) {
   const list = Array.isArray(attempts) ? attempts : []
 
+  if (!isLoading && !error && list.length === 0) return null
+
   return (
-    <section className="mt-2 rounded-md border border-[#dfe4e0] p-2.5">
-      <h3 className="mb-2 text-[10px] font-bold">Dispatch attempts</h3>
+    <section className="mt-3 rounded-md border border-[#e4e7e5] bg-[#fafbfa] p-2.5">
+      <h3 className="mb-2 text-[10px] font-bold text-[#101a14]">Dispatch attempts</h3>
       {isLoading ? (
         <p className="py-2 text-center text-[9px] text-[#78827c]">Loading attempts…</p>
       ) : null}
@@ -30,15 +32,12 @@ export function AdminOrderDispatchAttempts({
           ) : null}
         </div>
       ) : null}
-      {!isLoading && !error && list.length === 0 ? (
-        <p className="py-2 text-center text-[9px] text-[#78827c]">No dispatch attempts</p>
-      ) : null}
       {!isLoading && !error && list.length > 0 ? (
         <div className="space-y-1.5">
           {list.map((attempt, index) => (
             <article
               key={attempt.id || `${attempt.title}-${index}`}
-              className="rounded-[8px] border border-[#e8ebe9] bg-[#fafbfa] px-2.5 py-2"
+              className="rounded-[8px] border border-[#e8ebe9] bg-white px-2.5 py-2"
             >
               <p className="text-[9px] font-bold text-[#17231c]">{attempt.title}</p>
               <p className="mt-0.5 text-[8px] text-[#7c8780]">{attempt.meta}</p>

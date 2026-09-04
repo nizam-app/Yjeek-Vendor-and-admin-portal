@@ -122,6 +122,8 @@ export function mapAdminIncidentItem(item) {
     resolutionSummary: item.resolutionSummary ?? null,
     incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
     readinessManaged: item.readinessManaged ?? false,
+    activeViewers: Array.isArray(item.activeViewers) ? item.activeViewers : [],
+    openedBy: item.openedBy && typeof item.openedBy === 'object' ? item.openedBy : null,
   })
 }
 
@@ -238,6 +240,8 @@ export function mapAdminIncidentDetail(data) {
     availableActions: Array.isArray(data?.availableActions) ? data.availableActions : [],
     chatConversationId: data?.chatConversationId ?? null,
     canResolve: Boolean(data?.canResolve),
+    activeViewers: Array.isArray(data?.activeViewers) ? data.activeViewers : item.activeViewers || [],
+    openedBy: data?.openedBy && typeof data.openedBy === 'object' ? data.openedBy : item.openedBy,
     history: mapAdminIncidentHistory(item),
   }
 }

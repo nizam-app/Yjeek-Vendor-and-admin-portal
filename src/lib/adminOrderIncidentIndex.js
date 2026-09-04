@@ -5,7 +5,6 @@ import {
   incidentOpenedAt,
   isIncidentUnattended,
   isOpenIncident,
-  normalizeIncidentPriority,
   pickBestRecurrenceLabel,
 } from './adminIncidentPresentation.js'
 
@@ -26,6 +25,7 @@ export function buildOrderIncidentIndex(incidents) {
   const index = new Map()
   for (const [orderId, list] of byOrder.entries()) {
     const open = list.filter(isOpenIncident)
+    const primary = open[0] || list[0]
     const oldestOpenedAt = list.reduce((min, row) => {
       const at = incidentOpenedAt(row)
       if (!at) return min
@@ -42,12 +42,17 @@ export function buildOrderIncidentIndex(incidents) {
       count: open.length || list.length,
       totalCount: list.length,
       highestPriority: highestIncidentPriority(open.length ? open : list),
-      primaryCategory: (open[0] || list[0])?.categoryLabel || null,
+      primaryCategory: primary?.categoryLabel || null,
+      primarySourceLabel: primary?.sourceLabel || null,
       oldestOpenedAt: oldestOpenedAt != null ? new Date(oldestOpenedAt).toISOString() : null,
       ageLabel: oldestOpenedAt != null ? formatIncidentAge(new Date(oldestOpenedAt).toISOString()) : null,
       unattended: open.some(isIncidentUnattended),
       categories: [...new Set(list.map((row) => row.categoryLabel).filter(Boolean))],
       recurrenceLabel: pickBestRecurrenceLabel(open.length ? open : list),
+      attentionLabel: (open.find((row) => row.openedBy?.displayName) || primary)?.attentionLabel || null,
+      openedBy: open.find((row) => row.openedBy)?.openedBy || null,
+      slaCountdownLabel: primary?.slaCountdownLabel || null,
+      incidentSlaDeadlineAt: primary?.incidentSlaDeadlineAt || null,
     })
   }
   return index

@@ -82,4 +82,28 @@ export const adminReportService = {
 
     return { data: csv, meta: response?.meta ?? null }
   },
+
+  /**
+   * Vendor cost-recovery obligations from incident refunds.
+   * GET /admin/reports/vendor-cost-recovery
+   */
+  async getVendorCostRecovery(filters = {}, options = {}) {
+    if (!useRealReportsApi()) {
+      throw new Error('Real reports API is required. Enable VITE_ADMIN_REAL_API_FEATURES=reports.')
+    }
+    const params = {
+      preset: filters.preset || '30d',
+      from: filters.from || undefined,
+      to: filters.to || undefined,
+      limit: filters.limit || 100,
+    }
+    const response = await apiClient.get(endpoints.admin.reports.vendorCostRecovery, {
+      ...options,
+      scope: 'admin',
+      feature: 'reports',
+      forceReal: !apiConfig.adminUseMockApi,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
 }

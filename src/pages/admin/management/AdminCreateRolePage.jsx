@@ -51,6 +51,7 @@ const FALLBACK_MODULES = [
   { id: 'ui-editor', key: 'UI_EDITOR', label: 'UI Editor' },
   { id: 'users-roles', key: 'USERS_ROLES', label: 'Users & Roles' },
   { id: 'reports', key: 'REPORTS', label: 'Reports' },
+  { id: 'sla-models', key: 'SLA_MODELS', label: 'SLA Models' },
   { id: 'settings', key: 'SETTINGS', label: 'Settings' },
 ]
 

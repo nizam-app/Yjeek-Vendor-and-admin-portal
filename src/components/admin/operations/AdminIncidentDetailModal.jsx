@@ -7,6 +7,8 @@ import { mapAdminIncidentHistory } from '../../../mappers/admin/mapAdminIncident
 import { mapAdminAvailableActions } from '../../../mappers/admin/mapAdminOrderDetail'
 import { AdminIncidentDetailContent } from './AdminIncidentDetailContent'
 import { isOpenIncident } from '../../../lib/adminIncidentPresentation'
+import { useAuth } from '../../../context/AuthContext'
+
 /**
  * Incident detail modal — loads GET /admin/incidents/:id and renders structured readiness UI.
  */
@@ -17,11 +19,13 @@ export function AdminIncidentDetailModal({
   onOpenChat,
   onAction,
 }) {
+  const { user } = useAuth()
   const incidentId = incident?.id || null
   const [detail, setDetail] = useState(incident || null)
   const [error, setError] = useState(null)
   const [isLoading, setIsLoading] = useState(Boolean(incidentId))
   const [markResolvedOpen, setMarkResolvedOpen] = useState(false)
+  const [presenceViewers, setPresenceViewers] = useState([])
 
   const refresh = useCallback(async () => {
     if (!incidentId) return
@@ -70,6 +74,36 @@ export function AdminIncidentDetailModal({
       cancelled = true
     }
   }, [incidentId, incident])
+
+  // Soft presence heartbeat while modal is open
+  useEffect(() => {
+    if (!incidentId) return undefined
+    let cancelled = false
+    const myId = user?.id || user?.userId || null
+
+    async function beat() {
+      try {
+        const response = await adminIncidentService.heartbeatPresence(incidentId)
+        if (cancelled) return
+        const viewers = Array.isArray(response?.data?.activeViewers)
+          ? response.data.activeViewers
+          : []
+        setPresenceViewers(
+          myId ? viewers.filter((viewer) => viewer.userId !== myId) : viewers,
+        )
+      } catch {
+        // Presence is best-effort — never block the modal.
+      }
+    }
+
+    void beat()
+    const timer = window.setInterval(beat, 15000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      void adminIncidentService.leavePresence(incidentId).catch(() => undefined)
+    }
+  }, [incidentId, user?.id, user?.userId])
 
   if (!incident) return null
 
@@ -140,6 +174,7 @@ export function AdminIncidentDetailModal({
             onAction={handleAction}
             onOpenChat={onOpenChat}
             onRefresh={refresh}
+            presenceViewers={presenceViewers}
           />
         </div>
 

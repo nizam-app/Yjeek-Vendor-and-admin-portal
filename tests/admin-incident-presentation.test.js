@@ -6,6 +6,7 @@ import {
   formatRecurrenceLabel,
   formatRecurrenceOrdinal,
   formatResolutionLabel,
+  formatSlaCountdown,
   highestIncidentPriority,
   isIncidentUnattended,
 } from '../src/lib/adminIncidentPresentation.js'
@@ -18,6 +19,30 @@ import { orderMatchesLiveQuery, sortLiveOrders } from '../src/lib/adminLiveOrder
 test('formatIncidentAge returns compact runtime age', () => {
   const opened = new Date(Date.now() - 4 * 60 * 1000).toISOString()
   assert.equal(formatIncidentAge(opened), '4m')
+})
+
+test('formatSlaCountdown shows remaining and overdue', () => {
+  const future = new Date(Date.now() + 4 * 60 * 1000 + 12 * 1000).toISOString()
+  assert.match(formatSlaCountdown(future), /^\d{2}:\d{2} to SLA$/)
+  const past = new Date(Date.now() - 80 * 1000).toISOString()
+  assert.match(formatSlaCountdown(past), /^Overdue \d{2}:\d{2}$/)
+})
+
+test('enrichIncidentRow surfaces opened-by attention and SLA countdown', () => {
+  const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString()
+  const row = enrichIncidentRow({
+    id: 'inc-1',
+    title: 'Late delivery',
+    status: 'OPEN',
+    priority: 'P2',
+    openedAt: new Date().toISOString(),
+    incidentSlaDeadlineAt: deadline,
+    openedBy: { displayName: 'Yousif A.', openForMs: 220000 },
+    recurrenceCount14d: 3,
+  })
+  assert.match(row.attentionLabel, /Open · Yousif A/)
+  assert.ok(row.slaCountdownLabel)
+  assert.equal(row.recurrenceLabel, '3rd claim · 14d')
 })
 
 test('highestIncidentPriority prefers P1 over P2', () => {

@@ -348,7 +348,20 @@ export function AdminIncidentBoard({
         <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
       ) : null}
       {incidentOrder ? (
-        <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} />
+        <IncidentOrderModal
+          order={incidentOrder}
+          onClose={() => setIncidentOrder(null)}
+          onOpenChat={(conversationId) => {
+            openChatPanel({
+              id: conversationId,
+              conversationId,
+              name: 'Customer',
+              role: 'Customer',
+              channel: 'customer',
+              peerRole: 'CUSTOMER',
+            })
+          }}
+        />
       ) : null}
       {selectedIncident ? (
         <AdminIncidentDetailModal

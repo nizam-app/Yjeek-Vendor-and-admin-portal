@@ -45,6 +45,18 @@ export const adminIncidentService = {
     }
   },
 
+  async getTaxonomy(options = {}) {
+    if (!isAdminRealApiFeature('dashboard')) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.incidents.taxonomy, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
   async get(incidentId, options = {}) {
     const id = String(incidentId || '').trim()
     if (!id) {
@@ -203,6 +215,39 @@ export const adminIncidentService = {
     const id = String(incidentId || '').trim()
     if (!id) throw new ApiError({ message: 'Incident id is required.' })
     const response = await apiClient.post(endpoints.admin.incidents.seniorSignOff(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async acknowledge(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.acknowledge(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: mapAdminIncidentDetail(response?.data), meta: response?.meta ?? null }
+  },
+
+  async heartbeatPresence(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.post(endpoints.admin.incidents.presenceHeartbeat(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async leavePresence(incidentId, options = {}) {
+    const id = String(incidentId || '').trim()
+    if (!id) throw new ApiError({ message: 'Incident id is required.' })
+    const response = await apiClient.delete(endpoints.admin.incidents.presenceLeave(id), {
       ...options,
       scope: 'admin',
       feature: 'dashboard',

@@ -5,6 +5,7 @@ import {
   LIVE_ORDER_TYPES,
   LIVE_INCIDENT_PRIORITY_SORTS,
   LIVE_INCIDENT_AGE_SORTS,
+  LIVE_INCIDENT_SLA_SORTS,
   INCIDENT_SEVERITIES,
   champsFromOrders,
   liveOrderFilterChips,
@@ -39,11 +40,14 @@ export function AdminLiveOrderFilterBar({
     ? sort
     : null
   const incidentAgeSort = LIVE_INCIDENT_AGE_SORTS.some((item) => item.id === sort) ? sort : null
-  const standardSort = incidentPrioritySort || incidentAgeSort ? 'time_left' : sort
+  const incidentSlaSort = LIVE_INCIDENT_SLA_SORTS.some((item) => item.id === sort) ? sort : null
+  const standardSort =
+    incidentPrioritySort || incidentAgeSort || incidentSlaSort ? 'time_left' : sort
   const sortOptions = [
     ...LIVE_ORDER_SORTS,
     ...(showIncidentFilters ? LIVE_INCIDENT_PRIORITY_SORTS : []),
     ...(showIncidentFilters ? LIVE_INCIDENT_AGE_SORTS : []),
+    ...(showIncidentFilters ? LIVE_INCIDENT_SLA_SORTS : []),
   ]
 
   return (

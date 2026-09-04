@@ -1,45 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, X } from 'lucide-react'
-import { cn } from './cn'
+import { X } from 'lucide-react'
 import { adminIncidentService } from '../../services/admin/incidentService'
-import { ApiError, formatApiErrorMessage } from '../../api/errors'
-import { formatAdminMoney } from '../../mappers/admin/mapAdminOrderDetail'
-import {
-  formatCostBearerLabel,
-  formatCustomerRemedyLabel,
-  formatEnforcementLabel,
-  RESOLUTION_ACTION_LABELS,
-} from '../../lib/adminIncidentPresentation'
+import { formatApiErrorMessage } from '../../api/errors'
+import { isCanonicalResolutionCode, resolveCanonicalResolutionCode } from '../../lib/incidentTaxonomy.js'
 import { useAuth } from '../../context/AuthContext'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
+const fieldLabelClass =
+  'mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[#a07d5a]'
 const inputClass =
-  'box-border h-[40px] w-full appearance-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 pr-9 text-[13px] text-[#17231c] outline-none transition focus:border-[#1aa054]'
-
-function resolutionLabel(code) {
-  if (!code) return '—'
-  return RESOLUTION_ACTION_LABELS[code] || String(code).replace(/_/g, ' ')
-}
+  'box-border h-[42px] w-full appearance-none rounded-[8px] border border-[#e4e7e5] bg-white px-3 pr-9 text-[13px] font-medium text-[#101a14] outline-none transition focus:border-[#c4a574]'
+const readonlyClass =
+  'box-border flex min-h-[42px] w-full items-center rounded-[8px] border border-[#e4e7e5] bg-[#fafbfa] px-3 text-[13px] font-medium text-[#101a14]'
 
 function canSeniorSignOff(user) {
   const actions = user?.permissions?.LIVE_DASHBOARD
   return Array.isArray(actions) && actions.includes('APPROVE')
 }
 
-function ReadOnlyField({ label, value }) {
-  if (!value) return null
-  return (
-    <div>
-      <p className={labelClass}>{label}</p>
-      <p className="rounded-[8px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-2.5 text-[13px] text-[#17231c]">
-        {value}
-      </p>
-    </div>
-  )
-}
-
 /**
- * Typed Mark Resolved for readiness-managed incidents.
+ * Mark Resolved — closed resolution vocabulary + auto SLA “Recorded” bond.
  */
 export default function AdminMarkResolvedModal({
   open,
@@ -51,34 +30,27 @@ export default function AdminMarkResolvedModal({
   const [context, setContext] = useState(null)
   const [loading, setLoading] = useState(false)
   const [resolutionCode, setResolutionCode] = useState('')
-  const [note, setNote] = useState('')
+  const [compensationType, setCompensationType] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [signingOff, setSigningOff] = useState(false)
   const [error, setError] = useState(null)
 
-  const persisted = context?.persisted ?? {}
   const requirements = context?.closeRequirements ?? {}
   const canSignOff = canSeniorSignOff(user)
 
   const codeOptions = useMemo(() => {
-    const all = Array.isArray(context?.canonicalResolutionCodes)
-      ? context.canonicalResolutionCodes
+    const fromApi = Array.isArray(context?.resolutionOptions)
+      ? context.resolutionOptions
       : []
-    const candidates = new Set(context?.resolutionCandidates || [])
-    const noAction = new Set(context?.noActionResolutionCodes || [])
-    const suggested = context?.suggestedResolutionCode
-    const ordered = []
-    if (suggested && !ordered.includes(suggested)) ordered.push(suggested)
-    for (const code of candidates) {
-      if (!ordered.includes(code)) ordered.push(code)
-    }
-    for (const code of noAction) {
-      if (!ordered.includes(code)) ordered.push(code)
-    }
-    for (const code of all) {
-      if (!ordered.includes(code)) ordered.push(code)
-    }
-    return ordered
+    if (fromApi.length) return fromApi
+    const vocab = Array.isArray(context?.resolutionVocabulary)
+      ? context.resolutionVocabulary
+      : []
+    return vocab.map((row) => ({
+      code: row.code,
+      displayCode: row.code,
+      label: row.label,
+    }))
   }, [context])
 
   useEffect(() => {
@@ -87,7 +59,6 @@ export default function AdminMarkResolvedModal({
     setLoading(true)
     setError(null)
     setContext(null)
-    setNote('')
     adminIncidentService
       .getResolveContext(incidentId)
       .then((res) => {
@@ -97,8 +68,12 @@ export default function AdminMarkResolvedModal({
         const initial =
           ctx?.suggestedResolutionCode && !ctx?.ambiguousResolution
             ? ctx.suggestedResolutionCode
-            : ''
+            : ctx?.isSlaIncident
+              ? 'WALLET_CREDIT_SLA_BREACH'
+              : ''
         setResolutionCode(initial || '')
+        const persistedType = ctx?.persisted?.compensationType
+        setCompensationType(persistedType || '')
       })
       .catch((err) => {
         if (!cancelled) {
@@ -146,18 +121,19 @@ export default function AdminMarkResolvedModal({
     blockerMessages.push('Class C/I requires investigation before resolve.')
   }
 
-  const compensationLabel =
-    persisted.compensationAmountBhd != null
-      ? formatAdminMoney(persisted.compensationAmountBhd)
-      : null
+  const subtitleParts = [
+    context?.incidentDisplayId ? `Incident #${context.incidentDisplayId}` : null,
+    context?.categoryLabel || context?.title || null,
+  ].filter(Boolean)
 
-  const bearerParts = []
-  if (persisted.costBearer) {
-    bearerParts.push(formatCostBearerLabel(persisted.costBearer))
-  }
-  if (persisted.bearerWasOverridden && persisted.bearerOverrideReason) {
-    bearerParts.push(`Override: ${persisted.bearerOverrideReason}`)
-  }
+  const recordedLabel = context?.recorded?.label || '—'
+  const resolvedByLabel = [
+    user?.name || user?.fullName || 'You',
+    'Ops',
+    'now',
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   async function handleSeniorSignOff() {
     if (!incidentId || signingOff) return
@@ -186,14 +162,18 @@ export default function AdminMarkResolvedModal({
       setError('Select a resolution code.')
       return
     }
+    if (!isCanonicalResolutionCode(resolutionCode)) {
+      setError('Resolution must be a closed vocabulary code — free text is not allowed.')
+      return
+    }
     setError(null)
     setSubmitting(true)
     try {
-      const body = {
-        resolutionActionCode: String(resolutionCode).trim(),
-      }
-      if (note.trim()) body.freeTextNote = note.trim()
-      await adminIncidentService.resolveTyped(incidentId, body)
+      const canonical = resolveCanonicalResolutionCode(resolutionCode) || resolutionCode
+      await adminIncidentService.resolveTyped(incidentId, {
+        resolutionActionCode: String(canonical).trim(),
+        ...(compensationType ? { compensationType } : {}),
+      })
       onSuccess?.()
       onClose?.()
     } catch (err) {
@@ -215,36 +195,38 @@ export default function AdminMarkResolvedModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="mark-resolved-title"
-        className="relative flex max-h-[calc(100vh-32px)] w-full max-w-[520px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_12px_40px_rgba(20,40,28,.18)]"
+        className="relative flex max-h-[calc(100vh-32px)] w-full max-w-[440px] flex-col overflow-hidden rounded-[11px] bg-white shadow-[0_18px_55px_rgba(0,0,0,.32)]"
       >
-        <div className="flex shrink-0 items-start gap-3 px-5 pt-5 pb-3">
-          <div className="min-w-0 flex-1">
-            <h2 id="mark-resolved-title" className="text-[16px] font-bold text-[#17231c]">
-              Mark resolved
-            </h2>
-            <p className="mt-0.5 text-[12px] text-[#7c8780]">
-              Typed resolution required for readiness-managed incidents.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3]"
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-[22px] pb-2 pt-[18px]">
+            <div className="relative pr-8">
+              <h2 id="mark-resolved-title" className="text-[16px] font-bold text-[#101a14]">
+                Mark resolved
+              </h2>
+              {subtitleParts.length ? (
+                <p className="mt-1 text-[11.5px] text-[#6b7a71]">{subtitleParts.join(' · ')}</p>
+              ) : (
+                <p className="mt-1 text-[11.5px] text-[#6b7a71]">
+                  Closed resolution vocabulary — no free text.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={submitting}
+                className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-md text-[#6b7a71] hover:bg-[#f1f3f1]"
+                aria-label="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
             {loading ? (
               <p className="text-[12px] text-[#7c8780]">Loading resolve context…</p>
             ) : null}
 
             {context?.ambiguousResolution ? (
-              <div className="rounded-[10px] bg-[#fff8e8] px-3.5 py-2.5 text-[12px] text-[#9a7618]">
+              <div className="rounded-[8px] bg-[#fff8e8] px-3 py-2 text-[12px] text-[#9a7618]">
                 Multiple prior actions map to different resolutions — select the correct code.
               </div>
             ) : null}
@@ -252,18 +234,15 @@ export default function AdminMarkResolvedModal({
             {blockerMessages.map((msg) => (
               <div
                 key={msg}
-                className="rounded-[10px] bg-[#fdebec] px-3.5 py-2.5 text-[12px] text-[#d64044]"
+                className="rounded-[8px] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]"
               >
                 {msg}
               </div>
             ))}
 
             {requirements.requiresSeniorSignOff && !requirements.seniorSignOffUserId ? (
-              <div className="rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3.5 py-2.5">
-                <p className="text-[12px] font-medium text-[#17231c]">Senior sign-off required</p>
-                <p className="mt-1 text-[11px] text-[#7c8780]">
-                  Requires LIVE_DASHBOARD.APPROVE permission.
-                </p>
+              <div className="rounded-[8px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-2.5">
+                <p className="text-[12px] font-medium text-[#101a14]">Senior sign-off required</p>
                 {canSignOff ? (
                   <button
                     type="button"
@@ -275,14 +254,16 @@ export default function AdminMarkResolvedModal({
                   </button>
                 ) : (
                   <p className="mt-2 text-[11px] text-[#9a7618]">
-                    Your account lacks APPROVE permission — ask a senior approver.
+                    Requires LIVE_DASHBOARD.APPROVE permission.
                   </p>
                 )}
               </div>
             ) : null}
 
             <label className="block">
-              <span className={labelClass}>Resolution code (required)</span>
+              <span className={fieldLabelClass}>
+                Resolution <span className="text-[#8C401D]">Required</span>
+              </span>
               <div className="relative">
                 <select
                   className={inputClass}
@@ -292,9 +273,9 @@ export default function AdminMarkResolvedModal({
                   required
                 >
                   <option value="">Select resolution…</option>
-                  {codeOptions.map((code) => (
-                    <option key={code} value={code}>
-                      {resolutionLabel(code)}
+                  {codeOptions.map((row) => (
+                    <option key={row.code} value={row.code}>
+                      {row.displayCode || row.code}
                     </option>
                   ))}
                 </select>
@@ -302,63 +283,75 @@ export default function AdminMarkResolvedModal({
                   ▾
                 </span>
               </div>
+              <p className="mt-1.5 text-[11px] leading-4 text-[#8a948e]">
+                Closed list. Auto-selected when an action was taken this session; manual when
+                closing without one.
+              </p>
             </label>
 
-            <ReadOnlyField
-              label="Customer remedy"
-              value={formatCustomerRemedyLabel(persisted.customerRemedy)}
-            />
-            <ReadOnlyField label="Compensation" value={compensationLabel} />
-            <ReadOnlyField
-              label="Cost bearer"
-              value={bearerParts.length ? bearerParts.join(' · ') : null}
-            />
-            <ReadOnlyField
-              label="Enforcement"
-              value={formatEnforcementLabel(persisted.enforcement)}
-            />
-            <ReadOnlyField
-              label="Resolved by"
-              value={user?.name || user?.fullName || user?.email || 'Current admin (on submit)'}
-            />
+            {(Array.isArray(context?.compensationTypeVocabulary)
+              ? context.compensationTypeVocabulary
+              : []
+            ).length ? (
+              <label className="block">
+                <span className={fieldLabelClass}>Compensation type</span>
+                <div className="relative">
+                  <select
+                    className={inputClass}
+                    value={compensationType}
+                    onChange={(e) => setCompensationType(e.target.value)}
+                    disabled={submitting || loading || blockerMessages.length > 0}
+                  >
+                    <option value="">Auto (from resolution)</option>
+                    {context.compensationTypeVocabulary.map((row) => (
+                      <option key={row.code} value={row.code}>
+                        {row.label || row.code}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                    ▾
+                  </span>
+                </div>
+              </label>
+            ) : null}
 
-            <label className="block">
-              <span className={labelClass}>Note (optional)</span>
-              <textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                disabled={submitting}
-                rows={2}
-                placeholder="Supplementary note for the audit log…"
-                className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
-              />
-            </label>
+            <div>
+              <p className={fieldLabelClass}>Recorded</p>
+              <div className={readonlyClass} title="Derived from SLA / prior compensation">
+                {loading ? '…' : recordedLabel}
+              </div>
+            </div>
+
+            <div>
+              <p className={fieldLabelClass}>Resolved by</p>
+              <div className={readonlyClass}>{resolvedByLabel}</div>
+            </div>
 
             {error ? (
-              <div className="rounded-[10px] bg-[#fdebec] px-3.5 py-2.5 text-[12px] text-[#d64044]">
+              <div className="rounded-[8px] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
                 {error}
               </div>
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-[#edf0ee] px-5 py-4">
+          <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-[#e4e7e5] px-[22px] py-3.5">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="inline-flex h-[36px] items-center justify-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
+              className="inline-flex h-[34px] items-center justify-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12px] font-semibold text-[#101a14] hover:bg-[#f6f8f6] disabled:opacity-60"
             >
-              Cancel
+              Back
             </button>
             <button
               type="submit"
               disabled={
                 submitting || loading || blockerMessages.length > 0 || !resolutionCode
               }
-              className="inline-flex h-[36px] items-center justify-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
+              className="inline-flex h-[34px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[12px] font-semibold text-white hover:bg-[#158a47] disabled:opacity-60"
             >
-              <CheckCircle2 size={14} strokeWidth={2.2} />
-              {submitting ? 'Resolving…' : 'Mark resolved'}
+              {submitting ? 'Confirming…' : 'Confirm resolved'}
             </button>
           </div>
         </form>

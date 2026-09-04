@@ -94,6 +94,8 @@ export const endpoints = {
        * Confirmed: GET /admin/incidents?status=&priority=&limit=
        */
       list: '/admin/incidents',
+      /** Closed category + resolutionActionCode vocabularies */
+      taxonomy: '/admin/incidents/taxonomy',
       /**
        * Confirmed: GET /admin/incidents/:incidentId
        * @param {string} incidentId
@@ -110,6 +112,9 @@ export const endpoints = {
         `/admin/incidents/${encodeURIComponent(incidentId)}/severity/escalate`,
       addEvidence: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/evidence`,
       actions: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/actions`,
+      presenceHeartbeat: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/presence/heartbeat`,
+      presenceLeave: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/presence`,
       refundContext: (incidentId) =>
         `/admin/incidents/${encodeURIComponent(incidentId)}/refund-context`,
       refundApprovals: '/admin/incidents/refund-approvals',
@@ -760,6 +765,8 @@ export const endpoints = {
       ordersMeta: '/admin/reports/orders/meta',
       /** Confirmed: GET /admin/reports/orders/export?preset=&limit= → CSV */
       ordersExport: '/admin/reports/orders/export',
+      /** Vendor settlement recovery obligations from incidents */
+      vendorCostRecovery: '/admin/reports/vendor-cost-recovery',
     },
   },
 }
