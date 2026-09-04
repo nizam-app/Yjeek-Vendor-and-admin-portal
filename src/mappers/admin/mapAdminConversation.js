@@ -20,8 +20,18 @@ export function mapAdminChatMessage(item) {
     senderId: item.senderId ?? null,
     createdAt: item.createdAt ?? null,
     time: item.timeLabel ? String(item.timeLabel) : '',
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments.map((url) => String(url || '').trim()).filter(Boolean)
+      : attachmentsFromMetadata(item.metadata),
     own,
   }
+}
+
+function attachmentsFromMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return []
+  const raw = metadata.attachments
+  if (!Array.isArray(raw)) return []
+  return raw.map((url) => String(url || '').trim()).filter(Boolean)
 }
 
 /**

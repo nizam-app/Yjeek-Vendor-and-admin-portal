@@ -7,7 +7,7 @@ const CHAT_GRID_GAP = 10
 const CHAT_GRID_MAX_H = CHAT_CARD_H * 2 + CHAT_GRID_GAP
 
 function ChatCard({ chat, onChatClick }) {
-  const { initials, name, role, message, unreadCount } = chat
+  const { initials, name, role, message, unreadCount, ticketDisplayCode } = chat
 
   return (
     <button
@@ -26,6 +26,11 @@ function ChatCard({ chat, onChatClick }) {
             'rounded px-1 text-[8px] not-italic',
             role === 'Champ' ? 'bg-[#e5efff] text-[#3470ae]' : 'bg-[#eee8ff] text-[#7454ad]',
           )}>{role}</i>
+          {ticketDisplayCode ? (
+            <i className="rounded bg-[#e8f6ec] px-1 text-[8px] not-italic text-[#1f7a46]">
+              {ticketDisplayCode}
+            </i>
+          ) : null}
         </span>
         <span className="block truncate text-[9px] text-[#828b85]">{message}</span>
       </span>

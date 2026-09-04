@@ -38,6 +38,7 @@ export default function AdminOrderSuspendChampModal({
   types = [],
   durations = [],
   reasons = [],
+  incidentId = null,
   onSuccess,
 }) {
   const [suspendType, setSuspendType] = useState('')
@@ -125,7 +126,10 @@ export default function AdminOrderSuspendChampModal({
         body.durationHours = hours
       }
 
-      await adminOrderService.suspendChamp(orderId, body)
+      await adminOrderService.suspendChamp(orderId, {
+        ...body,
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
+      })
       onSuccess?.()
       onClose?.()
     } catch (err) {

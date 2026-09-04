@@ -1,13 +1,22 @@
 import { ApiError } from '../../api/errors'
+import { enrichIncidentRow } from '../../lib/adminIncidentPresentation'
 
 const ACTION_LABELS = {
   REASSIGN_CHAMP: { group: 'Dispatch', icon: '↻', label: 'Reassign champ', tone: 'text-[#2876c7]' },
   REDISPATCH: { group: 'Dispatch', icon: '↻', label: 'Redispatch order', tone: 'text-[#2876c7]' },
-  REFUND: { group: 'Resolution', icon: '↝', label: 'Refund — full/partial', tone: 'text-[#18a653]' },
+  REDELIVER: { group: 'Dispatch', icon: '📦', label: 'Redeliver', tone: 'text-[#2876c7]' },
+  REPLACE: { group: 'Dispatch', icon: '📦', label: 'Replace items', tone: 'text-[#2876c7]' },
+  REFUND: { group: 'Resolution', icon: '↩', label: 'Refund — full/partial', tone: 'text-[#18a653]' },
+  GOODWILL_CREDIT: { group: 'Resolution', icon: '🎁', label: 'Goodwill credit', tone: 'text-[#18a653]' },
   CANCEL: { group: 'Resolution', icon: '×', label: 'Cancel order', tone: 'text-[#d92f35]' },
-  SUSPEND_CHAMP: { group: 'Enforcement · Ops', icon: '⊘', label: 'Suspend champ', tone: 'text-[#dc2931]' },
-  FLAG_VENDOR: { group: 'Enforcement · Ops', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
-  MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]' },
+  START_INVESTIGATION: { group: 'Investigate', icon: '🔍', label: 'Start investigation', tone: 'text-[#2876c7]' },
+  REQUEST_PARTY_RESPONSE: { group: 'Investigate', icon: '💬', label: 'Request party response', tone: 'text-[#2876c7]' },
+  ESCALATE_SEVERITY: { group: 'Investigate', icon: '⬆', label: 'Escalate severity', tone: 'text-[#c68618]' },
+  SUSPEND_CHAMP: { group: 'Enforcement', icon: '⊘', label: 'Suspend champ', tone: 'text-[#dc2931]' },
+  FLAG_VENDOR: { group: 'Enforcement', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
+  APPLY_VPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]', deferred: true },
+  APPLY_CPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]', deferred: true },
+  MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]', deferred: true },
 }
 
 export function humanizeAdminStatus(status) {
@@ -94,10 +103,11 @@ function mapOrderIncidents(incidents) {
       if (item.stage) badges.push([`Stage: ${item.stage}`, 'gray'])
       if (item.reportedByCustomer) badges.push(['Reported', 'blue'])
 
-      return {
+      return enrichIncidentRow({
         id: item.id ? String(item.id) : null,
         title: item.title || item.type || 'Incident',
         status: statusLabel,
+        statusRaw,
         statusTone,
         badges,
         detail: item.note || '—',
@@ -111,7 +121,33 @@ function mapOrderIncidents(incidents) {
           .join(' · '),
         priority: item.priority ?? null,
         type: item.type ?? null,
-      }
+        note: item.note ?? null,
+        cause: item.cause ?? null,
+        stage: item.stage ?? null,
+        reportedByCustomer: item.reportedByCustomer ?? false,
+        createdAt: item.createdAt ?? null,
+        resolvedAt: item.resolvedAt ?? null,
+        resolvedByName: item.resolvedByName ?? null,
+        lifecycleState: item.lifecycleState ?? null,
+        source: item.source ?? null,
+        category: item.category ?? null,
+        openedAt: item.openedAt ?? null,
+        firstResponseAt: item.firstResponseAt ?? null,
+        acknowledgedAt: item.acknowledgedAt ?? null,
+        acknowledgedByName: item.acknowledgedByName ?? null,
+        recurredWithin14Days: item.recurredWithin14Days ?? false,
+        recurrenceCount14d: item.recurrenceCount14d ?? null,
+        recurrenceContext: item.recurrenceContext ?? null,
+        evidenceCount: item.evidenceCount ?? 0,
+        resolutionActionCode: item.resolutionActionCode ?? null,
+        previousResolutionActionCode: item.previousResolutionActionCode ?? null,
+        costBearer: item.costBearer ?? null,
+        compensationAmountBhd: item.compensationAmountBhd ?? null,
+        customerRemedy: item.customerRemedy ?? null,
+        incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
+        readinessManaged: item.readinessManaged ?? false,
+        evidenceHoldAt: item.evidenceHoldAt ?? null,
+      })
     })
     .filter(Boolean)
 }
@@ -127,11 +163,12 @@ export function mapAdminAvailableActions(actions, options = {}) {
   const groups = new Map()
   const hasChamp = options.hasChamp == null ? true : Boolean(options.hasChamp)
 
-  for (const code of list) {
+  const codes = [...new Set([...list, 'START_INVESTIGATION', 'REQUEST_PARTY_RESPONSE', 'ESCALATE_SEVERITY', 'REDELIVER', 'REPLACE', 'GOODWILL_CREDIT', 'APPLY_VPI_PENALTY', 'APPLY_CPI_PENALTY'])]
+
+  for (const code of codes) {
     const key = String(code || '')
     const meta = ACTION_LABELS[key]
     if (!meta) continue
-    // Suspend requires an assigned champ (driverId) — hide when unassigned.
     if (key === 'SUSPEND_CHAMP' && !hasChamp) continue
     if (!groups.has(meta.group)) groups.set(meta.group, [])
     groups.get(meta.group).push({
@@ -139,10 +176,15 @@ export function mapAdminAvailableActions(actions, options = {}) {
       icon: meta.icon,
       label: meta.label,
       tone: meta.tone,
+      disabled: Boolean(meta.deferred),
+      deferredReason: meta.deferred ? 'Coming in a later phase' : null,
     })
   }
 
-  return Array.from(groups.entries()).map(([title, items]) => ({ title, actions: items }))
+  const groupOrder = ['Dispatch', 'Resolution', 'Investigate', 'Enforcement', 'Close-out']
+  return groupOrder
+    .filter((title) => groups.has(title))
+    .map((title) => ({ title, actions: groups.get(title) }))
 }
 
 function computeRemainingRefundable(data, payment) {

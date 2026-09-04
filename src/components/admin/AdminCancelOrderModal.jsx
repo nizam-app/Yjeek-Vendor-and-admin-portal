@@ -42,6 +42,7 @@ export default function AdminCancelOrderModal({
   orderValueLabel = null,
   causes = [],
   reasonsByCause = {},
+  incidentId = null,
   onSuccess,
 }) {
   const [itemDisposition, setItemDisposition] = useState('CHAMP_KEEPS')
@@ -129,6 +130,7 @@ export default function AdminCancelOrderModal({
         refund: String(refund).trim(),
         cause: String(cause).trim(),
         reason: String(reason).trim(),
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
       })
       onSuccess?.()
       onClose?.()

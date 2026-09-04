@@ -34,6 +34,7 @@ export default function AdminRedispatchOrderModal({
   items = [],
   currency = 'BHD',
   reasons = [],
+  incidentId = null,
   onSuccess,
 }) {
   const [scope, setScope] = useState('FULL')
@@ -150,7 +151,10 @@ export default function AdminRedispatchOrderModal({
         body.itemIds = selectedIds.map(String)
       }
 
-      await adminOrderService.redispatch(orderId, body)
+      await adminOrderService.redispatch(orderId, {
+        ...body,
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
+      })
       onSuccess?.()
       onClose?.()
     } catch (err) {

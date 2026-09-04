@@ -101,6 +101,28 @@ export const endpoints = {
       detail: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}`,
       /** Confirmed: POST /admin/incidents/:incidentId/resolve */
       resolve: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/resolve`,
+      acknowledge: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/acknowledge`,
+      startInvestigation: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/investigation/start`,
+      requestPartyResponse: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/party-response/request`,
+      escalateSeverity: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/severity/escalate`,
+      addEvidence: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/evidence`,
+      actions: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/actions`,
+      refundContext: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/refund-context`,
+      refundApprovals: '/admin/incidents/refund-approvals',
+      approveRefund: (approvalId) =>
+        `/admin/incidents/refund-approvals/${encodeURIComponent(approvalId)}/approve`,
+      rejectRefund: (approvalId) =>
+        `/admin/incidents/refund-approvals/${encodeURIComponent(approvalId)}/reject`,
+      resolveContext: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/resolve-context`,
+      resolveTyped: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/resolve/typed`,
+      seniorSignOff: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/senior-sign-off`,
     },
     search: {
       /** Confirmed: GET /admin/search?q=&limit= */
@@ -341,6 +363,26 @@ export const endpoints = {
        */
       reset: (slaModelId) =>
         `/admin/sla-models/${encodeURIComponent(slaModelId)}/reset`,
+      /**
+       * @param {string} slaModelId
+       */
+      rollback: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/rollback`,
+      /**
+       * @param {string} slaModelId
+       */
+      versions: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/versions`,
+      /**
+       * @param {string} slaModelId
+       */
+      changelog: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/changelog`,
+      /**
+       * @param {string} slaModelId
+       */
+      versionUsage: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/version-usage`,
     },
     /**
      * Confirmed Customers — Postman folder 08.
