@@ -6,7 +6,7 @@ import { isCanonicalResolutionCode, resolveCanonicalResolutionCode } from '../..
 import { useAuth } from '../../context/AuthContext'
 
 const fieldLabelClass =
-  'mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[#a07d5a]'
+  'mb-1.5 block text-[9.5px] font-bold uppercase tracking-[0.11em] text-[#d97706]'
 const inputClass =
   'box-border h-[42px] w-full appearance-none rounded-[8px] border border-[#e4e7e5] bg-white px-3 pr-9 text-[13px] font-medium text-[#101a14] outline-none transition focus:border-[#c4a574]'
 const readonlyClass =
@@ -34,6 +34,9 @@ export default function AdminMarkResolvedModal({
   const [submitting, setSubmitting] = useState(false)
   const [signingOff, setSigningOff] = useState(false)
   const [error, setError] = useState(null)
+  const [nowClock, setNowClock] = useState(() =>
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+  )
 
   const requirements = context?.closeRequirements ?? {}
   const canSignOff = canSeniorSignOff(user)
@@ -90,6 +93,18 @@ export default function AdminMarkResolvedModal({
 
   useEffect(() => {
     if (!open) return undefined
+    function tick() {
+      setNowClock(
+        new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      )
+    }
+    tick()
+    const id = window.setInterval(tick, 30000)
+    return () => window.clearInterval(id)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
     function onKeyDown(e) {
       if (e.key === 'Escape' && !submitting) onClose?.()
     }
@@ -127,11 +142,7 @@ export default function AdminMarkResolvedModal({
   ].filter(Boolean)
 
   const recordedLabel = context?.recorded?.label || '—'
-  const resolvedByLabel = [
-    user?.name || user?.fullName || 'You',
-    'Ops',
-    'now',
-  ]
+  const resolvedByLabel = [user?.name || user?.fullName || 'You', 'Ops', nowClock]
     .filter(Boolean)
     .join(' · ')
 
@@ -284,40 +295,13 @@ export default function AdminMarkResolvedModal({
                 </span>
               </div>
               <p className="mt-1.5 text-[11px] leading-4 text-[#8a948e]">
-                Closed list. Auto-selected when an action was taken this session; manual when
-                closing without one.
+                Closed list. Auto-selected when an action was taken; must be chosen manually if
+                closing with no action.
               </p>
             </label>
 
-            {(Array.isArray(context?.compensationTypeVocabulary)
-              ? context.compensationTypeVocabulary
-              : []
-            ).length ? (
-              <label className="block">
-                <span className={fieldLabelClass}>Compensation type</span>
-                <div className="relative">
-                  <select
-                    className={inputClass}
-                    value={compensationType}
-                    onChange={(e) => setCompensationType(e.target.value)}
-                    disabled={submitting || loading || blockerMessages.length > 0}
-                  >
-                    <option value="">Auto (from resolution)</option>
-                    {context.compensationTypeVocabulary.map((row) => (
-                      <option key={row.code} value={row.code}>
-                        {row.label || row.code}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
-                    ▾
-                  </span>
-                </div>
-              </label>
-            ) : null}
-
             <div>
-              <p className={fieldLabelClass}>Recorded</p>
+              <p className={fieldLabelClass}>Compensation</p>
               <div className={readonlyClass} title="Derived from SLA / prior compensation">
                 {loading ? '…' : recordedLabel}
               </div>
@@ -342,7 +326,7 @@ export default function AdminMarkResolvedModal({
               disabled={submitting}
               className="inline-flex h-[34px] items-center justify-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12px] font-semibold text-[#101a14] hover:bg-[#f6f8f6] disabled:opacity-60"
             >
-              Back
+              Close
             </button>
             <button
               type="submit"
@@ -351,7 +335,7 @@ export default function AdminMarkResolvedModal({
               }
               className="inline-flex h-[34px] items-center justify-center rounded-full bg-[#1aa054] px-4 text-[12px] font-semibold text-white hover:bg-[#158a47] disabled:opacity-60"
             >
-              {submitting ? 'Confirming…' : 'Confirm resolved'}
+              {submitting ? 'Saving…' : 'Mark resolved'}
             </button>
           </div>
         </form>

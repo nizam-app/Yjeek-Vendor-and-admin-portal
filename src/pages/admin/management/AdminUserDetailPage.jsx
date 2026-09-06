@@ -7,6 +7,7 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { mapPermissionFlagsToOverrides } from '../../../mappers/admin/mapAdminUsers'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
 import { cn } from '../../../components/admin/cn'
 
 const roleToneClass = {
@@ -730,20 +731,11 @@ export default function AdminUserDetailPage() {
                 </Field>
                 <InfoItem label="Email" value={detail.email || row.email} />
                 <Field label="Phone">
-                  <div className="flex gap-2">
-                    <input
-                      className={cn(inputClass, 'w-[96px] shrink-0')}
-                      value={form.countryCode}
-                      onChange={(e) => patchForm({ countryCode: e.target.value })}
-                      aria-label="Country code"
-                    />
-                    <input
-                      className={inputClass}
-                      value={form.phone}
-                      onChange={(e) => patchForm({ phone: e.target.value })}
-                      aria-label="Phone number"
-                    />
-                  </div>
+                  <AdminPhoneField
+                    countryCode={form.countryCode}
+                    phone={form.phone}
+                    onChange={({ countryCode, phone }) => patchForm({ countryCode, phone })}
+                  />
                 </Field>
                 <Field label="Job title">
                   <input

@@ -56,6 +56,20 @@ const COST_BEARER_LABELS = {
   NOT_APPLICABLE: 'Not applicable',
 }
 
+const COST_BEARER_SELECT_LABELS = {
+  ...COST_BEARER_LABELS,
+  VENDOR: 'Vendor — recoverable',
+  AGENCY: 'Champ agency — recoverable',
+}
+
+const CAUSE_CHIP_LABELS = {
+  VENDOR: 'Vendor',
+  CHAMP: 'Champ',
+  CUSTOMER: 'Customer',
+  SYSTEM: 'System',
+  UNKNOWN: 'Unknown',
+}
+
 export const CUSTOMER_REMEDY_LABELS = {
   REDELIVERY: 'Redelivery',
   REPLACEMENT: 'Replacement',
@@ -166,8 +180,70 @@ export function isOpenIncident(incident) {
   return true
 }
 
+/**
+ * Live viewer presence, else the dispatcher who first opened/acknowledged.
+ * Keeps "Open · Name" on the board after the modal is closed.
+ */
+export function resolveOpenedBy(incident) {
+  if (!incident || !isOpenIncident(incident)) return null
+  if (incident.openedBy?.displayName || incident.openedBy?.userId) {
+    return incident.openedBy
+  }
+  if (Array.isArray(incident.activeViewers) && incident.activeViewers.length > 0) {
+    const viewer = incident.activeViewers.find((row) => row?.displayName || row?.userId)
+    if (viewer) return viewer
+  }
+  if (incident.acknowledgedByName) {
+    return {
+      userId: incident.acknowledgedById || null,
+      displayName: incident.acknowledgedByName,
+      openedAt: incident.acknowledgedAt || null,
+      lastSeenAt: null,
+      openForMs: null,
+    }
+  }
+  return null
+}
+
+/**
+ * Viewers to show in order/incident detail "Open by …" banner.
+ * Prefers other live viewers; else self live presence; else claimed opener.
+ */
+export function buildOpenPresenceBanner({
+  activeViewers = [],
+  incidents = [],
+  currentUserId = null,
+} = {}) {
+  const live = (Array.isArray(activeViewers) ? activeViewers : []).filter(
+    (viewer) => viewer?.displayName || viewer?.userId,
+  )
+  const others = currentUserId
+    ? live.filter((viewer) => viewer.userId !== currentUserId)
+    : live
+  if (others.length) return others
+  if (live.length) return live
+
+  const list = Array.isArray(incidents) ? incidents : []
+  for (const incident of list) {
+    const openedBy = resolveOpenedBy(incident)
+    if (openedBy?.displayName) {
+      return [
+        {
+          userId: openedBy.userId || null,
+          displayName: openedBy.displayName,
+          openForMs: openedBy.openForMs ?? null,
+          openedAt: openedBy.openedAt ?? null,
+        },
+      ]
+    }
+  }
+  return []
+}
+
 export function isIncidentUnattended(incident) {
   if (!incident || !isOpenIncident(incident)) return false
+  // Soft presence or claimed opener → not unattended.
+  if (resolveOpenedBy(incident)) return false
   if (incident.firstResponseAt || incident.acknowledgedAt || incident.assignedToUserId) return false
   return true
 }
@@ -177,13 +253,12 @@ export function formatAttentionState(incident) {
   if (!isOpenIncident(incident)) {
     return incident.resolvedByName ? `Resolved · ${incident.resolvedByName}` : 'Resolved'
   }
-  const openedBy = incident.openedBy
+  const openedBy = resolveOpenedBy(incident)
   if (openedBy?.displayName) {
     const duration = formatOpenDuration(openedBy.openForMs)
     return duration ? `Open · ${openedBy.displayName} · ${duration}` : `Open · ${openedBy.displayName}`
   }
   if (isIncidentUnattended(incident)) return 'Unattended'
-  if (incident.acknowledgedByName) return `Acknowledged · ${incident.acknowledgedByName}`
   if (incident.lifecycleState === 'UNDER_INVESTIGATION') return 'Under investigation'
   if (incident.lifecycleState === 'AWAITING_PARTY_RESPONSE') return 'Awaiting party response'
   if (incident.partyRespondedAt) return 'Party responded'
@@ -226,7 +301,7 @@ export function formatIncidentStatusWithSla(incident, now = Date.now()) {
   return countdown ? `${base} · ${countdown}` : base
 }
 
-export function formatRecurrenceOrdinal(count) {
+export function formatRecurrenceOrdinal(count, noun = 'claim') {
   if (typeof count !== 'number' || count < 2) return null
   const suffix = count % 100 >= 11 && count % 100 <= 13
     ? 'th'
@@ -237,34 +312,65 @@ export function formatRecurrenceOrdinal(count) {
         : count % 10 === 3
           ? 'rd'
           : 'th'
-  return `${count}${suffix} claim · 14d`
+  return `${count}${suffix} ${noun} · 14d`
+}
+
+export function formatRecurrenceChips(incident) {
+  if (!incident) return []
+  const ctx = incident.recurrenceContext && typeof incident.recurrenceContext === 'object'
+    ? incident.recurrenceContext
+    : {}
+  const hasDimCounts =
+    ctx.customerClaimCount14d != null ||
+    ctx.vendorIncidentCount14d != null ||
+    ctx.champIncidentCount14d != null
+  const customer = hasDimCounts
+    ? Number(ctx.customerClaimCount14d) || 0
+    : incident.recurrenceCount14d ??
+      incident.recurrenceCount ??
+      incident.metadata?.recurrenceCount
+  const vendor = hasDimCounts ? Number(ctx.vendorIncidentCount14d) || 0 : 0
+  const champ = hasDimCounts ? Number(ctx.champIncidentCount14d) || 0 : 0
+  const chips = []
+  const customerLabel = formatRecurrenceOrdinal(customer, 'claim')
+  if (customerLabel) chips.push({ key: 'customer', label: customerLabel })
+  const vendorLabel = formatRecurrenceOrdinal(vendor, 'vendor incident')
+  if (vendorLabel) chips.push({ key: 'vendor', label: vendorLabel })
+  const champLabel = formatRecurrenceOrdinal(champ, 'champ incident')
+  if (champLabel) chips.push({ key: 'champ', label: champLabel })
+  if (!chips.length && incident.recurredWithin14Days) {
+    chips.push({ key: 'repeat', label: 'Repeated within 14d' })
+  }
+  return chips
 }
 
 export function formatRecurrenceLabel(incident) {
-  if (!incident) return null
-  const count =
-    incident.recurrenceCount14d ??
-    incident.recurrenceCount ??
-    incident.metadata?.recurrenceCount
-  const ordinal = formatRecurrenceOrdinal(count)
-  if (ordinal) return ordinal
-  if (incident.recurredWithin14Days) return 'Repeated within 14d'
-  return null
+  return formatRecurrenceChips(incident)[0]?.label || null
 }
 
 export function pickBestRecurrenceLabel(incidents) {
   if (!Array.isArray(incidents) || incidents.length === 0) return null
-  let best = null
-  let bestCount = 0
+  const chips = []
   for (const incident of incidents) {
-    const count = incident.recurrenceCount14d ?? 0
-    const label = formatRecurrenceLabel(incident)
-    if (label && count >= bestCount) {
-      best = label
-      bestCount = count
+    chips.push(...formatRecurrenceChips(incident))
+  }
+  const customer = chips.find((row) => row.key === 'customer')
+  if (customer) return customer.label
+  return chips[0]?.label || null
+}
+
+export function pickRecurrenceChips(incidents) {
+  if (!Array.isArray(incidents) || incidents.length === 0) return []
+  const seen = new Set()
+  const chips = []
+  for (const incident of incidents) {
+    for (const chip of formatRecurrenceChips(incident)) {
+      if (seen.has(chip.key)) continue
+      seen.add(chip.key)
+      chips.push(chip)
     }
   }
-  return best
+  return chips
 }
 
 export function formatResolutionLabel(code) {
@@ -272,9 +378,87 @@ export function formatResolutionLabel(code) {
   return resolutionActionLabel(code) || RESOLUTION_ACTION_LABELS[code] || humanizeEnum(code)
 }
 
-export function formatCostBearerLabel(bearer) {
+export function formatCostBearerLabel(bearer, opts = {}) {
   if (!bearer) return null
-  return COST_BEARER_LABELS[bearer] || humanizeEnum(bearer)
+  const table = opts.select ? COST_BEARER_SELECT_LABELS : COST_BEARER_LABELS
+  return table[bearer] || humanizeEnum(bearer)
+}
+
+export function formatIncidentDisplayId(id) {
+  if (!id) return null
+  const raw = String(id).trim()
+  if (!raw) return null
+  if (/^INC-/i.test(raw)) return raw.toUpperCase()
+  if (raw.length > 10) return `INC-${raw.slice(-6).toUpperCase()}`
+  return `INC-${raw}`
+}
+
+export function formatCauseChip(cause) {
+  if (!cause) return null
+  const raw = String(cause).trim()
+  if (!raw) return null
+  if (/^cause:/i.test(raw)) return raw.replace(/^cause:\s*/i, 'Cause: ')
+  const key = raw.toUpperCase().replace(/\s+/g, '_')
+  const label = CAUSE_CHIP_LABELS[key] || humanizeEnum(raw)
+  return `Cause: ${label}`
+}
+
+export function formatStageChip(stage) {
+  if (!stage) return null
+  const raw = String(stage).trim()
+  if (!raw) return null
+  if (/^stage:/i.test(raw)) {
+    const rest = raw.replace(/^stage:\s*/i, '')
+    return `Stage: ${rest}`
+  }
+  const pretty = humanizeEnum(raw)
+  const sentence = pretty ? pretty.charAt(0) + pretty.slice(1).toLowerCase() : raw
+  return `Stage: ${sentence}`
+}
+
+export function formatCompensationTypeLabel(type) {
+  if (!type) return null
+  const raw = String(type).toUpperCase()
+  if (raw.includes('VOUCHER')) return 'Voucher'
+  if (raw.includes('REFUND')) return 'Refund'
+  if (raw.includes('REDELIVER')) return 'Redelivery'
+  if (raw.includes('REPLACE')) return 'Replacement'
+  if (raw === 'NONE') return null
+  if (raw.includes('WALLET') || raw.includes('GOODWILL') || raw.includes('CREDIT')) return 'Wallet'
+  return humanizeEnum(type)
+}
+
+export function formatCompensationRecord({
+  amount,
+  compensationType,
+  costBearer,
+  currency = 'BHD',
+} = {}) {
+  const parts = []
+  if (amount != null && amount !== '' && Number.isFinite(Number(amount)) && Number(amount) > 0) {
+    const numeric = Number(amount)
+    parts.push(`${currency} ${numeric.toFixed(3)}`)
+    const typeLabel = formatCompensationTypeLabel(compensationType) || 'Wallet'
+    parts.push(typeLabel)
+  }
+  const bearer = formatCostBearerLabel(costBearer)
+  if (bearer) parts.push(`borne by ${bearer}`)
+  return parts.length ? parts.join(' · ') : null
+}
+
+export function formatResolvedByLine({ name, role, at } = {}) {
+  const parts = []
+  if (name) parts.push(name)
+  parts.push(role ? humanizeEnum(role) : 'Ops')
+  if (at) {
+    const date = at instanceof Date ? at : new Date(at)
+    if (!Number.isNaN(date.getTime())) {
+      parts.push(
+        date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+      )
+    }
+  }
+  return parts.join(' · ')
 }
 
 export function formatEvidenceKind(kind) {
@@ -291,6 +475,7 @@ export function enrichIncidentRow(item) {
   const priority = normalizeIncidentPriority(item)
   const openedAt = incidentOpenedAt(item)
   const slaCountdownLabel = formatSlaCountdown(item.incidentSlaDeadlineAt)
+  const openedBy = resolveOpenedBy(item)
   return {
     ...item,
     priority,
@@ -299,11 +484,13 @@ export function enrichIncidentRow(item) {
     categoryLabel: formatIncidentCategory(item),
     ageLabel: formatIncidentAge(openedAt),
     openedAt,
+    openedBy,
     lifecycleLabel: formatLifecycleLabel(item),
     sourceLabel: formatSourceLabel(item),
-    attentionLabel: formatAttentionState(item),
-    unattended: isIncidentUnattended(item),
+    attentionLabel: formatAttentionState({ ...item, openedBy }),
+    unattended: isIncidentUnattended({ ...item, openedBy }),
     recurrenceLabel: formatRecurrenceLabel(item),
+    recurrenceChips: formatRecurrenceChips(item),
     slaCountdownLabel,
     statusWithSlaLabel: formatIncidentStatusWithSla(item),
     resolutionLabel: isOpenIncident(item)

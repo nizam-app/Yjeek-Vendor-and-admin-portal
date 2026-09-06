@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Flame, ShieldCheck, TriangleAlert, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminDashboard } from '../../../hooks/admin/useAdminDashboard'
@@ -11,6 +11,9 @@ import { cn } from '../../../components/admin/cn'
 import { AdminOrderDetailModal } from '../../admin/operations/AdminLiveOrdersPage'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
+import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
+import { countUnattendedIncidents } from '../../../lib/adminOrderIncidentIndex'
+import { enrichIncidentRow } from '../../../lib/adminIncidentPresentation'
 
 const KPI_PLACEHOLDERS = [
   { key: 'pending', label: 'Pending' },
@@ -78,12 +81,19 @@ export default function AdminDashboardPage() {
     region,
     refreshSeconds: data?.autoRefreshSeconds,
   })
-  const { data: incidentsData } = useAdminIncidents()
-  const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+  const { data: incidentsData } = useAdminIncidents({ refreshSeconds: data?.autoRefreshSeconds || 15 })
+  const incidents = useMemo(
+    () => (Array.isArray(incidentsData?.items) ? incidentsData.items : []).map(enrichIncidentRow),
+    [incidentsData?.items],
+  )
+  const unattendedIncidentCount = useMemo(() => countUnattendedIncidents(incidents), [incidents])
   const kpiItems = data?.summary?.length
     ? data.summary
     : KPI_PLACEHOLDERS.map((item) => ({ ...item, value: null }))
   const slaColumns = data?.slaColumns?.length ? data.slaColumns : []
+  const activeOrdersLabel =
+    data?.activeOrders == null ? '—' : String(data.activeOrders)
+  const refreshKey = `${activeOrdersLabel}-${unattendedIncidentCount}-${slaColumns.map((c) => c.count).join('-')}`
 
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
@@ -130,6 +140,23 @@ export default function AdminDashboardPage() {
       <ApiErrorBanner error={error} onRetry={refetch} />
       <DashboardKpiStrip items={kpiItems} />
 
+      <div className="mt-3 flex flex-wrap items-center gap-2.5">
+        <h2 className="text-[14px] font-bold text-[#17231c]">{activeOrdersLabel} active orders</h2>
+        <AdminAutoRefreshBadge
+          intervalSeconds={data?.autoRefreshSeconds}
+          resetKey={refreshKey}
+        />
+        {unattendedIncidentCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => navigate('/admin/live-orders?unattended=1')}
+            className="rounded-full bg-[#fff0ed] px-2.5 py-1 text-[10px] font-semibold text-[#c62828] hover:bg-[#fde4e0]"
+          >
+            {unattendedIncidentCount} incident{unattendedIncidentCount === 1 ? '' : 's'} unattended
+          </button>
+        ) : null}
+      </div>
+
       <div className="mt-4 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <AdminLiveMap
           layer={layer}
@@ -148,6 +175,7 @@ export default function AdminDashboardPage() {
         <OpsIncidentsSidebar
           fillHeight={false}
           incidents={incidents}
+          unattendedCount={unattendedIncidentCount}
           onIncidentClick={setSelectedIncident}
         />
       </div>

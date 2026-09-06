@@ -4,20 +4,54 @@ import { enrichIncidentRow } from '../../lib/adminIncidentPresentation'
 const ACTION_LABELS = {
   REASSIGN_CHAMP: { group: 'Dispatch', icon: '↻', label: 'Reassign champ', tone: 'text-[#2876c7]' },
   REDISPATCH: { group: 'Dispatch', icon: '↻', label: 'Redispatch order', tone: 'text-[#2876c7]' },
+  REDELIVER_REPLACE: {
+    group: 'Dispatch',
+    icon: '📦',
+    label: 'Redeliver / replace',
+    tone: 'text-[#2876c7]',
+  },
   REDELIVER: { group: 'Dispatch', icon: '📦', label: 'Redeliver', tone: 'text-[#2876c7]' },
   REPLACE: { group: 'Dispatch', icon: '📦', label: 'Replace items', tone: 'text-[#2876c7]' },
   REFUND: { group: 'Resolution', icon: '↩', label: 'Refund — full/partial', tone: 'text-[#18a653]' },
   GOODWILL_CREDIT: { group: 'Resolution', icon: '🎁', label: 'Goodwill credit', tone: 'text-[#18a653]' },
   CANCEL: { group: 'Resolution', icon: '×', label: 'Cancel order', tone: 'text-[#d92f35]' },
   START_INVESTIGATION: { group: 'Investigate', icon: '🔍', label: 'Start investigation', tone: 'text-[#2876c7]' },
-  REQUEST_PARTY_RESPONSE: { group: 'Investigate', icon: '💬', label: 'Request party response', tone: 'text-[#2876c7]' },
+  REQUEST_PARTY_RESPONSE: {
+    group: 'Investigate',
+    icon: '💬',
+    label: 'Request party response',
+    tone: 'text-[#2876c7]',
+  },
   ESCALATE_SEVERITY: { group: 'Investigate', icon: '⬆', label: 'Escalate severity', tone: 'text-[#c68618]' },
-  SUSPEND_CHAMP: { group: 'Enforcement', icon: '⊘', label: 'Suspend champ', tone: 'text-[#dc2931]' },
-  FLAG_VENDOR: { group: 'Enforcement', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
-  APPLY_VPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]' },
-  APPLY_CPI_PENALTY: { group: 'Enforcement', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]' },
+  SUSPEND_CHAMP: {
+    group: 'Enforcement · Ops',
+    icon: '⊘',
+    label: 'Suspend champ',
+    tone: 'text-[#dc2931]',
+  },
+  FLAG_VENDOR: { group: 'Enforcement · Ops', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
+  APPLY_PENALTY: {
+    group: 'Enforcement · Ops',
+    icon: '☰',
+    label: 'Apply penalty (VPI / CPI)',
+    tone: 'text-[#d92f35]',
+  },
+  APPLY_VPI_PENALTY: { group: 'Enforcement · Ops', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]' },
+  APPLY_CPI_PENALTY: { group: 'Enforcement · Ops', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]' },
   MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]' },
 }
+
+const GROUP_ORDER = ['Dispatch', 'Resolution', 'Investigate', 'Enforcement · Ops', 'Enforcement', 'Close-out']
+
+const RESOLUTION_ORDER = ['REFUND', 'GOODWILL_CREDIT', 'CANCEL']
+const DISPATCH_ORDER = ['REASSIGN_CHAMP', 'REDISPATCH', 'REDELIVER_REPLACE', 'REDELIVER', 'REPLACE']
+const ENFORCEMENT_ORDER = [
+  'SUSPEND_CHAMP',
+  'FLAG_VENDOR',
+  'APPLY_PENALTY',
+  'APPLY_VPI_PENALTY',
+  'APPLY_CPI_PENALTY',
+]
 
 export function humanizeAdminStatus(status) {
   if (!status) return '—'
@@ -153,8 +187,10 @@ function mapOrderIncidents(incidents) {
         evidence: Array.isArray(item.evidence) ? item.evidence : [],
         resolutionActionCode: item.resolutionActionCode ?? null,
         previousResolutionActionCode: item.previousResolutionActionCode ?? null,
-        costBearer: item.costBearer ?? null,
-        compensationAmountBhd: item.compensationAmountBhd ?? null,
+    costBearer: item.costBearer ?? null,
+    compensationAmountBhd: item.compensationAmountBhd ?? null,
+    compensationType: item.compensationType ?? null,
+    decidedByRole: item.decidedByRole ?? item.resolutionSummary?.resolvedByRole ?? null,
         customerRemedy: item.customerRemedy ?? null,
         incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
         readinessManaged: item.readinessManaged ?? false,
@@ -169,19 +205,48 @@ function mapOrderIncidents(incidents) {
 
 /**
  * Group confirmed availableActions into Take-action menu sections.
- * Unknown action codes are skipped (not invented).
+ * Collapses Redeliver+Replace and VPI+CPI into single design-menu items.
  * @param {unknown[]} actions
  * @param {{ hasChamp?: boolean }} [options]
  */
 export function mapAdminAvailableActions(actions, options = {}) {
   const list = Array.isArray(actions) ? actions : []
-  const groups = new Map()
   const hasChamp = options.hasChamp == null ? true : Boolean(options.hasChamp)
+  const incoming = new Set(list.map((code) => String(code || '')).filter(Boolean))
 
-  const codes = [...new Set([...list, 'START_INVESTIGATION', 'REQUEST_PARTY_RESPONSE', 'ESCALATE_SEVERITY', 'REDELIVER', 'REPLACE', 'GOODWILL_CREDIT', 'APPLY_VPI_PENALTY', 'APPLY_CPI_PENALTY'])]
+  // Always surface ops readiness actions that backends may omit from older payloads.
+  for (const code of [
+    'START_INVESTIGATION',
+    'REQUEST_PARTY_RESPONSE',
+    'ESCALATE_SEVERITY',
+    'REDELIVER',
+    'REPLACE',
+    'GOODWILL_CREDIT',
+    'APPLY_VPI_PENALTY',
+    'APPLY_CPI_PENALTY',
+    'SUSPEND_CHAMP',
+  ]) {
+    incoming.add(code)
+  }
 
-  for (const code of codes) {
-    const key = String(code || '')
+  const codes = new Set(incoming)
+
+  // Design: one "Redeliver / replace" row instead of two.
+  if (codes.has('REDELIVER') || codes.has('REPLACE')) {
+    codes.add('REDELIVER_REPLACE')
+    codes.delete('REDELIVER')
+    codes.delete('REPLACE')
+  }
+
+  // Design: one "Apply penalty (VPI / CPI)" row instead of two.
+  if (codes.has('APPLY_VPI_PENALTY') || codes.has('APPLY_CPI_PENALTY')) {
+    codes.add('APPLY_PENALTY')
+    codes.delete('APPLY_VPI_PENALTY')
+    codes.delete('APPLY_CPI_PENALTY')
+  }
+
+  const groups = new Map()
+  for (const key of codes) {
     const meta = ACTION_LABELS[key]
     if (!meta) continue
     if (key === 'SUSPEND_CHAMP' && !hasChamp) continue
@@ -196,10 +261,26 @@ export function mapAdminAvailableActions(actions, options = {}) {
     })
   }
 
-  const groupOrder = ['Dispatch', 'Resolution', 'Investigate', 'Enforcement', 'Close-out']
-  return groupOrder
+  function sortGroup(title, actions) {
+    const order =
+      title === 'Resolution'
+        ? RESOLUTION_ORDER
+        : title === 'Dispatch'
+          ? DISPATCH_ORDER
+          : title.startsWith('Enforcement')
+            ? ENFORCEMENT_ORDER
+            : null
+    if (!order) return actions
+    return [...actions].sort((a, b) => {
+      const ai = order.indexOf(a.code)
+      const bi = order.indexOf(b.code)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+  }
+
+  return GROUP_ORDER
     .filter((title) => groups.has(title))
-    .map((title) => ({ title, actions: groups.get(title) }))
+    .map((title) => ({ title, actions: sortGroup(title, groups.get(title)) }))
 }
 
 function computeRemainingRefundable(data, payment) {

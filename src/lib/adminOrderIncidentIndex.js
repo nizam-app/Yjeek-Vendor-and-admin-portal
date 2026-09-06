@@ -6,6 +6,7 @@ import {
   isIncidentUnattended,
   isOpenIncident,
   pickBestRecurrenceLabel,
+  pickRecurrenceChips,
 } from './adminIncidentPresentation.js'
 
 function orderKey(order) {
@@ -46,11 +47,13 @@ export function buildOrderIncidentIndex(incidents) {
       primarySourceLabel: primary?.sourceLabel || null,
       oldestOpenedAt: oldestOpenedAt != null ? new Date(oldestOpenedAt).toISOString() : null,
       ageLabel: oldestOpenedAt != null ? formatIncidentAge(new Date(oldestOpenedAt).toISOString()) : null,
-      unattended: open.some(isIncidentUnattended),
+      // Card is unattended only when every open incident still has no opener/claim.
+      unattended: open.length > 0 && open.every(isIncidentUnattended),
       categories: [...new Set(list.map((row) => row.categoryLabel).filter(Boolean))],
       recurrenceLabel: pickBestRecurrenceLabel(open.length ? open : list),
+      recurrenceChips: pickRecurrenceChips(open.length ? open : list),
       attentionLabel: (open.find((row) => row.openedBy?.displayName) || primary)?.attentionLabel || null,
-      openedBy: open.find((row) => row.openedBy)?.openedBy || null,
+      openedBy: open.find((row) => row.openedBy?.displayName)?.openedBy || null,
       slaCountdownLabel: primary?.slaCountdownLabel || null,
       incidentSlaDeadlineAt: primary?.incidentSlaDeadlineAt || null,
     })

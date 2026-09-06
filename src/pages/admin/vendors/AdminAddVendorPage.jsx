@@ -12,6 +12,8 @@ import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
 import { AdminVendorSlaConfigs, buildAllowedModesFromStoreType, mergeBranchModesIntoServiceModes } from '../../../components/admin/AdminVendorSlaConfigs'
 import AdminPasswordField from '../../../components/admin/AdminPasswordField'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
+import { parseAdminPhone } from '../../../lib/adminPhone'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import AdminVendorImageUpload from '../../../components/admin/AdminVendorImageUpload'
@@ -102,6 +104,7 @@ const WIZARD_FORM_DIRTY_KEYS = [
   'ownerName',
   'ownerEmail',
   'ownerPhone',
+  'ownerCountryCode',
   'ownerPassword',
   'crNumber',
   'vatNumber',
@@ -604,7 +607,7 @@ export default function AdminAddVendorPage({ onBack }) {
     cuisineTags: [],
     ownerName: '',
     ownerEmail: '',
-    ownerPhone: '+973 ',
+    ownerPhone: '',
     ownerCountryCode: '+973',
     ownerPassword: '',
     crNumber: '',
@@ -1304,11 +1307,13 @@ export default function AdminAddVendorPage({ onBack }) {
         setUsers(list)
         if (owner) {
           setOwnerStaffId(owner.id || null)
+          const phoneParts = parseAdminPhone(owner.phone, owner.countryCode || '+973')
           setForm((prev) => ({
             ...prev,
             ownerName: owner.name && owner.name !== 'Untitled' ? owner.name : prev.ownerName,
             ownerEmail: owner.email && owner.email !== '—' ? owner.email : prev.ownerEmail,
-            ownerPhone: owner.phone || prev.ownerPhone,
+            ownerPhone: phoneParts.phone || prev.ownerPhone,
+            ownerCountryCode: phoneParts.countryCode || prev.ownerCountryCode,
             ownerPassword: owner.password || '',
           }))
         } else {
@@ -2233,13 +2238,21 @@ export default function AdminAddVendorPage({ onBack }) {
                     disabled={isEdit}
                   />
                 </VendorField>
-                <VendorField label="Phone">
-                  <VendorInput
-                    value={form.ownerPhone}
-                    onChange={update('ownerPhone')}
+                <div className="block min-w-0">
+                  <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Phone</span>
+                  <AdminPhoneField
+                    countryCode={form.ownerCountryCode}
+                    phone={form.ownerPhone}
                     disabled={isEdit}
+                    onChange={({ countryCode, phone }) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        ownerCountryCode: countryCode,
+                        ownerPhone: phone,
+                      }))
+                    }
                   />
-                </VendorField>
+                </div>
                 <div className="block">
                   <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">
                     Password{isEdit ? ' (visible to admin)' : ''}

@@ -68,7 +68,7 @@ export function AdminOpenChats({
 
   return (
     <section
-      className="sticky bottom-0 z-20 flex shrink-0 flex-col overflow-hidden rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-3 pt-2.5 shadow-[0_-4px_16px_rgba(20,40,28,.06)]"
+      className="z-20 flex shrink-0 flex-col overflow-hidden rounded-t-xl border border-b-0 border-[#dfe4e0] bg-white px-[14px] pb-2.5 pt-2 shadow-[0_-4px_16px_rgba(20,40,28,.06)]"
       style={{ maxHeight: CHAT_GRID_MAX_H + 52 }}
     >
       <div className="mb-2 flex shrink-0 items-center justify-between text-[11px]">
@@ -84,7 +84,7 @@ export function AdminOpenChats({
       </div>
       <div className="min-h-0 overflow-y-auto overscroll-contain" style={{ maxHeight: CHAT_GRID_MAX_H }}>
         {list.length === 0 ? (
-          <div className="py-4 text-center text-[11px] text-[#78837c]">No open chats</div>
+          <div className="py-1.5 text-center text-[11px] text-[#78837c]">No open chats</div>
         ) : shouldGroup ? (
           <div className="space-y-3">
             {champChats.length > 0 ? (

@@ -12,21 +12,24 @@ export default function AdminRedeliverModal({
   onClose,
   incidentId = null,
   mode = 'REDELIVER',
+  allowModeSwitch = false,
   items = [],
   onSuccess,
 }) {
+  const [activeMode, setActiveMode] = useState(mode)
   const [reason, setReason] = useState('')
   const [selectedIds, setSelectedIds] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
-  const isReplace = mode === 'REPLACE'
+  const isReplace = activeMode === 'REPLACE'
 
   useEffect(() => {
     if (!open) return
-    setReason(isReplace ? 'Vendor item replacement' : 'Redelivery requested')
+    setActiveMode(mode === 'REPLACE' ? 'REPLACE' : 'REDELIVER')
+    setReason(mode === 'REPLACE' ? 'Vendor item replacement' : 'Redelivery requested')
     setSelectedIds([])
     setError(null)
-  }, [open, mode, isReplace])
+  }, [open, mode])
 
   if (!open) return null
 
@@ -72,7 +75,9 @@ export default function AdminRedeliverModal({
       <div role="dialog" aria-modal="true" className="relative w-full max-w-[480px] rounded-[16px] bg-white p-5 shadow-lg">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[16px] font-bold text-[#17231c]">{isReplace ? 'Replace items' : 'Redeliver order'}</h2>
+            <h2 className="text-[16px] font-bold text-[#17231c]">
+              {allowModeSwitch ? 'Redeliver / replace' : isReplace ? 'Replace items' : 'Redeliver order'}
+            </h2>
             <p className="mt-0.5 text-[12px] text-[#7c8780]">
               {isReplace
                 ? 'Vendor remake for selected items — no refund substitute'
@@ -84,6 +89,33 @@ export default function AdminRedeliverModal({
           </button>
         </div>
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+          {allowModeSwitch ? (
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'REDELIVER', label: 'Redeliver' },
+                { id: 'REPLACE', label: 'Replace items' },
+              ].map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={submitting}
+                  aria-pressed={activeMode === option.id}
+                  onClick={() => {
+                    setActiveMode(option.id)
+                    setReason(option.id === 'REPLACE' ? 'Vendor item replacement' : 'Redelivery requested')
+                    setError(null)
+                  }}
+                  className={`rounded-[8px] border px-3 py-2 text-[12px] font-semibold ${
+                    activeMode === option.id
+                      ? 'border-[#1aa054] bg-[#e7f4ec] text-[#1a6b3c]'
+                      : 'border-[#e4e8e4] bg-white text-[#536158]'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {isReplace ? (
             <div>
               <p className={labelClass}>Items to replace</p>

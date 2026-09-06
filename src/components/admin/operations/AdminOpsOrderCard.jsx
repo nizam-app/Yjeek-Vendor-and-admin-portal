@@ -166,24 +166,6 @@ export function AdminOpsOrderCard({
                 {summary.ageLabel}
               </span>
             ) : null}
-            {summary.slaCountdownLabel ? (
-              <span
-                className={cn(
-                  'inline-flex items-center gap-0.5 rounded px-[7px] py-[2.5px] font-mono text-[9px] font-semibold',
-                  String(summary.slaCountdownLabel).startsWith('Overdue')
-                    ? 'bg-[#fbe9e6] text-[#c45c4a]'
-                    : 'bg-[#fff8e8] text-[#9a7618]',
-                )}
-              >
-                <Clock3 size={10} className="shrink-0" strokeWidth={2.2} />
-                {summary.slaCountdownLabel}
-              </span>
-            ) : null}
-            {summary.recurrenceLabel ? (
-              <span className="rounded bg-[#fbe9e6] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#c45c4a]">
-                {summary.recurrenceLabel}
-              </span>
-            ) : null}
           </div>
 
           {openedByName ? (

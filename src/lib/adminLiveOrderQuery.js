@@ -28,6 +28,13 @@ export const LIVE_ORDER_SORTS = [
   { id: 'vendor', label: 'Vendor' },
 ]
 
+/** Compact sort pills for Critical / incident full views (matches ops board sketch). */
+export const LIVE_INCIDENT_BOARD_SORT_PILLS = [
+  { id: 'time_left', label: 'Time left' },
+  { id: 'incident_priority', label: 'Severity' },
+  { id: 'incident_age_oldest', label: 'Incident age' },
+]
+
 export const LIVE_INCIDENT_PRIORITY_SORTS = [
   { id: 'incident_priority', label: 'P1 → P4' },
   { id: 'incident_priority_desc', label: 'P4 → P1' },

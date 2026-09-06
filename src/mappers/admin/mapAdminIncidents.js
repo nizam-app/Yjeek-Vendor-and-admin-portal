@@ -115,6 +115,7 @@ export function mapAdminIncidentItem(item) {
     previousResolutionActionCode: item.previousResolutionActionCode ?? null,
     compensationAmountBhd: item.compensationAmountBhd ?? null,
     compensationType: item.compensationType ?? null,
+    decidedByRole: item.decidedByRole ?? item.resolutionSummary?.resolvedByRole ?? null,
     recurredWithin14Days: item.recurredWithin14Days ?? false,
     recurrenceCount14d: item.recurrenceCount14d ?? null,
     recurrenceContext: item.recurrenceContext ?? null,

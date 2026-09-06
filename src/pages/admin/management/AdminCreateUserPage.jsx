@@ -7,7 +7,9 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import { mapApiRoleToPermissionFlags } from '../../../mappers/admin/mapAdminRoles'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
 import { cn } from '../../../components/admin/cn'
+import { formatAdminPhoneDisplay } from '../../../lib/adminPhone'
 
 const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
@@ -558,11 +560,12 @@ export default function AdminCreateUserPage() {
                 />
               </Field>
               <Field label="Phone">
-                <input
-                  className={inputClass}
-                  placeholder="+973 3xxx xxxx"
-                  value={form.phone}
-                  onChange={update('phone')}
+                <AdminPhoneField
+                  countryCode={form.countryCode}
+                  phone={form.phone}
+                  onChange={({ countryCode, phone }) =>
+                    setForm((prev) => ({ ...prev, countryCode, phone }))
+                  }
                 />
               </Field>
               <Field label="Job title">
@@ -687,7 +690,10 @@ export default function AdminCreateUserPage() {
             <div className="grid grid-cols-4 gap-4 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
               <ReviewField label="Full name" value={form.fullName} />
               <ReviewField label="Email" value={form.email} />
-              <ReviewField label="Phone" value={form.phone} />
+              <ReviewField
+                label="Phone"
+                value={formatAdminPhoneDisplay(form.countryCode, form.phone)}
+              />
               <ReviewField label="Job title" value={form.jobTitle} />
             </div>
           </Card>

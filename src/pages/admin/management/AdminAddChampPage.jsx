@@ -11,6 +11,7 @@ import {
   todayLocalIsoDate,
 } from '../../../components/admin/AdminDatePicker'
 import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
@@ -73,6 +74,7 @@ const EMPTY_DOCS = Object.fromEntries(Object.keys(CHAMP_DOC_SLOT_META).map((key)
 const EMPTY_CHAMP_FORM = {
   fullName: '',
   phone: '',
+  countryCode: '+973',
   email: '',
   nationality: '',
   supplierId: '',
@@ -662,11 +664,13 @@ export default function AdminAddChampPage() {
               />
             </Field>
             <Field label="Phone">
-              <input
-                className={inputClass}
-                value={form.phone}
-                onChange={update('phone')}
-                placeholder={isEdit ? undefined : '+973 3xxx xxxx'}
+              <AdminPhoneField
+                countryCode={form.countryCode}
+                phone={form.phone}
+                onChange={({ countryCode, phone }) =>
+                  setForm((prev) => ({ ...prev, countryCode, phone }))
+                }
+                placeholder={isEdit ? undefined : '3300 0000'}
               />
             </Field>
             <Field label="Email">

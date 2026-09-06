@@ -2,12 +2,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '../Button'
 import { ApiState } from '../ApiState'
 import AdminMarkResolvedModal from '../AdminMarkResolvedModal'
+import AdminRedeliverModal from '../AdminRedeliverModal'
+import AdminApplyPenaltyModal from '../AdminApplyPenaltyModal'
+import AdminGoodwillModal from '../AdminGoodwillModal'
 import { adminIncidentService } from '../../../services/admin/incidentService'
 import { mapAdminIncidentHistory } from '../../../mappers/admin/mapAdminIncidents'
 import { mapAdminAvailableActions } from '../../../mappers/admin/mapAdminOrderDetail'
 import { AdminIncidentDetailContent } from './AdminIncidentDetailContent'
-import { isOpenIncident } from '../../../lib/adminIncidentPresentation'
+import { isOpenIncident, buildOpenPresenceBanner } from '../../../lib/adminIncidentPresentation'
 import { useAuth } from '../../../context/AuthContext'
+
+const LOCAL_INCIDENT_ACTIONS = new Set([
+  'REDELIVER_REPLACE',
+  'REDELIVER',
+  'REPLACE',
+  'APPLY_PENALTY',
+  'APPLY_VPI_PENALTY',
+  'APPLY_CPI_PENALTY',
+  'GOODWILL_CREDIT',
+])
 
 /**
  * Incident detail modal — loads GET /admin/incidents/:id and renders structured readiness UI.
@@ -18,6 +31,7 @@ export function AdminIncidentDetailModal({
   onOpenOrder,
   onOpenChat,
   onAction,
+  onPresenceChange,
 }) {
   const { user } = useAuth()
   const incidentId = incident?.id || null
@@ -25,6 +39,7 @@ export function AdminIncidentDetailModal({
   const [error, setError] = useState(null)
   const [isLoading, setIsLoading] = useState(Boolean(incidentId))
   const [markResolvedOpen, setMarkResolvedOpen] = useState(false)
+  const [localAction, setLocalAction] = useState(null)
   const [presenceViewers, setPresenceViewers] = useState([])
 
   const refresh = useCallback(async () => {
@@ -79,7 +94,6 @@ export function AdminIncidentDetailModal({
   useEffect(() => {
     if (!incidentId) return undefined
     let cancelled = false
-    const myId = user?.id || user?.userId || null
 
     async function beat() {
       try {
@@ -88,9 +102,17 @@ export function AdminIncidentDetailModal({
         const viewers = Array.isArray(response?.data?.activeViewers)
           ? response.data.activeViewers
           : []
-        setPresenceViewers(
-          myId ? viewers.filter((viewer) => viewer.userId !== myId) : viewers,
-        )
+        const openedBy = response?.data?.openedBy ?? viewers[0] ?? null
+        onPresenceChange?.({
+          incidentId,
+          openedBy,
+          activeViewers: viewers,
+          acknowledgedAt: response?.data?.acknowledgedAt ?? null,
+          acknowledgedById: response?.data?.acknowledgedById ?? null,
+          acknowledgedByName: response?.data?.acknowledgedByName ?? null,
+          firstResponseAt: response?.data?.firstResponseAt ?? null,
+        })
+        setPresenceViewers(Array.isArray(viewers) ? viewers : [])
       } catch {
         // Presence is best-effort — never block the modal.
       }
@@ -101,17 +123,40 @@ export function AdminIncidentDetailModal({
     return () => {
       cancelled = true
       window.clearInterval(timer)
-      void adminIncidentService.leavePresence(incidentId).catch(() => undefined)
+      void adminIncidentService
+        .leavePresence(incidentId)
+        .then((response) => {
+          const viewers = Array.isArray(response?.data?.activeViewers)
+            ? response.data.activeViewers
+            : []
+          onPresenceChange?.({
+            incidentId,
+            openedBy: response?.data?.openedBy ?? viewers[0] ?? null,
+            activeViewers: viewers,
+            acknowledgedAt: response?.data?.acknowledgedAt ?? null,
+            acknowledgedById: response?.data?.acknowledgedById ?? null,
+            acknowledgedByName: response?.data?.acknowledgedByName ?? null,
+            firstResponseAt: response?.data?.firstResponseAt ?? null,
+          })
+        })
+        .catch(() => undefined)
     }
-  }, [incidentId, user?.id, user?.userId])
+  }, [incidentId, user?.id, user?.userId, onPresenceChange])
 
   if (!incident) return null
 
   const row = detail || incident
   const orderId = row.orderId || row.order?.id || null
   const orderNumber = row.orderNumber || row.order?.orderNumber || null
+  const presenceBannerViewers = buildOpenPresenceBanner({
+    activeViewers: presenceViewers,
+    incidents: [row],
+    currentUserId: user?.id || user?.userId || null,
+  })
   const actionGroups = useMemo(() => {
-    const groups = mapAdminAvailableActions(row.availableActions || [], { hasChamp: true })
+    const groups = mapAdminAvailableActions(row.availableActions || [], {
+      hasChamp: Boolean(row.champName || row.champId || row.order?.champ),
+    })
     if (!row.readinessManaged || !isOpenIncident(row)) return groups
     return groups
       .map((group) => ({
@@ -124,6 +169,10 @@ export function AdminIncidentDetailModal({
   function handleAction(code, id) {
     if (code === 'MARK_RESOLVED' && row.readinessManaged) {
       setMarkResolvedOpen(true)
+      return
+    }
+    if (LOCAL_INCIDENT_ACTIONS.has(code)) {
+      setLocalAction({ code, incidentId: id || incidentId })
       return
     }
     onAction?.(code, id)
@@ -174,7 +223,7 @@ export function AdminIncidentDetailModal({
             onAction={handleAction}
             onOpenChat={onOpenChat}
             onRefresh={refresh}
-            presenceViewers={presenceViewers}
+            presenceViewers={presenceBannerViewers}
           />
         </div>
 
@@ -210,6 +259,46 @@ export function AdminIncidentDetailModal({
           onClose={() => setMarkResolvedOpen(false)}
           onSuccess={async () => {
             setMarkResolvedOpen(false)
+            await refresh()
+          }}
+        />
+      ) : null}
+      {localAction?.code === 'REDELIVER_REPLACE' ||
+      localAction?.code === 'REDELIVER' ||
+      localAction?.code === 'REPLACE' ? (
+        <AdminRedeliverModal
+          open
+          incidentId={localAction.incidentId || incidentId}
+          mode={localAction.code === 'REPLACE' ? 'REPLACE' : 'REDELIVER'}
+          allowModeSwitch={localAction.code === 'REDELIVER_REPLACE'}
+          onClose={() => setLocalAction(null)}
+          onSuccess={async () => {
+            setLocalAction(null)
+            await refresh()
+          }}
+        />
+      ) : null}
+      {localAction?.code === 'APPLY_PENALTY' ||
+      localAction?.code === 'APPLY_VPI_PENALTY' ||
+      localAction?.code === 'APPLY_CPI_PENALTY' ? (
+        <AdminApplyPenaltyModal
+          open
+          incidentId={localAction.incidentId || incidentId}
+          onClose={() => setLocalAction(null)}
+          onSuccess={async () => {
+            setLocalAction(null)
+            await refresh()
+          }}
+        />
+      ) : null}
+      {localAction?.code === 'GOODWILL_CREDIT' ? (
+        <AdminGoodwillModal
+          open
+          orderId={orderId}
+          incidentId={localAction.incidentId || incidentId}
+          onClose={() => setLocalAction(null)}
+          onSuccess={async () => {
+            setLocalAction(null)
             await refresh()
           }}
         />
