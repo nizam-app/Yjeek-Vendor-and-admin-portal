@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useApiResource } from '../useApiResource'
 import { isAdminRealApiFeature } from '../../api/config'
 import { adminIncidentService } from '../../services/admin/incidentService'
@@ -9,6 +10,8 @@ import { emptyAdminIncidents } from '../../mappers/admin/mapAdminIncidents'
  *
  * Confirmed: GET /admin/incidents?status=all&priority=all&limit=50
  * When dashboard real API is off, returns empty items (no mock padding).
+ *
+ * @param {{ status?: string, priority?: string, limit?: number, orderIds?: string|null, enabled?: boolean, refreshSeconds?: number }} [query]
  */
 export function useAdminIncidents(query = {}) {
   const useReal = isAdminRealApiFeature('dashboard')
@@ -17,11 +20,22 @@ export function useAdminIncidents(query = {}) {
   const priority = query.priority ?? 'all'
   const limit = query.limit ?? 50
   const orderIds = query.orderIds ?? null
+  const refreshSeconds = Number(query.refreshSeconds) || 0
 
-  return useApiResource(() => {
+  const resource = useApiResource(() => {
     if (!enabled || !useReal) {
       return Promise.resolve({ data: emptyAdminIncidents(), meta: null })
     }
     return adminIncidentService.list({ status, priority, limit, orderIds })
   }, [useReal, enabled, status, priority, limit, orderIds])
+
+  useEffect(() => {
+    if (!enabled || !useReal || refreshSeconds < 1) return undefined
+    const intervalId = window.setInterval(() => {
+      resource.refetch()
+    }, refreshSeconds * 1000)
+    return () => window.clearInterval(intervalId)
+  }, [enabled, useReal, refreshSeconds, resource.refetch])
+
+  return resource
 }

@@ -20,7 +20,12 @@ export function useApiResource(loader, dependencies = []) {
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current
-    setState((current) => ({ ...current, error: null, isLoading: true }))
+    // Keep previous data visible during background refresh (auto-refresh / Refresh button).
+    setState((current) => ({
+      ...current,
+      error: null,
+      isLoading: current.data == null,
+    }))
 
     try {
       const response = await loaderRef.current()

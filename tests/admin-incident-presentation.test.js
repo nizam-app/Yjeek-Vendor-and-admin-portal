@@ -2,12 +2,20 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   enrichIncidentRow,
+  formatCauseChip,
+  formatCompensationRecord,
+  formatCostBearerLabel,
   formatIncidentAge,
+  formatIncidentDisplayId,
   formatRecurrenceLabel,
   formatRecurrenceOrdinal,
   formatResolutionLabel,
+  formatResolvedByLine,
+  formatSlaCountdown,
+  formatStageChip,
   highestIncidentPriority,
   isIncidentUnattended,
+  buildOpenPresenceBanner,
 } from '../src/lib/adminIncidentPresentation.js'
 import {
   buildOrderIncidentIndex,
@@ -18,6 +26,122 @@ import { orderMatchesLiveQuery, sortLiveOrders } from '../src/lib/adminLiveOrder
 test('formatIncidentAge returns compact runtime age', () => {
   const opened = new Date(Date.now() - 4 * 60 * 1000).toISOString()
   assert.equal(formatIncidentAge(opened), '4m')
+})
+
+test('formatSlaCountdown shows remaining and overdue', () => {
+  const future = new Date(Date.now() + 4 * 60 * 1000 + 12 * 1000).toISOString()
+  assert.match(formatSlaCountdown(future), /^\d{2}:\d{2} to SLA$/)
+  const past = new Date(Date.now() - 80 * 1000).toISOString()
+  assert.match(formatSlaCountdown(past), /^Overdue \d{2}:\d{2}$/)
+})
+
+test('enrichIncidentRow surfaces opened-by attention and SLA countdown', () => {
+  const deadline = new Date(Date.now() + 5 * 60 * 1000).toISOString()
+  const row = enrichIncidentRow({
+    id: 'inc-1',
+    title: 'Late delivery',
+    status: 'OPEN',
+    priority: 'P2',
+    openedAt: new Date().toISOString(),
+    incidentSlaDeadlineAt: deadline,
+    openedBy: { displayName: 'Yousif A.', openForMs: 220000 },
+    recurrenceCount14d: 3,
+  })
+  assert.match(row.attentionLabel, /Open · Yousif A/)
+  assert.equal(row.unattended, false)
+  assert.equal(isIncidentUnattended(row), false)
+  assert.ok(row.slaCountdownLabel)
+  assert.equal(row.recurrenceLabel, '3rd claim · 14d')
+})
+
+test('open incident with active viewer is not unattended', () => {
+  const row = enrichIncidentRow({
+    id: 'inc-open',
+    title: 'Prep delay',
+    status: 'OPEN',
+    statusRaw: 'OPEN',
+    priority: 'P1',
+    activeViewers: [{ userId: 'u1', displayName: 'Yousif A.', openForMs: 4000 }],
+    openedBy: { userId: 'u1', displayName: 'Yousif A.', openForMs: 4000 },
+  })
+  assert.equal(isIncidentUnattended(row), false)
+  assert.equal(row.unattended, false)
+  assert.match(row.attentionLabel, /Open · Yousif A/)
+})
+
+test('acknowledged opener stays visible after presence leaves', () => {
+  const row = enrichIncidentRow({
+    id: 'inc-claimed',
+    title: 'Prep delay',
+    status: 'PENDING',
+    statusRaw: 'PENDING',
+    priority: 'P1',
+    acknowledgedAt: new Date().toISOString(),
+    acknowledgedById: 'u1',
+    acknowledgedByName: 'Yousif A.',
+    openedBy: null,
+    activeViewers: [],
+  })
+  assert.equal(isIncidentUnattended(row), false)
+  assert.equal(row.unattended, false)
+  assert.match(row.attentionLabel, /^Open · Yousif A\./)
+  assert.equal(row.openedBy?.displayName, 'Yousif A.')
+})
+
+test('presence banner prefers other live viewers then claimed opener', () => {
+  const others = buildOpenPresenceBanner({
+    activeViewers: [
+      { userId: 'me', displayName: 'Super Admin', openForMs: 1000 },
+      { userId: 'u2', displayName: 'Yousif A.', openForMs: 220000 },
+    ],
+    currentUserId: 'me',
+  })
+  assert.equal(others.length, 1)
+  assert.equal(others[0].displayName, 'Yousif A.')
+
+  const self = buildOpenPresenceBanner({
+    activeViewers: [{ userId: 'me', displayName: 'Super Admin', openForMs: 4000 }],
+    currentUserId: 'me',
+  })
+  assert.equal(self[0].displayName, 'Super Admin')
+
+  const claimed = buildOpenPresenceBanner({
+    activeViewers: [],
+    currentUserId: 'me',
+    incidents: [
+      {
+        statusRaw: 'OPEN',
+        acknowledgedByName: 'Yousif A.',
+        acknowledgedAt: new Date().toISOString(),
+      },
+    ],
+  })
+  assert.equal(claimed[0].displayName, 'Yousif A.')
+})
+
+test('order stays attended when any open incident is claimed', () => {
+  const index = buildOrderIncidentIndex([
+    {
+      id: 'a',
+      orderId: 'order-1',
+      priority: 'P1',
+      status: 'Open',
+      statusRaw: 'OPEN',
+      acknowledgedByName: 'Yousif A.',
+      acknowledgedAt: new Date().toISOString(),
+    },
+    {
+      id: 'b',
+      orderId: 'order-1',
+      priority: 'P2',
+      status: 'Open',
+      statusRaw: 'OPEN',
+    },
+  ])
+  const summary = index.get('order-1')
+  assert.equal(summary.unattended, false)
+  assert.equal(summary.openedBy?.displayName, 'Yousif A.')
+  assert.match(summary.attentionLabel, /Open · Yousif A/)
 })
 
 test('highestIncidentPriority prefers P1 over P2', () => {
@@ -79,6 +203,18 @@ test('formatRecurrenceOrdinal renders 2nd and 3rd claim labels', () => {
   assert.equal(formatRecurrenceLabel({ recurrenceCount14d: 3 }), '3rd claim · 14d')
   assert.equal(formatRecurrenceLabel({ recurredWithin14Days: true }), 'Repeated within 14d')
   assert.equal(formatRecurrenceLabel({ recurredWithin14Days: false }), null)
+  assert.equal(
+    formatRecurrenceLabel({
+      recurrenceContext: { customerClaimCount14d: 3, vendorIncidentCount14d: 11 },
+    }),
+    '3rd claim · 14d',
+  )
+  assert.equal(
+    formatRecurrenceLabel({
+      recurrenceContext: { customerClaimCount14d: 1, vendorIncidentCount14d: 11 },
+    }),
+    '11th vendor incident · 14d',
+  )
 })
 
 test('buildOrderIncidentIndex merges multiple incidents per order', () => {
@@ -161,4 +297,32 @@ test('sortLiveOrders supports incident age oldest first', () => {
     'incident_age_oldest',
   )
   assert.equal(sorted[0].id, 'old')
+})
+
+test('incident chips and display id match buyer vocabulary', () => {
+  assert.equal(formatCauseChip('CHAMP'), 'Cause: Champ')
+  assert.equal(formatStageChip('DURING_DELIVERY'), 'Stage: During delivery')
+  assert.equal(formatIncidentDisplayId('INC-4417'), 'INC-4417')
+  assert.equal(formatIncidentDisplayId('orderinc4417xx'), 'INC-4417XX')
+})
+
+test('compensation record and cost bearer labels match buyer vocabulary', () => {
+  assert.equal(formatCostBearerLabel('PLATFORM'), 'Yjeek')
+  assert.equal(formatCostBearerLabel('AGENCY', { select: true }), 'Champ agency — recoverable')
+  assert.equal(
+    formatCompensationRecord({
+      amount: 2,
+      compensationType: 'WALLET_CREDIT',
+      costBearer: 'AGENCY',
+    }),
+    'BHD 2.000 · Wallet · borne by Champ agency',
+  )
+  assert.match(
+    formatResolvedByLine({
+      name: 'Fatima H.',
+      role: 'Ops',
+      at: new Date('2026-01-01T12:47:00'),
+    }),
+    /Fatima H\. · Ops · 12:47/,
+  )
 })

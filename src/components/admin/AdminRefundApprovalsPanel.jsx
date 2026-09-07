@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { Check, X } from 'lucide-react'
 import { cn } from './cn'
 import { formatAdminMoney } from '../../mappers/admin/mapAdminOrderDetail'
+import { formatCostBearerLabel } from '../../lib/adminIncidentPresentation'
 import { adminIncidentService } from '../../services/admin/incidentService'
 import { formatApiErrorMessage } from '../../api/errors'
 import { useAuth } from '../../context/AuthContext'
@@ -12,8 +13,7 @@ function canApproveRefunds(user) {
 }
 
 function bearerLabel(bearer) {
-  if (!bearer) return '—'
-  return String(bearer).replace(/_/g, ' ')
+  return formatCostBearerLabel(bearer) || '—'
 }
 
 /**

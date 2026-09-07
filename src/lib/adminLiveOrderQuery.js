@@ -28,6 +28,13 @@ export const LIVE_ORDER_SORTS = [
   { id: 'vendor', label: 'Vendor' },
 ]
 
+/** Compact sort pills for Critical / incident full views (matches ops board sketch). */
+export const LIVE_INCIDENT_BOARD_SORT_PILLS = [
+  { id: 'time_left', label: 'Time left' },
+  { id: 'incident_priority', label: 'Severity' },
+  { id: 'incident_age_oldest', label: 'Incident age' },
+]
+
 export const LIVE_INCIDENT_PRIORITY_SORTS = [
   { id: 'incident_priority', label: 'P1 → P4' },
   { id: 'incident_priority_desc', label: 'P4 → P1' },
@@ -36,6 +43,11 @@ export const LIVE_INCIDENT_PRIORITY_SORTS = [
 export const LIVE_INCIDENT_AGE_SORTS = [
   { id: 'incident_age_oldest', label: 'Incident age · oldest' },
   { id: 'incident_age_newest', label: 'Incident age · newest' },
+]
+
+export const LIVE_INCIDENT_SLA_SORTS = [
+  { id: 'incident_sla_soonest', label: 'Incident SLA · soonest' },
+  { id: 'incident_sla_latest', label: 'Incident SLA · latest' },
 ]
 
 export const EMPTY_LIVE_ORDER_QUERY = {
@@ -54,6 +66,7 @@ const SORT_IDS = new Set([
   ...LIVE_ORDER_SORTS.map((item) => item.id),
   ...LIVE_INCIDENT_PRIORITY_SORTS.map((item) => item.id),
   ...LIVE_INCIDENT_AGE_SORTS.map((item) => item.id),
+  ...LIVE_INCIDENT_SLA_SORTS.map((item) => item.id),
 ])
 
 function splitCsv(value) {
@@ -236,6 +249,18 @@ export function sortLiveOrders(orders, sort) {
       if (Number.isNaN(aTs)) return 1
       if (Number.isNaN(bTs)) return -1
       return key === 'incident_age_newest' ? bTs - aTs : aTs - bTs
+    }
+    if (key === 'incident_sla_soonest' || key === 'incident_sla_latest') {
+      const aTs = a?.incidentSummary?.incidentSlaDeadlineAt
+        ? Date.parse(a.incidentSummary.incidentSlaDeadlineAt)
+        : NaN
+      const bTs = b?.incidentSummary?.incidentSlaDeadlineAt
+        ? Date.parse(b.incidentSummary.incidentSlaDeadlineAt)
+        : NaN
+      if (Number.isNaN(aTs) && Number.isNaN(bTs)) return 0
+      if (Number.isNaN(aTs)) return 1
+      if (Number.isNaN(bTs)) return -1
+      return key === 'incident_sla_latest' ? bTs - aTs : aTs - bTs
     }
     return (Number(b?.elapsedMin) || 0) - (Number(a?.elapsedMin) || 0)
   })

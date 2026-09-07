@@ -701,6 +701,11 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
       ? String(detail.name)
       : [firstName, lastName].filter(Boolean).join(' ').trim()
 
+  const parsedPhone = parseChampPhone(
+    detail.phone && detail.phone !== '—' ? String(detail.phone) : profile.phone || '',
+    profile.countryCode || detail.countryCode || '+973',
+  )
+
   const vehicleTypeRaw = vehicle.type || detail.vehicle || 'BIKE'
   const vehicleType =
     String(vehicleTypeRaw).toUpperCase() === 'CAR' || String(vehicleTypeRaw) === 'Car'
@@ -766,7 +771,8 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
 
   return {
     fullName: fullName || '',
-    phone: detail.phone && detail.phone !== '—' ? String(detail.phone) : '',
+    phone: parsedPhone.phone,
+    countryCode: parsedPhone.countryCode,
     email: profile.email ? String(profile.email) : '',
     nationality: profile.nationality ? String(profile.nationality) : 'Bahraini',
     supplierId: String(profile.supplierId || supplier.id || '').trim(),

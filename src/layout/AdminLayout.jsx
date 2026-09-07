@@ -382,7 +382,7 @@ export default function AdminLayout() {
         <AdminTopbar collapsed={collapsed} />
         <main
           className={cn(
-            'h-full overflow-y-auto overflow-x-hidden pt-[44px] transition-[padding-left] duration-200 max-[900px]:pl-0 [-webkit-overflow-scrolling:touch]',
+            'flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden pt-[44px] transition-[padding-left] duration-200 max-[900px]:pl-0 [-webkit-overflow-scrolling:touch]',
             collapsed ? 'pl-[68px]' : 'pl-[250px]',
           )}
         >

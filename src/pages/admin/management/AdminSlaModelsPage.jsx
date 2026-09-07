@@ -16,6 +16,7 @@ import { useAdminSlaModels } from '../../../hooks/admin/useAdminSlaModels'
 import { mapSlaConfigToForm } from '../../../mappers/admin/mapAdminSlaModels'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
+import { useAuth } from '../../../context/AuthContext'
 
 const TABS = [
   { id: 'vendor', label: 'Vendor SLA', path: '/admin/sla-models' },
@@ -95,8 +96,15 @@ function groupSlaChangeLog(entries) {
 export default function AdminSlaModelsPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { user } = useAuth()
   const tab = tabFromPath(pathname)
   const copy = TAB_COPY[tab]
+  const canViewSlaChangelog = useMemo(() => {
+    const actions = user?.permissions?.SLA_MODELS
+    if (Array.isArray(actions) && actions.includes('APPROVE')) return true
+    const role = String(user?.role || user?.roleName || user?.roleFull || '').toLowerCase()
+    return role.includes('super')
+  }, [user])
 
   const vendorDefaults = useMemo(() => buildSlaDefaults(VENDOR_SLA_SECTIONS), [])
   const champDefaults = useMemo(() => buildSlaDefaults(CHAMP_SLA_SECTIONS), [])
@@ -174,16 +182,20 @@ export default function AdminSlaModelsPage() {
       return
     }
     try {
-      const [logResult, usageResult, versionsResult] = await Promise.all([
-        adminSlaModelsService.getChangelog(modelId, { limit: 100 }),
+      const requests = [
+        canViewSlaChangelog
+          ? adminSlaModelsService.getChangelog(modelId, { limit: 100 })
+          : Promise.resolve({ data: { changes: [] } }),
         adminSlaModelsService.getVersionUsage(modelId),
         adminSlaModelsService.getVersions(modelId),
-      ])
-      setChangeLog(logResult?.data?.changes || [])
+      ]
+      const [logResult, usageResult, versionsResult] = await Promise.all(requests)
+      setChangeLog(canViewSlaChangelog ? (logResult?.data?.changes || []) : [])
       setVersionUsage(usageResult?.data || null)
       setVersions(versionsResult?.data?.versions || [])
     } catch {
       // Meta panels are additive — keep editor usable if endpoints fail.
+      if (!canViewSlaChangelog) setChangeLog([])
     }
   }
 
@@ -798,10 +810,11 @@ export default function AdminSlaModelsPage() {
         )}
       </section>
 
+      {canViewSlaChangelog ? (
       <section className="mt-0 mb-6 rounded-[14px] border border-[#e4e8e4] bg-white p-4 shadow-[0_1px_2px_rgba(20,40,28,.04)]">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <h3 className="text-[14px] font-bold text-[#17231c]">Change log</h3>
-          <span className="text-[11px] text-[#8a948d]">From published SLA versions</span>
+          <span className="text-[11px] text-[#8a948d]">From published SLA versions · read-only</span>
         </div>
         {changeLogPeople.length === 0 ? (
           <p className="text-[12.5px] text-[#7c8780]">No threshold changes recorded yet.</p>
@@ -917,6 +930,7 @@ export default function AdminSlaModelsPage() {
           3-working-day dispute window.
         </p>
       </section>
+      ) : null}
 
       <SlaTierPageFooter footnote={SLA_TIER_FOOTNOTES[tab]} />
 

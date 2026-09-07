@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Undo2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { cn } from './cn'
 import { adminOrderService } from '../../services/admin/orderService'
 import { adminIncidentService } from '../../services/admin/incidentService'
 import { ApiError, formatApiErrorMessage } from '../../api/errors'
 import { formatAdminMoney } from '../../mappers/admin/mapAdminOrderDetail'
+import { formatCostBearerLabel, formatIncidentDisplayId } from '../../lib/adminIncidentPresentation'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
+const labelClass =
+  'mb-1.5 block text-[9.5px] font-bold uppercase tracking-[0.11em] text-[#d97706]'
 const inputClass =
   'box-border h-[40px] w-full appearance-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 pr-9 text-[13px] text-[#17231c] outline-none transition focus:border-[#1aa054]'
+const requiredTagClass = 'ml-1.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-[#8C3A2B]'
 
 const APPROVAL_THRESHOLD = 5
 
@@ -26,11 +29,24 @@ function optionLabel(item) {
 }
 
 function destinationUiLabel(item) {
-  return optionLabel(item)
+  const id = optionValue(item).toUpperCase().replace(/[\s-]+/g, '_')
+  const raw = optionLabel(item)
+  if (id === 'WALLET' || id === 'YJEEK_WALLET' || /^yjeek wallet/i.test(raw) || /^wallet$/i.test(raw)) {
+    return 'Yjeek Wallet — instant'
+  }
+  if (
+    id === 'ORIGINAL_PAYMENT' ||
+    id === 'CARD' ||
+    /original payment/i.test(raw) ||
+    /card/i.test(raw)
+  ) {
+    return 'Original payment (card) — 3–5 working days'
+  }
+  return raw
 }
 
 function bearerUiLabel(value) {
-  return String(value || '').replace(/_/g, ' ')
+  return formatCostBearerLabel(value, { select: true }) || String(value || '').replace(/_/g, ' ')
 }
 
 function defaultSplitState() {
@@ -88,7 +104,10 @@ export default function AdminRefundModal({
 
   const derivedBearer = refundContext?.derivedCostBearer ?? null
   const incidentReasonLabel =
-    refundContext?.categoryLabel || refundContext?.legacyRefundReason || null
+    refundContext?.inheritedRefundReason ||
+    refundContext?.categoryLabel ||
+    refundContext?.legacyRefundReason ||
+    null
   const classLocksPlatform = Boolean(refundContext?.classLocksBearerToPlatform)
   const noAutoBearer = Boolean(refundContext?.noAutomaticBearerAvailable)
   const pendingApproval = refundContext?.pendingApproval ?? approvalPending?.approval ?? null
@@ -184,8 +203,10 @@ export default function AdminRefundModal({
 
   const subtitleParts = [
     orderValueLabel ? `Order value ${orderValueLabel}` : null,
-    maxRefundable != null ? `Refundable ${formatAdminMoney(maxRefundable, currency)}` : null,
     paymentLabel && paymentLabel !== '—' ? paymentLabel : null,
+    incidentId
+      ? `Incident #${refundContext?.incidentDisplayId || formatIncidentDisplayId(incidentId)}`
+      : null,
   ].filter(Boolean)
 
   function buildBearerSplitPayload() {
@@ -303,7 +324,7 @@ export default function AdminRefundModal({
         ? 'Submitting…'
         : 'Issuing…'
       : requiresApproval
-        ? 'Send for approval'
+        ? 'Send for approval →'
         : 'Issue refund'
 
   return (
@@ -381,24 +402,24 @@ export default function AdminRefundModal({
               })}
             </div>
 
-            <label className="block">
-              <span className={labelClass}>Partial amount</span>
-              <input
-                type="number"
-                min="0"
-                step="0.001"
-                className={cn(inputClass, 'pr-3', refundType !== 'PARTIAL' && 'bg-[#f7f8f7] text-[#9aa49d]')}
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                placeholder="BHD 0.000"
-                disabled={submitting || refundType !== 'PARTIAL' || Boolean(pendingApproval)}
-              />
-            </label>
+            {refundType === 'PARTIAL' ? (
+              <label className="block">
+                <span className={labelClass}>Partial amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  className={cn(inputClass, 'pr-3')}
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder="BHD 0.000"
+                  disabled={submitting || Boolean(pendingApproval)}
+                />
+              </label>
+            ) : null}
 
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#8a948e]">
-                Refund to
-              </p>
+              <p className={labelClass}>Refund to</p>
               {destinationOptions.length === 0 ? (
                 <p className="rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3 text-[12px] text-[#7c8780]">
                   No refund destinations from API.
@@ -443,15 +464,120 @@ export default function AdminRefundModal({
             </div>
 
             {isReadinessIncident ? (
-              <div className="rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-[#8a948e]">
-                  Incident reason
-                </p>
-                <p className="mt-1 text-[13px] font-medium text-[#17231c]">
-                  {incidentReasonLabel || '—'}
-                </p>
-                <p className="mt-0.5 text-[11px] text-[#7c8780]">
-                  Derived from incident category (read-only).
+              <div className="border-l-[3px] border-[#1a8043] pl-3">
+                <label className="block">
+                  <span className={labelClass}>
+                    Cost bearer
+                    <span className={requiredTagClass}>Required</span>
+                  </span>
+                  {classLocksPlatform ? (
+                    <p className="rounded-[8px] border border-[#e4e8e4] bg-[#f7f8f7] px-3 py-2.5 text-[13px] text-[#17231c]">
+                      Yjeek (locked for this incident class)
+                    </p>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        className={inputClass}
+                        value={costBearer}
+                        onChange={(e) => setCostBearer(e.target.value)}
+                        disabled={submitting || Boolean(pendingApproval) || classLocksPlatform}
+                      >
+                        <option value="">Select bearer…</option>
+                        {(Array.isArray(refundContext?.costBearerOptions) &&
+                        refundContext.costBearerOptions.length
+                          ? refundContext.costBearerOptions
+                          : BEARER_OPTIONS.map((b) => ({ value: b, selectLabel: bearerUiLabel(b) }))
+                        ).map((b) => {
+                          const value = typeof b === 'string' ? b : b.value
+                          const label =
+                            typeof b === 'string'
+                              ? bearerUiLabel(b)
+                              : b.selectLabel || b.label || bearerUiLabel(value)
+                          return (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                        ▾
+                      </span>
+                    </div>
+                  )}
+                  <p className="mt-1.5 text-[11px] leading-4 text-[#6b7a71]">
+                    Yjeek · Vendor · Champ agency · Shared. Pre-filled from the incident&apos;s
+                    cause attribution, overridable with a note.
+                  </p>
+                  {noAutoBearer && !derivedBearer ? (
+                    <p className="mt-1 text-[11px] font-medium text-[#9a7618]">
+                      No automatic bearer available — select cost bearer.
+                    </p>
+                  ) : null}
+                </label>
+
+                {bearerOverridden ? (
+                  <label className="mt-3 block">
+                    <span className={labelClass}>
+                      Override reason
+                      <span className={requiredTagClass}>Required</span>
+                    </span>
+                    <textarea
+                      value={bearerOverrideReason}
+                      onChange={(e) => setBearerOverrideReason(e.target.value)}
+                      disabled={submitting || Boolean(pendingApproval)}
+                      rows={2}
+                      placeholder="Why the derived bearer is wrong…"
+                      className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
+                    />
+                  </label>
+                ) : null}
+
+                {costBearer === 'SHARED' ? (
+                  <div className="mt-3">
+                    <p className={labelClass}>Shared split (% — must total 100)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SPLIT_PARTIES.map((party) => (
+                        <label key={party} className="block">
+                          <span className="mb-1 block text-[10px] text-[#8a948e]">
+                            {bearerUiLabel(party)}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={bearerSplit[party]}
+                            onChange={(e) =>
+                              setBearerSplit((prev) => ({ ...prev, [party]: e.target.value }))
+                            }
+                            disabled={submitting || Boolean(pendingApproval)}
+                            className="box-border h-[36px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] px-2 text-[12px]"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {isReadinessIncident ? (
+              <div>
+                <p className={labelClass}>Reason</p>
+                <div className="relative">
+                  <input
+                    className={cn(inputClass, 'bg-[#fafbfa] text-[#17231c]')}
+                    value={incidentReasonLabel || ''}
+                    readOnly
+                    disabled
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                    ▾
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-4 text-[#6b7a71]">
+                  Inherited from the incident category. One vocabulary, not two.
                 </p>
               </div>
             ) : (
@@ -481,113 +607,24 @@ export default function AdminRefundModal({
               </label>
             )}
 
-            {isReadinessIncident ? (
-              <>
-                <label className="block">
-                  <span className={labelClass}>Cost bearer</span>
-                  {classLocksPlatform ? (
-                    <p className="rounded-[8px] border border-[#e4e8e4] bg-[#f7f8f7] px-3 py-2.5 text-[13px] text-[#17231c]">
-                      Platform (locked for this incident class)
-                    </p>
-                  ) : (
-                    <>
-                      {derivedBearer ? (
-                        <p className="mb-1.5 text-[11px] text-[#7c8780]">
-                          SLA default: {bearerUiLabel(derivedBearer)}
-                        </p>
-                      ) : noAutoBearer ? (
-                        <p className="mb-1.5 text-[11px] font-medium text-[#9a7618]">
-                          No automatic bearer available — select cost bearer.
-                        </p>
-                      ) : null}
-                      <div className="relative">
-                        <select
-                          className={inputClass}
-                          value={costBearer}
-                          onChange={(e) => setCostBearer(e.target.value)}
-                          disabled={submitting || Boolean(pendingApproval) || classLocksPlatform}
-                        >
-                          <option value="">Select bearer…</option>
-                          {BEARER_OPTIONS.map((b) => (
-                            <option key={b} value={b}>
-                              {bearerUiLabel(b)}
-                            </option>
-                          ))}
-                        </select>
-                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
-                          ▾
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </label>
-
-                {bearerOverridden ? (
-                  <label className="block">
-                    <span className={labelClass}>Override reason (required)</span>
-                    <textarea
-                      value={bearerOverrideReason}
-                      onChange={(e) => setBearerOverrideReason(e.target.value)}
-                      disabled={submitting || Boolean(pendingApproval)}
-                      rows={2}
-                      placeholder="Why is the SLA-derived bearer being changed?"
-                      className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
-                    />
-                  </label>
-                ) : null}
-
-                {costBearer === 'SHARED' ? (
-                  <div>
-                    <p className={labelClass}>Shared split (% — must total 100)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {SPLIT_PARTIES.map((party) => (
-                        <label key={party} className="block">
-                          <span className="mb-1 block text-[10px] text-[#8a948e]">
-                            {bearerUiLabel(party)}
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={bearerSplit[party]}
-                            onChange={(e) =>
-                              setBearerSplit((prev) => ({ ...prev, [party]: e.target.value }))
-                            }
-                            disabled={submitting || Boolean(pendingApproval)}
-                            className="box-border h-[36px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] px-2 text-[12px]"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-
             <label className="block">
               <span className={labelClass}>
-                Note {noteRequired ? '(required for approval)' : '(optional)'}
+                Note
+                {isReadinessIncident ? (
+                  <span className={requiredTagClass}>Required over BHD 5</span>
+                ) : noteRequired ? (
+                  <span className={requiredTagClass}>Required</span>
+                ) : null}
               </span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 disabled={submitting || Boolean(pendingApproval)}
                 rows={2}
-                placeholder={
-                  noteRequired
-                    ? 'Required for refunds above BHD 5.000…'
-                    : 'Add a note for the log…'
-                }
+                placeholder="Why this amount, and why this bearer…"
                 className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
               />
             </label>
-
-            {requiresApproval && !pendingApproval ? (
-              <div className="rounded-[10px] bg-[#fff8e8] px-3.5 py-2.5 text-[12px] text-[#9a7618]">
-                Refunds above BHD 5.000 require approval before money is issued.
-              </div>
-            ) : null}
 
             {pendingApproval ? (
               <div className="rounded-[10px] bg-[#fff8e8] px-3.5 py-2.5 text-[12px] text-[#9a7618]">
@@ -629,7 +666,6 @@ export default function AdminRefundModal({
               disabled={submitting || Boolean(pendingApproval) || contextLoading}
               className="inline-flex h-[36px] items-center justify-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
             >
-              <Undo2 size={14} strokeWidth={2.2} />
               {submitLabel}
             </button>
           </div>

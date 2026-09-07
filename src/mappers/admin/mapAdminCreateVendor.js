@@ -140,7 +140,7 @@ function mapAdditionalUsers(users = [], branches = []) {
       }
 
       // Postman create body uses local digits only (e.g. "38001122"), not "+973 …"
-      const phoneParts = splitOwnerPhone(user.phone)
+      const phoneParts = splitOwnerPhone(user.phone, user.countryCode)
       const phoneDigits = phoneParts.phone
 
       const item = {

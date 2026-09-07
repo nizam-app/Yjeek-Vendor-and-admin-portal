@@ -115,6 +115,7 @@ export function mapAdminIncidentItem(item) {
     previousResolutionActionCode: item.previousResolutionActionCode ?? null,
     compensationAmountBhd: item.compensationAmountBhd ?? null,
     compensationType: item.compensationType ?? null,
+    decidedByRole: item.decidedByRole ?? item.resolutionSummary?.resolvedByRole ?? null,
     recurredWithin14Days: item.recurredWithin14Days ?? false,
     recurrenceCount14d: item.recurrenceCount14d ?? null,
     recurrenceContext: item.recurrenceContext ?? null,
@@ -122,6 +123,8 @@ export function mapAdminIncidentItem(item) {
     resolutionSummary: item.resolutionSummary ?? null,
     incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
     readinessManaged: item.readinessManaged ?? false,
+    activeViewers: Array.isArray(item.activeViewers) ? item.activeViewers : [],
+    openedBy: item.openedBy && typeof item.openedBy === 'object' ? item.openedBy : null,
   })
 }
 
@@ -238,6 +241,8 @@ export function mapAdminIncidentDetail(data) {
     availableActions: Array.isArray(data?.availableActions) ? data.availableActions : [],
     chatConversationId: data?.chatConversationId ?? null,
     canResolve: Boolean(data?.canResolve),
+    activeViewers: Array.isArray(data?.activeViewers) ? data.activeViewers : item.activeViewers || [],
+    openedBy: data?.openedBy && typeof data.openedBy === 'object' ? data.openedBy : item.openedBy,
     history: mapAdminIncidentHistory(item),
   }
 }

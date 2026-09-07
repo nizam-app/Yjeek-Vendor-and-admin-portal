@@ -4,6 +4,8 @@ import { ChevronDown } from 'lucide-react'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
 import AdminPasswordField from '../../../components/admin/AdminPasswordField'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
+import { parseAdminPhone } from '../../../lib/adminPhone'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -106,11 +108,29 @@ function emptyCreateForm(firstBranchId = '') {
   return {
     fullName: '',
     email: '',
-    phone: '+973 ',
+    phone: '',
+    countryCode: '+973',
     password: '',
     role: 'Branch manager',
     branchId: firstBranchId,
     status: 'Active',
+  }
+}
+
+function formFromUser(user, firstBranchId = '') {
+  if (!user) {
+    return emptyCreateForm(firstBranchId)
+  }
+  const phoneParts = parseAdminPhone(user.phone, user.countryCode || '+973')
+  return {
+    fullName: user.name || '',
+    email: user.email || '',
+    phone: phoneParts.phone,
+    countryCode: phoneParts.countryCode,
+    password: user.password || '',
+    role: user.role === 'Operation staff' ? 'Staff' : user.role || 'Branch manager',
+    branchId: user.branchId || user.branch || firstBranchId,
+    status: user.status || 'Active',
   }
 }
 
@@ -159,19 +179,9 @@ export default function AdminAddVendorUser() {
   const [branchesLoading, setBranchesLoading] = useState(false)
 
   const [form, setForm] = useState(() => {
-    if (isNewUser) {
-      const firstId = Array.isArray(state?.branches) ? state.branches.find((b) => b?.id)?.id || '' : ''
-      return emptyCreateForm(firstId)
-    }
-    return {
-      fullName: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      password: '',
-      role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
-      branchId: user?.branchId || user?.branch || '',
-      status: user?.status || 'Active',
-    }
+    const firstId = Array.isArray(state?.branches) ? state.branches.find((b) => b?.id)?.id || '' : ''
+    if (isNewUser) return emptyCreateForm(firstId)
+    return formFromUser(user, firstId)
   })
 
   const [permissions, setPermissions] = useState(() =>
@@ -251,15 +261,7 @@ export default function AdminAddVendorUser() {
 
   useEffect(() => {
     if (!user && isNewUser) return
-    setForm({
-      fullName: user?.name || '',
-      email: user?.email || '',
-      phone: user?.phone || '',
-      password: user?.password || '',
-      role: user?.role === 'Operation staff' ? 'Staff' : (user?.role || 'Branch manager'),
-      branchId: user?.branchId || user?.branch || '',
-      status: user?.status || 'Active',
-    })
+    setForm(formFromUser(user))
     setPermissions(
       user?.permissions && typeof user.permissions === 'object'
         ? {
@@ -317,6 +319,7 @@ export default function AdminAddVendorUser() {
           displayName: form.fullName.trim(),
           email: form.email.trim(),
           phone: form.phone.trim(),
+          countryCode: form.countryCode || '+973',
           password: form.password,
           role: form.role,
           branch: branch?.name || '',
@@ -418,11 +421,12 @@ export default function AdminAddVendorUser() {
               <input className={inputClass} value={form.email} onChange={updateField('email')} />
             </Field>
             <Field label="Phone">
-              <input
-                className={inputClass}
-                value={form.phone}
-                onChange={updateField('phone')}
-                placeholder="+973 33008888"
+              <AdminPhoneField
+                countryCode={form.countryCode}
+                phone={form.phone}
+                onChange={({ countryCode, phone }) =>
+                  setForm((prev) => ({ ...prev, countryCode, phone }))
+                }
               />
             </Field>
             <Field label="Password">

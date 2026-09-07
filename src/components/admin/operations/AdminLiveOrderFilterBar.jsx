@@ -14,6 +14,7 @@ import {
 } from '../../../lib/adminLiveOrderQuery'
 import { AdminVendorFilterButton } from '../AdminVendorFilterButton'
 import { AdminFilterDropdown } from './AdminFilterDropdown'
+import { AdminSortDropdown } from './AdminSortDropdown'
 
 /**
  * Live Orders search + Vendor / Type / Champ / Sort controls.
@@ -28,18 +29,12 @@ export function AdminLiveOrderFilterBar({
   incidentCategories = [],
   showTypes = true,
   showIncidentFilters = true,
-  showIncidentPrioritySort = false,
 }) {
   const champs = champsFromOrders(orders)
   const vendors = [...vendorsFromOrders(orders), ...extraVendors]
   const chips = liveOrderFilterChips(query, { vendors, champs })
   const active = liveOrderQueryIsActive(query)
   const sort = query?.sort || 'time_left'
-  const incidentPrioritySort = LIVE_INCIDENT_PRIORITY_SORTS.some((item) => item.id === sort)
-    ? sort
-    : null
-  const incidentAgeSort = LIVE_INCIDENT_AGE_SORTS.some((item) => item.id === sort) ? sort : null
-  const standardSort = incidentPrioritySort || incidentAgeSort ? 'time_left' : sort
   const sortOptions = [
     ...LIVE_ORDER_SORTS,
     ...(showIncidentFilters ? LIVE_INCIDENT_PRIORITY_SORTS : []),
@@ -48,7 +43,8 @@ export function AdminLiveOrderFilterBar({
 
   return (
     <div className="shrink-0">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
         <label className="flex h-[31px] w-[225px] items-center gap-2 rounded-full border border-[#dfe4e0] bg-white px-3">
           <Search size={12} className="text-[#7b867f]" />
           <input
@@ -118,29 +114,13 @@ export function AdminLiveOrderFilterBar({
             </button>
           </>
         ) : null}
-        {showIncidentPrioritySort ? (
-          <AdminFilterDropdown
-            label="Priority"
-            multiple={false}
-            showAll
-            allLabel="Any"
-            align="right"
-            options={LIVE_INCIDENT_PRIORITY_SORTS}
-            selectedIds={incidentPrioritySort ? [incidentPrioritySort] : []}
-            onChange={(ids) => onChange?.({ ...query, sort: ids[0] || 'time_left' })}
-          />
-        ) : null}
-        <div className="ml-auto">
-          <AdminFilterDropdown
-            label="Sort"
-            multiple={false}
-            showAll={false}
-            align="right"
-            options={sortOptions}
-            selectedIds={[incidentPrioritySort || incidentAgeSort || standardSort]}
-            onChange={(ids) => onChange?.({ ...query, sort: ids[0] || 'time_left' })}
-          />
         </div>
+        <AdminSortDropdown
+          value={sort}
+          options={sortOptions}
+          align="right"
+          onChange={(nextSort) => onChange?.({ ...query, sort: nextSort || 'time_left' })}
+        />
       </div>
 
       {chips.length > 0 ? (

@@ -5,8 +5,8 @@ import {
   incidentOpenedAt,
   isIncidentUnattended,
   isOpenIncident,
-  normalizeIncidentPriority,
   pickBestRecurrenceLabel,
+  pickRecurrenceChips,
 } from './adminIncidentPresentation.js'
 
 function orderKey(order) {
@@ -26,6 +26,7 @@ export function buildOrderIncidentIndex(incidents) {
   const index = new Map()
   for (const [orderId, list] of byOrder.entries()) {
     const open = list.filter(isOpenIncident)
+    const primary = open[0] || list[0]
     const oldestOpenedAt = list.reduce((min, row) => {
       const at = incidentOpenedAt(row)
       if (!at) return min
@@ -42,12 +43,19 @@ export function buildOrderIncidentIndex(incidents) {
       count: open.length || list.length,
       totalCount: list.length,
       highestPriority: highestIncidentPriority(open.length ? open : list),
-      primaryCategory: (open[0] || list[0])?.categoryLabel || null,
+      primaryCategory: primary?.categoryLabel || null,
+      primarySourceLabel: primary?.sourceLabel || null,
       oldestOpenedAt: oldestOpenedAt != null ? new Date(oldestOpenedAt).toISOString() : null,
       ageLabel: oldestOpenedAt != null ? formatIncidentAge(new Date(oldestOpenedAt).toISOString()) : null,
-      unattended: open.some(isIncidentUnattended),
+      // Card is unattended only when every open incident still has no opener/claim.
+      unattended: open.length > 0 && open.every(isIncidentUnattended),
       categories: [...new Set(list.map((row) => row.categoryLabel).filter(Boolean))],
       recurrenceLabel: pickBestRecurrenceLabel(open.length ? open : list),
+      recurrenceChips: pickRecurrenceChips(open.length ? open : list),
+      attentionLabel: (open.find((row) => row.openedBy?.displayName) || primary)?.attentionLabel || null,
+      openedBy: open.find((row) => row.openedBy?.displayName)?.openedBy || null,
+      slaCountdownLabel: primary?.slaCountdownLabel || null,
+      incidentSlaDeadlineAt: primary?.incidentSlaDeadlineAt || null,
     })
   }
   return index
@@ -57,18 +65,29 @@ export function mergeOrderIncidentSummary(order, index) {
   if (!order) return order
   const key = orderKey(order)
   const summary = index?.get?.(key)
+  const boardSummary = order.incidentSummary && typeof order.incidentSummary === 'object'
+    ? order.incidentSummary
+    : null
+
   if (!summary) {
+    if (!order.hasIncident && !boardSummary) {
+      return { ...order, incidentSummary: null }
+    }
+    // Prefer board-embedded summary when incidents list join missed this order.
     return {
       ...order,
-      incidentSummary: order.hasIncident
-        ? {
-            count: Number(order.incidentCount) || 1,
-            highestPriority: order.incidentPriority || null,
-            ageLabel: null,
-            primaryCategory: null,
-            unattended: false,
-          }
-        : null,
+      incidentSummary: {
+        count: Number(order.incidentCount) || 1,
+        highestPriority: order.incidentPriority || boardSummary?.highestPriority || null,
+        ageLabel: boardSummary?.ageLabel ?? null,
+        oldestOpenedAt: boardSummary?.oldestOpenedAt ?? null,
+        primaryCategory: boardSummary?.primaryCategory ?? null,
+        primarySourceLabel: boardSummary?.primarySourceLabel ?? null,
+        unattended: Boolean(boardSummary?.unattended),
+        categories: boardSummary?.primaryCategory ? [boardSummary.primaryCategory] : [],
+        attentionLabel: boardSummary?.attentionLabel ?? null,
+        openedBy: boardSummary?.openedBy ?? null,
+      },
     }
   }
   return {
