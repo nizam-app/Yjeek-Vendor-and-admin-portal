@@ -64,6 +64,10 @@ export function mapAdminOpsIncidentBoardItem(item) {
     hasIncident: Boolean(item.hasIncident),
     incidentCount: Number(item.incidentCount) || 0,
     incidentPriority: item.incidentPriority ?? null,
+    incidentSummary:
+      item.incidentSummary && typeof item.incidentSummary === 'object'
+        ? item.incidentSummary
+        : null,
     conversationId: item.conversationId ?? item.customerConversationId ?? item.driverConversationId ?? null,
     customerConversationId: item.customerConversationId ?? null,
     driverConversationId: item.driverConversationId ?? null,

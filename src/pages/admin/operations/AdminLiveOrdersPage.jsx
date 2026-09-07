@@ -620,16 +620,17 @@ export function IncidentOrderModal({ order, onClose, onOpenChat, onPresenceChang
                   <Button
                     primary
                     className="h-[32px] rounded-full px-4"
-                    onClick={() =>
-                      setActiveAction({
-                        code: 'MARK_RESOLVED_TYPED',
-                        incidentId:
-                          readinessOpenIncidents[0]?.id ||
-                          legacyOpenIncidents[0]?.id ||
-                          openIncidents[0]?.id ||
-                          null,
-                      })
-                    }
+                    onClick={() => {
+                      // Prefer readiness (typed modal). Legacy seed incidents use free-text resolve.
+                      if (readinessOpenIncidents[0]?.id) {
+                        setActiveAction({
+                          code: 'MARK_RESOLVED_TYPED',
+                          incidentId: readinessOpenIncidents[0].id,
+                        })
+                        return
+                      }
+                      void markResolved(legacyOpenIncidents[0]?.id || openIncidents[0]?.id || null)
+                    }}
                   >
                     Mark resolved
                   </Button>

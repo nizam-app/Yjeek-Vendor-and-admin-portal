@@ -65,18 +65,29 @@ export function mergeOrderIncidentSummary(order, index) {
   if (!order) return order
   const key = orderKey(order)
   const summary = index?.get?.(key)
+  const boardSummary = order.incidentSummary && typeof order.incidentSummary === 'object'
+    ? order.incidentSummary
+    : null
+
   if (!summary) {
+    if (!order.hasIncident && !boardSummary) {
+      return { ...order, incidentSummary: null }
+    }
+    // Prefer board-embedded summary when incidents list join missed this order.
     return {
       ...order,
-      incidentSummary: order.hasIncident
-        ? {
-            count: Number(order.incidentCount) || 1,
-            highestPriority: order.incidentPriority || null,
-            ageLabel: null,
-            primaryCategory: null,
-            unattended: false,
-          }
-        : null,
+      incidentSummary: {
+        count: Number(order.incidentCount) || 1,
+        highestPriority: order.incidentPriority || boardSummary?.highestPriority || null,
+        ageLabel: boardSummary?.ageLabel ?? null,
+        oldestOpenedAt: boardSummary?.oldestOpenedAt ?? null,
+        primaryCategory: boardSummary?.primaryCategory ?? null,
+        primarySourceLabel: boardSummary?.primarySourceLabel ?? null,
+        unattended: Boolean(boardSummary?.unattended),
+        categories: boardSummary?.primaryCategory ? [boardSummary.primaryCategory] : [],
+        attentionLabel: boardSummary?.attentionLabel ?? null,
+        openedBy: boardSummary?.openedBy ?? null,
+      },
     }
   }
   return {

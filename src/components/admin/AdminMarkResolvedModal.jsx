@@ -33,6 +33,7 @@ export default function AdminMarkResolvedModal({
   const [compensationType, setCompensationType] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [signingOff, setSigningOff] = useState(false)
+  const [assigning, setAssigning] = useState(false)
   const [error, setError] = useState(null)
   const [nowClock, setNowClock] = useState(() =>
     new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
@@ -166,6 +167,28 @@ export default function AdminMarkResolvedModal({
     }
   }
 
+  async function handleAssignToMe() {
+    if (!incidentId || assigning) return
+    setError(null)
+    setAssigning(true)
+    try {
+      // Acknowledge claims the ticket and backfills assignedToUserId for P1 close.
+      const claimed = await adminIncidentService.acknowledge(incidentId)
+      setContext((prev) => ({
+        ...(prev || {}),
+        closeRequirements: {
+          ...(prev?.closeRequirements || {}),
+          assignedToUserId:
+            claimed?.data?.assignedToUserId || user?.id || user?.userId || 'assigned',
+        },
+      }))
+    } catch (err) {
+      setError(formatApiErrorMessage(err, 'Failed to assign incident.'))
+    } finally {
+      setAssigning(false)
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     if (!incidentId || submitting || blockerMessages.length) return
@@ -250,6 +273,20 @@ export default function AdminMarkResolvedModal({
                 {msg}
               </div>
             ))}
+
+            {requirements.requiresAssignment && !requirements.assignedToUserId ? (
+              <div className="rounded-[8px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-2.5">
+                <p className="text-[12px] font-medium text-[#101a14]">Assignment required</p>
+                <button
+                  type="button"
+                  disabled={assigning}
+                  onClick={handleAssignToMe}
+                  className="mt-2 inline-flex h-8 items-center rounded-full bg-[#1aa054] px-3 text-[12px] font-medium text-white disabled:opacity-60"
+                >
+                  {assigning ? 'Assigning…' : 'Assign to me'}
+                </button>
+              </div>
+            ) : null}
 
             {requirements.requiresSeniorSignOff && !requirements.seniorSignOffUserId ? (
               <div className="rounded-[8px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-2.5">
