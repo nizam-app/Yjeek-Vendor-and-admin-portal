@@ -7,7 +7,8 @@ export const ADMIN_OPS_BOARD_FILTERS = [
   'Chat · Customer',
 ]
 
-export const ADMIN_OPS_DEFAULT_REFRESH_SECONDS = 3
+/** Ops boards / Live / overview — target 10–15s (was 3s; too hard on shared DB). */
+export const ADMIN_OPS_DEFAULT_REFRESH_SECONDS = 12
 
 export function resolveAdminBoardFilters(filters) {
   if (Array.isArray(filters) && filters.length > 0) {
@@ -18,6 +19,7 @@ export function resolveAdminBoardFilters(filters) {
 
 /**
  * Prefer API autoRefreshSeconds / refreshIntervalSeconds; fall back to design default.
+ * Never poll faster than 10s (clamps legacy API values of 3).
  * @param {Record<string, unknown>|null|undefined} data
  */
 export function resolveAdminBoardRefreshSeconds(data) {
@@ -26,7 +28,7 @@ export function resolveAdminBoardRefreshSeconds(data) {
   if (raw === null || raw === undefined || raw === '') return ADMIN_OPS_DEFAULT_REFRESH_SECONDS
   const n = Number(raw)
   if (!Number.isFinite(n) || n < 1) return ADMIN_OPS_DEFAULT_REFRESH_SECONDS
-  return Math.floor(n)
+  return Math.max(10, Math.floor(n))
 }
 
 /** @param {string} [filter] */

@@ -320,6 +320,7 @@ export function IncidentOrderModal({ order, onClose, onOpenChat, onPresenceChang
     }
 
     async function beat() {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try {
         const mergedViewers = []
         for (const incidentId of ids) {
@@ -337,9 +338,14 @@ export function IncidentOrderModal({ order, onClose, onOpenChat, onPresenceChang
 
     void beat()
     const timer = window.setInterval(beat, 15000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void beat()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
       for (const incidentId of ids) {
         void adminIncidentService
           .leavePresence(incidentId)
@@ -1037,7 +1043,7 @@ export default function AdminLiveOrdersPage() {
     status: 'OPEN',
     limit: 100,
     refreshSeconds: Number(data?.refreshIntervalSeconds) > 0
-      ? Math.max(3, Number(data.refreshIntervalSeconds))
+      ? Math.max(10, Number(data.refreshIntervalSeconds))
       : 15,
   })
   const {
@@ -1072,7 +1078,7 @@ export default function AdminLiveOrdersPage() {
     status: 'all',
     limit: 500,
     refreshSeconds: Number(data?.refreshIntervalSeconds) > 0
-      ? Math.max(3, Number(data.refreshIntervalSeconds))
+      ? Math.max(10, Number(data.refreshIntervalSeconds))
       : 15,
   })
 
