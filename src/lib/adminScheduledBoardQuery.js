@@ -22,7 +22,8 @@ export const SCHEDULED_STAGE_OPTIONS = [
 ]
 
 export const EMPTY_SCHEDULED_BOARD_QUERY = {
-  dates: ['today'],
+  /** Empty = all dates (active pipeline). Prefer this over silent "today" which hides overdue windows. */
+  dates: [],
   types: [],
   stages: [],
   zones: [],
@@ -76,8 +77,8 @@ function thisWeekRange(now = new Date()) {
 export function parseScheduledBoardQuery(searchParams) {
   const rawDate = searchParams?.get?.('date')
   let dates
-  if (rawDate == null || rawDate === '') dates = ['today']
-  else if (rawDate === 'all') dates = []
+  // Default (no param) and explicit `all` → show every active scheduled order.
+  if (rawDate == null || rawDate === '' || rawDate === 'all') dates = []
   else dates = splitCsv(rawDate).filter((id) => DATE_IDS.has(id))
 
   return {
@@ -98,7 +99,7 @@ export function writeScheduledBoardQuery(searchParams, query) {
   const zones = Array.isArray(query?.zones) ? query.zones.filter(Boolean) : []
 
   if (dates.length === 0) next.set('date', 'all')
-  else if (dates.length === 1 && dates[0] === 'today') next.delete('date')
+  else if (dates.length === 1 && dates[0] === 'today') next.set('date', 'today')
   else next.set('date', dates.join(','))
 
   setOrDelete(next, 'stype', types.join(','))
