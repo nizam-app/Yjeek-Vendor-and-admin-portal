@@ -34,7 +34,6 @@ import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminActiveChatPanels } from './AdminActiveChatPanels'
 import { AdminOpenChats } from './AdminOpenChats'
-import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import {
   buildOrderIncidentIndex,
   mergeBoardOrdersWithIncidents,
