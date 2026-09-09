@@ -155,9 +155,6 @@ function AdminOperationsBoard({ mode }) {
   })
   const { data: incidentsData } = useAdminIncidents()
   const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
-  const incidentCountLabel = String(
-    incidentsData?.summary?.totalOpen ?? incidentsData?.total ?? incidents.length,
-  )
   const { data: chatsData } = useAdminChats()
   const chats = Array.isArray(chatsData?.items) ? chatsData.items : []
   const chatsActive = chatsData?.active ?? chats.length
@@ -167,8 +164,30 @@ function AdminOperationsBoard({ mode }) {
 
   const filteredOrders = useMemo(() => {
     const list = Array.isArray(data?.orders) ? data.orders : []
-    return mode === 'scheduled' ? filterScheduledOrders(list, boardQuery) : list
-  }, [mode, data?.orders, boardQuery])
+    if (mode !== 'scheduled') return list
+    // Pipeline has no date picker. Do not apply the silent default "today"
+    // filter — that hid every scheduled order whose window is not today.
+    const query = view === 'Pipeline' ? { ...boardQuery, dates: [] } : boardQuery
+    return filterScheduledOrders(list, query)
+  }, [mode, view, data?.orders, boardQuery])
+
+  const boardIncidents = useMemo(() => {
+    const orders = Array.isArray(data?.orders) ? data.orders : []
+    const ids = new Set(orders.map((order) => String(order.orderId || '').trim()).filter(Boolean))
+    const numbers = new Set(
+      orders
+        .map((order) => String(order.id || '').trim().replace(/^#/, ''))
+        .filter(Boolean),
+    )
+    if (ids.size === 0 && numbers.size === 0) return []
+    return incidents.filter((incident) => {
+      const orderId = String(incident?.orderId || '').trim()
+      const orderNumber = String(incident?.orderNumber || '').trim().replace(/^#/, '')
+      return (orderId && ids.has(orderId)) || (orderNumber && numbers.has(orderNumber))
+    })
+  }, [data?.orders, incidents])
+
+  const incidentCountLabel = String(boardIncidents.length)
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
@@ -186,7 +205,7 @@ function AdminOperationsBoard({ mode }) {
           query={boardQuery}
           onQueryChange={patchBoardQuery}
           onQueryClear={clearBoardQuery}
-          incidents={incidents}
+          incidents={boardIncidents}
           incidentCountLabel={incidentCountLabel}
           view={view}
           onViewChange={onViewChange}
@@ -263,7 +282,7 @@ function AdminOperationsBoard({ mode }) {
               )
             })}
           </div>
-          <IncidentLog incidents={incidents} countLabel={incidentCountLabel} onIncidentClick={setSelectedIncident} />
+          <IncidentLog incidents={boardIncidents} countLabel={incidentCountLabel} onIncidentClick={setSelectedIncident} />
         </>
       )}
       {view === 'Calendar' && mode === 'scheduled' ? null : <ChatStrip chats={chats} activeCount={chatsActive} />}

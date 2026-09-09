@@ -1508,6 +1508,35 @@ export function mapAdminChampSuspendRequest(form = {}) {
   return body
 }
 
+/**
+ * Map Message champ modal → POST /admin/fleet/champs/:id/messages body.
+ * Confirmed: title, body, push?, sms? — at least one channel required.
+ */
+export function mapAdminChampMessageRequest(form = {}) {
+  const title = String(form.title || '').trim()
+  const messageBody = String(form.body || '').trim()
+  if (!title) {
+    throw new ApiError({ message: 'Title is required.' })
+  }
+  if (!messageBody) {
+    throw new ApiError({ message: 'Message is required.' })
+  }
+  if (title.length > 200) {
+    throw new ApiError({ message: 'Title must be 200 characters or less.' })
+  }
+  if (messageBody.length > 5000) {
+    throw new ApiError({ message: 'Message must be 5000 characters or less.' })
+  }
+
+  const push = form.push !== false
+  const sms = Boolean(form.sms)
+  if (!push && !sms) {
+    throw new ApiError({ message: 'Enable Push and/or SMS.' })
+  }
+
+  return { title, body: messageBody, push, sms }
+}
+
 const TERMINATE_MONTH_INDEX = {
   jan: 0,
   feb: 1,

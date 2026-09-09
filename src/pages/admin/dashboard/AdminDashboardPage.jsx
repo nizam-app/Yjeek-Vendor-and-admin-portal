@@ -11,7 +11,6 @@ import { cn } from '../../../components/admin/cn'
 import { AdminOrderDetailModal } from '../../admin/operations/AdminLiveOrdersPage'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
-import { AdminAutoRefreshBadge } from '../../../components/admin/operations/AdminAutoRefreshBadge'
 import { countUnattendedIncidents } from '../../../lib/adminOrderIncidentIndex'
 import { enrichIncidentRow } from '../../../lib/adminIncidentPresentation'
 
@@ -91,9 +90,6 @@ export default function AdminDashboardPage() {
     ? data.summary
     : KPI_PLACEHOLDERS.map((item) => ({ ...item, value: null }))
   const slaColumns = data?.slaColumns?.length ? data.slaColumns : []
-  const activeOrdersLabel =
-    data?.activeOrders == null ? '—' : String(data.activeOrders)
-  const refreshKey = `${activeOrdersLabel}-${unattendedIncidentCount}-${slaColumns.map((c) => c.count).join('-')}`
 
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
@@ -140,24 +136,7 @@ export default function AdminDashboardPage() {
       <ApiErrorBanner error={error} onRetry={refetch} />
       <DashboardKpiStrip items={kpiItems} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-2.5">
-        <h2 className="text-[14px] font-bold text-[#17231c]">{activeOrdersLabel} active orders</h2>
-        <AdminAutoRefreshBadge
-          intervalSeconds={data?.autoRefreshSeconds}
-          resetKey={refreshKey}
-        />
-        {unattendedIncidentCount > 0 ? (
-          <button
-            type="button"
-            onClick={() => navigate('/admin/live-orders?unattended=1')}
-            className="rounded-full bg-[#fff0ed] px-2.5 py-1 text-[10px] font-semibold text-[#c62828] hover:bg-[#fde4e0]"
-          >
-            {unattendedIncidentCount} incident{unattendedIncidentCount === 1 ? '' : 's'} unattended
-          </button>
-        ) : null}
-      </div>
-
-      <div className="mt-4 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
+      <div className="mt-3 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <AdminLiveMap
           layer={layer}
           onLayerChange={setLayer}

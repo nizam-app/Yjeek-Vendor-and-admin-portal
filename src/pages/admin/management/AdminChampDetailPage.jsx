@@ -11,6 +11,7 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
+import AdminMessageChampModal from '../../../components/admin/AdminMessageChampModal'
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
 import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
 import AdminReconcilePodModal from '../../../components/admin/AdminReconcilePodModal'
@@ -59,6 +60,7 @@ export default function AdminChampDetailPage() {
   const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const [tab, setTab] = useState('Overview')
   const [online, setOnline] = useState(null)
+  const [messageOpen, setMessageOpen] = useState(false)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
   const [reconcileOpen, setReconcileOpen] = useState(false)
@@ -171,6 +173,15 @@ export default function AdminChampDetailPage() {
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
+      <AdminMessageChampModal
+        open={messageOpen}
+        onClose={() => setMessageOpen(false)}
+        champId={resolvedChampId}
+        champName={data.name}
+        champInitials={data.initials}
+        champStatus={isSuspended ? 'Suspended' : data.status}
+        champCode={data.displayCode || data.id}
+      />
       <AdminSuspendChampModal
         open={suspendOpen}
         onClose={() => setSuspendOpen(false)}
@@ -264,7 +275,15 @@ export default function AdminChampDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
+            disabled={isTerminated}
+            title={isTerminated ? 'Cannot message a terminated champ' : `Message ${data.name}`}
+            onClick={() => {
+              if (isTerminated) return
+              setActionError('')
+              setActionSuccess('')
+              setMessageOpen(true)
+            }}
+            className="inline-flex h-[36px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3.5 text-[13px] font-medium text-[#17231c] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Mail size={14} strokeWidth={1.8} className="text-[#59655e]" />
             Message
