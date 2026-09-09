@@ -103,10 +103,14 @@ export function mapAdminDashboardOverviewResponse(data) {
     region: typeof data.region === 'string' ? data.region : null,
     activeOrders: data.activeOrders ?? null,
     openIncidents: data.openIncidents ?? null,
-    autoRefreshSeconds:
-      data.autoRefreshSeconds === null || data.autoRefreshSeconds === undefined
-        ? null
-        : Number(data.autoRefreshSeconds),
+    autoRefreshSeconds: (() => {
+      if (data.autoRefreshSeconds === null || data.autoRefreshSeconds === undefined) {
+        return 12
+      }
+      const n = Number(data.autoRefreshSeconds)
+      if (!Number.isFinite(n) || n < 1) return 12
+      return Math.max(10, Math.floor(n))
+    })(),
     summary: KPI_STRIP.map(({ key, label, tone }) => ({
       key,
       value: formatCount(kpis[key]),

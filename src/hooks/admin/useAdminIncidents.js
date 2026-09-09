@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
 import { useApiResource } from '../useApiResource'
+import { useIntervalWhenVisible } from '../useIntervalWhenVisible'
 import { isAdminRealApiFeature } from '../../api/config'
 import { adminIncidentService } from '../../services/admin/incidentService'
 import { emptyAdminIncidents } from '../../mappers/admin/mapAdminIncidents'
@@ -29,13 +29,13 @@ export function useAdminIncidents(query = {}) {
     return adminIncidentService.list({ status, priority, limit, orderIds })
   }, [useReal, enabled, status, priority, limit, orderIds])
 
-  useEffect(() => {
-    if (!enabled || !useReal || refreshSeconds < 1) return undefined
-    const intervalId = window.setInterval(() => {
+  useIntervalWhenVisible(
+    () => {
       resource.refetch()
-    }, refreshSeconds * 1000)
-    return () => window.clearInterval(intervalId)
-  }, [enabled, useReal, refreshSeconds, resource.refetch])
+    },
+    refreshSeconds > 0 ? refreshSeconds * 1000 : null,
+    enabled && useReal,
+  )
 
   return resource
 }

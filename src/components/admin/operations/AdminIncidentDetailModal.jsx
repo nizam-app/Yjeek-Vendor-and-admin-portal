@@ -96,6 +96,7 @@ export function AdminIncidentDetailModal({
     let cancelled = false
 
     async function beat() {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       try {
         const response = await adminIncidentService.heartbeatPresence(incidentId)
         if (cancelled) return
@@ -120,9 +121,14 @@ export function AdminIncidentDetailModal({
 
     void beat()
     const timer = window.setInterval(beat, 15000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void beat()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       cancelled = true
       window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
       void adminIncidentService
         .leavePresence(incidentId)
         .then((response) => {

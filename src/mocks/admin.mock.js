@@ -59,7 +59,7 @@ export const adminChatsMock = [
 
 export const adminLiveOrdersMock = {
   activeOrderCount: 41,
-  refreshIntervalSeconds: 3,
+  refreshIntervalSeconds: 12,
   filters: ['All orders', 'All chats', 'Chat · Champ', 'Chat · Customer'],
   columns: [
     {
@@ -107,7 +107,7 @@ export const adminLiveOrdersMock = {
 }
 
 const adminIncidentBoardShared = {
-  refreshIntervalSeconds: 3,
+  refreshIntervalSeconds: 12,
   filters: ['All orders', 'All chats', 'Chat · Champ', 'Chat · Customer'],
 }
 

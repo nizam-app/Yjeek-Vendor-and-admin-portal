@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, MessageCircle, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useIntervalWhenVisible } from '../../../hooks/useIntervalWhenVisible'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
@@ -33,6 +34,7 @@ import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminActiveChatPanels } from './AdminActiveChatPanels'
 import { AdminOpenChats } from './AdminOpenChats'
+import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import {
   buildOrderIncidentIndex,
   mergeBoardOrdersWithIncidents,
@@ -237,7 +239,7 @@ export function AdminIncidentBoard({
   const refetch = useFetchBoard ? fetched.refetch : onRetry
   const { data: incidentsData, setData: setIncidentsData, refetch: refetchIncidents } = useAdminIncidents({
     refreshSeconds: Number(data?.refreshIntervalSeconds) > 0
-      ? Math.max(3, Number(data.refreshIntervalSeconds))
+      ? Math.max(10, Number(data.refreshIntervalSeconds))
       : 15,
   })
   const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats({
@@ -314,13 +316,13 @@ export function AdminIncidentBoard({
 
   const refreshSeconds = Number(data?.refreshIntervalSeconds) || 0
 
-  useEffect(() => {
-    if (!refreshSeconds || refreshSeconds < 1 || typeof refetch !== 'function') return undefined
-    const intervalId = window.setInterval(() => {
+  useIntervalWhenVisible(
+    () => {
       refetch()
-    }, refreshSeconds * 1000)
-    return () => window.clearInterval(intervalId)
-  }, [refreshSeconds, refetch])
+    },
+    refreshSeconds > 0 ? refreshSeconds * 1000 : null,
+    typeof refetch === 'function',
+  )
 
   const feedIncidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
   const incidents = feedIncidents.length > 0

@@ -29,10 +29,15 @@ function causeLabel(cause) {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function parseMoneyLabel(label) {
+  if (label == null || label === '') return null
+  const n = Number(String(label).replace(/[^0-9.]/g, ''))
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /**
  * Cancel order modal — Take action → Cancel order.
- * Confirmed POST: { itemDisposition, refund, cause, reason }
- * Note is UI-only (not in API body).
+ * POST: { itemDisposition, refund, refundAmount?, cause, reason, note?, incidentId? }
  */
 export default function AdminCancelOrderModal({
   open,
@@ -47,11 +52,13 @@ export default function AdminCancelOrderModal({
 }) {
   const [itemDisposition, setItemDisposition] = useState('CHAMP_KEEPS')
   const [refund, setRefund] = useState('FULL')
+  const [refundAmount, setRefundAmount] = useState('')
   const [cause, setCause] = useState('')
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const orderValueAmount = parseMoneyLabel(orderValueLabel)
 
   const causeOptions = Array.isArray(causes) ? causes.filter(Boolean).map(String) : []
   const reasonOptions = useMemo(() => {
@@ -64,6 +71,7 @@ export default function AdminCancelOrderModal({
     if (!open) return
     setItemDisposition('CHAMP_KEEPS')
     setRefund('FULL')
+    setRefundAmount('')
     setNote('')
     setError(null)
     const firstCause = causeOptions[0] || ''
@@ -125,13 +133,28 @@ export default function AdminCancelOrderModal({
         throw new ApiError({ message: 'Select a refund option.' })
       }
 
-      await adminOrderService.cancel(orderId, {
+      const body = {
         itemDisposition: String(itemDisposition).trim(),
         refund: String(refund).trim(),
         cause: String(cause).trim(),
         reason: String(reason).trim(),
         ...(incidentId ? { incidentId: String(incidentId) } : {}),
-      })
+        ...(note.trim() ? { note: note.trim() } : {}),
+      }
+      if (refund === 'PARTIAL') {
+        const amount = Number(refundAmount)
+        if (!String(refundAmount || '').trim() || Number.isNaN(amount) || amount <= 0) {
+          throw new ApiError({ message: 'Enter a valid partial refund amount.' })
+        }
+        if (orderValueAmount != null && amount > orderValueAmount) {
+          throw new ApiError({
+            message: `Partial refund cannot exceed ${orderValueLabel}.`,
+          })
+        }
+        body.refundAmount = amount
+      }
+
+      await adminOrderService.cancel(orderId, body)
       onSuccess?.()
       onClose?.()
     } catch (err) {
@@ -227,7 +250,10 @@ export default function AdminCancelOrderModal({
                     <button
                       key={option.id}
                       type="button"
-                      onClick={() => setRefund(option.id)}
+                      onClick={() => {
+                        setRefund(option.id)
+                        if (option.id !== 'PARTIAL') setRefundAmount('')
+                      }}
                       className={cn(
                         'flex w-full items-center gap-3 rounded-[12px] border px-3.5 py-3 text-left transition',
                         selected
@@ -248,6 +274,23 @@ export default function AdminCancelOrderModal({
                   )
                 })}
               </div>
+              {refund === 'PARTIAL' ? (
+                <label className="mt-3 block">
+                  <span className={labelClass}>Partial amount</span>
+                  <input
+                    type="number"
+                    min="0.001"
+                    step="0.001"
+                    max={orderValueAmount ?? undefined}
+                    className={cn(inputClass, 'pr-3')}
+                    value={refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value)}
+                    placeholder={orderValueLabel ? `Less than ${orderValueLabel}` : 'BHD 0.000'}
+                    disabled={submitting}
+                    required
+                  />
+                </label>
+              ) : null}
             </div>
 
             <div>

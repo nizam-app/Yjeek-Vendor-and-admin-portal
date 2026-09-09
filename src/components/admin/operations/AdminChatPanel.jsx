@@ -91,12 +91,21 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
 
     loadConversation()
     const pollId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
       loadConversation({ silent: true })
-    }, 3000)
+    }, 12000)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadConversation({ silent: true })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       cancelled = true
       window.clearInterval(pollId)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [useReal, conversationId, chat?.message])
 
