@@ -557,6 +557,13 @@ export const endpoints = {
       champReconcilePod: (champId) =>
         `/admin/fleet/champs/${encodeURIComponent(champId)}/reconcile-pod`,
       /**
+       * Confirmed: POST /admin/fleet/champs/:champId/messages
+       * Body: { title, body, push?, sms? } — at least one channel required
+       * @param {string} champId
+       */
+      champMessages: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/messages`,
+      /**
        * Confirmed: GET /admin/fleet/champs/:champId/documents
        * Also POST upsert document: { type, imageUrl, documentNumber?, expiryDate?, nationality? }
        * @param {string} champId

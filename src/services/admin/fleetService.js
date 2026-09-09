@@ -5,6 +5,7 @@ import {
   mapAdminChampDetailResponse,
   mapAdminChampEarningsParams,
   mapAdminChampEarningsResponse,
+  mapAdminChampMessageRequest,
   mapAdminChampSuspendRequest,
   mapAdminChampTerminateRequest,
   mapAdminCreateChampRequest,
@@ -194,6 +195,36 @@ export const adminFleetService = {
 
     return {
       data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Message a single champ (push / SMS).
+   * Confirmed: POST /admin/fleet/champs/:champId/messages
+   * Body: { title, body, push?, sms? }
+   */
+  async messageChamp(champId, form = {}, options = {}) {
+    if (!useFleetRealApi()) {
+      throw new Error('Real fleet API is required to message a champ.')
+    }
+
+    const id = String(champId || '').trim()
+    if (!id) {
+      throw new Error('Champ id is required.')
+    }
+
+    const body = mapAdminChampMessageRequest(form)
+    const response = await apiClient.post(endpoints.admin.fleet.champMessages(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+
+    const payload = response?.data ?? null
+    return {
+      data: payload && typeof payload === 'object' ? payload : { raw: payload },
       meta: response?.meta ?? null,
     }
   },

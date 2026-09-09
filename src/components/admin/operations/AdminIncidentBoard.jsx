@@ -30,10 +30,10 @@ import { Button } from '../Button'
 import { cn } from '../cn'
 import { AdminVendorFilterButton } from '../AdminVendorFilterButton'
 import { AdminLiveOrderFilterBar } from './AdminLiveOrderFilterBar'
+import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
 import { AdminActiveChatPanels } from './AdminActiveChatPanels'
 import { AdminOpenChats } from './AdminOpenChats'
-import { AdminOpsOrderCard } from './AdminOpsOrderCard'
 import {
   buildOrderIncidentIndex,
   mergeBoardOrdersWithIncidents,
@@ -353,6 +353,20 @@ export function AdminIncidentBoard({
     () => flattenOpsBoardOrders(mergeBoardOrdersWithIncidents(rawColumns, incidentIndex)),
     [rawColumns, incidentIndex],
   )
+  const boardIncidents = useMemo(() => {
+    const ids = new Set(
+      boardOrders.map((order) => String(order.orderId || '').trim()).filter(Boolean),
+    )
+    const numbers = new Set(
+      boardOrders.map((order) => String(order.id || '').trim()).filter(Boolean),
+    )
+    if (ids.size === 0 && numbers.size === 0) return []
+    return incidents.filter((incident) => {
+      const orderId = String(incident?.orderId || '').trim()
+      const orderNumber = String(incident?.orderNumber || '').trim()
+      return (orderId && ids.has(orderId)) || (orderNumber && numbers.has(orderNumber))
+    })
+  }, [incidents, boardOrders])
 
   const visibleChats = useMemo(
     () => buildOpsBoardChats(chats, boardOrders, filter),
@@ -607,7 +621,7 @@ export function AdminIncidentBoard({
 
         <OpsIncidentsSidebar
           fillHeight
-          incidents={incidents}
+          incidents={boardIncidents}
           onIncidentClick={setSelectedIncident}
         />
       </div>

@@ -134,6 +134,9 @@ export const adminService = {
   reconcileAdminFleetChampPod(champId, form, options = {}) {
     return adminFleetService.reconcileChampPod(champId, form, options)
   },
+  messageAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.messageChamp(champId, form, options)
+  },
   estimateAdminFleetNotify(form, options = {}) {
     return adminFleetService.estimateNotify(form, options)
   },
