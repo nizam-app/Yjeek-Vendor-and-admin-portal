@@ -69,6 +69,9 @@ const pageTitles = {
   '/admin/marketing/notifications/vendors': 'Vendor Management',
   '/admin/marketing/promo-codes': 'Marketing · Promo codes',
   '/admin/marketing/promo-codes/new': 'Marketing · Create promo code',
+  '/admin/marketing/promo-categories': 'Marketing · Promo categories',
+  '/admin/marketing/geofence': 'Marketing · Geofence offers',
+  '/admin/marketing/geofence/new': 'Marketing · New geofence offer',
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
@@ -333,6 +336,9 @@ function AdminTopbar({ collapsed }) {
     || (pathname.startsWith('/admin/fleet/') ? 'Fleet Management · Champs' : null)
     || (pathname.startsWith('/admin/customers/') ? 'Customer Management' : null)
     || (pathname.startsWith('/admin/users/') ? 'Users & Roles · User' : null)
+    || (/^\/admin\/marketing\/promo-codes\/[^/]+\/edit$/.test(pathname)
+      ? 'Marketing · Edit promo code'
+      : null)
     || (() => {
       const match = pathname.match(/^\/admin\/marketing\/notifications\/([^/]+)$/)
       if (!match) return null

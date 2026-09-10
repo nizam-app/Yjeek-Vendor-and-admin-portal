@@ -7,6 +7,7 @@ import { adminService } from '../../../services/adminService'
 import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
+import AdminPromoCategoriesPanel from '../../../components/admin/AdminPromoCategoriesPanel'
 
 const statTone = {
   ink: 'text-[#17231c]',
@@ -20,7 +21,7 @@ const codeToneClass = {
   gray: 'bg-[#eff2f0] text-[#637068]',
 }
 
-const VIEW_TABS = ['Notifications', 'Promo codes']
+const VIEW_TABS = ['Notifications', 'Promo codes', 'Promo categories', 'Geofence offers']
 const DEFAULT_CHANNELS = [
   {
     id: 'customers',
@@ -34,7 +35,7 @@ const DEFAULT_CHANNELS = [
   },
 ]
 const NOTIFICATION_COLUMNS = ['Target', 'Title', 'Channel', 'Date / time', 'Status']
-const PROMO_COLUMNS = ['Code', 'Description', 'Type', 'Max disc', 'Used / limit', 'Status', 'Expiry']
+const PROMO_COLUMNS = ['Code', 'Description', 'Type', 'Max disc', 'Used / limit', 'Status', 'Expiry', '']
 
 function useRealMarketing() {
   return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
@@ -92,11 +93,15 @@ export default function AdminMarketingPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const isPromo = pathname.includes('/promo-codes')
-  const tab = isPromo ? 'Promo codes' : 'Notifications'
+  const isCategories = pathname.includes('/promo-categories')
+  const tab = isCategories ? 'Promo categories' : isPromo ? 'Promo codes' : 'Notifications'
   const useReal = useRealMarketing()
 
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => {
+      if (isCategories) {
+        return Promise.resolve({ data: { viewTabs: VIEW_TABS }, meta: null })
+      }
       if (useReal && isPromo) {
         return adminService.listAdminMarketingPromoCodes({
           status: 'all',
@@ -112,31 +117,37 @@ export default function AdminMarketingPage() {
       }
       return adminService.getManagement('marketing')
     },
-    [useReal, isPromo],
+    [useReal, isPromo, isCategories],
   )
 
   // Drop previous tab payload immediately so we never render notifications shape on
   // the promo route (or vice versa) — that was crashing the page white.
   useEffect(() => {
     setData(null)
-  }, [isPromo, setData])
+  }, [isPromo, isCategories, setData])
 
   const promoCodes = isPromoCodesModel(data?.promoCodes) ? data.promoCodes : null
   const notifications = isNotificationsModel(data?.notifications) ? data.notifications : null
-  const viewTabs = Array.isArray(data?.viewTabs) && data.viewTabs.length ? data.viewTabs : VIEW_TABS
-  const header = isPromo ? promoCodes : notifications
-  const title = header?.title || (isPromo ? 'Promo codes' : 'Notifications')
+  // Always show all Marketing tabs — API/mock viewTabs may omit "Promo categories".
+  const viewTabs = VIEW_TABS
+  const header = isCategories ? null : isPromo ? promoCodes : notifications
+  const title =
+    header?.title ||
+    (isCategories ? 'Promo categories' : isPromo ? 'Promo codes' : 'Notifications')
   const subtitle =
     header?.subtitle ||
-    (isPromo
-      ? 'Create and manage discount codes.'
-      : 'Send push / SMS to customers & vendors.')
+    (isCategories
+      ? 'The list vendors choose from when creating a promotion'
+      : isPromo
+        ? 'Create and manage discount codes.'
+        : 'Send push / SMS to customers & vendors.')
   const channels = notifications?.channels?.length ? notifications.channels : DEFAULT_CHANNELS
   const notificationColumns = notifications?.columns?.length
     ? notifications.columns
     : NOTIFICATION_COLUMNS
   const promoColumns = promoCodes?.columns?.length ? promoCodes.columns : PROMO_COLUMNS
-  const showTableSkeleton = isLoading && !error && (isPromo ? !promoCodes : !notifications)
+  const showTableSkeleton =
+    !isCategories && isLoading && !error && (isPromo ? !promoCodes : !notifications)
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -159,26 +170,38 @@ export default function AdminMarketingPage() {
         ) : null}
       </div>
 
-      <div className="mb-4 inline-flex items-center gap-1">
+      <div className="mb-4 inline-flex flex-wrap items-center gap-1">
         {viewTabs.map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => {
-              navigate(item === 'Promo codes' ? '/admin/marketing/promo-codes' : '/admin/marketing')
+              if (item === 'Promo codes') navigate('/admin/marketing/promo-codes')
+              else if (item === 'Promo categories') navigate('/admin/marketing/promo-categories')
+              else if (item === 'Geofence offers') navigate('/admin/marketing/geofence')
+              else navigate('/admin/marketing')
             }}
             className={cn(
-              'h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
+              'relative h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
               tab === item
                 ? 'bg-[#e8f7ed] text-[#1aa054]'
                 : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4] hover:text-[#455249]',
             )}
           >
             {item}
+            {item === 'Promo categories' || item === 'Geofence offers' ? (
+              <span className="absolute -right-1 -top-1 rounded-[3px] bg-[#8C3A2B] px-1 py-px text-[7.5px] font-bold tracking-[0.08em] text-white">
+                NEW
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
 
+      {isCategories ? <AdminPromoCategoriesPanel /> : null}
+
+      {!isCategories ? (
+        <>
       <ApiErrorBanner error={error} onRetry={refetch} />
 
       {isPromo ? (
@@ -258,6 +281,19 @@ export default function AdminMarketingPage() {
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
                             {row.expiry}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                            <button
+                              type="button"
+                              className="text-[12px] font-semibold text-[#1aa054] hover:underline"
+                              onClick={() =>
+                                navigate(
+                                  `/admin/marketing/promo-codes/${encodeURIComponent(row.id)}/edit`,
+                                )
+                              }
+                            >
+                              Edit
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -366,6 +402,8 @@ export default function AdminMarketingPage() {
           </Card>
         </>
       )}
+        </>
+      ) : null}
     </div>
   )
 }

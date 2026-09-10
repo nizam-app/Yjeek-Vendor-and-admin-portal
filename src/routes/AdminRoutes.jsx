@@ -28,6 +28,8 @@ import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDeta
 import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
 import AdminCreatePromoCodePage from '../pages/admin/management/AdminCreatePromoCodePage'
+import AdminGeofenceCampaignsPage from '../pages/admin/management/AdminGeofenceCampaignsPage'
+import AdminCreateGeofenceCampaignPage from '../pages/admin/management/AdminCreateGeofenceCampaignPage'
 import AdminSendCustomerNotificationPage from '../pages/admin/management/AdminSendCustomerNotificationPage'
 import AdminSendVendorNotificationPage from '../pages/admin/management/AdminSendVendorNotificationPage'
 import AdminNotificationDetailPage from '../pages/admin/management/AdminNotificationDetailPage'
@@ -82,8 +84,13 @@ export const adminRoutes = (
     <Route path="marketing/notifications/customers" element={<AdminSendCustomerNotificationPage />} />
     <Route path="marketing/notifications/vendors" element={<AdminSendVendorNotificationPage />} />
     <Route path="marketing/notifications/:notificationId" element={<AdminNotificationDetailPage />} />
+    <Route path="marketing/geofence/new" element={<AdminCreateGeofenceCampaignPage />} />
+    <Route path="marketing/geofence/:campaignId/edit" element={<AdminCreateGeofenceCampaignPage />} />
+    <Route path="marketing/geofence" element={<AdminGeofenceCampaignsPage />} />
     <Route path="marketing/promo-codes/new" element={<AdminCreatePromoCodePage />} />
+    <Route path="marketing/promo-codes/:promoCodeId/edit" element={<AdminCreatePromoCodePage />} />
     <Route path="marketing/promo-codes" element={<AdminMarketingPage />} />
+    <Route path="marketing/promo-categories" element={<AdminMarketingPage />} />
     <Route path="marketing" element={<AdminMarketingPage />} />
     <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
     <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />
