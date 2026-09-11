@@ -3,6 +3,7 @@ import { cn } from '../cn'
 
 /**
  * Live auto-refresh indicator with countdown. Resets when `resetKey` changes (e.g. after fetch).
+ * Also keeps ticking so the next poll is visible even when board counts stay the same.
  */
 export function AdminAutoRefreshBadge({
   intervalSeconds,
@@ -25,7 +26,18 @@ export function AdminAutoRefreshBadge({
     return () => window.clearInterval(id)
   }, [enabled, seconds, resetKey])
 
-  if (!enabled) return null
+  if (!enabled) {
+    return (
+      <span
+        className={cn(
+          'rounded-full bg-[#eef1ef] px-2.5 py-1 text-[10px] font-medium text-[#6b7a71]',
+          className,
+        )}
+      >
+        ● refresh off
+      </span>
+    )
+  }
 
   return (
     <span

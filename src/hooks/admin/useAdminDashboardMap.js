@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useApiResource } from '../useApiResource'
+import { useIntervalWhenVisible } from '../useIntervalWhenVisible'
 import { apiConfig, isAdminRealApiFeature } from '../../api/config'
 import { adminDashboardService } from '../../services/admin/dashboardService'
 import {
@@ -52,17 +53,13 @@ export function useAdminDashboardMap(options = {}) {
     return adminDashboardService.getMap({ region, layer })
   }, [region, layer, useRealMap, useMockShell])
 
-  useEffect(() => {
-    if (!useRealMap) return undefined
-    if (!refreshSeconds || Number(refreshSeconds) < 1) return undefined
-    if (!ADMIN_DASHBOARD_MAP_API_LAYERS.includes(layer)) return undefined
-
-    const intervalId = window.setInterval(() => {
+  useIntervalWhenVisible(
+    () => {
       resource.refetch()
-    }, Number(refreshSeconds) * 1000)
-
-    return () => window.clearInterval(intervalId)
-  }, [useRealMap, refreshSeconds, layer, resource.refetch])
+    },
+    Number(refreshSeconds) > 0 ? Number(refreshSeconds) * 1000 : null,
+    useRealMap && ADMIN_DASHBOARD_MAP_API_LAYERS.includes(layer),
+  )
 
   return {
     ...resource,

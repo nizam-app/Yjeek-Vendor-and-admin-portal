@@ -26,8 +26,7 @@ function needsDuration(type) {
 /**
  * Suspend champ from order — Take action → Suspend champ.
  * Confirmed POST /admin/orders/:orderId/suspend-champ
- * Body: { type, durationHours?, reason, driverId }
- * Evidence/note is UI-only (not in API body).
+ * Body: { type, durationHours?, reason, driverId, note?, reconsiderationOffered }
  */
 export default function AdminOrderSuspendChampModal({
   open,
@@ -38,12 +37,14 @@ export default function AdminOrderSuspendChampModal({
   types = [],
   durations = [],
   reasons = [],
+  incidentId = null,
   onSuccess,
 }) {
   const [suspendType, setSuspendType] = useState('')
   const [durationHours, setDurationHours] = useState('')
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
+  const [reconsiderationOffered, setReconsiderationOffered] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
 
@@ -60,6 +61,7 @@ export default function AdminOrderSuspendChampModal({
   useEffect(() => {
     if (!open) return
     setNote('')
+    setReconsiderationOffered(false)
     setError(null)
     const firstType = typeOptions[0]
     const typeId = firstType ? optionValue(firstType) : 'TEMPORARY'
@@ -111,10 +113,18 @@ export default function AdminOrderSuspendChampModal({
         throw new ApiError({ message: 'Select a suspend reason.' })
       }
 
+      if (!reconsiderationOffered) {
+        throw new ApiError({
+          message: 'Offer a reconsideration path before suspending (PDPL Art. 22).',
+        })
+      }
+
       const body = {
         type: String(suspendType).trim(),
         reason: String(reason).trim(),
         driverId: resolvedChampId,
+        reconsiderationOffered: true,
+        ...(String(note || '').trim() ? { note: String(note).trim() } : {}),
       }
 
       if (needsDuration(body.type)) {
@@ -125,7 +135,10 @@ export default function AdminOrderSuspendChampModal({
         body.durationHours = hours
       }
 
-      await adminOrderService.suspendChamp(orderId, body)
+      await adminOrderService.suspendChamp(orderId, {
+        ...body,
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
+      })
       onSuccess?.()
       onClose?.()
     } catch (err) {
@@ -291,6 +304,21 @@ export default function AdminOrderSuspendChampModal({
               />
             </label>
 
+            <label className="flex items-start gap-2 rounded-[10px] border border-[#e4e8e4] bg-[#fafbfa] px-3.5 py-3">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={reconsiderationOffered}
+                onChange={(e) => setReconsiderationOffered(e.target.checked)}
+                disabled={submitting}
+              />
+              <span className="text-[12px] leading-[16px] text-[#17231c]">
+                Reconsideration offered. This decision is reviewed by a human Ops user
+                ({champSubtitle ? 'logged on the suspension record' : 'you'}) and the champ may
+                request a review (PDPL Art. 22).
+              </span>
+            </label>
+
             <div className="flex items-start gap-2 rounded-[10px] bg-[#fdebec] px-3.5 py-3">
               <AlertTriangle size={14} className="mt-0.5 shrink-0 text-[#d64044]" strokeWidth={2.2} />
               <p className="text-[12px] leading-[16px] text-[#d64044]">
@@ -317,7 +345,7 @@ export default function AdminOrderSuspendChampModal({
             </button>
             <button
               type="submit"
-              disabled={submitting || !resolvedChampId}
+              disabled={submitting || !resolvedChampId || !reconsiderationOffered}
               className="inline-flex h-[36px] items-center justify-center gap-1.5 rounded-full bg-[#d64044] px-4 text-[13px] font-medium text-white hover:brightness-[0.96] disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Ban size={14} strokeWidth={2.2} />

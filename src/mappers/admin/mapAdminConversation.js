@@ -20,8 +20,18 @@ export function mapAdminChatMessage(item) {
     senderId: item.senderId ?? null,
     createdAt: item.createdAt ?? null,
     time: item.timeLabel ? String(item.timeLabel) : '',
+    attachments: Array.isArray(item.attachments)
+      ? item.attachments.map((url) => String(url || '').trim()).filter(Boolean)
+      : attachmentsFromMetadata(item.metadata),
     own,
   }
+}
+
+function attachmentsFromMetadata(metadata) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return []
+  const raw = metadata.attachments
+  if (!Array.isArray(raw)) return []
+  return raw.map((url) => String(url || '').trim()).filter(Boolean)
 }
 
 /**
@@ -62,6 +72,11 @@ export function mapAdminConversationResponse(data) {
     orderNumber: data.orderNumber ? String(data.orderNumber) : null,
     orderStatus: data.orderStatus ? String(data.orderStatus) : null,
     vendorName: data.vendorName ? String(data.vendorName) : null,
+    channel: data.channel ? String(data.channel) : null,
+    channelLabel: data.channelLabel ? String(data.channelLabel) : null,
+    status: data.status ? String(data.status) : null,
+    readOnly: Boolean(data.readOnly),
+    lifecycle: data.lifecycle ?? null,
     customer,
     champ,
     messages,

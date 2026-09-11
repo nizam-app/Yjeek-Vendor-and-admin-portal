@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Flame, ShieldCheck, TriangleAlert, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminDashboard } from '../../../hooks/admin/useAdminDashboard'
@@ -11,6 +11,8 @@ import { cn } from '../../../components/admin/cn'
 import { AdminOrderDetailModal } from '../../admin/operations/AdminLiveOrdersPage'
 import { AdminIncidentDetailModal } from '../../../components/admin/operations/AdminIncidentDetailModal'
 import { OpsIncidentsSidebar } from '../../../components/admin/operations/OpsIncidentsSidebar'
+import { countUnattendedIncidents } from '../../../lib/adminOrderIncidentIndex'
+import { enrichIncidentRow } from '../../../lib/adminIncidentPresentation'
 
 const KPI_PLACEHOLDERS = [
   { key: 'pending', label: 'Pending' },
@@ -78,8 +80,12 @@ export default function AdminDashboardPage() {
     region,
     refreshSeconds: data?.autoRefreshSeconds,
   })
-  const { data: incidentsData } = useAdminIncidents()
-  const incidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
+  const { data: incidentsData } = useAdminIncidents({ refreshSeconds: data?.autoRefreshSeconds || 15 })
+  const incidents = useMemo(
+    () => (Array.isArray(incidentsData?.items) ? incidentsData.items : []).map(enrichIncidentRow),
+    [incidentsData?.items],
+  )
+  const unattendedIncidentCount = useMemo(() => countUnattendedIncidents(incidents), [incidents])
   const kpiItems = data?.summary?.length
     ? data.summary
     : KPI_PLACEHOLDERS.map((item) => ({ ...item, value: null }))
@@ -130,7 +136,7 @@ export default function AdminDashboardPage() {
       <ApiErrorBanner error={error} onRetry={refetch} />
       <DashboardKpiStrip items={kpiItems} />
 
-      <div className="mt-4 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
+      <div className="mt-3 grid grid-cols-[minmax(0,2.3fr)_minmax(260px,1fr)] items-start gap-4 max-[900px]:grid-cols-1">
         <AdminLiveMap
           layer={layer}
           onLayerChange={setLayer}
@@ -148,6 +154,7 @@ export default function AdminDashboardPage() {
         <OpsIncidentsSidebar
           fillHeight={false}
           incidents={incidents}
+          unattendedCount={unattendedIncidentCount}
           onIncidentClick={setSelectedIncident}
         />
       </div>

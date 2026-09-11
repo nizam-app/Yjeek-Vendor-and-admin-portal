@@ -98,4 +98,25 @@ export const adminChatService = {
       meta: response?.meta ?? null,
     }
   },
+
+  /**
+   * PATCH /admin/chats/:conversationId/status
+   */
+  async updateStatus(conversationId, payload = {}, options = {}) {
+    const id = String(conversationId || '').trim()
+    if (!id) {
+      throw new ApiError({ message: 'Conversation id is required.' })
+    }
+
+    const response = await apiClient.patch(endpoints.admin.chats.status(id), payload, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
 }

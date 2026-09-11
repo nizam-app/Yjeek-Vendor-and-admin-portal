@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowUpRight, MessageCircle, RefreshCw, ShieldCheck, TriangleAlert } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useIntervalWhenVisible } from '../../../hooks/useIntervalWhenVisible'
 import { useAdminIncidents } from '../../../hooks/admin/useAdminIncidents'
 import { useAdminChats } from '../../../hooks/admin/useAdminChats'
 import { initialsFromPeerName } from '../../../mappers/admin/mapAdminChats'
+import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
 import { ADMIN_BOARD_FULL_LIMIT } from '../../../lib/adminBoardLimits'
 import {
   ADMIN_OPS_BOARD_FILTERS,
@@ -28,10 +30,15 @@ import { Button } from '../Button'
 import { cn } from '../cn'
 import { AdminVendorFilterButton } from '../AdminVendorFilterButton'
 import { AdminLiveOrderFilterBar } from './AdminLiveOrderFilterBar'
-import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
-import { AdminChatPanel } from './AdminChatPanel'
-import { AdminOpenChats } from './AdminOpenChats'
 import { AdminOpsOrderCard } from './AdminOpsOrderCard'
+import { AdminAutoRefreshBadge } from './AdminAutoRefreshBadge'
+import { AdminActiveChatPanels } from './AdminActiveChatPanels'
+import { AdminOpenChats } from './AdminOpenChats'
+import {
+  buildOrderIncidentIndex,
+  mergeBoardOrdersWithIncidents,
+  mergeOrderIncidentSummary,
+} from '../../../lib/adminOrderIncidentIndex'
 import { OpsIncidentsSidebar } from './OpsIncidentsSidebar'
 import { AdminIncidentDetailModal } from './AdminIncidentDetailModal'
 import {
@@ -46,6 +53,7 @@ function ModeBoardFullView({
   filter,
   chats,
   query,
+  incidentIndex,
   onQueryChange,
   onQueryClear,
   onBack,
@@ -54,16 +62,29 @@ function ModeBoardFullView({
   onContactClick,
   onOrderClick,
 }) {
+  const [refreshing, setRefreshing] = useState(false)
   const { data, error, isLoading, refetch } = useApiResource(
     () => fetchBoard({ limit: ADMIN_BOARD_FULL_LIMIT }),
     [fetchBoard, column?.id],
   )
 
+  async function handleFullViewRefresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await refetch()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   const bucketColumn =
     data?.columns?.find((item) => item.id === column.id) ||
     data?.columns?.find((item) => item.tone === column.tone)
 
-  const rawOrders = bucketColumn?.orders || []
+  const rawOrders = (bucketColumn?.orders || []).map((order) =>
+    mergeOrderIncidentSummary(order, incidentIndex),
+  )
   const chatOrders = isOpsChatFilter(filter)
     ? rawOrders.filter((order) => orderMatchesOpsFilter(order, filter))
     : rawOrders
@@ -73,7 +94,7 @@ function ModeBoardFullView({
   const visibleChats = buildOpsBoardChats(chats, rawOrders, filter)
 
   return (
-    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-[18px] pt-3">
       <div className="flex shrink-0 items-start gap-3">
         <button
           type="button"
@@ -93,15 +114,16 @@ function ModeBoardFullView({
         </div>
         <button
           type="button"
-          onClick={() => refetch()}
-          disabled={isLoading}
-          className="ml-auto h-[27px] rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#536158] disabled:opacity-60"
+          onClick={() => void handleFullViewRefresh()}
+          disabled={refreshing}
+          className="ml-auto inline-flex h-[27px] items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3 text-[10px] font-medium text-[#536158] hover:border-[#c5cdc7] disabled:opacity-60"
         >
-          Refresh
+          <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
-      <div className="relative z-30 mt-6 shrink-0 overflow-visible">
+      <div className="relative z-30 mt-3 shrink-0 overflow-visible">
         <AdminLiveOrderFilterBar
           query={query}
           onChange={onQueryChange}
@@ -111,7 +133,7 @@ function ModeBoardFullView({
         />
       </div>
 
-      <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
+      <div className="mt-2 min-h-0 flex-1 overflow-y-auto">
         {error && !chatOrders.length ? (
           <div className="mt-8 rounded-lg border border-[#f0d5d5] bg-[#fff7f7] px-4 py-6 text-center text-[12px] text-[#a15b58]">
             <p>Unable to load {column.title.toLowerCase()} orders.</p>
@@ -149,7 +171,7 @@ function ModeBoardFullView({
         ) : null}
 
         {orders.length > 0 ? (
-          <div className="mt-8 grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
+          <div className="grid grid-cols-4 gap-3 max-[1000px]:grid-cols-3 max-[760px]:grid-cols-2 max-[520px]:grid-cols-1">
             {orders.map((order) => (
               <AdminOpsOrderCard
                 key={order.orderId || order.id}
@@ -189,7 +211,7 @@ export function AdminIncidentBoard({
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [filter, setFilter] = useState('All orders')
-  const [activeChat, setActiveChat] = useState(null)
+  const [activeChats, setActiveChats] = useState([])
   const [fullView, setFullView] = useState(null)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [incidentOrder, setIncidentOrder] = useState(null)
@@ -210,38 +232,102 @@ export function AdminIncidentBoard({
     [useFetchBoard, fetchBoard],
   )
 
-  const { data: incidentsData } = useAdminIncidents()
   const data = useFetchBoard ? fetched.data : controlledData
   const error = useFetchBoard ? fetched.error : controlledError
   const isLoading = useFetchBoard ? fetched.isLoading : controlledLoading
   const refetch = useFetchBoard ? fetched.refetch : onRetry
+  const { data: incidentsData, setData: setIncidentsData, refetch: refetchIncidents } = useAdminIncidents({
+    refreshSeconds: Number(data?.refreshIntervalSeconds) > 0
+      ? Math.max(10, Number(data.refreshIntervalSeconds))
+      : 15,
+  })
   const { data: chatsData, setData: setChatsData, refetch: refetchChats } = useAdminChats({
     refreshSeconds: data?.refreshIntervalSeconds,
   })
+
+  const [refreshTick, setRefreshTick] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+
+  async function handleBoardRefresh() {
+    if (refreshing) return
+    setRefreshing(true)
+    setRefreshTick((tick) => tick + 1)
+    try {
+      await Promise.all([
+        typeof refetch === 'function' ? refetch() : Promise.resolve(),
+        refetchChats(),
+        refetchIncidents(),
+      ])
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const applyIncidentPresence = useCallback((payload) => {
+    const incidentId = String(payload?.incidentId || '').trim()
+    if (!incidentId) return
+    const activeViewers = Array.isArray(payload?.activeViewers) ? payload.activeViewers : []
+    const liveOpenedBy = payload?.openedBy ?? activeViewers[0] ?? null
+
+    setIncidentsData((current) => {
+      if (!current?.items) return current
+      let changed = false
+      const items = current.items.map((item) => {
+        if (item?.id !== incidentId) return item
+        changed = true
+        const acknowledgedByName = payload?.acknowledgedByName ?? item.acknowledgedByName ?? null
+        const acknowledgedById = payload?.acknowledgedById ?? item.acknowledgedById ?? null
+        const acknowledgedAt = payload?.acknowledgedAt ?? item.acknowledgedAt ?? null
+        const firstResponseAt = payload?.firstResponseAt ?? item.firstResponseAt ?? null
+        const openedBy =
+          liveOpenedBy ||
+          (acknowledgedByName
+            ? {
+                userId: acknowledgedById,
+                displayName: acknowledgedByName,
+                openedAt: acknowledgedAt,
+                lastSeenAt: null,
+                openForMs: null,
+              }
+            : null)
+        return {
+          ...item,
+          openedBy,
+          activeViewers,
+          acknowledgedAt,
+          acknowledgedById,
+          acknowledgedByName,
+          firstResponseAt,
+        }
+      })
+      return changed ? { ...current, items } : current
+    })
+  }, [setIncidentsData])
 
   useEffect(() => {
     setFullView(null)
     setSelectedOrder(null)
     setIncidentOrder(null)
     setSelectedIncident(null)
-    setActiveChat(null)
+    setActiveChats([])
     setFilter('All orders')
   }, [boardTitle])
 
   const refreshSeconds = Number(data?.refreshIntervalSeconds) || 0
 
-  useEffect(() => {
-    if (!refreshSeconds || refreshSeconds < 1 || typeof refetch !== 'function') return undefined
-    const intervalId = window.setInterval(() => {
+  useIntervalWhenVisible(
+    () => {
       refetch()
-    }, refreshSeconds * 1000)
-    return () => window.clearInterval(intervalId)
-  }, [refreshSeconds, refetch])
+    },
+    refreshSeconds > 0 ? refreshSeconds * 1000 : null,
+    typeof refetch === 'function',
+  )
 
   const feedIncidents = Array.isArray(incidentsData?.items) ? incidentsData.items : []
   const incidents = feedIncidents.length > 0
     ? feedIncidents
     : (Array.isArray(data?.incidents) ? data.incidents : [])
+  const incidentIndex = useMemo(() => buildOrderIncidentIndex(incidents), [incidents])
   const feedChats = Array.isArray(chatsData?.items) ? chatsData.items : []
   const chats = feedChats.length > 0
     ? feedChats
@@ -259,10 +345,28 @@ export function AdminIncidentBoard({
 
   const rawColumns = Array.isArray(data?.columns) ? data.columns : []
   const columns = useMemo(() => {
-    const byChat = filterOpsBoardColumns(rawColumns, filter)
+    const withIncidents = mergeBoardOrdersWithIncidents(rawColumns, incidentIndex)
+    const byChat = filterOpsBoardColumns(withIncidents, filter)
     return filterOpsBoardLiveQuery(byChat, boardQuery)
-  }, [rawColumns, filter, boardQuery])
-  const boardOrders = useMemo(() => flattenOpsBoardOrders(rawColumns), [rawColumns])
+  }, [rawColumns, filter, boardQuery, incidentIndex])
+  const boardOrders = useMemo(
+    () => flattenOpsBoardOrders(mergeBoardOrdersWithIncidents(rawColumns, incidentIndex)),
+    [rawColumns, incidentIndex],
+  )
+  const boardIncidents = useMemo(() => {
+    const ids = new Set(
+      boardOrders.map((order) => String(order.orderId || '').trim()).filter(Boolean),
+    )
+    const numbers = new Set(
+      boardOrders.map((order) => String(order.id || '').trim()).filter(Boolean),
+    )
+    if (ids.size === 0 && numbers.size === 0) return []
+    return incidents.filter((incident) => {
+      const orderId = String(incident?.orderId || '').trim()
+      const orderNumber = String(incident?.orderNumber || '').trim()
+      return (orderId && ids.has(orderId)) || (orderNumber && numbers.has(orderNumber))
+    })
+  }, [incidents, boardOrders])
 
   const visibleChats = useMemo(
     () => buildOpsBoardChats(chats, boardOrders, filter),
@@ -279,9 +383,9 @@ export function AdminIncidentBoard({
     : (data?.activeCount ?? '—')
 
   const refreshKey = useMemo(() => {
-    if (!data) return '0'
-    return `${data.activeCount}-${columns.map((column) => column.count).join('-')}-${isLoading ? '1' : '0'}`
-  }, [data, columns, isLoading])
+    if (!data) return String(refreshTick)
+    return `${data.activeCount}-${columns.map((column) => column.count).join('-')}-${refreshTick}`
+  }, [data, columns, refreshTick])
 
   function handleChatMarkedRead(conversationId) {
     setChatsData((current) => {
@@ -300,11 +404,23 @@ export function AdminIncidentBoard({
     refetchChats()
   }
 
+  function openChatPanel(chat) {
+    if (!chat?.conversationId) return
+    setActiveChats((prev) => {
+      const without = prev.filter((item) => item.conversationId !== chat.conversationId)
+      return [...without, chat].slice(-2)
+    })
+  }
+
+  function closeChatPanel(conversationId) {
+    setActiveChats((prev) => prev.filter((item) => item.conversationId !== conversationId))
+  }
+
   function openOrderChat(order, preferredRole) {
-    const conversationId = order?.conversationId
+    const role = preferredRole || order.contactType || 'Customer'
+    const conversationId = resolveOrderConversationId(order, role)
     if (!conversationId) return
 
-    const role = preferredRole || order.contactType || 'Customer'
     const name =
       role === 'Champ'
         ? order.rider?.name || order.champ?.name || 'Champ'
@@ -312,13 +428,14 @@ export function AdminIncidentBoard({
 
     const matchingChat = chats.find((chat) => chat.conversationId === conversationId)
 
-    setActiveChat({
+    openChatPanel({
       ...(matchingChat || {}),
       id: conversationId,
       conversationId,
       orderId: order.orderId || matchingChat?.orderId || null,
       orderNumber: order.id || matchingChat?.orderNumber || null,
       role,
+      channel: role === 'Champ' ? 'driver' : 'customer',
       name: matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
       initials: initialsFromPeerName(
         matchingChat?.name && matchingChat.role === role ? matchingChat.name : name,
@@ -333,26 +450,38 @@ export function AdminIncidentBoard({
         <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} />
       ) : null}
       {incidentOrder ? (
-        <IncidentOrderModal order={incidentOrder} onClose={() => setIncidentOrder(null)} />
+        <IncidentOrderModal
+          order={incidentOrder}
+          onClose={() => setIncidentOrder(null)}
+          onPresenceChange={applyIncidentPresence}
+          onOpenChat={(conversationId) => {
+            openChatPanel({
+              id: conversationId,
+              conversationId,
+              name: 'Customer',
+              role: 'Customer',
+              channel: 'customer',
+              peerRole: 'CUSTOMER',
+            })
+          }}
+        />
       ) : null}
       {selectedIncident ? (
         <AdminIncidentDetailModal
           incident={selectedIncident}
           onClose={() => setSelectedIncident(null)}
+          onPresenceChange={applyIncidentPresence}
           onOpenOrder={(order) => {
             setSelectedIncident(null)
             setSelectedOrder(order)
           }}
         />
       ) : null}
-      {activeChat ? (
-        <AdminChatPanel
-          key={`${activeChat.id}-${activeChat.orderId || ''}`}
-          chat={activeChat}
-          onClose={() => setActiveChat(null)}
-          onMarkedRead={handleChatMarkedRead}
-        />
-      ) : null}
+      <AdminActiveChatPanels
+        chats={activeChats}
+        onClose={closeChatPanel}
+        onMarkedRead={handleChatMarkedRead}
+      />
     </>
   )
 
@@ -366,10 +495,11 @@ export function AdminIncidentBoard({
           filter={filter}
           chats={chats}
           query={boardQuery}
+          incidentIndex={incidentIndex}
           onQueryChange={patchBoardQuery}
           onQueryClear={clearBoardQuery}
           onBack={() => setFullView(null)}
-          onChatClick={setActiveChat}
+          onChatClick={openChatPanel}
           onIncidentClick={setIncidentOrder}
           onContactClick={openOrderChat}
           onOrderClick={setSelectedOrder}
@@ -382,7 +512,7 @@ export function AdminIncidentBoard({
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   return (
-    <div className="flex h-[calc(100vh-44px)] flex-col overflow-hidden px-[18px] pt-[15px]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-[18px] pt-[15px]">
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_292px] gap-3 max-[1050px]:grid-cols-1">
         <div className="flex min-h-0 min-w-0 flex-col">
           <div className="relative z-30 shrink-0 overflow-visible">
@@ -402,8 +532,9 @@ export function AdminIncidentBoard({
                   onChange={(vendorIds) => patchBoardQuery({ ...boardQuery, vendorIds })}
                   extraVendors={vendorsFromOrders(boardOrders)}
                 />
-                <Button className="h-[31px] px-4" onClick={refetch} disabled={isLoading}>
-                  <RefreshCw size={11} /> Refresh
+                <Button className="h-[31px] px-4" onClick={() => void handleBoardRefresh()} disabled={refreshing}>
+                  <RefreshCw size={11} className={refreshing ? 'animate-spin' : undefined} />
+                  {refreshing ? 'Refreshing…' : 'Refresh'}
                 </Button>
               </div>
             </div>
@@ -490,7 +621,7 @@ export function AdminIncidentBoard({
 
         <OpsIncidentsSidebar
           fillHeight
-          incidents={incidents}
+          incidents={boardIncidents}
           onIncidentClick={setSelectedIncident}
         />
       </div>
@@ -499,7 +630,7 @@ export function AdminIncidentBoard({
         chats={visibleChats}
         activeCount={visibleChatsActive}
         unreadCount={visibleChatsUnread}
-        onChatClick={setActiveChat}
+        onChatClick={openChatPanel}
         groupByRole={isOpsChatFilter(filter)}
       />
       {modals}

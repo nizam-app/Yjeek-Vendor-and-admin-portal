@@ -55,7 +55,7 @@ export function mapAdminMarketingPromoCodesPage(listData) {
   const raw = Array.isArray(listData.promoCodes) ? listData.promoCodes : []
 
   return {
-    viewTabs: ['Notifications', 'Promo codes'],
+    viewTabs: ['Notifications', 'Promo codes', 'Promo categories'],
     promoCodes: {
       title: 'Promo codes',
       subtitle: 'Discount codes & coupons',
@@ -82,7 +82,7 @@ export function mapAdminMarketingPromoCodesPage(listData) {
           tone: 'green',
         },
       ],
-      columns: ['Code', 'Description', 'Type', 'Max disc.', 'Used / limit', 'Status', 'Expiry'],
+      columns: ['Code', 'Description', 'Type', 'Max disc.', 'Used / limit', 'Status', 'Expiry', ''],
       rows: raw.filter((item) => item && item.id).map(mapPromoRow),
       page: Number(listData.page) || 1,
       limit: Number(listData.limit) || 20,
@@ -224,6 +224,103 @@ export function mapAdminCreatePromoCodeRequest(form = {}) {
   }
 
   return body
+}
+
+function isoToLocalDateInput(value) {
+  if (!value) return ''
+  const raw = String(value)
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ''
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function mapPromoDiscountTypeToUi(discountType) {
+  const raw = String(discountType || '').trim().toUpperCase()
+  if (raw === 'FIXED') return 'Fixed amount'
+  if (raw === 'FREE_DELIVERY') return 'Free delivery'
+  if (raw === 'BOGO') return 'BOGO'
+  return 'Percentage %'
+}
+
+export function mapPromoAudienceToUi(audience) {
+  const raw = String(audience || '').trim().toUpperCase()
+  if (raw === 'NEW_CUSTOMERS') return 'New customers'
+  if (raw === 'RETURNING_CUSTOMERS') return 'Returning customers'
+  if (raw === 'VIP_SEGMENT') return 'VIP segment'
+  return 'All customers'
+}
+
+export function mapPromoScopeToUi(scope) {
+  const raw = String(scope || '').trim().toUpperCase()
+  if (raw === 'SPECIFIC_VENDORS') return 'Specific vendors'
+  if (raw === 'CATEGORIES') return 'Categories'
+  if (raw === 'SERVICES') return 'Services'
+  return 'All stores'
+}
+
+export function mapPromoChannelsToUi(channels) {
+  const list = Array.isArray(channels) ? channels : []
+  const mapped = list
+    .map((item) => {
+      const raw = String(item || '').trim().toUpperCase()
+      if (raw === 'APP') return 'App'
+      if (raw === 'AUTO_APPLY') return 'Auto-apply'
+      if (raw === 'HOME_BANNER') return 'Show on home banner'
+      if (raw === 'PUSH') return 'Send via push'
+      return null
+    })
+    .filter(Boolean)
+  return mapped.length ? mapped : ['App']
+}
+
+/**
+ * Map GET /admin/marketing/promo-codes/:id → Create/Edit form state.
+ */
+export function mapAdminPromoCodeToEditForm(promo) {
+  if (!promo || typeof promo !== 'object') return null
+
+  const scope = mapPromoScopeToUi(promo.scope)
+  const vendorIds = Array.isArray(promo.vendorIds)
+    ? promo.vendorIds.map((id) => ({ id: String(id), label: String(id) }))
+    : []
+
+  return {
+    code: promo.code ? String(promo.code) : '',
+    description: promo.description ? String(promo.description) : '',
+    discountType: mapPromoDiscountTypeToUi(promo.discountType),
+    discountValue:
+      promo.discountValue != null && promo.discountValue !== ''
+        ? String(promo.discountValue)
+        : '',
+    maxDiscount:
+      promo.maxDiscountAmount != null && promo.maxDiscountAmount !== ''
+        ? String(promo.maxDiscountAmount)
+        : '',
+    minOrder:
+      promo.minOrderAmount != null && promo.minOrderAmount !== ''
+        ? String(promo.minOrderAmount)
+        : '',
+    totalUsageLimit: promo.maxUses != null ? String(promo.maxUses) : '',
+    perCustomerLimit:
+      promo.maxUsesPerCustomer != null ? String(promo.maxUsesPerCustomer) : '',
+    audience: mapPromoAudienceToUi(promo.audience),
+    validFrom: isoToLocalDateInput(promo.startsAt),
+    validTo: isoToLocalDateInput(promo.endsAt),
+    scope,
+    selectedVendors: scope === 'Specific vendors' ? vendorIds : [],
+    categoryIds: Array.isArray(promo.categoryIds)
+      ? promo.categoryIds.map((id) => ({ id: String(id), label: String(id) }))
+      : [],
+    serviceIds: Array.isArray(promo.serviceIds)
+      ? promo.serviceIds.map((id) => ({ id: String(id), label: String(id) }))
+      : [],
+    channels: mapPromoChannelsToUi(promo.channels),
+    isActive: promo.isActive !== false,
+  }
 }
 
 export function mapPromoAudienceToApi(audience) {

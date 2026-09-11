@@ -159,19 +159,36 @@ function mapPlacementSlot(item) {
   const type = mapBannerType(
     item.displayType || item.bannerType || item.type || item.slotType || 'Static',
   )
+  const slotKind =
+    item.slotKind === 'exclusive-offers' || id === EXCLUSIVE_OFFERS_SLOT_ID
+      ? 'exclusive-offers'
+      : null
+  const exclusiveItems = slotKind
+    ? asArray(item.exclusiveItems)
+        .map((row, index) => mapExclusiveOfferItem(row, index))
+        .filter(Boolean)
+    : []
+  const productCount = asNumber(item.productCount ?? item.bannerCount, exclusiveItems.length)
 
   return {
     id,
     label,
     active: activeCount,
-    banners: bannerCount,
-    bannerCount,
+    banners: slotKind ? productCount : bannerCount,
+    bannerCount: slotKind ? productCount : bannerCount,
     activeCount,
     type,
     bannerType: asString(item.bannerType || '').toUpperCase() || null,
     displayType: asString(item.displayType || type),
     slotBanners: nestedBanners,
-    showInPreview: item.showInPreview != null ? Boolean(item.showInPreview) : type !== 'Pop-up',
+    slotKind: slotKind || undefined,
+    exclusiveItems,
+    showInPreview:
+      item.showInPreview != null
+        ? Boolean(item.showInPreview)
+        : slotKind
+          ? false
+          : type !== 'Pop-up',
     previewLabel: asString(item.previewLabel || label),
   }
 }
@@ -558,15 +575,33 @@ export function mapAdminUiEditorPreview(data) {
     .map(mapPlacementSlot)
     .filter(Boolean)
   const banners = mapAdminUiEditorBanners(src.banners ? { banners: src.banners } : src).banners
+  const exclusiveOffers = asArray(src.exclusiveOffers)
+    .map((item, index) => mapExclusiveOfferItem(item, index))
+    .filter(Boolean)
+  const exclusiveSectionSrc = asObject(src.exclusiveOffersSection) || {}
 
   return {
     app: asString(src.app || src.appTarget || ''),
-    screen: asString(src.screen || src.screenKey || 'home'),
-    title: asString(src.title || src.screenLabel || src.name || titleCaseKey(src.screen || 'home')),
+    screen: asString(src.screen?.key || src.screen || src.screenKey || 'home'),
+    title: asString(
+      src.title ||
+        src.screen?.label ||
+        src.screenLabel ||
+        src.name ||
+        titleCaseKey(src.screen?.key || src.screen || 'home'),
+    ),
     previewUrl: asString(src.previewUrl || src.url || src.deepLink || '') || null,
     message: asString(src.message || ''),
     placements,
     banners,
+    exclusiveOffersSection: exclusiveOffers.length || exclusiveSectionSrc.title
+      ? {
+          title: asString(exclusiveSectionSrc.title || 'Super Exclusive offers'),
+          isVisible: exclusiveSectionSrc.isVisible != null ? Boolean(exclusiveSectionSrc.isVisible) : true,
+          itemCount: asNumber(exclusiveSectionSrc.itemCount, exclusiveOffers.length),
+        }
+      : null,
+    exclusiveOffers,
     raw: src,
   }
 }
@@ -618,11 +653,13 @@ const TAP_ACTION_UI_TO_API = {
   'Open store': 'OPEN_STORE',
   'Open category': 'OPEN_CATEGORY',
   'Open offer': 'OPEN_OFFER',
+  'Open Champ screen': 'OPEN_CHAMP_SCREEN',
   'Open URL': 'OPEN_URL',
   'No action': 'NONE',
   OPEN_STORE: 'OPEN_STORE',
   OPEN_CATEGORY: 'OPEN_CATEGORY',
   OPEN_OFFER: 'OPEN_OFFER',
+  OPEN_CHAMP_SCREEN: 'OPEN_CHAMP_SCREEN',
   OPEN_URL: 'OPEN_URL',
   NONE: 'NONE',
   NO_ACTION: 'NONE',
@@ -632,6 +669,7 @@ const TAP_ACTION_API_TO_UI = {
   OPEN_STORE: 'Open store',
   OPEN_CATEGORY: 'Open category',
   OPEN_OFFER: 'Open offer',
+  OPEN_CHAMP_SCREEN: 'Open Champ screen',
   OPEN_URL: 'Open URL',
   NONE: 'No action',
   NO_ACTION: 'No action',
@@ -639,6 +677,7 @@ const TAP_ACTION_API_TO_UI = {
 
 const AUDIENCE_UI_TO_API = {
   'All customers': 'ALL',
+  'All champs': 'ALL',
   'New customers': 'NEW_CUSTOMERS',
   'Returning customers': 'INACTIVE',
   'Inactive customers': 'INACTIVE',
@@ -746,6 +785,7 @@ export function mapAdminUiEditorBannerDetail(data) {
     type: mapBannerTypeToUiId(src.bannerType || src.type),
     title: asString(src.title || src.name || ''),
     subtitle: asString(src.subtitle || src.cta || ''),
+    ctaLabel: asString(src.ctaLabel || ''),
     // Do not use src.url here — that can be a CTA link, not the banner image.
     imageUrl: pickMediaUrl(
       src.imageUrl,
@@ -793,6 +833,7 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   const body = {
     title: asString(src.title).trim(),
     subtitle: asString(src.subtitle).trim(),
+    ctaLabel: asString(src.ctaLabel).trim() || null,
     bannerType: BANNER_TYPE_UI_TO_API[src.type] || 'STATIC',
     placementKey,
     appTarget: String(appTarget || 'CUSTOMER').toUpperCase(),
@@ -826,6 +867,10 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   } else if (tapAction === 'OPEN_STORE') {
     body.targetId = targetId || null
     body.vendorId = targetId || null
+    body.ctaUrl = null
+  } else if (tapAction === 'OPEN_CHAMP_SCREEN') {
+    body.targetId = targetId || null
+    body.vendorId = null
     body.ctaUrl = null
   } else if (tapAction === 'OPEN_CATEGORY' || tapAction === 'OPEN_OFFER') {
     body.targetId = targetId || null
@@ -881,4 +926,224 @@ export function mapAdminUiEditorPublishRequest(app) {
   return {
     app: String(app || 'CUSTOMER').trim().toUpperCase() || 'CUSTOMER',
   }
+}
+
+export const EXCLUSIVE_OFFERS_SLOT_ID = 'home_exclusive_offers'
+
+function mapExclusiveOfferItem(item, index = 0) {
+  if (!item || typeof item !== 'object') return null
+  const id = asString(item.id || item.itemId).trim()
+  if (!id) return null
+  const productId = asString(item.productId || item.targetId).trim()
+  return {
+    id,
+    productId,
+    vendorId: asString(item.vendorId || item.vendor?.id || ''),
+    title: asString(item.title || item.name || item.product?.name || 'Product'),
+    titleAr: asString(item.titleAr || item.nameAr || ''),
+    imageUrl: pickMediaUrl(item.imageUrl, item.image_url, item.product?.imageUrl),
+    originalPrice: asNumber(item.originalPrice, 0),
+    offerPrice: asNumber(item.offerPrice, 0),
+    discountType: asString(item.discountType || ''),
+    discountValue: item.discountValue != null ? asNumber(item.discountValue, 0) : null,
+    badgeLabel: asString(item.badgeLabel || ''),
+    isVisible: item.isVisible != null ? Boolean(item.isVisible) : true,
+    liveOnCustomer: item.liveOnCustomer != null ? Boolean(item.liveOnCustomer) : true,
+    sortOrder: asNumber(item.sortOrder ?? index, index),
+    tapAction: asString(item.tapAction || 'OPEN_PRODUCT'),
+    targetId: asString(item.targetId || productId),
+    vendor: item.vendor && typeof item.vendor === 'object'
+      ? {
+          id: asString(item.vendor.id || ''),
+          name: asString(item.vendor.name || ''),
+          logoUrl: pickMediaUrl(item.vendor.logoUrl, item.vendor.logo_url),
+        }
+      : null,
+    raw: item,
+  }
+}
+
+/**
+ * GET /admin/ui-editor/home/exclusive-offers
+ */
+export function mapAdminUiEditorExclusiveOffers(data) {
+  const src = asObject(data) || {}
+  const sectionSrc = asObject(src.section) || {}
+  const summarySrc = asObject(src.summary) || {}
+  const items = asArray(src.items)
+    .map((item, index) => mapExclusiveOfferItem(item, index))
+    .filter(Boolean)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+
+  return {
+    section: {
+      id: asString(sectionSrc.id || 'customer_home'),
+      title: asString(sectionSrc.title || 'Super Exclusive offers'),
+      titleAr: asString(sectionSrc.titleAr || ''),
+      isVisible: sectionSrc.isVisible != null ? Boolean(sectionSrc.isVisible) : true,
+      publishStatus: asString(sectionSrc.publishStatus || 'DRAFT'),
+      publishedAt: sectionSrc.publishedAt || null,
+      itemCount: asNumber(sectionSrc.itemCount, items.length),
+    },
+    summary: {
+      itemCount: asNumber(summarySrc.itemCount, items.length),
+      visibleCount: asNumber(summarySrc.visibleCount, items.filter((i) => i.isVisible).length),
+      liveOnCustomerCount: asNumber(
+        summarySrc.liveOnCustomerCount,
+        items.filter((i) => i.liveOnCustomer).length,
+      ),
+      unpublishedChanges: Boolean(summarySrc.unpublishedChanges),
+    },
+    published: src.published || null,
+    items,
+  }
+}
+
+/**
+ * GET /admin/ui-editor/home/exclusive-offers/products
+ */
+export function mapAdminExclusiveOfferProducts(data) {
+  const src = asObject(data) || {}
+  return {
+    page: asNumber(src.page, 1),
+    limit: asNumber(src.limit, 20),
+    total: asNumber(src.total, 0),
+    selectedProductIds: asArray(src.selectedProductIds).map((id) => asString(id)),
+    products: asArray(src.products)
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null
+        const id = asString(item.id).trim()
+        if (!id) return null
+        return {
+          id,
+          name: asString(item.name || 'Product'),
+          nameAr: asString(item.nameAr || ''),
+          imageUrl: pickMediaUrl(item.imageUrl, item.image_url),
+          price: asNumber(item.price, 0),
+          compareAtPrice: item.compareAtPrice != null ? asNumber(item.compareAtPrice, 0) : null,
+          isAvailable: item.isAvailable != null ? Boolean(item.isAvailable) : true,
+          alreadySelected: Boolean(item.alreadySelected),
+          vendor: item.vendor && typeof item.vendor === 'object'
+            ? {
+                id: asString(item.vendor.id || ''),
+                name: asString(item.vendor.name || ''),
+                logoUrl: pickMediaUrl(item.vendor.logoUrl),
+                isActive: item.vendor.isActive != null ? Boolean(item.vendor.isActive) : true,
+              }
+            : null,
+        }
+      })
+      .filter(Boolean),
+  }
+}
+
+export function mapAdminUpdateExclusiveSectionRequest(input = {}) {
+  const src = asObject(input) || {}
+  const body = {}
+  if (src.title != null) body.title = asString(src.title).trim()
+  if (src.titleAr != null) body.titleAr = asString(src.titleAr).trim()
+  if (src.isVisible != null) body.isVisible = Boolean(src.isVisible)
+  return body
+}
+
+export function mapAdminAddExclusiveOfferItemsRequest(input = {}) {
+  const src = asObject(input) || {}
+  if (asArray(src.items).length) {
+    return {
+      items: asArray(src.items)
+        .map((item) => {
+          if (!item || typeof item !== 'object') return null
+          const productId = asString(item.productId).trim()
+          if (!productId) return null
+          const row = { productId }
+          if (item.originalPrice != null) row.originalPrice = asNumber(item.originalPrice, 0)
+          if (item.offerPrice != null) row.offerPrice = asNumber(item.offerPrice, 0)
+          if (item.badgeLabel != null) row.badgeLabel = asString(item.badgeLabel).trim() || null
+          if (item.isVisible != null) row.isVisible = Boolean(item.isVisible)
+          return row
+        })
+        .filter(Boolean),
+    }
+  }
+  const productIds = asArray(src.productIds)
+    .map((id) => asString(id).trim())
+    .filter(Boolean)
+  return { productIds }
+}
+
+export function mapAdminReorderExclusiveOfferItemsRequest(items = []) {
+  return {
+    items: asArray(items)
+      .map((item, index) => {
+        if (!item || typeof item !== 'object') return null
+        const id = asString(item.id).trim()
+        if (!id) return null
+        return {
+          id,
+          sortOrder: asNumber(item.sortOrder ?? index, index),
+        }
+      })
+      .filter(Boolean),
+  }
+}
+
+export function mapAdminPatchExclusiveOfferItemRequest(input = {}) {
+  const src = asObject(input) || {}
+  const body = {}
+  if (src.isVisible != null) body.isVisible = Boolean(src.isVisible)
+  if (src.sortOrder != null) body.sortOrder = asNumber(src.sortOrder, 0)
+  if (src.originalPrice != null) body.originalPrice = asNumber(src.originalPrice, 0)
+  if (src.offerPrice != null) body.offerPrice = asNumber(src.offerPrice, 0)
+  if (src.title != null) body.title = asString(src.title).trim() || null
+  if (src.imageUrl != null) body.imageUrl = asString(src.imageUrl).trim() || null
+  if (src.badgeLabel != null) body.badgeLabel = asString(src.badgeLabel).trim() || null
+  if (src.discountType != null) body.discountType = asString(src.discountType).trim()
+  if (src.discountValue != null) body.discountValue = asNumber(src.discountValue, 0)
+  return body
+}
+
+export function buildExclusiveOffersSlot(section, items = []) {
+  const liveCount = items.filter((item) => item.liveOnCustomer).length
+  const visibleCount = items.filter((item) => item.isVisible).length
+  return {
+    id: EXCLUSIVE_OFFERS_SLOT_ID,
+    label: section?.title || 'Super Exclusive offers',
+    type: 'Scroll',
+    displayType: 'Scroll',
+    bannerType: 'SCROLL',
+    slotKind: 'exclusive-offers',
+    showInPreview: false,
+    previewLabel: section?.title || 'Super Exclusive offers',
+    exclusiveItems: items,
+    bannerCount: items.length,
+    banners: items.length,
+    activeCount: liveCount,
+    active: liveCount,
+    visibleCount,
+    slotBanners: [],
+  }
+}
+
+export function injectExclusiveOffersSlot(slots, section, items) {
+  if (!Array.isArray(slots) || slots.length === 0) return slots
+  const exclusiveSlot = buildExclusiveOffersSlot(section, items)
+  const existingIdx = slots.findIndex(
+    (slot) => slot.id === EXCLUSIVE_OFFERS_SLOT_ID || slot.slotKind === 'exclusive-offers',
+  )
+  if (existingIdx >= 0) {
+    const next = [...slots]
+    next[existingIdx] = {
+      ...next[existingIdx],
+      ...exclusiveSlot,
+      label: section?.title || next[existingIdx].label || exclusiveSlot.label,
+    }
+    return next
+  }
+  const belowIdx = slots.findIndex((slot) => slot.id === 'home_below_picks')
+  if (belowIdx >= 0) {
+    const next = [...slots]
+    next.splice(belowIdx, 0, exclusiveSlot)
+    return next
+  }
+  return [...slots, exclusiveSlot]
 }

@@ -63,7 +63,14 @@ export function mapAdminOpsIncidentBoardItem(item) {
     slaBreached: Boolean(item.slaBreached),
     hasIncident: Boolean(item.hasIncident),
     incidentCount: Number(item.incidentCount) || 0,
-    conversationId: item.conversationId ?? null,
+    incidentPriority: item.incidentPriority ?? null,
+    incidentSummary:
+      item.incidentSummary && typeof item.incidentSummary === 'object'
+        ? item.incidentSummary
+        : null,
+    conversationId: item.conversationId ?? item.customerConversationId ?? item.driverConversationId ?? null,
+    customerConversationId: item.customerConversationId ?? null,
+    driverConversationId: item.driverConversationId ?? null,
     tags,
     contactTypes,
     contactType: contactTypes[0] || null,

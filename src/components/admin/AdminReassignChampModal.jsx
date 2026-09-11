@@ -43,6 +43,7 @@ export default function AdminReassignChampModal({
   orderStatus = null,
   currentChamp = null,
   reasons = [],
+  incidentId = null,
   onSuccess,
 }) {
   const [driverId, setDriverId] = useState('')
@@ -150,6 +151,7 @@ export default function AdminReassignChampModal({
         driverId: nextId,
         reason: String(reason).trim(),
         notifyCustomer,
+        ...(incidentId ? { incidentId: String(incidentId) } : {}),
       })
       onSuccess?.()
       onClose?.()

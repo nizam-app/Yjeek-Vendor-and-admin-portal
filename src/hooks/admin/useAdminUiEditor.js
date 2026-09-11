@@ -137,3 +137,37 @@ export function useAdminUiEditorHomeCategories() {
     refetchPreview: previewResource.refetch,
   }
 }
+
+/**
+ * UI Editor — Super Exclusive offers (customer home carousel).
+ */
+export function useAdminUiEditorExclusiveOffers() {
+  const enabled = isAdminRealApiFeature('ui-editor') || !apiConfig.adminUseMockApi
+
+  const resource = useApiResource(() => {
+    if (!enabled) {
+      return Promise.resolve({
+        data: { section: {}, summary: {}, items: [] },
+        meta: null,
+      })
+    }
+    return adminUiEditorService.getExclusiveOffers()
+  }, [enabled])
+
+  return {
+    ...resource,
+    enabled,
+    section: resource.data?.section || {
+      title: 'Super Exclusive offers',
+      titleAr: '',
+      isVisible: true,
+    },
+    summary: resource.data?.summary || {
+      itemCount: 0,
+      visibleCount: 0,
+      liveOnCustomerCount: 0,
+      unpublishedChanges: false,
+    },
+    items: resource.data?.items || [],
+  }
+}

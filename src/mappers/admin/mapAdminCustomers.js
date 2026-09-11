@@ -464,6 +464,7 @@ function mapSupportTicket(item, index = 0) {
   const created = item.createdAt || item.openedAt || item.date || null
   const updated = item.updatedAt || item.resolvedAt || created
   const code =
+    item.displayCode ||
     item.ticketNumber ||
     item.ticketCode ||
     item.code ||

@@ -22,6 +22,12 @@ import {
   mapAdminUpdateBannerRequest,
   mapAdminCreateBannerRequest,
   mapAdminUpsertHelpPageRequest,
+  mapAdminUiEditorExclusiveOffers,
+  mapAdminExclusiveOfferProducts,
+  mapAdminUpdateExclusiveSectionRequest,
+  mapAdminAddExclusiveOfferItemsRequest,
+  mapAdminReorderExclusiveOfferItemsRequest,
+  mapAdminPatchExclusiveOfferItemRequest,
 } from '../../mappers/admin/mapAdminUiEditor'
 import { adminHomeCatalogMock } from '../../mocks/admin.mock'
 
@@ -534,6 +540,153 @@ export const adminUiEditorService = {
     return {
       data: response?.data ?? { published: false },
       meta: response?.meta ?? null,
+    }
+  },
+
+  async getExclusiveOffers(options = {}) {
+    if (!useRealUiEditorApi()) return { data: { section: {}, summary: {}, items: [] }, meta: null }
+
+    const response = await apiClient.get(
+      endpoints.admin.uiEditor.home.exclusiveOffers,
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async updateExclusiveOffersSection(patch = {}, options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+
+    const body = mapAdminUpdateExclusiveSectionRequest(patch)
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.home.exclusiveOffers,
+      body,
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async searchExclusiveOfferProducts(params = {}, options = {}) {
+    if (!useRealUiEditorApi()) return { data: { products: [], total: 0 }, meta: null }
+
+    const response = await apiClient.get(
+      endpoints.admin.uiEditor.home.exclusiveOffersProducts,
+      {
+        ...requestOptions(options),
+        params: {
+          search: params.search || undefined,
+          page: params.page || 1,
+          limit: params.limit || 20,
+          vendorId: params.vendorId || undefined,
+          storeTypeId: params.storeTypeId || undefined,
+          availableOnly: params.availableOnly === false ? false : params.availableOnly || undefined,
+          includeSelected: params.includeSelected || undefined,
+          ...(options.params || {}),
+        },
+      },
+    )
+    return {
+      data: mapAdminExclusiveOfferProducts(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async addExclusiveOfferItems(input = {}, options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+
+    const body = mapAdminAddExclusiveOfferItemsRequest(input)
+    const response = await apiClient.post(
+      endpoints.admin.uiEditor.home.exclusiveOffersItems,
+      body,
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async reorderExclusiveOfferItems(items = [], options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+
+    const body = mapAdminReorderExclusiveOfferItemsRequest(items)
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.home.exclusiveOffersItemsReorder,
+      body,
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async patchExclusiveOfferItem(itemId, patch = {}, options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+    const id = String(itemId || '').trim()
+    if (!id) throw new Error('Exclusive offer item id is required.')
+
+    const body = mapAdminPatchExclusiveOfferItemRequest(patch)
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.home.exclusiveOfferItem(id),
+      body,
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async deleteExclusiveOfferItem(itemId, options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+    const id = String(itemId || '').trim()
+    if (!id) throw new Error('Exclusive offer item id is required.')
+
+    const response = await apiClient.delete(
+      endpoints.admin.uiEditor.home.exclusiveOfferItem(id),
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async publishExclusiveOffers(options = {}) {
+    if (!useRealUiEditorApi()) {
+      throw new Error('UI Editor API is not enabled.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.uiEditor.home.exclusiveOffersPublish,
+      {},
+      requestOptions(options),
+    )
+    return {
+      data: mapAdminUiEditorExclusiveOffers(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
     }
   },
 }

@@ -4,8 +4,8 @@ This document defines when a live order stays **On Track**, moves to **At Risk**
 
 Source of truth in code:
 
-- Live / Pickup / Dine-in / Services board buckets: `riskForOrder()` in `Yjeek_teck_backend/src/modules/admin-panel/dashboard/admin-dashboard.service.ts`
-- Per-mode time targets: `DEFAULT_SLA_CONFIG` in `Yjeek_teck_backend/src/modules/admin-panel/sla-models/sla-config.ts` (overridable per vendor / champ / dispatcher SLA model)
+- Live / Pickup / Dine-in / Services board buckets: `evaluateOrderRisk()` in `sla-evaluation.service.ts`, wrapped by `riskForOrder()` in `admin-dashboard.service.ts`
+- Per-metric tier targets: `{ target, atRisk, critical }` seconds in `sla-config.ts` (overridable per SLA model; snapshotted per order)
 - Incident ack / resolve clocks: dispatcher `incidentAckSecByPriority` and `incidentResolveSecByPriority`
 
 Times below are **defaults**. Configured SLA models replace the matching target; the **board bucket equations do not change**.
@@ -17,110 +17,62 @@ Times below are **defaults**. Configured SLA models replace the matching target;
 | Symbol | Meaning |
 | --- | --- |
 | `t0` | Clock start: `prepStartedAt` if set, otherwise `order.createdAt` |
-| `elapsedMin` | `floor((now − t0) / 60_000)` |
+| `elapsedMin` | Minutes from active clock start (metric-specific; see evaluator) |
 | `acceptDeadline` | `order.vendorAcceptDeadline` |
 | `status` | Current `OrderStatus` |
 | `openIncidents` | Count of incidents on the order with status `OPEN` or `PENDING` |
-| `reportedIncidents` | Count of incidents on the order that were reported (any status except ignored closed-only noise; board uses `reportedIncidentCount`) |
-| `acceptBreached` | Vendor accept window missed (see below) |
+| `reportedIncidents` | Count of incidents on the order that were reported |
 | `slaBreached` | Order-level breach flag that forces **Critical** |
+| `tier` | `{ target, atRisk, critical }` seconds for the active metric |
 
 ---
 
 ## Live board buckets (all order types)
 
-The same three equations apply to Hot food, Pickup, Dine-in, Services, and any other active order on the ops boards. Category labels change; the bucket math does not.
+Buckets are computed by `evaluateOrderRisk()` using configured **three-tier** thresholds per active metric. The **worst** metric status wins.
 
-### Accept-window breach
-
-```
-acceptBreached =
-  acceptDeadline ≠ null
-  AND now > acceptDeadline
-  AND status ∈ { PLACED, PENDING_VENDOR_ACCEPT }
-```
-
-This is the live-board mapping of **Vendor acceptance SLA** (default 2 minutes for hot food on demand; see tables below). If the vendor has already accepted, this term is false even if the deadline has passed.
-
-### Critical
-
-An order is **Critical** when **any** of the following is true:
+### Per-metric bands (lower elapsed is better)
 
 ```
-slaBreached =
-    acceptBreached
- OR elapsedMin ≥ 25
- OR openIncidents > 0
+on_track   ⇔  actualSec ≤ target
+at_risk    ⇔  actualSec > atRisk   (and ≤ critical)
+critical   ⇔  actualSec > critical
 ```
 
-```
-bucket = Critical   ⇔   slaBreached = true
-```
+Active metrics (v1):
 
-Implications:
+| Order stage | Metric | Clock start |
+|-------------|--------|-------------|
+| `PLACED` / `PENDING_VENDOR_ACCEPT` | `vendor.acceptance` | `createdAt` |
+| `PREPARING` | `vendor.preparation` | `prepStartedAt` |
+| `SEARCHING_DRIVER` / `AWAITING_DRIVER_CONFIRM` (no driver) | `dispatcher.assignment` | `createdAt` |
+| Fallback (no stage timer) | `board.elapsed` | `prepStartedAt ?? createdAt` |
 
-- Any **open or pending incident** (P1–P4, any type, any cause) immediately places the order in Critical.
-- Age ≥ **25 minutes** from `t0` is Critical even with no incident.
-- A missed vendor-accept deadline while still waiting for accept is Critical.
+Config comes from the order **SLA snapshot** when present, otherwise platform `DEFAULT_SLA_CONFIG`.
 
-### At Risk
+Default `boardOrderElapsedSec` tiers: target **8 min**, at-risk **12 min**, critical **25 min**.
 
-An order is **At Risk** only if it is **not** Critical, and **any** of:
+### Critical override (incidents)
 
-```
-atRisk =
-    NOT slaBreached
-AND (
-      elapsedMin ≥ 12
-   OR reportedIncidents > 0
-   OR status = PREPARING
-    )
-```
+An order is **Critical** immediately when:
 
 ```
-bucket = At Risk   ⇔   slaBreached = false AND atRisk = true
+openIncidents > 0
 ```
 
-Implications:
-
-- **Preparing** is treated as At Risk as soon as kitchen/work starts, until the 25-minute Critical line or an open incident.
-- A **reported** incident that is already resolved no longer forces Critical (`openIncidents = 0`) but still flags At Risk via `reportedIncidents > 0` while that count remains on the order payload.
-- Age 12–24 minutes with no open incident is At Risk.
-
-### On Track
-
-```
-bucket = On Track   ⇔   slaBreached = false AND atRisk = false
-```
-
-Expanded:
-
-```
-On Track  ⇔
-    NOT acceptBreached
-AND elapsedMin < 12
-AND openIncidents = 0
-AND reportedIncidents = 0
-AND status ≠ PREPARING
-```
-
-Typical On Track states: just placed, vendor accepted, confirmed, searching champ — all younger than 12 minutes, with no incidents.
+This overrides all SLA tier math. Auto-created SLA incidents (from the monitor at at-risk / critical) also trigger this rule.
 
 ### Decision order
 
-Evaluate **once per refresh** in this order (first match wins):
-
-1. If `slaBreached` → **Critical**
-2. Else if `atRisk` → **At Risk**
-3. Else → **On Track**
+1. If `openIncidents > 0` → **Critical**
+2. Else evaluate active metrics → worst of `on_track` / `at_risk` / `critical`
+3. Map to board bucket labels: On Track / At Risk / Critical
 
 There is no hysteresis: crossing a threshold on the next poll moves the card immediately.
 
-```
-elapsedMin < 12, no incidents, not PREPARING, accept OK     → On Track
-elapsedMin ∈ [12, 25) OR PREPARING OR reported incident     → At Risk   (if not Critical)
-elapsedMin ≥ 25 OR open incident OR accept missed           → Critical
-```
+### Legacy note
+
+Older docs referenced fixed **12 min** (at risk) and **25 min** (critical) age rules and **PREPARING → at risk**. Those are replaced by tier evaluation above. The 12 / 25 values remain as the default **board elapsed** at-risk and critical tiers unless changed in SLA Models.
 
 ---
 

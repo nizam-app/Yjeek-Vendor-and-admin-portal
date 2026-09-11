@@ -1,10 +1,12 @@
 import motoBike from '../../../assets/moto_bike.png'
-import { Clock3 } from 'lucide-react'
+import { Clock3, User } from 'lucide-react'
 import { cn } from '../cn'
+import { resolveOrderConversationId } from '../../../lib/adminOrderChat'
+import { AdminIncidentSeverityBadge } from './AdminIncidentSeverityBadge'
 
 /**
- * Shared Live-Orders-style card for Live / Pickup / Dine-in / Services boards.
- * Supports Incident, Champ/Customer chat badges, and order detail click.
+ * Live-order card — matches incident board sketch (608:2 / image).
+ * Layout: id+meta → vendor → status → incident chips → open/unattended → champ.
  */
 export function AdminOpsOrderCard({
   order,
@@ -36,39 +38,16 @@ export function AdminOpsOrderCard({
   const state = order.state || order.statusLabel || order.status || '—'
   const riderName = order.rider?.name || order.champ?.name || 'Unassigned'
   const stateText = String(state)
+  const summary = order.incidentSummary
+  const hasIncident = Boolean(order.hasIncident && summary)
+  const isP1 = summary?.highestPriority === 'P1'
+  const openedByName = summary?.openedBy?.displayName || null
+  const sourceLabel = summary?.primarySourceLabel || null
 
-  const hasBadges = Boolean(temperature || schedule)
-
-  const temperatureBadge = temperature ? (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center whitespace-nowrap text-[9px] font-medium leading-4',
-        temperature === 'Hot food'
-          ? 'rounded-full bg-[#fff0e8] px-1.5 py-0.5 text-[#ff5b2d]'
-          : 'text-[#6f7973]',
-      )}
-    >
-      {temperature}
-    </span>
-  ) : null
-
-  const scheduleBadge = schedule ? (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-[#eee8ff] px-1.5 py-0.5 text-[9px] font-medium leading-4 text-[#7055aa]">
-      {schedule}
-    </span>
-  ) : null
-
-  const timeBadge = timeLeft ? (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap text-[10px] font-medium leading-4',
-        tone === 'red' ? 'text-[#d13f45]' : 'text-[#c68618]',
-      )}
-    >
-      <Clock3 size={11} className="shrink-0" />
-      {timeLeft}
-    </span>
-  ) : null
+  function openIncidents(event) {
+    event.stopPropagation()
+    onIncidentClick?.(order)
+  }
 
   return (
     <article
@@ -81,92 +60,164 @@ export function AdminOpsOrderCard({
           onOrderClick?.(order)
         }
       }}
-      className="@container min-h-[112px] cursor-pointer rounded-[9px] border border-[#dde3df] bg-white p-2.5 shadow-[0_1px_2px_rgba(20,40,28,.03)] transition hover:border-[#a9cdb5] hover:shadow-[0_3px_8px_rgba(20,40,28,.08)] focus:outline-none focus:ring-2 focus:ring-[#1a9b53]/20"
+      className={cn(
+        'min-h-[112px] cursor-pointer rounded-[8px] border bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(20,40,28,.03)] transition hover:shadow-[0_3px_12px_rgba(0,0,0,.09)] focus:outline-none focus:ring-2 focus:ring-[#1a9b53]/20',
+        isP1 ? 'border-[#efb8ba]' : 'border-[#e4e7e5]',
+      )}
     >
-      {/* Narrow card: ID + time on top, badges flush-left on 2nd line. Wide card: one row. */}
-      <div className="flex flex-col gap-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <strong className="min-w-0 flex-1 truncate text-[11px] font-bold leading-4">
-            {order.id}
-          </strong>
-          <span className="@[300px]:hidden">{timeBadge}</span>
-          <div className="hidden items-center gap-1.5 @[300px]:flex">
-            {temperatureBadge}
-            {scheduleBadge}
-            {timeBadge}
-          </div>
+      {/* Row 1 — order id · Hot food · order timer */}
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <strong className="min-w-0 truncate text-[12px] font-semibold leading-4 text-[#101a14]">
+          {order.id}
+        </strong>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {temperature ? (
+            <span
+              className={cn(
+                'whitespace-nowrap text-[9px] font-bold leading-4',
+                temperature === 'Hot food' ? 'text-[#e2542a]' : 'text-[#6f7973]',
+              )}
+            >
+              {temperature}
+            </span>
+          ) : null}
+          {schedule ? (
+            <span className="whitespace-nowrap rounded-full bg-[#eee8ff] px-1.5 py-0.5 text-[9px] font-medium text-[#7055aa]">
+              {schedule}
+            </span>
+          ) : null}
+          {timeLeft ? (
+            <span
+              className={cn(
+                'inline-flex items-center gap-0.5 whitespace-nowrap font-mono text-[10px] font-medium leading-4',
+                tone === 'red' ? 'text-[#c45c4a]' : 'text-[#c68618]',
+              )}
+            >
+              <Clock3 size={11} className="shrink-0" strokeWidth={2.2} />
+              {timeLeft}
+            </span>
+          ) : null}
         </div>
-        {hasBadges ? (
-          <div className="flex flex-wrap items-center justify-start gap-1.5 pl-0 @[300px]:hidden">
-            {temperatureBadge}
-            {scheduleBadge}
-          </div>
-        ) : null}
       </div>
 
-      <p className="mt-1.5 truncate text-[11px] font-bold leading-4">{order.vendor || '—'}</p>
+      {/* Row 2 — vendor */}
+      <p className="mb-1.5 truncate text-[12.5px] font-semibold leading-4 text-[#101a14]">
+        {order.vendor || '—'}
+      </p>
 
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+      {/* Row 3 — order status alone */}
+      <div className="mb-1.5 flex flex-wrap gap-1">
         <span
           className={cn(
-            'max-w-full truncate rounded-md px-2 py-1 text-[9px] font-medium',
-            stateText.startsWith('Preparing') && 'bg-[#fff3d8] text-[#a97013]',
-            stateText.startsWith('Ready') && 'bg-[#e4efff] text-[#3470ae]',
-            stateText.startsWith('Picked') && 'bg-[#e4efff] text-[#3470ae]',
+            'max-w-full truncate rounded px-[7px] py-[2.5px] text-[9px] font-semibold',
+            stateText.startsWith('Preparing') && 'bg-[#fdf1de] text-[#a97013]',
+            stateText.startsWith('Ready') && 'bg-[#e7effa] text-[#2b5a91]',
+            stateText.startsWith('Picked') && 'bg-[#e7effa] text-[#2b5a91]',
             stateText.startsWith('On the way') && 'bg-[#e5f5eb] text-[#24834e]',
-            (stateText.startsWith('Accepted') || stateText.startsWith('Assigned') || stateText.startsWith('Pending')) && 'bg-[#fff3d8] text-[#a97013]',
-            stateText.toLowerCase().startsWith('placed') && 'bg-[#f0f2f0] text-[#59655e]',
-            !stateText.startsWith('Preparing')
-              && !stateText.startsWith('Ready')
-              && !stateText.startsWith('Picked')
-              && !stateText.startsWith('On the way')
-              && !stateText.startsWith('Accepted')
-              && !stateText.startsWith('Assigned')
-              && !stateText.startsWith('Pending')
-              && !stateText.toLowerCase().startsWith('placed')
-              && 'bg-[#f0f2f0] text-[#59655e]',
+            (stateText.startsWith('Accepted') ||
+              stateText.startsWith('Assigned') ||
+              stateText.startsWith('Pending')) &&
+              'bg-[#fdf1de] text-[#a97013]',
+            stateText.toLowerCase().startsWith('placed') && 'bg-[#eef1ef] text-[#5d6d63]',
+            !stateText.startsWith('Preparing') &&
+              !stateText.startsWith('Ready') &&
+              !stateText.startsWith('Picked') &&
+              !stateText.startsWith('On the way') &&
+              !stateText.startsWith('Accepted') &&
+              !stateText.startsWith('Assigned') &&
+              !stateText.startsWith('Pending') &&
+              !stateText.toLowerCase().startsWith('placed') &&
+              'bg-[#eef1ef] text-[#5d6d63]',
           )}
         >
           {stateText}
         </span>
       </div>
 
-      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-        {order.hasIncident ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              onIncidentClick?.(order)
-            }}
-            className="rounded-[9px] bg-[#fdebec] px-2 py-1 text-[9px] font-medium text-[#DB2626] transition hover:bg-[#f9d9da] focus:outline-none focus:ring-2 focus:ring-danger/25"
-          >
-            Incident
-          </button>
-        ) : null}
-        {contactTypes.map((contactType) => (
-          <button
-            key={contactType}
-            type="button"
-            disabled={!order.conversationId}
-            title={order.conversationId ? `Open ${contactType} chat` : 'No conversation yet'}
-            onClick={(event) => {
-              event.stopPropagation()
-              if (!order.conversationId) return
-              onContactClick?.(order, contactType)
-            }}
-            className={cn(
-              'rounded-[9px] px-2 py-1 text-[9px] font-medium transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50',
-              contactType === 'Champ' ? 'bg-[#e5efff] text-[#3470ae]' : 'bg-[#eee8ff] text-[#7454ad]',
-            )}
-          >
-            💬 {contactType}
-          </button>
-        ))}
-      </div>
+      {/* Row 4–5 — incident chips (sketch order) */}
+      {hasIncident ? (
+        <div className="mb-1.5 flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1">
+            <AdminIncidentSeverityBadge
+              priority={summary.highestPriority}
+              severityLabel={summary.highestPriority ? null : 'Unclassified'}
+              className="rounded px-[7px] py-[2.5px]"
+            />
+            <button
+              type="button"
+              onClick={openIncidents}
+              className="rounded bg-[#fbe9e6] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#c45c4a] transition hover:brightness-95"
+            >
+              {summary.count > 1 ? `Incident ×${summary.count}` : 'Incident'}
+            </button>
+            {summary.primaryCategory ? (
+              <span className="max-w-[9rem] truncate rounded bg-[#eef1ef] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#5d6d63]">
+                {summary.primaryCategory}
+              </span>
+            ) : null}
+            {sourceLabel ? (
+              <span className="rounded bg-[#f3eef5] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#6b4a7a]">
+                {sourceLabel}
+              </span>
+            ) : null}
+            {summary.ageLabel ? (
+              <span className="inline-flex items-center gap-0.5 rounded bg-[#f6f8f6] px-[7px] py-[2.5px] font-mono text-[9px] font-semibold text-[#c45c4a]">
+                <Clock3 size={10} className="shrink-0" strokeWidth={2.2} />
+                {summary.ageLabel}
+              </span>
+            ) : null}
+          </div>
 
-      <p className="mt-1 flex min-w-0 items-center gap-1 text-[9px] font-medium text-[#2f3933]">
-        <img src={motoBike} alt="" className="h-3 w-3 shrink-0 object-contain" />
+          {openedByName ? (
+            <span className="inline-flex w-fit max-w-full items-center gap-1 truncate rounded bg-[#e7f4ec] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#1a6b3c]">
+              <User size={11} className="shrink-0 text-[#5b3d8a]" strokeWidth={2.2} />
+              Open · {openedByName}
+            </span>
+          ) : summary.unattended ? (
+            <span className="inline-flex w-fit max-w-full truncate rounded bg-[#fff0ed] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#c62828]">
+              Unattended
+            </span>
+          ) : summary.attentionLabel ? (
+            <span className="inline-flex w-fit max-w-full truncate rounded bg-[#eaf2fb] px-[7px] py-[2.5px] text-[9px] font-semibold text-[#3974ad]">
+              {summary.attentionLabel}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* Optional contact chips — only when no incident row (sketch keeps cards clean) */}
+      {!hasIncident && contactTypes.length > 0 ? (
+        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+          {contactTypes.map((contactType) => {
+            const threadId = resolveOrderConversationId(order, contactType)
+            return (
+              <button
+                key={contactType}
+                type="button"
+                disabled={!threadId}
+                title={threadId ? `Open ${contactType} support chat` : 'No conversation yet'}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  if (!threadId) return
+                  onContactClick?.(order, contactType)
+                }}
+                className={cn(
+                  'rounded-[9px] px-2 py-1 text-[9px] font-medium transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50',
+                  contactType === 'Champ'
+                    ? 'bg-[#e5efff] text-[#3470ae]'
+                    : 'bg-[#eee8ff] text-[#7454ad]',
+                )}
+              >
+                💬 {contactType}
+              </button>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {/* Row 6 — champ */}
+      <p className="flex min-w-0 items-center gap-1 text-[10.5px] font-medium text-[#6b7a71]">
+        <img src={motoBike} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
         <span className="min-w-0 truncate">{riderName}</span>
       </p>
     </article>

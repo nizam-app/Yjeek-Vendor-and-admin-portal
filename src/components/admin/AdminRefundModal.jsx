@@ -1,13 +1,22 @@
-import { useEffect, useState } from 'react'
-import { Undo2, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import { cn } from './cn'
 import { adminOrderService } from '../../services/admin/orderService'
+import { adminIncidentService } from '../../services/admin/incidentService'
 import { ApiError, formatApiErrorMessage } from '../../api/errors'
 import { formatAdminMoney } from '../../mappers/admin/mapAdminOrderDetail'
+import { formatCostBearerLabel, formatIncidentDisplayId } from '../../lib/adminIncidentPresentation'
 
-const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
+const labelClass =
+  'mb-1.5 block text-[9.5px] font-bold uppercase tracking-[0.11em] text-[#d97706]'
 const inputClass =
   'box-border h-[40px] w-full appearance-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 pr-9 text-[13px] text-[#17231c] outline-none transition focus:border-[#1aa054]'
+const requiredTagClass = 'ml-1.5 text-[9.5px] font-bold uppercase tracking-[0.08em] text-[#8C3A2B]'
+
+const APPROVAL_THRESHOLD = 5
+
+const BEARER_OPTIONS = ['PLATFORM', 'VENDOR', 'AGENCY', 'CUSTOMER', 'SHARED']
+const SPLIT_PARTIES = ['PLATFORM', 'VENDOR', 'AGENCY', 'CUSTOMER']
 
 function optionValue(item) {
   if (typeof item === 'string') return item
@@ -20,18 +29,38 @@ function optionLabel(item) {
 }
 
 function destinationUiLabel(item) {
-  return optionLabel(item)
+  const id = optionValue(item).toUpperCase().replace(/[\s-]+/g, '_')
+  const raw = optionLabel(item)
+  if (id === 'WALLET' || id === 'YJEEK_WALLET' || /^yjeek wallet/i.test(raw) || /^wallet$/i.test(raw)) {
+    return 'Yjeek Wallet — instant'
+  }
+  if (
+    id === 'ORIGINAL_PAYMENT' ||
+    id === 'CARD' ||
+    /original payment/i.test(raw) ||
+    /card/i.test(raw)
+  ) {
+    return 'Original payment (card) — 3–5 working days'
+  }
+  return raw
+}
+
+function bearerUiLabel(value) {
+  return formatCostBearerLabel(value, { select: true }) || String(value || '').replace(/_/g, ' ')
+}
+
+function defaultSplitState() {
+  return { PLATFORM: '', VENDOR: '', AGENCY: '', CUSTOMER: '' }
 }
 
 /**
- * Refund modal — Take action → Refund — full/partial.
- * Confirmed POST: { type, amount?, destination, reason, idempotencyKey }
- * Note is UI-only (not in API body).
+ * Refund modal — readiness incidents use category reason + cost bearer + approval gate.
  */
 export default function AdminRefundModal({
   open,
   onClose,
   orderId,
+  incidentId = null,
   orderValueLabel = null,
   orderValueAmount = null,
   remainingRefundable = null,
@@ -46,9 +75,16 @@ export default function AdminRefundModal({
   const [destination, setDestination] = useState('')
   const [reason, setReason] = useState('')
   const [note, setNote] = useState('')
+  const [costBearer, setCostBearer] = useState('')
+  const [bearerOverrideReason, setBearerOverrideReason] = useState('')
+  const [bearerSplit, setBearerSplit] = useState(defaultSplitState)
+  const [refundContext, setRefundContext] = useState(null)
+  const [contextLoading, setContextLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
+  const [approvalPending, setApprovalPending] = useState(null)
 
+  const isReadinessIncident = Boolean(incidentId)
   const reasonOptions = Array.isArray(reasons) ? reasons.filter(Boolean) : []
   const destinationOptions = Array.isArray(destinations) ? destinations.filter(Boolean) : []
 
@@ -56,6 +92,31 @@ export default function AdminRefundModal({
     remainingRefundable != null && !Number.isNaN(Number(remainingRefundable))
       ? Number(remainingRefundable)
       : orderValueAmount
+
+  const resolvedAmount = useMemo(() => {
+    if (refundType === 'FULL') return maxRefundable ?? 0
+    const amount = Number(refundAmount)
+    return Number.isFinite(amount) ? amount : 0
+  }, [refundType, refundAmount, maxRefundable])
+
+  const requiresApproval = resolvedAmount > APPROVAL_THRESHOLD
+  const noteRequired = requiresApproval
+
+  const derivedBearer = refundContext?.derivedCostBearer ?? null
+  const incidentReasonLabel =
+    refundContext?.inheritedRefundReason ||
+    refundContext?.categoryLabel ||
+    refundContext?.legacyRefundReason ||
+    null
+  const classLocksPlatform = Boolean(refundContext?.classLocksBearerToPlatform)
+  const noAutoBearer = Boolean(refundContext?.noAutomaticBearerAvailable)
+  const pendingApproval = refundContext?.pendingApproval ?? approvalPending?.approval ?? null
+
+  const bearerOverridden =
+    isReadinessIncident &&
+    derivedBearer &&
+    costBearer &&
+    String(costBearer) !== String(derivedBearer)
 
   const fullAmountLabel =
     maxRefundable != null
@@ -68,18 +129,57 @@ export default function AdminRefundModal({
     setRefundAmount('')
     setReason('')
     setNote('')
+    setBearerOverrideReason('')
+    setBearerSplit(defaultSplitState())
     setError(null)
+    setApprovalPending(null)
+    setRefundContext(null)
     const firstDest = destinationOptions[0]
     setDestination(firstDest ? optionValue(firstDest) : '')
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on open/order
   }, [open, orderId])
 
   useEffect(() => {
-    if (!open || reason) return
+    if (!open || !incidentId) return undefined
+    let cancelled = false
+    setContextLoading(true)
+    adminIncidentService
+      .getRefundContext(incidentId)
+      .then((res) => {
+        if (cancelled) return
+        const ctx = res?.data ?? null
+        setRefundContext(ctx)
+        const initialBearer =
+          ctx?.costBearer ||
+          ctx?.derivedCostBearer ||
+          (ctx?.classLocksBearerToPlatform ? 'PLATFORM' : '')
+        setCostBearer(initialBearer ? String(initialBearer) : '')
+        if (ctx?.bearerSplit && typeof ctx.bearerSplit === 'object') {
+          setBearerSplit({ ...defaultSplitState(), ...ctx.bearerSplit })
+        }
+        if (ctx?.pendingApproval) {
+          setApprovalPending({ approvalRequired: true, approval: ctx.pendingApproval })
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(formatApiErrorMessage(err, 'Failed to load refund context.'))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setContextLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, incidentId])
+
+  useEffect(() => {
+    if (!open || isReadinessIncident || reason) return
     const first = reasonOptions[0]
     if (!first) return
     setReason(optionValue(first))
-  }, [open, reason, reasonOptions])
+  }, [open, reason, reasonOptions, isReadinessIncident])
 
   useEffect(() => {
     if (!open || destination || !destinationOptions.length) return
@@ -103,28 +203,76 @@ export default function AdminRefundModal({
 
   const subtitleParts = [
     orderValueLabel ? `Order value ${orderValueLabel}` : null,
-    maxRefundable != null ? `Refundable ${formatAdminMoney(maxRefundable, currency)}` : null,
     paymentLabel && paymentLabel !== '—' ? paymentLabel : null,
+    incidentId
+      ? `Incident #${refundContext?.incidentDisplayId || formatIncidentDisplayId(incidentId)}`
+      : null,
   ].filter(Boolean)
+
+  function buildBearerSplitPayload() {
+    if (costBearer !== 'SHARED') return undefined
+    const payload = {}
+    let total = 0
+    for (const party of SPLIT_PARTIES) {
+      const raw = bearerSplit[party]
+      if (raw === '' || raw == null) continue
+      const value = Number(raw)
+      if (Number.isNaN(value) || value < 0) {
+        throw new ApiError({ message: `Invalid split for ${party}.` })
+      }
+      if (value > 0) {
+        payload[party] = value
+        total += value
+      }
+    }
+    if (Math.abs(total - 100) > 0.001) {
+      throw new ApiError({ message: 'Shared bearer split must total exactly 100%.' })
+    }
+    return payload
+  }
 
   async function handleSubmit(event) {
     event.preventDefault()
-    if (!orderId || submitting) return
+    if (!orderId || submitting || pendingApproval) return
 
     setError(null)
     setSubmitting(true)
     try {
-      if (!String(reason || '').trim()) {
-        throw new ApiError({ message: 'Select a refund reason.' })
-      }
       if (!String(destination || '').trim()) {
         throw new ApiError({ message: 'Select a refund destination.' })
+      }
+
+      const legacyReason = isReadinessIncident
+        ? refundContext?.legacyRefundReason || incidentReasonLabel
+        : String(reason || '').trim()
+      if (!legacyReason) {
+        throw new ApiError({ message: 'Refund reason is unavailable for this incident.' })
+      }
+
+      if (isReadinessIncident) {
+        if (!costBearer) {
+          throw new ApiError({
+            message: noAutoBearer
+              ? 'Select a cost bearer — no automatic bearer is available.'
+              : 'Cost bearer is required for incident refunds.',
+          })
+        }
+        if (bearerOverridden && !String(bearerOverrideReason || '').trim()) {
+          throw new ApiError({ message: 'Override reason is required when changing cost bearer.' })
+        }
+        if (noteRequired && !String(note || '').trim()) {
+          throw new ApiError({
+            message: 'A note is required for refunds greater than BHD 5.000.',
+          })
+        }
+      } else if (!String(reason || '').trim()) {
+        throw new ApiError({ message: 'Select a refund reason.' })
       }
 
       const body = {
         type: refundType === 'PARTIAL' ? 'PARTIAL' : 'FULL',
         destination: String(destination).trim(),
-        reason: String(reason).trim(),
+        reason: legacyReason,
         idempotencyKey: `admin-refund-${orderId}-${Date.now()}`,
       }
 
@@ -141,8 +289,26 @@ export default function AdminRefundModal({
         body.amount = amount
       }
 
+      if (incidentId) {
+        body.incidentId = String(incidentId)
+        body.costBearer = costBearer
+        const splitPayload = buildBearerSplitPayload()
+        if (splitPayload) body.bearerSplit = splitPayload
+        if (bearerOverridden) {
+          body.bearerOverrideReason = bearerOverrideReason.trim()
+        }
+      }
+      if (note.trim()) {
+        body.note = note.trim()
+      }
+
       const result = await adminOrderService.refund(orderId, body)
-      onSuccess?.(result?.data || null)
+      const payload = result?.data ?? result
+      if (payload?.approvalRequired) {
+        setApprovalPending(payload)
+        return
+      }
+      onSuccess?.(payload || null)
       onClose?.()
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to issue refund.'))
@@ -150,6 +316,16 @@ export default function AdminRefundModal({
       setSubmitting(false)
     }
   }
+
+  const submitLabel = pendingApproval
+    ? 'Approval submitted'
+    : submitting
+      ? requiresApproval
+        ? 'Submitting…'
+        : 'Issuing…'
+      : requiresApproval
+        ? 'Send for approval →'
+        : 'Issue refund'
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
@@ -188,6 +364,10 @@ export default function AdminRefundModal({
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 pb-2">
+            {contextLoading ? (
+              <p className="text-[12px] text-[#7c8780]">Loading incident refund context…</p>
+            ) : null}
+
             <div className="space-y-2">
               {[
                 { id: 'FULL', label: `Full refund — ${fullAmountLabel}` },
@@ -199,11 +379,13 @@ export default function AdminRefundModal({
                     key={option.id}
                     type="button"
                     onClick={() => setRefundType(option.id)}
+                    disabled={Boolean(pendingApproval)}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-[12px] border px-3.5 py-3 text-left transition',
                       selected
                         ? 'border-[#1aa054] bg-[#f3faf5]'
                         : 'border-[#e4e8e4] bg-white hover:border-[#c5ced0]',
+                      pendingApproval && 'opacity-60',
                     )}
                   >
                     <span
@@ -220,24 +402,24 @@ export default function AdminRefundModal({
               })}
             </div>
 
-            <label className="block">
-              <span className={labelClass}>Partial amount</span>
-              <input
-                type="number"
-                min="0"
-                step="0.001"
-                className={cn(inputClass, 'pr-3', refundType !== 'PARTIAL' && 'bg-[#f7f8f7] text-[#9aa49d]')}
-                value={refundAmount}
-                onChange={(e) => setRefundAmount(e.target.value)}
-                placeholder="BHD 0.000"
-                disabled={submitting || refundType !== 'PARTIAL'}
-              />
-            </label>
+            {refundType === 'PARTIAL' ? (
+              <label className="block">
+                <span className={labelClass}>Partial amount</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  className={cn(inputClass, 'pr-3')}
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  placeholder="BHD 0.000"
+                  disabled={submitting || Boolean(pendingApproval)}
+                />
+              </label>
+            ) : null}
 
             <div>
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.06em] text-[#8a948e]">
-                Refund to
-              </p>
+              <p className={labelClass}>Refund to</p>
               {destinationOptions.length === 0 ? (
                 <p className="rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3 text-[12px] text-[#7c8780]">
                   No refund destinations from API.
@@ -252,11 +434,13 @@ export default function AdminRefundModal({
                         key={id}
                         type="button"
                         onClick={() => setDestination(id)}
+                        disabled={Boolean(pendingApproval)}
                         className={cn(
                           'flex w-full items-center gap-3 rounded-[12px] border px-3.5 py-3 text-left transition',
                           selected
                             ? 'border-[#1aa054] bg-[#f3faf5]'
                             : 'border-[#e4e8e4] bg-white hover:border-[#c5ced0]',
+                          pendingApproval && 'opacity-60',
                         )}
                       >
                         <span
@@ -279,42 +463,187 @@ export default function AdminRefundModal({
               )}
             </div>
 
-            <label className="block">
-              <span className={labelClass}>Reason</span>
-              <div className="relative">
-                <select
-                  className={inputClass}
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  disabled={submitting || reasonOptions.length === 0}
-                >
-                  {reasonOptions.length === 0 ? (
-                    <option value="">No reasons from API</option>
+            {isReadinessIncident ? (
+              <div className="border-l-[3px] border-[#1a8043] pl-3">
+                <label className="block">
+                  <span className={labelClass}>
+                    Cost bearer
+                    <span className={requiredTagClass}>Required</span>
+                  </span>
+                  {classLocksPlatform ? (
+                    <p className="rounded-[8px] border border-[#e4e8e4] bg-[#f7f8f7] px-3 py-2.5 text-[13px] text-[#17231c]">
+                      Yjeek (locked for this incident class)
+                    </p>
                   ) : (
-                    reasonOptions.map((item) => (
-                      <option key={optionValue(item)} value={optionValue(item)}>
-                        {optionLabel(item)}
-                      </option>
-                    ))
+                    <div className="relative">
+                      <select
+                        className={inputClass}
+                        value={costBearer}
+                        onChange={(e) => setCostBearer(e.target.value)}
+                        disabled={submitting || Boolean(pendingApproval) || classLocksPlatform}
+                      >
+                        <option value="">Select bearer…</option>
+                        {(Array.isArray(refundContext?.costBearerOptions) &&
+                        refundContext.costBearerOptions.length
+                          ? refundContext.costBearerOptions
+                          : BEARER_OPTIONS.map((b) => ({ value: b, selectLabel: bearerUiLabel(b) }))
+                        ).map((b) => {
+                          const value = typeof b === 'string' ? b : b.value
+                          const label =
+                            typeof b === 'string'
+                              ? bearerUiLabel(b)
+                              : b.selectLabel || b.label || bearerUiLabel(value)
+                          return (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                        ▾
+                      </span>
+                    </div>
                   )}
-                </select>
-                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
-                  ▾
-                </span>
+                  <p className="mt-1.5 text-[11px] leading-4 text-[#6b7a71]">
+                    Yjeek · Vendor · Champ agency · Shared. Pre-filled from the incident&apos;s
+                    cause attribution, overridable with a note.
+                  </p>
+                  {noAutoBearer && !derivedBearer ? (
+                    <p className="mt-1 text-[11px] font-medium text-[#9a7618]">
+                      No automatic bearer available — select cost bearer.
+                    </p>
+                  ) : null}
+                </label>
+
+                {bearerOverridden ? (
+                  <label className="mt-3 block">
+                    <span className={labelClass}>
+                      Override reason
+                      <span className={requiredTagClass}>Required</span>
+                    </span>
+                    <textarea
+                      value={bearerOverrideReason}
+                      onChange={(e) => setBearerOverrideReason(e.target.value)}
+                      disabled={submitting || Boolean(pendingApproval)}
+                      rows={2}
+                      placeholder="Why the derived bearer is wrong…"
+                      className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
+                    />
+                  </label>
+                ) : null}
+
+                {costBearer === 'SHARED' ? (
+                  <div className="mt-3">
+                    <p className={labelClass}>Shared split (% — must total 100)</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SPLIT_PARTIES.map((party) => (
+                        <label key={party} className="block">
+                          <span className="mb-1 block text-[10px] text-[#8a948e]">
+                            {bearerUiLabel(party)}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            value={bearerSplit[party]}
+                            onChange={(e) =>
+                              setBearerSplit((prev) => ({ ...prev, [party]: e.target.value }))
+                            }
+                            disabled={submitting || Boolean(pendingApproval)}
+                            className="box-border h-[36px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] px-2 text-[12px]"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-            </label>
+            ) : null}
+
+            {isReadinessIncident ? (
+              <div>
+                <p className={labelClass}>Reason</p>
+                <div className="relative">
+                  <input
+                    className={cn(inputClass, 'bg-[#fafbfa] text-[#17231c]')}
+                    value={incidentReasonLabel || ''}
+                    readOnly
+                    disabled
+                  />
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                    ▾
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[11px] leading-4 text-[#6b7a71]">
+                  Inherited from the incident category. One vocabulary, not two.
+                </p>
+              </div>
+            ) : (
+              <label className="block">
+                <span className={labelClass}>Reason</span>
+                <div className="relative">
+                  <select
+                    className={inputClass}
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    disabled={submitting || reasonOptions.length === 0}
+                  >
+                    {reasonOptions.length === 0 ? (
+                      <option value="">No reasons from API</option>
+                    ) : (
+                      reasonOptions.map((item) => (
+                        <option key={optionValue(item)} value={optionValue(item)}>
+                          {optionLabel(item)}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] text-[#69756d]">
+                    ▾
+                  </span>
+                </div>
+              </label>
+            )}
 
             <label className="block">
-              <span className={labelClass}>Note (optional)</span>
+              <span className={labelClass}>
+                Note
+                {isReadinessIncident ? (
+                  <span className={requiredTagClass}>Required over BHD 5</span>
+                ) : noteRequired ? (
+                  <span className={requiredTagClass}>Required</span>
+                ) : null}
+              </span>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                disabled={submitting}
+                disabled={submitting || Boolean(pendingApproval)}
                 rows={2}
-                placeholder="Add a note for the log…"
+                placeholder="Why this amount, and why this bearer…"
                 className="box-border w-full resize-none rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
               />
             </label>
+
+            {pendingApproval ? (
+              <div className="rounded-[10px] bg-[#fff8e8] px-3.5 py-2.5 text-[12px] text-[#9a7618]">
+                <p className="font-medium">Pending approval</p>
+                <p className="mt-1">
+                  {approvalPending?.message ||
+                    'Refund above BHD 5.000 requires approval before money is issued.'}
+                </p>
+                {(approvalPending?.amount ?? pendingApproval?.amountBhd) != null ? (
+                  <p className="mt-1">
+                    Amount pending:{' '}
+                    {formatAdminMoney(
+                      approvalPending?.amount ?? pendingApproval?.amountBhd,
+                      currency,
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
             {error ? (
               <div className="rounded-[10px] bg-[#fdebec] px-3.5 py-2.5 text-[12px] text-[#d64044]">
@@ -330,15 +659,14 @@ export default function AdminRefundModal({
               disabled={submitting}
               className="inline-flex h-[36px] items-center justify-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[13px] font-medium text-[#455249] hover:bg-[#f6f8f6] disabled:opacity-60"
             >
-              Cancel
+              {pendingApproval ? 'Close' : 'Cancel'}
             </button>
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || Boolean(pendingApproval) || contextLoading}
               className="inline-flex h-[36px] items-center justify-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[13px] font-medium text-white hover:bg-[#158a47] disabled:opacity-60"
             >
-              <Undo2 size={14} strokeWidth={2.2} />
-              {submitting ? 'Issuing…' : 'Issue refund'}
+              {submitLabel}
             </button>
           </div>
         </form>

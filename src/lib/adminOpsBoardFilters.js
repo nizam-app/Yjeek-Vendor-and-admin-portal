@@ -7,7 +7,8 @@ export const ADMIN_OPS_BOARD_FILTERS = [
   'Chat · Customer',
 ]
 
-export const ADMIN_OPS_DEFAULT_REFRESH_SECONDS = 3
+/** Ops boards / Live / overview — target 10–15s (was 3s; too hard on shared DB). */
+export const ADMIN_OPS_DEFAULT_REFRESH_SECONDS = 12
 
 export function resolveAdminBoardFilters(filters) {
   if (Array.isArray(filters) && filters.length > 0) {
@@ -18,6 +19,7 @@ export function resolveAdminBoardFilters(filters) {
 
 /**
  * Prefer API autoRefreshSeconds / refreshIntervalSeconds; fall back to design default.
+ * Never poll faster than 10s (clamps legacy API values of 3).
  * @param {Record<string, unknown>|null|undefined} data
  */
 export function resolveAdminBoardRefreshSeconds(data) {
@@ -26,7 +28,7 @@ export function resolveAdminBoardRefreshSeconds(data) {
   if (raw === null || raw === undefined || raw === '') return ADMIN_OPS_DEFAULT_REFRESH_SECONDS
   const n = Number(raw)
   if (!Number.isFinite(n) || n < 1) return ADMIN_OPS_DEFAULT_REFRESH_SECONDS
-  return Math.floor(n)
+  return Math.max(10, Math.floor(n))
 }
 
 /** @param {string} [filter] */
@@ -56,11 +58,15 @@ export function orderMatchesOpsFilter(order, filter) {
   const key = normalizeOpsChatFilter(filter)
   if (key === 'all_orders') return true
   const types = orderContactTypes(order)
-  const hasChat = Boolean(order?.conversationId) || types.length > 0
+  const hasChat =
+    Boolean(order?.customerConversationId) ||
+    Boolean(order?.driverConversationId) ||
+    Boolean(order?.conversationId) ||
+    types.length > 0
 
   if (key === 'all_chats') return hasChat
-  if (key === 'champ') return types.includes('Champ')
-  if (key === 'customer') return types.includes('Customer')
+  if (key === 'champ') return types.includes('Champ') || Boolean(order?.driverConversationId)
+  if (key === 'customer') return types.includes('Customer') || Boolean(order?.customerConversationId)
   return true
 }
 
@@ -159,10 +165,19 @@ export function buildOpsBoardChats(chats, orders, filter) {
 
   if (key === 'all_orders') return chatList
 
+  const fromFeed = chatList.filter((chat) => chatMatchesOpsFilter(chat, filter))
+  const seen = new Set(
+    fromFeed.map((chat) => `${chat?.conversationId || chat?.id || ''}:${chat?.role || ''}`),
+  )
+
   const orderByConversation = new Map()
   for (const order of orderList) {
-    const id = order?.conversationId ? String(order.conversationId) : ''
-    if (id) orderByConversation.set(id, order)
+    const customerId = order?.customerConversationId ? String(order.customerConversationId) : ''
+    const driverId = order?.driverConversationId ? String(order.driverConversationId) : ''
+    const legacyId = order?.conversationId ? String(order.conversationId) : ''
+    if (customerId) orderByConversation.set(customerId, order)
+    if (driverId) orderByConversation.set(driverId, order)
+    if (legacyId) orderByConversation.set(legacyId, order)
   }
 
   const chatByConversation = new Map()
@@ -171,16 +186,9 @@ export function buildOpsBoardChats(chats, orders, filter) {
     if (id) chatByConversation.set(id, chat)
   }
 
-  const conversationIds = new Set([
-    ...chatByConversation.keys(),
-    ...orderByConversation.keys(),
-  ])
-
-  const items = []
-
-  for (const conversationId of conversationIds) {
+  const extras = []
+  for (const [conversationId, order] of orderByConversation.entries()) {
     const chat = chatByConversation.get(conversationId) || null
-    const order = orderByConversation.get(conversationId) || null
     const categories = conversationCategories(order, chat)
     const wantedRoles = key === 'champ'
       ? ['Champ']
@@ -190,13 +198,16 @@ export function buildOpsBoardChats(chats, orders, filter) {
 
     for (const role of wantedRoles) {
       if (!categories.includes(role)) continue
+      const seenKey = `${conversationId}:${role}`
+      if (seen.has(seenKey)) continue
+      seen.add(seenKey)
 
       const champName = order?.rider?.name || order?.champ?.name || 'Champ'
       const customerName = chat?.role === 'Customer' && chat?.name ? chat.name : 'Customer'
       const name = role === 'Champ' ? champName : customerName
-      const fromFeed = Boolean(chat && chat.role === role)
+      const fromChat = Boolean(chat && chat.role === role)
 
-      items.push({
+      extras.push({
         ...(chat || {}),
         id: `${conversationId}:${role}`,
         conversationId,
@@ -205,12 +216,12 @@ export function buildOpsBoardChats(chats, orders, filter) {
         name,
         role,
         peerRole: role === 'Champ' ? 'CHAMP' : 'CUSTOMER',
-        message: fromFeed ? (chat.message || '') : (chat?.message || ''),
-        unreadCount: fromFeed ? (Number(chat.unreadCount) || 0) : 0,
+        message: fromChat ? (chat.message || '') : (chat?.message || ''),
+        unreadCount: fromChat ? (Number(chat.unreadCount) || 0) : 0,
         initials: initialsFromName(name),
       })
     }
   }
 
-  return items
+  return [...fromFeed, ...extras]
 }

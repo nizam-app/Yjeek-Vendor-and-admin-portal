@@ -134,6 +134,9 @@ export const adminService = {
   reconcileAdminFleetChampPod(champId, form, options = {}) {
     return adminFleetService.reconcileChampPod(champId, form, options)
   },
+  messageAdminFleetChamp(champId, form, options = {}) {
+    return adminFleetService.messageChamp(champId, form, options)
+  },
   estimateAdminFleetNotify(form, options = {}) {
     return adminFleetService.estimateNotify(form, options)
   },
@@ -344,6 +347,27 @@ export const adminService = {
   createAdminMarketingPromoCode(form, options = {}) {
     return adminMarketingService.createPromoCode(form, options)
   },
+  getAdminMarketingPromoCode(promoCodeId, options = {}) {
+    return adminMarketingService.getPromoCode(promoCodeId, options)
+  },
+  updateAdminMarketingPromoCode(promoCodeId, form, options = {}) {
+    return adminMarketingService.updatePromoCode(promoCodeId, form, options)
+  },
+  listAdminMarketingPromoCategories(options = {}) {
+    return adminMarketingService.listPromoCategories(options)
+  },
+  createAdminMarketingPromoCategory(body, options = {}) {
+    return adminMarketingService.createPromoCategory(body, options)
+  },
+  updateAdminMarketingPromoCategory(id, body, options = {}) {
+    return adminMarketingService.updatePromoCategory(id, body, options)
+  },
+  retireAdminMarketingPromoCategory(id, options = {}) {
+    return adminMarketingService.retirePromoCategory(id, options)
+  },
+  restoreAdminMarketingPromoCategory(id, options = {}) {
+    return adminMarketingService.restorePromoCategory(id, options)
+  },
   sendAdminCustomerNotification(form, options = {}) {
     return adminMarketingService.sendCustomerNotification(form, options)
   },
@@ -361,6 +385,21 @@ export const adminService = {
   },
   estimateAdminVendorNotification(form, options = {}) {
     return adminMarketingService.estimateVendorNotification(form, options)
+  },
+  listAdminGeofenceCampaigns(options = {}) {
+    return adminMarketingService.listGeofenceCampaigns(options)
+  },
+  getAdminGeofenceCampaign(campaignId, options = {}) {
+    return adminMarketingService.getGeofenceCampaign(campaignId, options)
+  },
+  createAdminGeofenceCampaign(form, options = {}) {
+    return adminMarketingService.createGeofenceCampaign(form, options)
+  },
+  updateAdminGeofenceCampaign(campaignId, form, options = {}) {
+    return adminMarketingService.updateGeofenceCampaign(campaignId, form, options)
+  },
+  deleteAdminGeofenceCampaign(campaignId, options = {}) {
+    return adminMarketingService.deleteGeofenceCampaign(campaignId, options)
   },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)

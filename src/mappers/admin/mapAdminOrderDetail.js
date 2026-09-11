@@ -1,14 +1,57 @@
 import { ApiError } from '../../api/errors'
+import { enrichIncidentRow } from '../../lib/adminIncidentPresentation'
 
 const ACTION_LABELS = {
   REASSIGN_CHAMP: { group: 'Dispatch', icon: '↻', label: 'Reassign champ', tone: 'text-[#2876c7]' },
   REDISPATCH: { group: 'Dispatch', icon: '↻', label: 'Redispatch order', tone: 'text-[#2876c7]' },
-  REFUND: { group: 'Resolution', icon: '↝', label: 'Refund — full/partial', tone: 'text-[#18a653]' },
+  REDELIVER_REPLACE: {
+    group: 'Dispatch',
+    icon: '📦',
+    label: 'Redeliver / replace',
+    tone: 'text-[#2876c7]',
+  },
+  REDELIVER: { group: 'Dispatch', icon: '📦', label: 'Redeliver', tone: 'text-[#2876c7]' },
+  REPLACE: { group: 'Dispatch', icon: '📦', label: 'Replace items', tone: 'text-[#2876c7]' },
+  REFUND: { group: 'Resolution', icon: '↩', label: 'Refund — full/partial', tone: 'text-[#18a653]' },
+  GOODWILL_CREDIT: { group: 'Resolution', icon: '🎁', label: 'Goodwill credit', tone: 'text-[#18a653]' },
   CANCEL: { group: 'Resolution', icon: '×', label: 'Cancel order', tone: 'text-[#d92f35]' },
-  SUSPEND_CHAMP: { group: 'Enforcement · Ops', icon: '⊘', label: 'Suspend champ', tone: 'text-[#dc2931]' },
+  START_INVESTIGATION: { group: 'Investigate', icon: '🔍', label: 'Start investigation', tone: 'text-[#2876c7]' },
+  REQUEST_PARTY_RESPONSE: {
+    group: 'Investigate',
+    icon: '💬',
+    label: 'Request party response',
+    tone: 'text-[#2876c7]',
+  },
+  ESCALATE_SEVERITY: { group: 'Investigate', icon: '⬆', label: 'Escalate severity', tone: 'text-[#c68618]' },
+  SUSPEND_CHAMP: {
+    group: 'Enforcement · Ops',
+    icon: '⊘',
+    label: 'Suspend champ',
+    tone: 'text-[#dc2931]',
+  },
   FLAG_VENDOR: { group: 'Enforcement · Ops', icon: '⚑', label: 'Flag vendor', tone: 'text-[#d92f35]' },
+  APPLY_PENALTY: {
+    group: 'Enforcement · Ops',
+    icon: '☰',
+    label: 'Apply penalty (VPI / CPI)',
+    tone: 'text-[#d92f35]',
+  },
+  APPLY_VPI_PENALTY: { group: 'Enforcement · Ops', icon: '⚠', label: 'Apply VPI penalty', tone: 'text-[#d92f35]' },
+  APPLY_CPI_PENALTY: { group: 'Enforcement · Ops', icon: '⚠', label: 'Apply CPI penalty', tone: 'text-[#d92f35]' },
   MARK_RESOLVED: { group: 'Close-out', icon: '✓', label: 'Mark resolved', tone: 'text-[#18a653]' },
 }
+
+const GROUP_ORDER = ['Dispatch', 'Resolution', 'Investigate', 'Enforcement · Ops', 'Enforcement', 'Close-out']
+
+const RESOLUTION_ORDER = ['REFUND', 'GOODWILL_CREDIT', 'CANCEL']
+const DISPATCH_ORDER = ['REASSIGN_CHAMP', 'REDISPATCH', 'REDELIVER_REPLACE', 'REDELIVER', 'REPLACE']
+const ENFORCEMENT_ORDER = [
+  'SUSPEND_CHAMP',
+  'FLAG_VENDOR',
+  'APPLY_PENALTY',
+  'APPLY_VPI_PENALTY',
+  'APPLY_CPI_PENALTY',
+]
 
 export function humanizeAdminStatus(status) {
   if (!status) return '—'
@@ -85,53 +128,127 @@ function mapOrderIncidents(incidents) {
   return incidents
     .map((item) => {
       if (!item || typeof item !== 'object') return null
-      const statusRaw = String(item.status || '').toUpperCase()
-      const statusLabel =
-        statusRaw === 'RESOLVED' ? 'Resolved' : statusRaw === 'PENDING' ? 'Pending' : statusRaw === 'OPEN' ? 'Open' : humanizeAdminStatus(item.status)
-      const statusTone = statusRaw === 'RESOLVED' ? 'green' : statusRaw === 'PENDING' ? 'yellow' : 'red'
-      const badges = []
-      if (item.cause) badges.push([`Cause: ${humanizeAdminStatus(item.cause)}`, 'yellow'])
-      if (item.stage) badges.push([`Stage: ${item.stage}`, 'gray'])
-      if (item.reportedByCustomer) badges.push(['Reported', 'blue'])
+      const statusRaw = String(item.status || item.lifecycleState || '').toUpperCase()
+      const resolved =
+        statusRaw === 'RESOLVED' || statusRaw === 'CLOSED' || item.resolvedAt != null
+      const statusLabel = resolved
+        ? 'Solved'
+        : statusRaw === 'PENDING' || statusRaw === 'OPEN' || statusRaw === 'REOPENED'
+          ? 'Pending'
+          : humanizeAdminStatus(item.status || item.lifecycleState)
+      const statusTone = resolved ? 'green' : 'yellow'
+      const openedClock = item.openedAt
+        ? formatClock(item.openedAt)
+        : item.createdAt
+          ? formatClock(item.createdAt)
+          : null
+      const metaParts = []
+      if (item.reportedByCustomer) metaParts.push('Reported by customer')
+      else if (item.source) metaParts.push(String(item.source).replace(/_/g, ' '))
+      else metaParts.push('Auto')
+      if (openedClock) metaParts.push(openedClock)
+      if (resolved && item.resolvedAt) {
+        metaParts.push(
+          `resolved ${formatClock(item.resolvedAt)}${item.resolvedByName ? ` by ${item.resolvedByName}` : ''}`,
+        )
+      } else if (!resolved) {
+        metaParts.push(item.acknowledgedByName ? `with ${item.acknowledgedByName}` : 'awaiting Ops action')
+      }
 
-      return {
+      return enrichIncidentRow({
         id: item.id ? String(item.id) : null,
         title: item.title || item.type || 'Incident',
         status: statusLabel,
+        statusRaw: resolved ? 'RESOLVED' : statusRaw || 'OPEN',
         statusTone,
-        badges,
         detail: item.note || '—',
-        meta: [
-          item.cause ? humanizeAdminStatus(item.cause) : null,
-          item.createdAt ? formatClock(item.createdAt) : null,
-          item.resolvedByName ? `resolved by ${item.resolvedByName}` : null,
-          item.resolvedAt ? `resolved ${formatClock(item.resolvedAt)}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
+        meta: metaParts.filter(Boolean).join(' · '),
         priority: item.priority ?? null,
         type: item.type ?? null,
-      }
+        note: item.note ?? null,
+        cause: item.cause ?? null,
+        stage: item.stage ?? null,
+        reportedByCustomer: item.reportedByCustomer ?? false,
+        createdAt: item.createdAt ?? null,
+        resolvedAt: item.resolvedAt ?? null,
+        resolvedByName: item.resolvedByName ?? null,
+        lifecycleState: item.lifecycleState ?? null,
+        source: item.source ?? null,
+        category: item.category ?? null,
+        categoryLabel: item.categoryLabel ?? null,
+        openedAt: item.openedAt ?? null,
+        firstResponseAt: item.firstResponseAt ?? null,
+        acknowledgedAt: item.acknowledgedAt ?? null,
+        acknowledgedByName: item.acknowledgedByName ?? null,
+        recurredWithin14Days: item.recurredWithin14Days ?? false,
+        recurrenceCount14d: item.recurrenceCount14d ?? null,
+        recurrenceContext: item.recurrenceContext ?? null,
+        evidenceCount: item.evidenceCount ?? (Array.isArray(item.evidence) ? item.evidence.length : 0),
+        evidence: Array.isArray(item.evidence) ? item.evidence : [],
+        resolutionActionCode: item.resolutionActionCode ?? null,
+        previousResolutionActionCode: item.previousResolutionActionCode ?? null,
+    costBearer: item.costBearer ?? null,
+    compensationAmountBhd: item.compensationAmountBhd ?? null,
+    compensationType: item.compensationType ?? null,
+    decidedByRole: item.decidedByRole ?? item.resolutionSummary?.resolvedByRole ?? null,
+        customerRemedy: item.customerRemedy ?? null,
+        incidentSlaDeadlineAt: item.incidentSlaDeadlineAt ?? null,
+        readinessManaged: item.readinessManaged ?? false,
+        evidenceHoldAt: item.evidenceHoldAt ?? null,
+        chatConversationId: item.chatConversationId ?? null,
+        openedBy: item.openedBy ?? null,
+        slaBreached: Boolean(item.slaBreached),
+      })
     })
     .filter(Boolean)
 }
 
 /**
  * Group confirmed availableActions into Take-action menu sections.
- * Unknown action codes are skipped (not invented).
+ * Collapses Redeliver+Replace and VPI+CPI into single design-menu items.
  * @param {unknown[]} actions
  * @param {{ hasChamp?: boolean }} [options]
  */
 export function mapAdminAvailableActions(actions, options = {}) {
   const list = Array.isArray(actions) ? actions : []
-  const groups = new Map()
   const hasChamp = options.hasChamp == null ? true : Boolean(options.hasChamp)
+  const incoming = new Set(list.map((code) => String(code || '')).filter(Boolean))
 
-  for (const code of list) {
-    const key = String(code || '')
+  // Always surface ops readiness actions that backends may omit from older payloads.
+  for (const code of [
+    'START_INVESTIGATION',
+    'REQUEST_PARTY_RESPONSE',
+    'ESCALATE_SEVERITY',
+    'REDELIVER',
+    'REPLACE',
+    'GOODWILL_CREDIT',
+    'APPLY_VPI_PENALTY',
+    'APPLY_CPI_PENALTY',
+    'SUSPEND_CHAMP',
+  ]) {
+    incoming.add(code)
+  }
+
+  const codes = new Set(incoming)
+
+  // Design: one "Redeliver / replace" row instead of two.
+  if (codes.has('REDELIVER') || codes.has('REPLACE')) {
+    codes.add('REDELIVER_REPLACE')
+    codes.delete('REDELIVER')
+    codes.delete('REPLACE')
+  }
+
+  // Design: one "Apply penalty (VPI / CPI)" row instead of two.
+  if (codes.has('APPLY_VPI_PENALTY') || codes.has('APPLY_CPI_PENALTY')) {
+    codes.add('APPLY_PENALTY')
+    codes.delete('APPLY_VPI_PENALTY')
+    codes.delete('APPLY_CPI_PENALTY')
+  }
+
+  const groups = new Map()
+  for (const key of codes) {
     const meta = ACTION_LABELS[key]
     if (!meta) continue
-    // Suspend requires an assigned champ (driverId) — hide when unassigned.
     if (key === 'SUSPEND_CHAMP' && !hasChamp) continue
     if (!groups.has(meta.group)) groups.set(meta.group, [])
     groups.get(meta.group).push({
@@ -139,10 +256,31 @@ export function mapAdminAvailableActions(actions, options = {}) {
       icon: meta.icon,
       label: meta.label,
       tone: meta.tone,
+      disabled: Boolean(meta.deferred),
+      deferredReason: meta.deferred ? 'Coming in a later phase' : null,
     })
   }
 
-  return Array.from(groups.entries()).map(([title, items]) => ({ title, actions: items }))
+  function sortGroup(title, actions) {
+    const order =
+      title === 'Resolution'
+        ? RESOLUTION_ORDER
+        : title === 'Dispatch'
+          ? DISPATCH_ORDER
+          : title.startsWith('Enforcement')
+            ? ENFORCEMENT_ORDER
+            : null
+    if (!order) return actions
+    return [...actions].sort((a, b) => {
+      const ai = order.indexOf(a.code)
+      const bi = order.indexOf(b.code)
+      return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
+    })
+  }
+
+  return GROUP_ORDER
+    .filter((title) => groups.has(title))
+    .map((title) => ({ title, actions: sortGroup(title, groups.get(title)) }))
 }
 
 function computeRemainingRefundable(data, payment) {
@@ -307,7 +445,10 @@ export function mapAdminOrderDetailResponse(data) {
     champ: {
       id: champ?.id ? String(champ.id) : null,
       name: champ?.name || 'Unassigned',
-      vehicle: champ?.vehicle || champ?.vehicleType || '—',
+      vehicle:
+        [champ?.vehicleType, champ?.plateNumber].filter(Boolean).join(' ') ||
+        champ?.vehicle ||
+        '—',
       phone: champ?.phone || '—',
       status: champ?.status || (champ?.name ? 'Assigned' : 'Unassigned'),
     },
@@ -343,5 +484,12 @@ export function mapAdminOrderDetailResponse(data) {
     }),
     availableActions: Array.isArray(data.availableActions) ? data.availableActions.map(String) : [],
     conversationId: data.conversationId ?? null,
+    pickupLabel: formatPickup(locations.pickup),
+    dropoffLabel: formatDropoff(locations.dropoff),
+    itemCount,
+    vendorAcceptance:
+      data.vendorAcceptance && typeof data.vendorAcceptance === 'object'
+        ? data.vendorAcceptance
+        : null,
   }
 }

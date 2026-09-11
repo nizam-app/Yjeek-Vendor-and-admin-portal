@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
 import { useApiResource } from '../useApiResource'
+import { useIntervalWhenVisible } from '../useIntervalWhenVisible'
 import { adminDashboardService } from '../../services/admin/dashboardService'
 
 /**
@@ -27,15 +27,12 @@ export function useAdminLiveOrders(options = {}) {
 
   const refreshSeconds = resource.data?.refreshIntervalSeconds
 
-  useEffect(() => {
-    if (!refreshSeconds || Number(refreshSeconds) < 1) return undefined
-
-    const intervalId = window.setInterval(() => {
+  useIntervalWhenVisible(
+    () => {
       resource.refetch()
-    }, Number(refreshSeconds) * 1000)
-
-    return () => window.clearInterval(intervalId)
-  }, [refreshSeconds, resource.refetch])
+    },
+    Number(refreshSeconds) > 0 ? Number(refreshSeconds) * 1000 : null,
+  )
 
   return resource
 }

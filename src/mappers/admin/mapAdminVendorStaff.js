@@ -198,7 +198,7 @@ export function mapAdminCreateStaffRequest(form = {}, branchOptions = []) {
     throw new ApiError({ message: 'Select a valid role.' })
   }
 
-  const { countryCode, phone } = mapAdminStaffPhoneParts(form.phone)
+  const { countryCode, phone } = mapAdminStaffPhoneParts(form.phone, form.countryCode)
   if (!phone) {
     throw new ApiError({ message: 'Phone is required.' })
   }
@@ -255,7 +255,7 @@ export function mapAdminUpdateStaffRequest(form = {}, branchOptions = []) {
   if (email) body.email = email
 
   if (form.phone != null && String(form.phone).trim()) {
-    const { countryCode, phone } = mapAdminStaffPhoneParts(form.phone)
+    const { countryCode, phone } = mapAdminStaffPhoneParts(form.phone, form.countryCode)
     if (phone) {
       body.phone = phone
       body.countryCode = countryCode

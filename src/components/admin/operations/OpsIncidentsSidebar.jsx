@@ -6,6 +6,12 @@ function incidentTone(incident) {
 }
 
 function incidentSubtitle(incident) {
+  const parts = []
+  if (incident?.orderNumber) parts.push(`#${incident.orderNumber}`)
+  if (incident?.categoryLabel) parts.push(incident.categoryLabel)
+  if (incident?.ageLabel) parts.push(incident.ageLabel)
+  if (incident?.attentionLabel) parts.push(incident.attentionLabel)
+  if (parts.length) return parts.join(' · ')
   if (incident?.detail) return String(incident.detail)
   const id = incident?.orderNumber ? `#${incident.orderNumber}` : (incident?.id ? `#${incident.id}` : '')
   const status = incident?.status ? String(incident.status).toLowerCase() : ''
@@ -19,6 +25,7 @@ function incidentSubtitle(incident) {
 export function OpsIncidentsSidebar({
   incidents = [],
   title = 'Incidents Log',
+  unattendedCount = 0,
   onIncidentClick,
   fillHeight = true,
 }) {
@@ -34,6 +41,11 @@ export function OpsIncidentsSidebar({
       <div className="flex h-[44px] shrink-0 items-center gap-1.5">
         <ShieldAlert size={14} strokeWidth={2} className="text-[#d46763]" />
         <h2 className="text-[14px] font-bold text-[#17231c]">{title}</h2>
+        {unattendedCount > 0 ? (
+          <span className="rounded-full bg-[#fff0ed] px-2 py-0.5 text-[10px] font-semibold text-[#c62828]">
+            {unattendedCount} unattended
+          </span>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {list.length === 0 ? (
@@ -57,7 +69,7 @@ export function OpsIncidentsSidebar({
                     tone === 'gray' && 'bg-[#f0f2f0] text-[#737d77]',
                   )}
                 >
-                  {incident.priority || 'P1'}
+                  {incident.priority || (incident.severityLabel === 'UNCLASSIFIED' || incident.severityLabel === 'Unclassified' ? 'Uncl' : '—')}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-[12px] font-bold leading-[15px] text-[#202722]">

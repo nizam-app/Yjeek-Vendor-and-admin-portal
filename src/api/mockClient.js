@@ -8,11 +8,15 @@ import {
   adminServicesMock,
   adminHomeCatalogMock,
   adminHomeCategoriesMock,
+  adminExclusiveOffersMock,
+  adminExclusiveOfferProductsMock,
   buildAdminStoreTypesListMock,
   buildAdminVendorDetail,
   buildAdminCustomerDetail,
   buildAdminChampDetail,
 } from '../mocks/admin.mock'
+
+const MOCK_SLA_TIER = (target, atRisk, critical) => ({ target, atRisk, critical })
 
 const MOCK_SLA_CONFIG = {
   schemaVersion: 2,
@@ -23,12 +27,12 @@ const MOCK_SLA_CONFIG = {
   vpiWeights: { accuracy: 20, packing: 5, prepTime: 25, reliability: 50 },
   vendor: {
     hotFoodOnDemand: {
-      acceptanceTimeSec: 120,
-      champCollectionTimeSec: 600,
-      earlyOnlineHoursSec: 3600,
+      acceptanceTimeSec: MOCK_SLA_TIER(180, 300, 480),
+      champCollectionTimeSec: MOCK_SLA_TIER(600, 840, 1200),
+      earlyOnlineHoursSec: MOCK_SLA_TIER(36000, 28800, 21600),
       fullDeliveryWindowStart: '00:00:00',
       fullDeliveryWindowEnd: '23:59:59',
-      prepTimeLimitSec: 1080,
+      prepTimeLimitSec: MOCK_SLA_TIER(900, 1200, 1680),
       customerIssueResponseSec: 7200,
       orderAccuracyPct: 100,
       orderRatingPct: 90,
@@ -43,15 +47,15 @@ const MOCK_SLA_CONFIG = {
   },
   champ: {
     acceptanceTimeByMode: {
-      hotFood: 90,
-      sameDay: 300,
-      nextDay: 600,
-      standard: 900,
-      economy: 1200,
-      food: 90,
-      groceryPharmacy: 180,
-      flowers: 180,
-      electronics: 300,
+      hotFood: MOCK_SLA_TIER(119, 180, 300),
+      sameDay: MOCK_SLA_TIER(300, 480, 720),
+      nextDay: MOCK_SLA_TIER(300, 600, 1200),
+      standard: MOCK_SLA_TIER(300, 480, 900),
+      economy: MOCK_SLA_TIER(300, 480, 900),
+      food: MOCK_SLA_TIER(119, 180, 300),
+      groceryPharmacy: MOCK_SLA_TIER(90, 180, 300),
+      flowers: MOCK_SLA_TIER(90, 180, 300),
+      electronics: MOCK_SLA_TIER(90, 180, 300),
     },
     performance: {
       doubleConfirmationSec: 30,
@@ -71,10 +75,10 @@ const MOCK_SLA_CONFIG = {
   },
   dispatcher: {
     assignmentTimeByMode: {
-      sameDay: 120,
-      nextDay: 300,
-      standard: 600,
-      economy: 900,
+      sameDay: MOCK_SLA_TIER(180, 300, 480),
+      nextDay: MOCK_SLA_TIER(300, 480, 720),
+      standard: MOCK_SLA_TIER(300, 540, 900),
+      economy: MOCK_SLA_TIER(600, 900, 1500),
     },
     incidentAckSecByPriority: { P1: 300, P2: 300, P3: 120, P4: 1800 },
     incidentResolveSecByPriority: { P1: 1800, P2: 1800, P3: 300, P4: 86400 },
@@ -131,6 +135,90 @@ const mockSlaStore = {
 function findMockSlaModel(id) {
   return mockSlaStore.models.find((item) => item.id === id) || null
 }
+
+const CHAMP_UI_EDITOR_SCREENS = [
+  {
+    key: 'home',
+    label: 'Champ Home',
+    shortLabel: 'Home',
+    slotCount: 2,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_home_top',
+        label: 'Champ home top',
+        displayType: 'Scroll',
+        bannerType: 'SCROLL',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+      {
+        key: 'champ_home_mid',
+        label: 'Champ home mid',
+        displayType: 'Static',
+        bannerType: 'STATIC',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'jobs',
+    label: 'Jobs',
+    shortLabel: 'Jobs',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_orders_banner',
+        label: 'Jobs banner',
+        displayType: 'Static',
+        bannerType: 'STATIC',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'earnings',
+    label: 'Earnings',
+    shortLabel: 'Earn',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_earnings_banner',
+        label: 'Earnings banner',
+        displayType: 'Scroll',
+        bannerType: 'SCROLL',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+  {
+    key: 'global',
+    label: 'Global',
+    shortLabel: 'Pop-up',
+    slotCount: 1,
+    bannerTotal: 0,
+    slots: [
+      {
+        key: 'champ_app_open_popup',
+        label: 'Pop-up ad (on open)',
+        displayType: 'Pop-up',
+        bannerType: 'POPUP',
+        bannerCount: 0,
+        activeCount: 0,
+        banners: [],
+      },
+    ],
+  },
+]
 
 const mockRoutes = {
   'GET /admin/dashboard': () => adminDashboardMock,
@@ -247,18 +335,24 @@ const mockRoutes = {
       { key: 'CHAMP', label: 'Champ app' },
     ],
   }),
-  'GET /admin/ui-editor/screen-map': ({ params }) => ({
-    app: params?.app || 'CUSTOMER',
-    apps: [
+  'GET /admin/ui-editor/screen-map': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    const apps = [
       { key: 'CUSTOMER', label: 'Customer app' },
       { key: 'CHAMP', label: 'Champ app' },
-    ],
+    ]
+    if (app === 'CHAMP') {
+      return { app: 'CHAMP', apps, screens: CHAMP_UI_EDITOR_SCREENS }
+    }
+    return {
+    app: params?.app || 'CUSTOMER',
+    apps,
     screens: [
       {
         key: 'home',
         label: 'Home Screen',
         shortLabel: 'Home',
-        slotCount: 3,
+        slotCount: 4,
         bannerTotal: 6,
         slots: [
           {
@@ -283,6 +377,18 @@ const mockRoutes = {
             banners: [
               { id: 'bnr-3', title: 'Ramadan offers', bannerType: 'STATIC', isActive: false },
             ],
+          },
+          {
+            key: 'home_exclusive_offers',
+            label: 'Super Exclusive offers',
+            displayType: 'Scroll',
+            bannerType: 'SCROLL',
+            slotKind: 'exclusive-offers',
+            bannerCount: 2,
+            productCount: 2,
+            activeCount: 2,
+            exclusiveItems: adminExclusiveOffersMock.items,
+            banners: [],
           },
           {
             key: 'home_below_picks',
@@ -341,8 +447,28 @@ const mockRoutes = {
         ],
       },
     ],
-  }),
-  'GET /admin/ui-editor/placements': ({ params }) => ({
+    }
+  },
+  'GET /admin/ui-editor/placements': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    const screen = params?.screen || 'home'
+    if (app === 'CHAMP') {
+      const screenDef = CHAMP_UI_EDITOR_SCREENS.find((item) => item.key === screen) || CHAMP_UI_EDITOR_SCREENS[0]
+      return {
+        app: 'CHAMP',
+        screen: screenDef.key,
+        screens: CHAMP_UI_EDITOR_SCREENS.map((item) => ({
+          key: item.key,
+          label: item.shortLabel || item.label,
+        })),
+        placements: screenDef.slots.map((slot) => ({
+          ...slot,
+          screenKey: screenDef.key,
+          screenLabel: screenDef.label,
+        })),
+      }
+    }
+    return {
     app: params?.app || 'CUSTOMER',
     screen: params?.screen || 'home',
     screens: [
@@ -357,8 +483,14 @@ const mockRoutes = {
       { key: 'home_below', label: 'Below a section', activeCount: 0, type: 'STATIC' },
       { key: 'app_open_popup', label: 'Pop-up ad (on open)', activeCount: 1, type: 'POPUP' },
     ],
-  }),
-  'GET /admin/ui-editor/banners': () => ({
+    }
+  },
+  'GET /admin/ui-editor/banners': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    if (app === 'CHAMP') {
+      return { count: 0, banners: [] }
+    }
+    return {
     count: 2,
     banners: [
       {
@@ -398,8 +530,44 @@ const mockRoutes = {
         isActive: true,
       },
     ],
-  }),
-  'GET /admin/ui-editor/banners/meta': ({ params }) => ({
+    }
+  },
+  'GET /admin/ui-editor/banners/meta': ({ params }) => {
+    const app = String(params?.app || 'CUSTOMER').toUpperCase()
+    if (app === 'CHAMP') {
+      return {
+        app: 'CHAMP',
+        screens: CHAMP_UI_EDITOR_SCREENS.map((item) => ({
+          key: item.key,
+          label: item.shortLabel || item.label,
+        })),
+        placements: CHAMP_UI_EDITOR_SCREENS.flatMap((screen) =>
+          screen.slots.map((slot) => ({
+            key: slot.key,
+            label: slot.label,
+            type: slot.bannerType,
+          })),
+        ),
+        bannerTypes: [
+          { key: 'SCROLL', label: 'Scroll' },
+          { key: 'STATIC', label: 'Static' },
+          { key: 'POPUP', label: 'Pop-up' },
+        ],
+        tapActions: [
+          { value: 'OPEN_CHAMP_SCREEN', label: 'Open Champ screen' },
+          { value: 'OPEN_URL', label: 'Open URL' },
+          { value: 'NONE', label: 'None' },
+        ],
+        audiences: [{ value: 'ALL', label: 'All champs' }],
+        statuses: [
+          { key: 'ACTIVE', label: 'Active' },
+          { key: 'SCHEDULED', label: 'Scheduled' },
+          { key: 'EXPIRED', label: 'Expired' },
+          { key: 'INACTIVE', label: 'Inactive' },
+        ],
+      }
+    }
+    return {
     app: params?.app || 'CUSTOMER',
     screens: [
       { key: 'home', label: 'Home' },
@@ -425,7 +593,8 @@ const mockRoutes = {
       { key: 'SCHEDULED', label: 'Scheduled' },
       { key: 'DRAFT', label: 'Draft' },
     ],
-  }),
+    }
+  },
   'GET /admin/ui-editor/banners/targets': ({ params }) => {
     const tapAction = String(params?.tapAction || 'OPEN_STORE').toUpperCase()
     if (tapAction === 'OPEN_CATEGORY') {
@@ -446,6 +615,17 @@ const mockRoutes = {
         targets: [
           { id: 'offer-ramadan', name: 'Ramadan deals' },
           { id: 'offer-free-delivery', name: 'Free delivery' },
+        ],
+      }
+    }
+    if (tapAction === 'OPEN_CHAMP_SCREEN') {
+      return {
+        tapAction,
+        targets: [
+          { id: 'home', label: 'Home' },
+          { id: 'orders', label: 'Active orders' },
+          { id: 'earnings', label: 'Earnings' },
+          { id: 'incentives', label: 'Incentives & rewards' },
         ],
       }
     }
@@ -496,6 +676,8 @@ const mockRoutes = {
   'GET /admin/ui-editor/home': () => ({
     title: 'Home',
     categories: adminHomeCategoriesMock.categories.slice(0, 2),
+    exclusiveOffersSection: adminExclusiveOffersMock.section,
+    exclusiveOffers: adminExclusiveOffersMock.items,
   }),
   'GET /admin/ui-editor/home/catalog': () => adminHomeCatalogMock,
   'GET /admin/ui-editor/home/categories': () => adminHomeCategoriesMock,
@@ -538,6 +720,99 @@ const mockRoutes = {
   'POST /admin/ui-editor/home/categories/publish': () => ({
     published: true,
     publishedAt: new Date().toISOString(),
+  }),
+  'GET /admin/ui-editor/home/exclusive-offers': () => adminExclusiveOffersMock,
+  'PATCH /admin/ui-editor/home/exclusive-offers': ({ body }) => ({
+    ...adminExclusiveOffersMock,
+    section: {
+      ...adminExclusiveOffersMock.section,
+      ...(body?.title != null ? { title: body.title } : {}),
+      ...(body?.titleAr != null ? { titleAr: body.titleAr } : {}),
+      ...(body?.isVisible != null ? { isVisible: body.isVisible } : {}),
+    },
+    summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: true },
+  }),
+  'GET /admin/ui-editor/home/exclusive-offers/products': ({ params }) => {
+    const search = String(params?.search || '').trim().toLowerCase()
+    const vendorId = params?.vendorId ? String(params.vendorId) : ''
+    const storeTypeId = params?.storeTypeId ? String(params.storeTypeId) : ''
+    const availableOnly = params?.availableOnly === true || params?.availableOnly === 'true'
+    const includeSelected = params?.includeSelected === true || params?.includeSelected === 'true'
+    let products = [...adminExclusiveOfferProductsMock.products]
+    if (search) {
+      products = products.filter((product) => {
+        const haystack = `${product.name} ${product.vendor?.name || ''}`.toLowerCase()
+        return haystack.includes(search)
+      })
+    }
+    if (vendorId) {
+      products = products.filter((product) => product.vendor?.id === vendorId)
+    }
+    if (storeTypeId) {
+      const storeTypeVendors = {
+        'st-food': ['vnd-green-kitchen'],
+        'st-electronics': ['vnd-sharaf'],
+        'st-flowers': ['vnd-flowers'],
+      }
+      const allowed = storeTypeVendors[storeTypeId] || []
+      products = products.filter((product) => allowed.includes(product.vendor?.id))
+    }
+    if (availableOnly) {
+      products = products.filter((product) => product.isAvailable !== false)
+    }
+    if (!includeSelected) {
+      products = products.filter((product) => !product.alreadySelected)
+    }
+    return {
+      ...adminExclusiveOfferProductsMock,
+      total: products.length,
+      products,
+    }
+  },
+  'POST /admin/ui-editor/home/exclusive-offers/items': ({ body }) => {
+    const ids = body?.productIds || body?.items?.map((item) => item.productId) || []
+    const newItems = ids
+      .filter((id) => !adminExclusiveOffersMock.items.some((item) => item.productId === id))
+      .map((productId, index) => ({
+        id: `exo-item-${Date.now()}-${index}`,
+        productId,
+        vendorId: 'vnd-mock',
+        title: `Product ${productId}`,
+        imageUrl: null,
+        originalPrice: 10,
+        offerPrice: 8,
+        isVisible: true,
+        liveOnCustomer: true,
+        sortOrder: adminExclusiveOffersMock.items.length + index,
+        tapAction: 'OPEN_PRODUCT',
+        targetId: productId,
+        vendor: { id: 'vnd-mock', name: 'Mock vendor', logoUrl: null },
+      }))
+    return {
+      ...adminExclusiveOffersMock,
+      items: [...adminExclusiveOffersMock.items, ...newItems],
+      summary: {
+        itemCount: adminExclusiveOffersMock.items.length + newItems.length,
+        visibleCount: adminExclusiveOffersMock.items.length + newItems.length,
+        liveOnCustomerCount: adminExclusiveOffersMock.items.length + newItems.length,
+        unpublishedChanges: true,
+      },
+    }
+  },
+  'PATCH /admin/ui-editor/home/exclusive-offers/items/reorder': ({ body }) => ({
+    ...adminExclusiveOffersMock,
+    items: (body?.items || []).map((item, index) => {
+      const existing = adminExclusiveOffersMock.items.find((row) => row.id === item.id)
+      return existing
+        ? { ...existing, sortOrder: item.sortOrder ?? index }
+        : { id: item.id, sortOrder: item.sortOrder ?? index }
+    }),
+  }),
+  'POST /admin/ui-editor/home/exclusive-offers/publish': () => ({
+    ...adminExclusiveOffersMock,
+    published: true,
+    publishedAt: new Date().toISOString(),
+    summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: false },
   }),
   'GET /admin/ui-editor/catalog': () => ({
     items: [
@@ -683,6 +958,38 @@ export const mockClient = {
       }
     }
 
+    // Dynamic exclusive offer item patch/delete
+    if (!route) {
+      const exclusiveItemMatch = String(url).match(
+        /^\/admin\/ui-editor\/home\/exclusive-offers\/items\/([^/?]+)$/,
+      )
+      if (exclusiveItemMatch) {
+        const itemId = decodeURIComponent(exclusiveItemMatch[1])
+        if (itemId !== 'reorder') {
+          if (method.toUpperCase() === 'PATCH') {
+            route = ({ body: patchBody }) => ({
+              ...adminExclusiveOffersMock,
+              items: adminExclusiveOffersMock.items.map((item) =>
+                item.id === itemId ? { ...item, ...(patchBody || {}) } : item,
+              ),
+              summary: { ...adminExclusiveOffersMock.summary, unpublishedChanges: true },
+            })
+          } else if (method.toUpperCase() === 'DELETE') {
+            route = () => ({
+              ...adminExclusiveOffersMock,
+              items: adminExclusiveOffersMock.items.filter((item) => item.id !== itemId),
+              summary: {
+                itemCount: adminExclusiveOffersMock.items.length - 1,
+                visibleCount: adminExclusiveOffersMock.items.length - 1,
+                liveOnCustomerCount: adminExclusiveOffersMock.items.length - 1,
+                unpublishedChanges: true,
+              },
+            })
+          }
+        }
+      }
+    }
+
     // Dynamic home category patch
     if (!route && method.toUpperCase() === 'PATCH') {
       const categoryMatch = String(url).match(
@@ -707,7 +1014,7 @@ export const mockClient = {
 
     // Dynamic SLA model detail / update / publish / set-default
     if (!route) {
-      const slaMatch = String(url).match(/^\/admin\/sla-models\/([^/?]+)(?:\/(publish|set-default))?$/)
+      const slaMatch = String(url).match(/^\/admin\/sla-models\/([^/?]+)(?:\/(publish|set-default|reset))?$/)
       if (slaMatch && slaMatch[1] !== 'template') {
         const slaModelId = decodeURIComponent(slaMatch[1])
         const action = slaMatch[2] || null
@@ -787,6 +1094,30 @@ export const mockClient = {
               config: structuredClone(MOCK_SLA_CONFIG),
             }
             return presentMockSlaModel({ ...current, isDefault: true })
+          }
+        } else if (action === 'reset' && methodName === 'POST') {
+          route = () => {
+            const current = existing || {
+              id: slaModelId,
+              name: 'Platform default SLA',
+              categoryLabel: 'Food & Beverage',
+              description: '',
+              status: 'DRAFT',
+              isDefault: false,
+              isActive: true,
+              currentVersion: 0,
+              config: structuredClone(MOCK_SLA_CONFIG),
+            }
+            const reset = {
+              ...current,
+              draftConfig: structuredClone(MOCK_SLA_CONFIG),
+              hasUnpublishedChanges: true,
+            }
+            mockSlaStore.models = [
+              reset,
+              ...mockSlaStore.models.filter((item) => item.id !== slaModelId),
+            ]
+            return presentMockSlaModel(reset)
           }
         }
       }

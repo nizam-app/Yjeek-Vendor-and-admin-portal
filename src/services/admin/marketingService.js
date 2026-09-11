@@ -238,6 +238,49 @@ export const adminMarketingService = {
   },
 
   /**
+   * GET /admin/marketing/promo-codes/:id
+   */
+  async getPromoCode(promoCodeId, options = {}) {
+    const id = String(promoCodeId || '').trim()
+    if (!id) return { data: null, meta: null }
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to load a promo code.')
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.promoCodes.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * PATCH /admin/marketing/promo-codes/:id
+   */
+  async updatePromoCode(promoCodeId, form = {}, options = {}) {
+    const id = String(promoCodeId || '').trim()
+    if (!id) throw new Error('Promo code id is required.')
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to update a promo code.')
+    }
+    const body = mapAdminCreatePromoCodeRequest(form)
+    const response = await apiClient.patch(endpoints.admin.marketing.promoCodes.update(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * Send customer notification.
    * Confirmed: POST /admin/marketing/notifications
    *
@@ -424,5 +467,160 @@ export const adminMarketingService = {
       },
       meta: response?.meta ?? null,
     }
+  },
+
+  async listPromoCategories(options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.promoCategories.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+    return {
+      data: response?.data ?? { count: 0, items: [] },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async createPromoCategory(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.promoCategories.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updatePromoCategory(id, body, options = {}) {
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.promoCategories.update(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async retirePromoCategory(id, options = {}) {
+    const response = await apiClient.post(
+      endpoints.admin.marketing.promoCategories.retire(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async restorePromoCategory(id, options = {}) {
+    const response = await apiClient.post(
+      endpoints.admin.marketing.promoCategories.restore(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listGeofenceCampaigns(options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const { status = 'all', limit = 20, page, search, vendorId, params, ...requestOptions } =
+      options
+    const response = await apiClient.get(endpoints.admin.marketing.geofenceCampaigns.list, {
+      ...requestOptions,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params: {
+        status,
+        limit,
+        ...(page != null ? { page } : {}),
+        ...(search ? { search } : {}),
+        ...(vendorId ? { vendorId } : {}),
+        ...(params || {}),
+      },
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getGeofenceCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    if (!useRealMarketingApi()) return { data: null, meta: null }
+    const response = await apiClient.get(endpoints.admin.marketing.geofenceCampaigns.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createGeofenceCampaign(form, options = {}) {
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to create a geofence campaign.')
+    }
+    const response = await apiClient.post(
+      endpoints.admin.marketing.geofenceCampaigns.create,
+      form,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateGeofenceCampaign(campaignId, form, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to update a geofence campaign.')
+    }
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.geofenceCampaigns.update(id),
+      form,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async deleteGeofenceCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to delete a geofence campaign.')
+    }
+    const response = await apiClient.delete(
+      endpoints.admin.marketing.geofenceCampaigns.remove(id),
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
 }

@@ -1,6 +1,8 @@
 import { ApiError } from '../../api/errors'
 
-function mapPeerRole(peerRole) {
+function mapPeerRole(peerRole, channel) {
+  if (channel === 'customer') return 'Customer'
+  if (channel === 'driver') return 'Champ'
   switch (String(peerRole || '').toUpperCase()) {
     case 'CUSTOMER':
       return 'Customer'
@@ -26,6 +28,11 @@ export function initialsFromPeerName(name) {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
+function formatIssueType(issueType) {
+  if (!issueType) return ''
+  return String(issueType).replaceAll('_', ' ')
+}
+
 /**
  * Map one confirmed open-chat item into AdminOpenChats / ChatStrip shape.
  * @param {Record<string, unknown>} item
@@ -37,17 +44,33 @@ export function mapAdminChatItem(item) {
   if (!conversationId) return null
 
   const peerName = item.peerName ? String(item.peerName) : '—'
-  const role = mapPeerRole(item.peerRole)
+  const role = mapPeerRole(item.peerRole, item.channel)
+  const ticketDisplayCode = item.ticketDisplayCode ? String(item.ticketDisplayCode) : ''
+  const ticketId = item.ticketId ? String(item.ticketId) : ''
+  const issueType = formatIssueType(item.issueType)
+  const baseMessage = item.lastMessage ? String(item.lastMessage) : ''
+  const message =
+    ticketDisplayCode && issueType
+      ? `${ticketDisplayCode} · ${issueType}`
+      : ticketDisplayCode || baseMessage
 
   return {
-    id: String(conversationId),
+    id: ticketDisplayCode ? `${conversationId}:${ticketDisplayCode}` : String(conversationId),
     conversationId: String(conversationId),
+    ticketId: ticketId || null,
     orderId: item.orderId ?? null,
     orderNumber: item.orderNumber ? String(item.orderNumber) : null,
+    channel: item.channel ? String(item.channel) : null,
+    channelLabel: item.channelLabel ? String(item.channelLabel) : null,
+    status: item.status ? String(item.status) : null,
+    ticketDisplayCode: ticketDisplayCode || null,
+    ticketStatus: item.ticketStatus ? String(item.ticketStatus) : null,
+    issueType: issueType || null,
     name: peerName,
     role,
     peerRole: item.peerRole ? String(item.peerRole) : null,
-    message: item.lastMessage ? String(item.lastMessage) : '',
+    message,
+    lastMessage: baseMessage,
     lastMessageAt: item.lastMessageAt ?? null,
     unreadCount: Number(item.unread) || 0,
     initials: initialsFromPeerName(peerName),
@@ -68,6 +91,14 @@ export function mapAdminChatsResponse(data) {
   const items = (Array.isArray(data.items) ? data.items : [])
     .map((item) => mapAdminChatItem(item))
     .filter(Boolean)
+    .sort((a, b) => {
+      const aTicket = a.ticketDisplayCode ? 1 : 0
+      const bTicket = b.ticketDisplayCode ? 1 : 0
+      if (aTicket !== bTicket) return bTicket - aTicket
+      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
+      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0
+      return bTime - aTime
+    })
 
   return {
     active: Number(data.active) || items.length,

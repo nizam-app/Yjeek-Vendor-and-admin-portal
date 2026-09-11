@@ -1,4 +1,5 @@
 import { useApiResource } from '../useApiResource'
+import { useIntervalWhenVisible } from '../useIntervalWhenVisible'
 import { isAdminRealApiFeature } from '../../api/config'
 import { adminIncidentService } from '../../services/admin/incidentService'
 import { emptyAdminIncidents } from '../../mappers/admin/mapAdminIncidents'
@@ -9,17 +10,32 @@ import { emptyAdminIncidents } from '../../mappers/admin/mapAdminIncidents'
  *
  * Confirmed: GET /admin/incidents?status=all&priority=all&limit=50
  * When dashboard real API is off, returns empty items (no mock padding).
+ *
+ * @param {{ status?: string, priority?: string, limit?: number, orderIds?: string|null, enabled?: boolean, refreshSeconds?: number }} [query]
  */
 export function useAdminIncidents(query = {}) {
   const useReal = isAdminRealApiFeature('dashboard')
+  const enabled = query.enabled !== false
   const status = query.status ?? 'all'
   const priority = query.priority ?? 'all'
   const limit = query.limit ?? 50
+  const orderIds = query.orderIds ?? null
+  const refreshSeconds = Number(query.refreshSeconds) || 0
 
-  return useApiResource(() => {
-    if (!useReal) {
+  const resource = useApiResource(() => {
+    if (!enabled || !useReal) {
       return Promise.resolve({ data: emptyAdminIncidents(), meta: null })
     }
-    return adminIncidentService.list({ status, priority, limit })
-  }, [useReal, status, priority, limit])
+    return adminIncidentService.list({ status, priority, limit, orderIds })
+  }, [useReal, enabled, status, priority, limit, orderIds])
+
+  useIntervalWhenVisible(
+    () => {
+      resource.refetch()
+    },
+    refreshSeconds > 0 ? refreshSeconds * 1000 : null,
+    enabled && useReal,
+  )
+
+  return resource
 }

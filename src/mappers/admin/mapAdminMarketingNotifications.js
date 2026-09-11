@@ -101,7 +101,7 @@ export function mapAdminMarketingNotificationsPage(listData) {
   const raw = Array.isArray(listData.notifications) ? listData.notifications : []
 
   return {
-    viewTabs: ['Notifications', 'Promo codes'],
+    viewTabs: ['Notifications', 'Promo codes', 'Promo categories'],
     notifications: {
       title: 'Notifications',
       subtitle: 'Send push / SMS to customers & vendors',

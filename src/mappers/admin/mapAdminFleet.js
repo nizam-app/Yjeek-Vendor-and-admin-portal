@@ -701,6 +701,11 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
       ? String(detail.name)
       : [firstName, lastName].filter(Boolean).join(' ').trim()
 
+  const parsedPhone = parseChampPhone(
+    detail.phone && detail.phone !== '—' ? String(detail.phone) : profile.phone || '',
+    profile.countryCode || detail.countryCode || '+973',
+  )
+
   const vehicleTypeRaw = vehicle.type || detail.vehicle || 'BIKE'
   const vehicleType =
     String(vehicleTypeRaw).toUpperCase() === 'CAR' || String(vehicleTypeRaw) === 'Car'
@@ -766,7 +771,8 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
 
   return {
     fullName: fullName || '',
-    phone: detail.phone && detail.phone !== '—' ? String(detail.phone) : '',
+    phone: parsedPhone.phone,
+    countryCode: parsedPhone.countryCode,
     email: profile.email ? String(profile.email) : '',
     nationality: profile.nationality ? String(profile.nationality) : 'Bahraini',
     supplierId: String(profile.supplierId || supplier.id || '').trim(),
@@ -1500,6 +1506,35 @@ export function mapAdminChampSuspendRequest(form = {}) {
   if (note) body.note = note
 
   return body
+}
+
+/**
+ * Map Message champ modal → POST /admin/fleet/champs/:id/messages body.
+ * Confirmed: title, body, push?, sms? — at least one channel required.
+ */
+export function mapAdminChampMessageRequest(form = {}) {
+  const title = String(form.title || '').trim()
+  const messageBody = String(form.body || '').trim()
+  if (!title) {
+    throw new ApiError({ message: 'Title is required.' })
+  }
+  if (!messageBody) {
+    throw new ApiError({ message: 'Message is required.' })
+  }
+  if (title.length > 200) {
+    throw new ApiError({ message: 'Title must be 200 characters or less.' })
+  }
+  if (messageBody.length > 5000) {
+    throw new ApiError({ message: 'Message must be 5000 characters or less.' })
+  }
+
+  const push = form.push !== false
+  const sms = Boolean(form.sms)
+  if (!push && !sms) {
+    throw new ApiError({ message: 'Enable Push and/or SMS.' })
+  }
+
+  return { title, body: messageBody, push, sms }
 }
 
 const TERMINATE_MONTH_INDEX = {

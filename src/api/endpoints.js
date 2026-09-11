@@ -94,6 +94,8 @@ export const endpoints = {
        * Confirmed: GET /admin/incidents?status=&priority=&limit=
        */
       list: '/admin/incidents',
+      /** Closed category + resolutionActionCode vocabularies */
+      taxonomy: '/admin/incidents/taxonomy',
       /**
        * Confirmed: GET /admin/incidents/:incidentId
        * @param {string} incidentId
@@ -101,6 +103,31 @@ export const endpoints = {
       detail: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}`,
       /** Confirmed: POST /admin/incidents/:incidentId/resolve */
       resolve: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/resolve`,
+      acknowledge: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/acknowledge`,
+      startInvestigation: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/investigation/start`,
+      requestPartyResponse: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/party-response/request`,
+      escalateSeverity: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/severity/escalate`,
+      addEvidence: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/evidence`,
+      actions: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/actions`,
+      presenceHeartbeat: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/presence/heartbeat`,
+      presenceLeave: (incidentId) => `/admin/incidents/${encodeURIComponent(incidentId)}/presence`,
+      refundContext: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/refund-context`,
+      refundApprovals: '/admin/incidents/refund-approvals',
+      approveRefund: (approvalId) =>
+        `/admin/incidents/refund-approvals/${encodeURIComponent(approvalId)}/approve`,
+      rejectRefund: (approvalId) =>
+        `/admin/incidents/refund-approvals/${encodeURIComponent(approvalId)}/reject`,
+      resolveContext: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/resolve-context`,
+      resolveTyped: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/resolve/typed`,
+      seniorSignOff: (incidentId) =>
+        `/admin/incidents/${encodeURIComponent(incidentId)}/senior-sign-off`,
     },
     search: {
       /** Confirmed: GET /admin/search?q=&limit= */
@@ -135,6 +162,8 @@ export const endpoints = {
        * @param {string} conversationId
        */
       messages: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/messages`,
+      status: (conversationId) => `/admin/chats/${encodeURIComponent(conversationId)}/status`,
+      orderConversations: (orderId) => `/admin/chats/orders/${encodeURIComponent(orderId)}/conversations`,
     },
     vendors: {
       /**
@@ -366,6 +395,31 @@ export const endpoints = {
        */
       setDefault: (slaModelId) =>
         `/admin/sla-models/${encodeURIComponent(slaModelId)}/set-default`,
+      /**
+       * @param {string} slaModelId
+       */
+      reset: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/reset`,
+      /**
+       * @param {string} slaModelId
+       */
+      rollback: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/rollback`,
+      /**
+       * @param {string} slaModelId
+       */
+      versions: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/versions`,
+      /**
+       * @param {string} slaModelId
+       */
+      changelog: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/changelog`,
+      /**
+       * @param {string} slaModelId
+       */
+      versionUsage: (slaModelId) =>
+        `/admin/sla-models/${encodeURIComponent(slaModelId)}/version-usage`,
     },
     /**
      * Confirmed Customers — Postman folder 08.
@@ -535,6 +589,13 @@ export const endpoints = {
       champReconcilePod: (champId) =>
         `/admin/fleet/champs/${encodeURIComponent(champId)}/reconcile-pod`,
       /**
+       * Confirmed: POST /admin/fleet/champs/:champId/messages
+       * Body: { title, body, push?, sms? } — at least one channel required
+       * @param {string} champId
+       */
+      champMessages: (champId) =>
+        `/admin/fleet/champs/${encodeURIComponent(champId)}/messages`,
+      /**
        * Confirmed: GET /admin/fleet/champs/:champId/documents
        * Also POST upsert document: { type, imageUrl, documentNumber?, expiryDate?, nationality? }
        * @param {string} champId
@@ -617,6 +678,25 @@ export const endpoints = {
         list: '/admin/marketing/promo-codes',
         /** Confirmed: POST /admin/marketing/promo-codes — Create promo code */
         create: '/admin/marketing/promo-codes',
+        /** Confirmed: GET /admin/marketing/promo-codes/:id */
+        detail: (id) => `/admin/marketing/promo-codes/${encodeURIComponent(id)}`,
+        /** Confirmed: PATCH /admin/marketing/promo-codes/:id */
+        update: (id) => `/admin/marketing/promo-codes/${encodeURIComponent(id)}`,
+      },
+      promoCategories: {
+        list: '/admin/marketing/promo-categories',
+        create: '/admin/marketing/promo-categories',
+        update: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}`,
+        retire: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}/retire`,
+        restore: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}/restore`,
+        reorder: '/admin/marketing/promo-categories/reorder',
+      },
+      geofenceCampaigns: {
+        list: '/admin/marketing/geofence-campaigns',
+        create: '/admin/marketing/geofence-campaigns',
+        detail: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
+        remove: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
       },
     },
     /**
@@ -716,6 +796,22 @@ export const endpoints = {
         categoriesPublish: '/admin/ui-editor/home/categories/publish',
         /** Confirmed: POST /admin/ui-editor/home/categories/cleanup */
         categoriesCleanup: '/admin/ui-editor/home/categories/cleanup',
+        /** Confirmed: GET + PATCH /admin/ui-editor/home/exclusive-offers */
+        exclusiveOffers: '/admin/ui-editor/home/exclusive-offers',
+        /** Confirmed: GET /admin/ui-editor/home/exclusive-offers/products */
+        exclusiveOffersProducts: '/admin/ui-editor/home/exclusive-offers/products',
+        /** Confirmed: POST /admin/ui-editor/home/exclusive-offers/items */
+        exclusiveOffersItems: '/admin/ui-editor/home/exclusive-offers/items',
+        /** Confirmed: PATCH /admin/ui-editor/home/exclusive-offers/items/reorder */
+        exclusiveOffersItemsReorder: '/admin/ui-editor/home/exclusive-offers/items/reorder',
+        /**
+         * Confirmed: PATCH + DELETE /admin/ui-editor/home/exclusive-offers/items/:itemId
+         * @param {string} itemId
+         */
+        exclusiveOfferItem: (itemId) =>
+          `/admin/ui-editor/home/exclusive-offers/items/${encodeURIComponent(String(itemId || '').trim())}`,
+        /** Confirmed: POST /admin/ui-editor/home/exclusive-offers/publish */
+        exclusiveOffersPublish: '/admin/ui-editor/home/exclusive-offers/publish',
       },
     },
     reports: {
@@ -729,6 +825,8 @@ export const endpoints = {
       ordersMeta: '/admin/reports/orders/meta',
       /** Confirmed: GET /admin/reports/orders/export?preset=&limit= → CSV */
       ordersExport: '/admin/reports/orders/export',
+      /** Vendor settlement recovery obligations from incidents */
+      vendorCostRecovery: '/admin/reports/vendor-cost-recovery',
     },
   },
 }
