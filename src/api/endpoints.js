@@ -646,6 +646,25 @@ export const endpoints = {
         list: '/admin/marketing/promo-codes',
         /** Confirmed: POST /admin/marketing/promo-codes — Create promo code */
         create: '/admin/marketing/promo-codes',
+        /** Confirmed: GET /admin/marketing/promo-codes/:id */
+        detail: (id) => `/admin/marketing/promo-codes/${encodeURIComponent(id)}`,
+        /** Confirmed: PATCH /admin/marketing/promo-codes/:id */
+        update: (id) => `/admin/marketing/promo-codes/${encodeURIComponent(id)}`,
+      },
+      promoCategories: {
+        list: '/admin/marketing/promo-categories',
+        create: '/admin/marketing/promo-categories',
+        update: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}`,
+        retire: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}/retire`,
+        restore: (id) => `/admin/marketing/promo-categories/${encodeURIComponent(id)}/restore`,
+        reorder: '/admin/marketing/promo-categories/reorder',
+      },
+      geofenceCampaigns: {
+        list: '/admin/marketing/geofence-campaigns',
+        create: '/admin/marketing/geofence-campaigns',
+        detail: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
+        remove: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
       },
     },
     /**

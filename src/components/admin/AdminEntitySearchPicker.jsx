@@ -18,6 +18,7 @@ const inputClass =
  *   searchFn: (query: string, opts?: { signal?: AbortSignal }) => Promise<Array<{ id: string, label: string, meta?: string }>>,
  *   disabled?: boolean,
  *   allowRawIdAdd?: boolean,
+ *   minQueryLength?: number,
  * }} props
  */
 export function AdminEntitySearchPicker({
@@ -29,6 +30,7 @@ export function AdminEntitySearchPicker({
   searchFn,
   disabled = false,
   allowRawIdAdd = true,
+  minQueryLength = 2,
 }) {
   const listId = useId()
   const rootRef = useRef(null)
@@ -54,7 +56,7 @@ export function AdminEntitySearchPicker({
 
   useEffect(() => {
     const term = String(query || '').trim()
-    if (term.length < 2) {
+    if (term.length < minQueryLength) {
       setSuggestions([])
       setLoading(false)
       setSearchError('')
@@ -72,8 +74,8 @@ export function AdminEntitySearchPicker({
           .filter((row) => row?.id && !selectedIds.has(String(row.id)))
           .slice(0, 8)
         setSuggestions(next)
-        setOpen(true)
         setHighlight(next.length ? 0 : -1)
+        if (term.length > 0) setOpen(true)
       } catch (err) {
         if (controller.signal.aborted) return
         setSuggestions([])
@@ -81,7 +83,7 @@ export function AdminEntitySearchPicker({
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
-    }, 300)
+    }, minQueryLength === 0 ? 0 : 300)
 
     return () => {
       controller.abort()
@@ -89,7 +91,7 @@ export function AdminEntitySearchPicker({
     }
     // selectedIds content changes when chips change — intentional.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchFn, selected])
+  }, [query, searchFn, selected, minQueryLength])
 
   function addItem(item) {
     if (!item?.id) return
@@ -160,7 +162,7 @@ export function AdminEntitySearchPicker({
               setOpen(true)
             }}
             onFocus={() => {
-              if (suggestions.length) setOpen(true)
+              if (minQueryLength === 0 || suggestions.length) setOpen(true)
             }}
             onKeyDown={(event) => {
               if (event.key === 'ArrowDown') {
@@ -205,7 +207,7 @@ export function AdminEntitySearchPicker({
           ) : null}
         </div>
 
-        {open && String(query || '').trim().length >= 2 ? (
+        {open && String(query || '').trim().length >= minQueryLength ? (
           <ul
             id={listId}
             role="listbox"
@@ -217,7 +219,8 @@ export function AdminEntitySearchPicker({
               <li className="px-3 py-2 text-[12.5px] text-[#b42318]">{searchError}</li>
             ) : suggestions.length === 0 ? (
               <li className="px-3 py-2 text-[12.5px] text-[#7c8780]">
-                No matches. {allowRawIdAdd ? 'You can still Add a raw id.' : null}
+                No matches.
+                {allowRawIdAdd ? ' You can still Add a raw id.' : ' Create a promo under Marketing → Promo codes.'}
               </li>
             ) : (
               suggestions.map((item, index) => (

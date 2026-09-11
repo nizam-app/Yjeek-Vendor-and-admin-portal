@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ChevronDown } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ChevronDown, ChevronLeft } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import { mapAdminPromoCodeToEditForm } from '../../../mappers/admin/mapAdminMarketingPromoCodes'
 import {
   AdminDatePicker,
   todayLocalIsoDate,
@@ -103,6 +104,8 @@ function Card({ title, subtitle, children }) {
 
 export default function AdminCreatePromoCodePage() {
   const navigate = useNavigate()
+  const { promoCodeId } = useParams()
+  const isEdit = Boolean(promoCodeId)
   const goBack = () => navigate('/admin/marketing/promo-codes')
 
   const [form, setForm] = useState(() => {
@@ -124,14 +127,46 @@ export default function AdminCreatePromoCodePage() {
       categoryIds: [],
       serviceIds: [],
       channels: ['App'],
+      isActive: true,
     }
   })
+  const [loading, setLoading] = useState(isEdit)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   const today = todayLocalIsoDate()
   const validToMin = form.validFrom && form.validFrom > today ? form.validFrom : today
+
+  useEffect(() => {
+    if (!isEdit) return undefined
+
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const response = await adminService.getAdminMarketingPromoCode(promoCodeId)
+        const mapped = mapAdminPromoCodeToEditForm(response?.data)
+        if (!mapped) {
+          throw new Error('Promo code could not be loaded.')
+        }
+        if (!cancelled) {
+          setForm((prev) => ({ ...prev, ...mapped }))
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(formatApiErrorMessage(err, 'Failed to load promo code.'))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, promoCodeId])
 
   const searchVendors = useCallback(async (query, options = {}) => {
     const result = await adminService.getVendors({
@@ -176,29 +211,54 @@ export default function AdminCreatePromoCodePage() {
     }))
   }
 
-  async function handleCreate() {
+  async function handleSubmit() {
     setError('')
     setSuccess('')
     setSubmitting(true)
     try {
-      const response = await adminService.createAdminMarketingPromoCode(form)
-      const createdCode = response?.data?.code || form.code
-      setSuccess(`Promo code ${createdCode} created.`)
+      if (isEdit) {
+        const response = await adminService.updateAdminMarketingPromoCode(promoCodeId, form)
+        const savedCode = response?.data?.code || form.code
+        setSuccess(`Promo code ${savedCode} updated.`)
+      } else {
+        const response = await adminService.createAdminMarketingPromoCode(form)
+        const createdCode = response?.data?.code || form.code
+        setSuccess(`Promo code ${createdCode} created.`)
+      }
       navigate('/admin/marketing/promo-codes')
     } catch (err) {
-      setError(formatApiErrorMessage(err, 'Failed to create promo code.'))
+      setError(
+        formatApiErrorMessage(
+          err,
+          isEdit ? 'Failed to update promo code.' : 'Failed to create promo code.',
+        ),
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
+  const busy = submitting || loading
+
   return (
     <div className="px-5 py-4 pb-10 max-[700px]:px-3">
-      <div className="mb-3.5">
-        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
-          Create promo code
-        </h2>
-        <p className="mt-0.5 text-[12.5px] text-[#7c8780]">Set up a discount code</p>
+      <div className="mb-3.5 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={goBack}
+          className="inline-flex h-[34px] shrink-0 items-center gap-1 rounded-full border border-[#e4e8e4] bg-white px-3 text-[13px] font-medium text-[#455249] shadow-[0_1px_2px_rgba(20,40,28,.04)] hover:bg-[#f6f8f6]"
+        >
+          <ChevronLeft size={15} strokeWidth={2.2} />
+          Back
+        </button>
+        <div className="min-w-0">
+          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+            {isEdit ? 'Edit promo code' : 'Create promo code'}
+          </h2>
+          <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
+            {isEdit ? 'Update discount code details' : 'Set up a discount code'}
+          </p>
+        </div>
       </div>
 
       <div className="mb-4 inline-flex items-center gap-1">
@@ -232,6 +292,14 @@ export default function AdminCreatePromoCodePage() {
         </div>
       ) : null}
 
+      {loading ? (
+        <div className="rounded-[12px] border border-[#eceeec] bg-white px-4 py-10 text-center text-[13px] text-[#7c8780]">
+          Loading promo code…
+        </div>
+      ) : null}
+
+      {!loading ? (
+      <>
       <div className="space-y-4">
         <Card title="Code & discount">
           <div className="space-y-3.5">
@@ -242,7 +310,8 @@ export default function AdminCreatePromoCodePage() {
                   value={form.code}
                   onChange={update('code')}
                   placeholder="e.g. WELCOME50"
-                  disabled={submitting}
+                  disabled={busy || isEdit}
+                  readOnly={isEdit}
                 />
               </Field>
               <Field label="Description">
@@ -251,7 +320,7 @@ export default function AdminCreatePromoCodePage() {
                   value={form.description}
                   onChange={update('description')}
                   placeholder="e.g. 50% off first order"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
             </div>
@@ -260,7 +329,7 @@ export default function AdminCreatePromoCodePage() {
               <PillGroup
                 options={DISCOUNT_TYPES}
                 value={form.discountType}
-                disabled={submitting}
+                disabled={busy}
                 onChange={(discountType) => setForm((prev) => ({ ...prev, discountType }))}
               />
             </div>
@@ -271,7 +340,7 @@ export default function AdminCreatePromoCodePage() {
                   value={form.discountValue}
                   onChange={update('discountValue')}
                   placeholder={form.discountType === 'Percentage %' ? '50' : '2'}
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Max discount (cap)">
@@ -280,7 +349,7 @@ export default function AdminCreatePromoCodePage() {
                   value={form.maxDiscount}
                   onChange={update('maxDiscount')}
                   placeholder="e.g. 2 or BHD 2"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Min order">
@@ -289,7 +358,7 @@ export default function AdminCreatePromoCodePage() {
                   value={form.minOrder}
                   onChange={update('minOrder')}
                   placeholder="e.g. 5"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
             </div>
@@ -305,7 +374,7 @@ export default function AdminCreatePromoCodePage() {
                   value={form.totalUsageLimit}
                   onChange={update('totalUsageLimit')}
                   placeholder="e.g. 1000"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Per-customer limit">
@@ -314,11 +383,11 @@ export default function AdminCreatePromoCodePage() {
                   value={form.perCustomerLimit}
                   onChange={update('perCustomerLimit')}
                   placeholder="e.g. 1"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Eligible audience">
-                <Select value={form.audience} onChange={update('audience')} disabled={submitting}>
+                <Select value={form.audience} onChange={update('audience')} disabled={busy}>
                   {AUDIENCE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
                       {option}
@@ -332,24 +401,24 @@ export default function AdminCreatePromoCodePage() {
                 <AdminDatePicker
                   value={form.validFrom}
                   onChange={setValidFrom}
-                  min={today}
+                  min={isEdit ? null : today}
                   placeholder="Start date"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Valid to">
                 <AdminDatePicker
                   value={form.validTo}
                   onChange={setValidTo}
-                  min={validToMin}
+                  min={isEdit ? form.validFrom || null : validToMin}
                   placeholder="End date"
-                  disabled={submitting}
+                  disabled={busy}
                 />
               </Field>
               <Field label="Applies to">
                 <Select
                   value={form.scope}
-                  disabled={submitting}
+                  disabled={busy}
                   onChange={(event) => setScope(event.target.value)}
                 >
                   {SCOPE_OPTIONS.map((option) => (
@@ -375,7 +444,7 @@ export default function AdminCreatePromoCodePage() {
               <PillGroup
                 options={SCOPE_OPTIONS}
                 value={form.scope}
-                disabled={submitting}
+                disabled={busy}
                 onChange={setScope}
               />
             </div>
@@ -388,7 +457,7 @@ export default function AdminCreatePromoCodePage() {
                 selected={form.selectedVendors}
                 onChange={(selectedVendors) => setForm((prev) => ({ ...prev, selectedVendors }))}
                 searchFn={searchVendors}
-                disabled={submitting}
+                disabled={busy}
               />
             ) : null}
 
@@ -400,7 +469,7 @@ export default function AdminCreatePromoCodePage() {
                 selected={form.categoryIds}
                 onChange={(categoryIds) => setForm((prev) => ({ ...prev, categoryIds }))}
                 searchFn={async () => []}
-                disabled={submitting}
+                disabled={busy}
                 allowRawIdAdd
               />
             ) : null}
@@ -413,7 +482,7 @@ export default function AdminCreatePromoCodePage() {
                 selected={form.serviceIds}
                 onChange={(serviceIds) => setForm((prev) => ({ ...prev, serviceIds }))}
                 searchFn={async () => []}
-                disabled={submitting}
+                disabled={busy}
                 allowRawIdAdd
               />
             ) : null}
@@ -425,7 +494,7 @@ export default function AdminCreatePromoCodePage() {
             options={CHANNEL_OPTIONS}
             value={form.channels}
             multi
-            disabled={submitting}
+            disabled={busy}
             onChange={(channels) => setForm((prev) => ({ ...prev, channels }))}
           />
         </Card>
@@ -442,13 +511,21 @@ export default function AdminCreatePromoCodePage() {
         </button>
         <button
           type="button"
-          onClick={handleCreate}
-          disabled={submitting}
+          onClick={handleSubmit}
+          disabled={busy}
           className="inline-flex h-[36px] items-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
         >
-          {submitting ? 'Creating…' : 'Create promo code'}
+          {submitting
+            ? isEdit
+              ? 'Saving…'
+              : 'Creating…'
+            : isEdit
+              ? 'Save changes'
+              : 'Create promo code'}
         </button>
       </div>
+      </>
+      ) : null}
     </div>
   )
 }

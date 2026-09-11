@@ -696,7 +696,7 @@ export const adminManagementMock = {
     ],
   },
   marketing: {
-    viewTabs: ['Notifications', 'Promo codes'],
+    viewTabs: ['Notifications', 'Promo codes', 'Promo categories'],
     notifications: {
       title: 'Notifications',
       subtitle: 'Send push / SMS to customers & vendors',
