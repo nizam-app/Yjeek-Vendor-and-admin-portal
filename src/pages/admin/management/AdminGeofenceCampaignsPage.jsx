@@ -86,18 +86,13 @@ export default function AdminGeofenceCampaignsPage() {
               else navigate('/admin/marketing')
             }}
             className={cn(
-              'relative h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
+              'h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
               item === 'Geofence offers'
                 ? 'bg-[#e8f7ed] text-[#1aa054]'
                 : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4] hover:text-[#455249]',
             )}
           >
             {item}
-            {item === 'Geofence offers' ? (
-              <span className="absolute -right-1 -top-1 rounded-[3px] bg-[#8C3A2B] px-1 py-px text-[7.5px] font-bold tracking-[0.08em] text-white">
-                NEW
-              </span>
-            ) : null}
           </button>
         ))}
       </div>
