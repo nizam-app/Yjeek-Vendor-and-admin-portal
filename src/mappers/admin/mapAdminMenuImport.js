@@ -41,7 +41,7 @@ function toPrice(value) {
 }
 
 export function formatBhd(price) {
-  return `BD ${toPrice(price).toFixed(3)}`
+  return `BHD ${toPrice(price).toFixed(3)}`
 }
 
 export function parseBhdInput(value) {
