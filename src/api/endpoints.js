@@ -259,6 +259,38 @@ export const endpoints = {
        * @param {string} vendorId
        */
       sla: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/sla`,
+      /**
+       * Menu Import BFF (Gate 1). Feature: `menu-import`.
+       * @param {string} vendorId
+       */
+      menuImports: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports`,
+      menuImportSpreadsheetPreview: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/spreadsheet-preview`,
+      /**
+       * @param {string} vendorId
+       * @param {string} importId
+       */
+      menuImport: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}`,
+      menuImportCancel: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/cancel`,
+      menuImportRetry: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/retry`,
+      menuImportReview: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review`,
+      menuImportReviewCategories: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review/categories`,
+      menuImportReviewCategory: (vendorId, importId, categoryId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review/categories/${encodeURIComponent(categoryId)}`,
+      menuImportReviewItems: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review/items`,
+      menuImportReviewItem: (vendorId, importId, itemId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review/items/${encodeURIComponent(itemId)}`,
+      menuImportPriceParity: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/review/verify-price-parity`,
+      menuImportPublish: (vendorId, importId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/menu-imports/${encodeURIComponent(importId)}/publish`,
     },
     /**
      * Confirmed Store types — Postman folder 11.
@@ -619,6 +651,8 @@ export const endpoints = {
        * multipart field: file → data.url
        */
       fleetImages: '/admin/uploads/fleet-images',
+      /** POST /admin/uploads/menu-sources (multipart field: file) — PDF + images */
+      menuSources: '/admin/uploads/menu-sources',
     },
     /**
      * Confirmed UI Editor — Postman folder 17.

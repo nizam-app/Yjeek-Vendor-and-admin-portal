@@ -16,6 +16,7 @@ import { AdminVendorUsers } from '../../../components/admin/management/AdminVend
 import { AdminVendorPromotions } from '../../../components/admin/management/AdminVendorPromotions'
 import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
 import { AdminVendorSla } from '../../../components/admin/management/AdminVendorSla'
+import { AdminVendorMenuImport } from '../../../components/admin/management/AdminVendorMenuImport'
 import { cn } from '../../../components/admin/cn'
 import {
   emptyAdminDeliveryZones,
@@ -753,7 +754,7 @@ export default function AdminVendorDetailPage() {
       {/* Pill tabs */}
       <div className="mb-4 overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
         <div className="inline-flex w-full min-w-full items-center rounded-[10px] bg-[#ebeceb] p-[4px]">
-          {data.tabs.map((item) => (
+          {(data.tabs || []).map((item) => (
             <button
               key={item}
               type="button"
@@ -1136,6 +1137,11 @@ export default function AdminVendorDetailPage() {
             </div>
           )}
         </div>
+      ) : tab === 'Menu import' ? (
+        <AdminVendorMenuImport
+          vendorId={data.backendId || vendorId}
+          storeName={data.name}
+        />
       ) : (
         <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <p className="text-[15px] font-bold text-[#17231c]">{tab}</p>

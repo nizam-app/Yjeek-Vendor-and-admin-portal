@@ -42,6 +42,7 @@ export default function AdminIconImageUpload({
   aspect = 1,
   feature = 'store-types',
   disabled = false,
+  skipCrop = false,
   className,
 }) {
   const inputRef = useRef(null)
@@ -113,14 +114,14 @@ export default function AdminIconImageUpload({
   }
 
   const handlePick = () => {
-    if (isBusy) return
+    if (isBusy || cropOpen) return
     inputRef.current?.click()
   }
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (!file || cropOpen) return
 
     setError(null)
 
@@ -128,6 +129,11 @@ export default function AdminIconImageUpload({
       validateAdminImageFile(file, { maxBytes: ADMIN_IMAGE_UPLOAD_MAX_BYTES })
     } catch (err) {
       setError(err)
+      return
+    }
+
+    if (skipCrop) {
+      void uploadFile(file)
       return
     }
 

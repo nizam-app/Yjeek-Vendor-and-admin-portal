@@ -147,4 +147,68 @@ export const adminUploadService = {
       raw: response?.data ?? null,
     }
   },
+
+  /**
+   * Menu import source files (PDF, images, CSV/Excel spreadsheets).
+   * POST /admin/uploads/menu-sources
+   *
+   * @param {File} file
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async uploadMenuSource(file, options = {}) {
+    if (!isAdminRealApiFeature('menu-import') && apiConfig.adminUseMockApi) {
+      throw new ApiError({ message: 'Menu import upload API is not enabled.' })
+    }
+
+    if (!file || !(file instanceof File)) {
+      throw new ApiError({ message: 'Please choose a PDF, image, or spreadsheet file.' })
+    }
+
+    const type = String(file.type || '').toLowerCase()
+    const name = String(file.name || '').toLowerCase()
+    const allowed =
+      type === 'application/pdf' ||
+      name.endsWith('.pdf') ||
+      ALLOWED_TYPES.has(type) ||
+      name.endsWith('.jpg') ||
+      name.endsWith('.jpeg') ||
+      name.endsWith('.png') ||
+      name.endsWith('.webp') ||
+      type === 'text/csv' ||
+      type === 'application/csv' ||
+      type === 'application/vnd.ms-excel' ||
+      type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+      name.endsWith('.csv') ||
+      name.endsWith('.xlsx') ||
+      name.endsWith('.xls')
+
+    if (!allowed) {
+      throw new ApiError({
+        message: 'Only JPEG, PNG, WebP, PDF, CSV, and Excel (.xlsx/.xls) files are allowed.',
+      })
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const response = await apiClient.post(
+      endpoints.admin.uploads.menuSources,
+      formData,
+      requestOptions({ ...options, feature: 'menu-import' }),
+    )
+
+    const mapped = mapAdminUploadImageResponse(response?.data)
+    if (!mapped.url) {
+      throw new ApiError({
+        message: 'Upload succeeded but no file URL was returned.',
+        details: response?.data,
+      })
+    }
+
+    return {
+      data: { url: mapped.url },
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
 }

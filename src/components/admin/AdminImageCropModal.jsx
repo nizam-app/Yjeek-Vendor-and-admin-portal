@@ -80,7 +80,7 @@ export default function AdminImageCropModal({
           </button>
         </div>
 
-        <div className="relative h-[280px] bg-[#1a1f1c] sm:h-[320px]">
+        <div className="relative h-[280px] bg-[#1a1f1c] sm:h-[320px]" onWheel={(event) => event.stopPropagation()}>
           <Cropper
             image={imageSrc}
             crop={crop}

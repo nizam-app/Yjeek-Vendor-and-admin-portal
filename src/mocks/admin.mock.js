@@ -2187,7 +2187,7 @@ export function buildAdminVendorDetail(vendorId) {
       { label: 'Active branches', value: `${branchCount} / ${branchCount}`, tone: 'green' },
       { label: 'Open issues', value: isActive ? '2' : '0', tone: isActive ? 'orange' : 'ink' },
     ],
-    tabs: ['Overview', 'Branches', 'Users & staff', 'Delivery zones', 'Promotions', 'Commission & fees', 'SLA'],
+    tabs: ['Overview', 'Branches', 'Users & staff', 'Delivery zones', 'Promotions', 'Commission & fees', 'SLA', 'Menu import'],
     branches,
     users,
     deliveryZones,
