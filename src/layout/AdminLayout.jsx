@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Store,
   Users,
+  Workflow,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -41,6 +42,7 @@ const navItems = [
   ['Customer Management', '/admin/customers', Users],
   ['Marketing', '/admin/marketing', Megaphone],
   ['SLA Models', '/admin/sla-models', Clock3],
+  ['Automation', '/admin/automation', Workflow],
   ['UI Editor', '/admin/ui-editor', PanelTop],
   ['Users', '/admin/users', ShieldCheck],
   ['Reports', '/admin/reports', BarChart3],
@@ -75,6 +77,16 @@ const pageTitles = {
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
+  '/admin/automation': 'Automation · Dispatch Rules',
+  '/admin/automation/dispatch-rules': 'Automation · Dispatch Rules',
+  '/admin/automation/champ-scoring': 'Automation · Champ Scoring',
+  '/admin/automation/stacking': 'Automation · Stacking',
+  '/admin/automation/radius-expansion': 'Automation · Radius Expansion',
+  '/admin/automation/vendor-status': 'Automation · Vendor Status',
+  '/admin/automation/pay-on-delivery': 'Automation · Pay on Delivery',
+  '/admin/automation/scheduled-tiers': 'Automation · Scheduled Tiers',
+  '/admin/automation/champ-status': 'Automation · Champ Status',
+  '/admin/automation/audit-log': 'Automation · Audit Log',
 
   '/admin/ui-editor': 'UI Editor',
   '/admin/users': 'Users & Roles · Users',
