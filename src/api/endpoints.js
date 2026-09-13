@@ -756,6 +756,15 @@ export const endpoints = {
         update: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
         remove: (id) => `/admin/marketing/geofence-campaigns/${encodeURIComponent(id)}`,
       },
+      cashback: {
+        root: '/admin/marketing/cashback',
+        settings: '/admin/marketing/cashback/settings',
+        baseRate: '/admin/marketing/cashback/base-rate',
+        rules: '/admin/marketing/cashback/rules',
+        rule: (id) => `/admin/marketing/cashback/rules/${encodeURIComponent(id)}`,
+        report: '/admin/marketing/cashback/report',
+        reportExport: '/admin/marketing/cashback/report/export',
+      },
     },
     /**
      * Confirmed Settings — Postman folder 13.

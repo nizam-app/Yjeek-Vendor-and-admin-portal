@@ -76,6 +76,7 @@ const pageTitles = {
   '/admin/marketing/geofence': 'Marketing · Geofence offers',
   '/admin/marketing/geofence/new': 'Marketing · New geofence offer',
   '/admin/marketing/geofence/:campaignId/edit': 'Marketing · Edit geofence offer',
+  '/admin/marketing/cashback': 'Marketing · Cashback',
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',

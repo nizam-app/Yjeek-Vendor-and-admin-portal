@@ -401,6 +401,30 @@ export const adminService = {
   deleteAdminGeofenceCampaign(campaignId, options = {}) {
     return adminMarketingService.deleteGeofenceCampaign(campaignId, options)
   },
+  getAdminCashback(options = {}) {
+    return adminMarketingService.getCashback(options)
+  },
+  updateAdminCashbackSettings(body, options = {}) {
+    return adminMarketingService.updateCashbackSettings(body, options)
+  },
+  updateAdminCashbackBaseRate(body, options = {}) {
+    return adminMarketingService.updateCashbackBaseRate(body, options)
+  },
+  createAdminCashbackRule(body, options = {}) {
+    return adminMarketingService.createCashbackRule(body, options)
+  },
+  updateAdminCashbackRule(ruleId, body, options = {}) {
+    return adminMarketingService.updateCashbackRule(ruleId, body, options)
+  },
+  deleteAdminCashbackRule(ruleId, options = {}) {
+    return adminMarketingService.deleteCashbackRule(ruleId, options)
+  },
+  getAdminCashbackReport(params, options = {}) {
+    return adminMarketingService.getCashbackReport(params, options)
+  },
+  exportAdminCashbackReport(params, options = {}) {
+    return adminMarketingService.exportCashbackReport(params, options)
+  },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)
   },

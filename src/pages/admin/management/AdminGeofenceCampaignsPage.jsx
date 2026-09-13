@@ -6,6 +6,7 @@ import { adminService } from '../../../services/adminService'
 import { ApiErrorBanner, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
+import { MarketingViewTabs } from '../../../components/admin/MarketingViewTabs'
 
 const VIEW_TABS = ['Notifications', 'Promo codes', 'Promo categories', 'Geofence offers']
 const COLUMNS = [
@@ -87,28 +88,7 @@ export default function AdminGeofenceCampaignsPage() {
         </button>
       </div>
 
-      <div className="mb-4 inline-flex flex-wrap items-center gap-1">
-        {VIEW_TABS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => {
-              if (item === 'Promo codes') navigate('/admin/marketing/promo-codes')
-              else if (item === 'Promo categories') navigate('/admin/marketing/promo-categories')
-              else if (item === 'Geofence offers') navigate('/admin/marketing/geofence')
-              else navigate('/admin/marketing')
-            }}
-            className={cn(
-              'h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
-              item === 'Geofence offers'
-                ? 'bg-[#e8f7ed] text-[#1aa054]'
-                : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4] hover:text-[#455249]',
-            )}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
+      <MarketingViewTabs active="geofence" />
 
       <ApiErrorBanner error={error} onRetry={refetch} />
 

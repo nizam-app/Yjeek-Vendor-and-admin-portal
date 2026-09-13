@@ -8,6 +8,7 @@ import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../c
 import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 import AdminPromoCategoriesPanel from '../../../components/admin/AdminPromoCategoriesPanel'
+import { MarketingViewTabs } from '../../../components/admin/MarketingViewTabs'
 
 const statTone = {
   ink: 'text-[#17231c]',
@@ -21,7 +22,6 @@ const codeToneClass = {
   gray: 'bg-[#eff2f0] text-[#637068]',
 }
 
-const VIEW_TABS = ['Notifications', 'Promo codes', 'Promo categories', 'Geofence offers']
 const DEFAULT_CHANNELS = [
   {
     id: 'customers',
@@ -94,13 +94,17 @@ export default function AdminMarketingPage() {
   const { pathname } = useLocation()
   const isPromo = pathname.includes('/promo-codes')
   const isCategories = pathname.includes('/promo-categories')
-  const tab = isCategories ? 'Promo categories' : isPromo ? 'Promo codes' : 'Notifications'
+  const activeTab = isCategories
+    ? 'promo-categories'
+    : isPromo
+      ? 'promo-codes'
+      : 'notifications'
   const useReal = useRealMarketing()
 
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => {
       if (isCategories) {
-        return Promise.resolve({ data: { viewTabs: VIEW_TABS }, meta: null })
+        return Promise.resolve({ data: {}, meta: null })
       }
       if (useReal && isPromo) {
         return adminService.listAdminMarketingPromoCodes({
@@ -128,8 +132,6 @@ export default function AdminMarketingPage() {
 
   const promoCodes = isPromoCodesModel(data?.promoCodes) ? data.promoCodes : null
   const notifications = isNotificationsModel(data?.notifications) ? data.notifications : null
-  // Always show all Marketing tabs — API/mock viewTabs may omit "Promo categories".
-  const viewTabs = VIEW_TABS
   const header = isCategories ? null : isPromo ? promoCodes : notifications
   const title =
     header?.title ||
@@ -170,28 +172,7 @@ export default function AdminMarketingPage() {
         ) : null}
       </div>
 
-      <div className="mb-4 inline-flex flex-wrap items-center gap-1">
-        {viewTabs.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => {
-              if (item === 'Promo codes') navigate('/admin/marketing/promo-codes')
-              else if (item === 'Promo categories') navigate('/admin/marketing/promo-categories')
-              else if (item === 'Geofence offers') navigate('/admin/marketing/geofence')
-              else navigate('/admin/marketing')
-            }}
-            className={cn(
-              'h-[34px] rounded-full px-4 text-[12.5px] font-bold transition',
-              tab === item
-                ? 'bg-[#e8f7ed] text-[#1aa054]'
-                : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4] hover:text-[#455249]',
-            )}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
+      <MarketingViewTabs active={activeTab} />
 
       {isCategories ? <AdminPromoCategoriesPanel /> : null}
 
