@@ -138,31 +138,15 @@ export function mapAdminOrdersReportResponse(data) {
       preset: range.preset ?? null,
     },
     stats: [
-      kpis.totalOrders != null
-        ? { key: 'totalOrders', label: 'Total orders', value: formatCount(kpis.totalOrders), tone: 'ink' }
-        : null,
-      kpis.delivered != null
-        ? { key: 'delivered', label: 'Delivered', value: formatCount(kpis.delivered), tone: 'green' }
-        : null,
-      kpis.cancelled != null
-        ? { key: 'cancelled', label: 'Cancelled', value: formatCount(kpis.cancelled), tone: 'red' }
-        : null,
-      kpis.gmv != null
-        ? { key: 'gmv', label: 'GMV', value: formatCompactMoney(kpis.gmv), tone: 'green' }
-        : null,
-      kpis.aov != null
-        ? { key: 'aov', label: 'AOV', value: formatMoneyBhd(kpis.aov), tone: 'ink' }
-        : null,
-      kpis.onTimePct != null
-        ? { key: 'onTimePct', label: 'On-time', value: formatPct(kpis.onTimePct), tone: 'green' }
-        : null,
-      kpis.avgDeliveryMin != null
-        ? { key: 'avgDeliveryMin', label: 'Avg delivery', value: formatMinutes(kpis.avgDeliveryMin), tone: 'ink' }
-        : null,
-      kpis.refunds != null
-        ? { key: 'refunds', label: 'Refunds', value: formatCompactMoney(kpis.refunds), tone: 'orange' }
-        : null,
-    ].filter(Boolean),
+      { key: 'totalOrders', label: 'Total orders', value: formatCount(kpis.totalOrders ?? 0), tone: 'ink' },
+      { key: 'delivered', label: 'Delivered', value: formatCount(kpis.delivered ?? 0), tone: 'green' },
+      { key: 'cancelled', label: 'Cancelled', value: formatCount(kpis.cancelled ?? 0), tone: 'red' },
+      { key: 'gmv', label: 'GMV', value: formatCompactMoney(kpis.gmv ?? 0), tone: 'green' },
+      { key: 'aov', label: 'AOV', value: formatMoneyBhd(kpis.aov ?? 0), tone: 'ink' },
+      { key: 'onTimePct', label: 'On-time', value: formatPct(kpis.onTimePct), tone: 'green' },
+      { key: 'avgDeliveryMin', label: 'Avg delivery', value: formatMinutes(kpis.avgDeliveryMin), tone: 'ink' },
+      { key: 'refunds', label: 'Refunds', value: formatCompactMoney(kpis.refunds ?? 0), tone: 'orange' },
+    ],
     page: Number.isFinite(page) && page > 0 ? page : 1,
     limit: Number.isFinite(limit) && limit > 0 ? limit : 10,
     total: Number.isFinite(total) && total >= 0 ? total : orders.length,
