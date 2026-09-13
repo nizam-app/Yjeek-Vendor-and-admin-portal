@@ -623,4 +623,105 @@ export const adminMarketingService = {
     )
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
+
+  async getCashback(options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.cashback.root, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateCashbackSettings(body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.cashback.settings, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateCashbackBaseRate(body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.cashback.baseRate, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createCashbackRule(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.cashback.rules, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateCashbackRule(ruleId, body, options = {}) {
+    const id = String(ruleId || '').trim()
+    if (!id) throw new Error('Rule id is required.')
+    const response = await apiClient.patch(endpoints.admin.marketing.cashback.rule(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async deleteCashbackRule(ruleId, options = {}) {
+    const id = String(ruleId || '').trim()
+    if (!id) throw new Error('Rule id is required.')
+    const response = await apiClient.delete(endpoints.admin.marketing.cashback.rule(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getCashbackReport(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.cashback.report, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async exportCashbackReport(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to export.')
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.cashback.reportExport, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    const csv =
+      typeof response?.data === 'string'
+        ? response.data
+        : response?.data == null
+          ? ''
+          : String(response.data)
+    return { data: csv, meta: response?.meta ?? null }
+  },
 }
