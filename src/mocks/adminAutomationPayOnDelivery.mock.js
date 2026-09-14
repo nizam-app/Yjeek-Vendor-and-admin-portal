@@ -1,12 +1,19 @@
 import { createOperatorNumber } from './adminAutomationDispatchRules.mock'
+import {
+  DEFAULT_POD_PLATFORM_SETTINGS,
+  mapChampToPodRow,
+  mapPodSettingsFromApi,
+  validatePodPlatformSettings,
+} from '../mappers/admin/mapAdminPodAutomation'
 
 /** Frontend mock source for Automation → Pay on Delivery. */
 
 export function createPodEditableDefaults() {
   return {
-    defaultMaxFloatBhd: createOperatorNumber('≤', 100),
-    warningThresholdPercent: createOperatorNumber('≥', 90),
-    autoSuspendOnBreach: true,
+    defaultMaxFloatBhd: createOperatorNumber('≤', DEFAULT_POD_PLATFORM_SETTINGS.defaultMaxFloatBhd),
+    warningThresholdPercent: createOperatorNumber('≥', DEFAULT_POD_PLATFORM_SETTINGS.warningPercent),
+    /** Maps to SystemConfig.platformSettings.pod.enforceFloatBlock (not account suspension). */
+    autoSuspendOnBreach: DEFAULT_POD_PLATFORM_SETTINGS.enforceFloatBlock,
     champs: [
       {
         id: 'ahmed-k',
@@ -14,7 +21,13 @@ export function createPodEditableDefaults() {
         podEnabled: true,
         maxFloatBhd: 150,
         currentCashBhd: 42.5,
-        disputes30d: 0,
+        disputes30d: null,
+        effectivePodEligible: true,
+        floatBlocked: false,
+        warningActive: false,
+        utilizationPercent: 28.333,
+        accountStatus: 'ACTIVE',
+        blockedReason: null,
       },
       {
         id: 'fatima-r',
@@ -22,15 +35,27 @@ export function createPodEditableDefaults() {
         podEnabled: true,
         maxFloatBhd: 100,
         currentCashBhd: 85,
-        disputes30d: 1,
+        disputes30d: null,
+        effectivePodEligible: true,
+        floatBlocked: false,
+        warningActive: true,
+        utilizationPercent: 85,
+        accountStatus: 'ACTIVE',
+        blockedReason: null,
       },
       {
         id: 'ali-m',
         name: 'Ali M.',
         podEnabled: false,
-        maxFloatBhd: 0,
-        currentCashBhd: null,
+        maxFloatBhd: 100,
+        currentCashBhd: 0,
         disputes30d: null,
+        effectivePodEligible: false,
+        floatBlocked: false,
+        warningActive: false,
+        utilizationPercent: 0,
+        accountStatus: 'ACTIVE',
+        blockedReason: 'MANUAL_DISABLED',
       },
       {
         id: 'sara-q',
@@ -38,7 +63,13 @@ export function createPodEditableDefaults() {
         podEnabled: true,
         maxFloatBhd: 30,
         currentCashBhd: 29.8,
-        disputes30d: 0,
+        disputes30d: null,
+        effectivePodEligible: true,
+        floatBlocked: false,
+        warningActive: true,
+        utilizationPercent: 99.333,
+        accountStatus: 'ACTIVE',
+        blockedReason: null,
       },
     ],
   }
@@ -60,12 +91,23 @@ export function getPayOnDeliveryMock() {
       defaultFloatUnit: 'BHD',
       warningLabel: 'Float warning threshold',
       warningUnit: '% of max float',
-      autoSuspendLabel: 'Auto-suspend POD on float breach',
-      autoSuspendToggleLabel: 'Suspend POD until reconciled',
+      autoSuspendLabel: 'Auto float-block on max breach',
+      autoSuspendToggleLabel: 'Block new CASH/POD until reconciled (not account suspend)',
     },
     champTable: {
-      title: 'Champ POD permissions — pod_enabled · pod_max_float · pod_current_cash_balance (Admin-only fields)',
-      columns: ['Champ', 'POD Enabled', 'Max Float', 'Current Cash', '30d Disputes', 'Action'],
+      title: 'Champ POD permissions — pod_enabled · effective max · cash exposure (Admin-only)',
+      columns: [
+        'Champ',
+        'POD Enabled',
+        'Max Float',
+        'Current Cash',
+        '30d Disputes',
+        'Action',
+      ],
+    },
+    scoringNote: {
+      label: 'P6 — POD scoring bonus',
+      body: '30-day dispute ledger and +5% POD scoring bonus remain future P6. Not editable here.',
     },
     editable: createPodEditableDefaults(),
   }
@@ -78,18 +120,17 @@ export function clonePodEditable(editable) {
 export function validatePodSettings(editable) {
   const maxFloat = Number.parseFloat(editable?.defaultMaxFloatBhd?.value)
   const warning = Number.parseFloat(editable?.warningThresholdPercent?.value)
-
-  if (!Number.isFinite(maxFloat) || maxFloat < 0) {
-    return 'Default max float must be a number greater than or equal to 0.'
-  }
-  if (!Number.isFinite(warning) || warning <= 0 || warning > 100) {
-    return 'Float warning threshold must be greater than 0 and less than or equal to 100.'
-  }
-  return null
+  return validatePodPlatformSettings({
+    defaultMaxFloatBhd: maxFloat,
+    warningPercent: warning,
+    enforceFloatBlock: Boolean(editable?.autoSuspendOnBreach),
+  })
 }
 
 /** Near-limit when cash is at or above warning % of max float (presentation helper). */
 export function isChampNearLimit(champ, warningThresholdPercent) {
+  if (champ?.warningActive === true) return true
+  if (champ?.floatBlocked === true) return true
   if (!champ?.podEnabled) return false
   if (!(champ.maxFloatBhd > 0) || champ.currentCashBhd == null) return false
   const threshold = Number.parseFloat(warningThresholdPercent)
@@ -114,4 +155,14 @@ export function formatBhdDisplay(amount, { forceCents = false } = {}) {
   if (!Number.isFinite(n)) return '—'
   if (forceCents || n % 1 !== 0) return `BHD ${n.toFixed(2)}`
   return `BHD ${n}`
+}
+
+export function editableFromPodApi(settings, champs) {
+  const normalized = mapPodSettingsFromApi(settings)
+  return {
+    defaultMaxFloatBhd: createOperatorNumber('≤', normalized.defaultMaxFloatBhd),
+    warningThresholdPercent: createOperatorNumber('≥', normalized.warningPercent),
+    autoSuspendOnBreach: normalized.enforceFloatBlock,
+    champs: (champs || []).map((row) => mapChampToPodRow(row, normalized)),
+  }
 }

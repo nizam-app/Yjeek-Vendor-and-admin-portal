@@ -422,6 +422,47 @@ export const endpoints = {
         `/admin/sla-models/${encodeURIComponent(slaModelId)}/version-usage`,
     },
     /**
+     * Dispatch Automation Admin (P2B).
+     * Feature flag: `automation`
+     */
+    dispatchAutomation: {
+      /** Confirmed: GET /admin/dispatch-automation/overview */
+      overview: '/admin/dispatch-automation/overview',
+      /** Confirmed: GET /admin/dispatch-automation/log */
+      log: '/admin/dispatch-automation/log',
+    },
+    /**
+     * Dispatch rule sets (versioned config).
+     * Feature flag: `automation`
+     */
+    dispatchRules: {
+      list: '/admin/dispatch-rules',
+      template: '/admin/dispatch-rules/template',
+      /**
+       * @param {string} ruleSetId
+       */
+      detail: (ruleSetId) => `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}`,
+      /**
+       * @param {string} ruleSetId
+       */
+      activate: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/activate`,
+      /**
+       * @param {string} ruleSetId
+       */
+      simulate: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/simulate`,
+      /**
+       * @param {string} ruleSetId
+       */
+      pause: (ruleSetId) => `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/pause`,
+      /**
+       * @param {string} ruleSetId
+       */
+      rollback: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/rollback`,
+    },
+    /**
      * Confirmed Customers — Postman folder 08.
      */
     customers: {

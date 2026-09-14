@@ -1,11 +1,23 @@
+import { formatApiErrorMessage } from '../../api/errors'
 import { cn } from './cn'
+
+function errorText(error, fallback) {
+  if (!error) return fallback
+  const formatted = formatApiErrorMessage(error)
+  if (formatted && String(formatted).trim()) return String(formatted).trim()
+  if (typeof error.message === 'string' && error.message.trim()) return error.message.trim()
+  return fallback
+}
 
 export function ApiState({ isLoading, error, onRetry }) {
   if (isLoading) return <div className="p-7 text-[12px] text-[#78837c]">Loading…</div>
   if (error) {
     return (
       <div className="m-7 rounded-lg border border-[#f2cccc] bg-[#fff5f5] p-4 text-[12px] text-[#a93e42]">
-        Unable to load this page.
+        {errorText(error, 'Unable to load this page.')}
+        {error?.status ? (
+          <span className="ml-1 opacity-80">(HTTP {error.status})</span>
+        ) : null}
         {onRetry ? (
           <button type="button" onClick={onRetry} className="ml-2 font-medium underline">
             Try again
@@ -26,7 +38,10 @@ export function ApiErrorBanner({ error, onRetry, className }) {
         className,
       )}
     >
-      Unable to load data.
+      {errorText(error, 'Unable to load data.')}
+      {error?.status ? (
+        <span className="ml-1 opacity-80">(HTTP {error.status})</span>
+      ) : null}
       {onRetry ? (
         <button type="button" onClick={onRetry} className="ml-2 font-medium underline">
           Try again

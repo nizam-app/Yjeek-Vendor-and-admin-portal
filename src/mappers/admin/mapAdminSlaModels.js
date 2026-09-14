@@ -764,6 +764,8 @@ export function mapAdminSlaModelRecord(raw) {
     // Live published rules for vendor inheritance (ignore unpublished draft).
     publishedConfig: asRecord(source.publishedConfig || source.config),
     draftConfig: source.draftConfig ? asRecord(source.draftConfig) : null,
+    /** P5D-B: backend-resolved acceptance timing (read-only). */
+    effectiveVendorAcceptance: source.effectiveVendorAcceptance || null,
     raw: source,
   }
 }
