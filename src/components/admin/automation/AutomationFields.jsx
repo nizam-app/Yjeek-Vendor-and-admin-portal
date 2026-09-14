@@ -1,10 +1,13 @@
 import { ChevronDown } from 'lucide-react'
 import { cn } from '../cn'
 
-const OPERATORS = ['≤', '≥', '=', '<', '>']
+const OPERATORS = ['≤', '≥']
 
 function OperatorSelect({ value, onChange, disabled, operators = OPERATORS, locked = false }) {
-  if (locked) {
+  const options = operators?.length ? operators : OPERATORS
+  const forceLocked = locked || options.length <= 1
+
+  if (forceLocked) {
     return (
       <span
         className="inline-flex h-8 w-[42px] shrink-0 items-center justify-center rounded-md border border-[#d1d5db] bg-[#f9fafb] text-[12px] font-semibold text-[#111827]"
@@ -14,8 +17,6 @@ function OperatorSelect({ value, onChange, disabled, operators = OPERATORS, lock
       </span>
     )
   }
-
-  const options = operators?.length ? operators : OPERATORS
 
   return (
     <div className="relative h-8 w-[42px] shrink-0">
@@ -202,7 +203,10 @@ export function AutomationKpiCard({ value, label, delta, deltaTone = 'muted', ac
 export function AutomationPercentField({ value, onChange, disabled = false }) {
   return (
     <div className="flex flex-nowrap items-center gap-1.5">
-      <span className="inline-flex h-8 w-[42px] shrink-0 items-center justify-center rounded-md border border-[#d1d5db] bg-white text-[12px] font-semibold text-[#111827]">
+      <span
+        className="inline-flex h-8 w-[42px] shrink-0 items-center justify-center rounded-md border border-[#d1d5db] bg-[#f9fafb] text-[12px] font-semibold text-[#111827]"
+        aria-hidden
+      >
         +
       </span>
       <input

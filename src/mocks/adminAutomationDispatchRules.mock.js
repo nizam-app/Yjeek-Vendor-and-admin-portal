@@ -66,7 +66,7 @@ export function getDispatchRulesMock() {
       },
     ],
     gate1: {
-      title: 'Gate 1 — Eligibility Filter',
+      title: 'Gate 1 · Eligibility Filter',
       subtitle: 'Hard exclusion — runs before scoring. Binary, no override at this layer.',
       status: 'Active',
       rows: [
@@ -95,7 +95,7 @@ export function getDispatchRulesMock() {
       ],
     },
     gate2: {
-      title: 'Gate 2 — Vehicle Capability Match',
+      title: 'Gate 2 · Vehicle Capability Match',
       subtitle: 'Matches order category and fragility flags to permitted vehicle types',
       status: 'Active',
       rows: [
@@ -123,10 +123,10 @@ export function getDispatchRulesMock() {
       ],
     },
     vendorAcceptance: {
-      title: 'Vendor Acceptance — Fully Automated — On-Demand',
+      title: 'Vendor Acceptance — Fully Automated · On-Demand',
       subtitle:
         'Customer sees "Waiting for vendor to confirm" — no payment screen before acceptance · no dispatcher involvement in normal flow',
-      status: 'Core rule — always on',
+      status: 'Core rule · always on',
       callout: {
         label: 'Dispatcher does not intervene in the acceptance flow',
         body: 'The entire acceptance window is system-automated. The dispatcher sees order status in real time on the Live Dashboard (On Track → At Risk → Critical → Cancelled) but cannot and does not intervene. Dispatcher involvement is reserved for physical incidents only — vehicle breakdown, Champ injury, or other operational emergencies that the system cannot auto-resolve.',

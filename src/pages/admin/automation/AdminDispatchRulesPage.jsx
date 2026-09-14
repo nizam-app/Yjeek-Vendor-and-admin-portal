@@ -123,7 +123,11 @@ export default function AdminDispatchRulesPage() {
               <AutomationOperatorNumberField
                 value={draft[row.fieldKey]}
                 unit={row.unit}
-                onChange={(next) => updateField(row.fieldKey, next)}
+                operatorLocked
+                operators={['≤']}
+                onChange={(next) =>
+                  updateField(row.fieldKey, { ...next, operator: '≤' })
+                }
               />
             )}
           </AutomationFieldRow>
@@ -172,14 +176,21 @@ export default function AdminDispatchRulesPage() {
         <AcceptanceTimeline stages={catalog.vendorAcceptance.timeline} />
 
         <AutomationSubsectionTitle>Configurable thresholds</AutomationSubsectionTitle>
-        {catalog.vendorAcceptance.thresholds.map((row) => (
-          <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
-            <AutomationDurationField
-              value={draft[row.fieldKey]}
-              onChange={(next) => updateField(row.fieldKey, next)}
-            />
-          </AutomationFieldRow>
-        ))}
+        {catalog.vendorAcceptance.thresholds.map((row) => {
+          const lockedOperator = draft[row.fieldKey]?.operator || '≤'
+          return (
+            <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
+              <AutomationDurationField
+                value={draft[row.fieldKey]}
+                operatorLocked
+                operators={[lockedOperator]}
+                onChange={(next) =>
+                  updateField(row.fieldKey, { ...next, operator: lockedOperator })
+                }
+              />
+            </AutomationFieldRow>
+          )
+        })}
 
         <AutomationSubsectionTitle>Event recording — feeds VPI weekly score</AutomationSubsectionTitle>
         {catalog.vendorAcceptance.events.map((row) => (

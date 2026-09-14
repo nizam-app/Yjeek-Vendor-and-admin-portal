@@ -42,7 +42,7 @@ const navItems = [
   ['Customer Management', '/admin/customers', Users],
   ['Marketing', '/admin/marketing', Megaphone],
   ['SLA Models', '/admin/sla-models', Clock3],
-  ['Automation', '/admin/automation', Workflow],
+  ['Automation', '/admin/automation', Workflow, 'NEW'],
   ['UI Editor', '/admin/ui-editor', PanelTop],
   ['Users', '/admin/users', ShieldCheck],
   ['Reports', '/admin/reports', BarChart3],
@@ -250,7 +250,7 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
             ) : null}
           </>
         )}
-        {navItems.map(([label, to, Icon]) => (
+        {navItems.map(([label, to, Icon, badge]) => (
           <NavLink
             key={to}
             to={to}
@@ -277,7 +277,16 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
                   strokeWidth={1.8}
                   className={isActive ? 'text-[#2EC75E]' : undefined}
                 />
-                {!collapsed ? label : null}
+                {!collapsed ? (
+                  <>
+                    <span className="min-w-0 flex-1">{label}</span>
+                    {badge ? (
+                      <span className="shrink-0 rounded-[10px] bg-[#CAA34D] px-1.5 py-px text-[9px] font-bold leading-none text-white">
+                        {badge}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
               </>
             )}
           </NavLink>

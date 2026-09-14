@@ -55,7 +55,7 @@ export function getStackingMock() {
       ],
     },
     trigger1: {
-      title: 'Trigger 1 — Same Vendor / Same Drop Zone',
+      title: 'Trigger 1 · Same Vendor · Same Drop Zone',
       subtitle: 'Fires even when free Champs are available — same vendor same zone is always more efficient',
       status: 'Always Active',
       statusTone: 'on',
@@ -67,7 +67,7 @@ export function getStackingMock() {
       multiVendorToggleLabel: 'Disabled — enable when ready',
     },
     trigger2: {
-      title: 'Trigger 2 — Long Distance Economics',
+      title: 'Trigger 2 · Long Distance Economics',
       subtitle: 'Activates 90s hold window on orders beyond the distance threshold · car only',
       status: 'Active',
       statusTone: 'on',
@@ -78,7 +78,7 @@ export function getStackingMock() {
       reevaluateToggleLabel: 'Check companion bundling when radius hits 12km',
     },
     trigger3: {
-      title: 'Trigger 3 — Supply Shortage Fallback',
+      title: 'Trigger 3 · Supply Shortage Fallback',
       subtitle:
         'Fires before broadcast after Offer 1 + Offer 2 both time out · last resort before open broadcast',
       status: 'Fallback only',
