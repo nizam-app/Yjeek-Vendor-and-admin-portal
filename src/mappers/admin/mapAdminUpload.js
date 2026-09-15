@@ -39,9 +39,9 @@ function mediaOriginFromEnv() {
 
 function uploadsPathFromUrl(parsed) {
   const pathname = String(parsed?.pathname || '')
-  const uploadsIndex = pathname.indexOf('/uploads/')
-  if (uploadsIndex >= 0) {
-    return `${pathname.slice(uploadsIndex)}${parsed.search || ''}`
+  // Only Yjeek upload roots — NOT WordPress `/wp-content/uploads/...` (menu import image URLs).
+  if (pathname.startsWith('/uploads/')) {
+    return `${pathname}${parsed.search || ''}`
   }
   // Some backends return /api/v1/uploads/...
   const apiUploads = pathname.match(/\/api\/v\d+(\/uploads\/.*)$/i)
@@ -68,10 +68,20 @@ function resolveDevMediaUrl(raw) {
   try {
     if (/^https?:\/\//i.test(raw)) {
       const parsed = new URL(raw)
+      const apiOrigin = apiOriginFromEnv()
+      const mediaOrigin = mediaOriginFromEnv()
+      const isOwnHost =
+        (apiOrigin && parsed.origin === apiOrigin) ||
+        (mediaOrigin && parsed.origin === mediaOrigin)
+
+      // Never rewrite third-party absolute URLs (WooCommerce, Webflow CDN, etc.).
+      if (!isOwnHost) {
+        return raw
+      }
+
       const uploadsPath = uploadsPathFromUrl(parsed)
       if (uploadsPath) return uploadsPath
 
-      const apiOrigin = apiOriginFromEnv()
       if (apiOrigin && parsed.origin === apiOrigin) {
         return `/__admin_media${parsed.pathname}${parsed.search || ''}`
       }
@@ -82,9 +92,13 @@ function resolveDevMediaUrl(raw) {
     // fall through
   }
 
-  const uploadsIndex = raw.indexOf('/uploads/')
-  if (uploadsIndex >= 0) {
-    return raw.slice(uploadsIndex)
+  // Relative paths only — do not treat `/wp-content/uploads/` as Yjeek media.
+  if (raw.startsWith('/uploads/')) {
+    return raw
+  }
+  const apiUploads = raw.match(/\/api\/v\d+(\/uploads\/.*)$/i)
+  if (apiUploads?.[1]) {
+    return apiUploads[1]
   }
 
   if (/^uploads\//i.test(raw)) {
@@ -111,9 +125,13 @@ export function adminMediaSameOriginPath(url) {
 function resolveProdMediaUrl(raw) {
   if (/^https?:\/\//i.test(raw)) return raw
 
-  const uploadsIndex = raw.indexOf('/uploads/')
-  if (uploadsIndex >= 0) {
-    return toAbsoluteMediaUrl(raw.slice(uploadsIndex))
+  if (raw.startsWith('/uploads/')) {
+    return toAbsoluteMediaUrl(raw)
+  }
+
+  const apiUploads = raw.match(/\/api\/v\d+(\/uploads\/.*)$/i)
+  if (apiUploads?.[1]) {
+    return toAbsoluteMediaUrl(apiUploads[1])
   }
 
   if (/^uploads\//i.test(raw)) {
@@ -133,7 +151,17 @@ export function resolveAdminMediaUrl(url) {
   if (!raw) return null
   if (raw.startsWith('blob:') || raw.startsWith('data:')) return raw
 
-  return import.meta.env.DEV ? resolveDevMediaUrl(raw) : resolveProdMediaUrl(raw)
+  const isDev = Boolean(import.meta.env?.DEV)
+  return isDev ? resolveDevMediaUrl(raw) : resolveProdMediaUrl(raw)
+}
+
+/** Exported for unit tests — Yjeek `/uploads` path only, never WP `/wp-content/uploads`. */
+export function yjeekUploadsPathFromAbsoluteUrl(url) {
+  try {
+    return uploadsPathFromUrl(new URL(String(url || '').trim()))
+  } catch {
+    return null
+  }
 }
 
 /**

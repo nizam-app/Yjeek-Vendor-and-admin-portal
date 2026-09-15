@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2, X } from 'lucide-react'
 import { Badge } from '../Badge'
 import AdminConfirmDialog from '../AdminConfirmDialog'
-import AdminIconImageUpload from '../AdminIconImageUpload'
 import AdminMediaImage from '../AdminMediaImage'
 import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
 import { adminMenuImportService } from '../../../services/admin/menuImportService'
@@ -11,8 +10,8 @@ import {
   canEditReview,
   formatBhd,
   messageForMenuImportError,
-  parseBhdInput,
 } from '../../../mappers/admin/mapAdminMenuImport'
+import AdminEditImportItemModal from './AdminEditImportItemModal'
 
 const cardClass =
   'rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]'
@@ -163,13 +162,7 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
       if (itemModal.mode === 'create') {
         await adminMenuImportService.createItem(vendorId, imp.id, data)
       } else {
-        await adminMenuImportService.patchItem(vendorId, imp.id, itemModal.item.id, {
-          name: data.name,
-          nameAr: data.nameAr ?? null,
-          price: data.price,
-          description: data.description ?? null,
-          imageUrl: data.imageUrl ?? null,
-        })
+        await adminMenuImportService.patchItem(vendorId, imp.id, itemModal.item.id, data)
       }
       setItemModal(null)
       showSuccess(itemModal.mode === 'create' ? 'Item added.' : 'Item updated.')
@@ -242,162 +235,178 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
           </div>
         ) : null}
 
-        <div className="mb-4 space-y-2">
-          {categories.map((cat) => (
-            <div
-              key={cat.id}
-              className="flex items-center justify-between rounded-[10px] border border-[#edf0ee] px-3 py-2"
-            >
-              <div>
-                <span className="text-[13px] font-semibold text-[#17231c]">{cat.name}</span>
-                {cat.nameAr ? (
-                  <span className="mt-0.5 block text-right text-[12px] text-[#7c8780]" dir="rtl" lang="ar">
-                    {cat.nameAr}
-                  </span>
-                ) : null}
-              </div>
-              {editable ? (
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className={ghostBtn}
-                    onClick={() => setCatModal({ mode: 'edit', category: cat })}
-                    aria-label="Rename category"
-                  >
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={ghostBtn}
-                    onClick={() =>
-                      setConfirmAction({
-                        type: 'category',
-                        id: cat.id,
-                        title: 'Delete category?',
-                        message: 'Delete this category and all its items? This cannot be undone.',
-                      })
-                    }
-                    aria-label="Delete category"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={outlineBtn}
-                    onClick={() => setItemModal({ mode: 'create', categoryId: cat.id })}
-                  >
-                    <Plus size={14} />
-                    Item
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-left">
-            <thead>
-              <tr className="border-b border-[#edf0ee] bg-[#fafbfa]">
-                {[
-                  'Category (EN)',
-                  'Category (AR)',
-                  'Item (EN)',
-                  'Item (AR)',
-                  'Image',
-                  'Price (BHD)',
-                  'Description (EN)',
-                  'Description (AR)',
-                  editable ? '' : null,
-                ]
-                  .filter((col) => col !== null)
-                  .map((col) => (
-                    <th
-                      key={col || 'actions'}
-                      className="whitespace-nowrap px-3 py-2 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
-                    >
-                      {col}
-                    </th>
-                  ))}
-              </tr>
-            </thead>
-            <tbody>
-              {flatItems.length ? (
-                flatItems.map((row) => (
-                  <tr key={row.id} className="border-b border-[#f3f5f3]">
-                    <td className="px-3 py-2.5 text-[12px] text-[#455249]">{row.categoryName}</td>
-                    <td className={arCellClass} dir="rtl" lang="ar">
-                      {row.categoryNameAr || '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-[13px] font-semibold text-[#17231c]">{row.name}</td>
-                    <td className={arItemCellClass} dir="rtl" lang="ar">
-                      {row.nameAr || '—'}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {row.imageUrl ? (
-                        <AdminMediaImage
-                          src={resolveAdminMediaUrl(row.imageUrl) || row.imageUrl}
-                          alt={row.name}
-                          className="size-10 rounded-[8px] border border-[#edf0ee] object-cover"
-                        />
-                      ) : (
-                        <span className="text-[11px] text-[#b0b8b3]">No image</span>
-                      )}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-[12px]">{formatBhd(row.price)}</td>
-                    <td className="max-w-[200px] px-3 py-2.5 text-[12px] text-[#7c8780]">
-                      <span className="line-clamp-2">{row.description || '—'}</span>
-                    </td>
-                    <td className={`max-w-[200px] ${arCellClass}`} dir="rtl" lang="ar">
-                      <span className="line-clamp-2">{row.descriptionAr || '—'}</span>
-                    </td>
-                    {editable ? (
-                      <td className="px-3 py-2.5">
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            className={ghostBtn}
-                            onClick={() =>
-                              setItemModal({
-                                mode: 'edit',
-                                categoryId: row.categoryId,
-                                item: row,
-                              })
-                            }
-                            aria-label="Edit item"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className={ghostBtn}
-                            onClick={() =>
-                              setConfirmAction({
-                                type: 'item',
-                                id: row.id,
-                                title: 'Delete item?',
-                                message: 'Remove this item from the staged menu?',
-                              })
-                            }
-                            aria-label="Delete item"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
+        {categories.length ? (
+          <div className="space-y-4">
+            {categories.map((cat) => (
+              <section
+                key={cat.id}
+                className="overflow-hidden rounded-[10px] border border-[#edf0ee]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#edf0ee] bg-[#fafbfa] px-3 py-2.5">
+                  <div>
+                    <span className="text-[13px] font-semibold text-[#17231c]">{cat.name}</span>
+                    {cat.nameAr ? (
+                      <span
+                        className="mt-0.5 block text-right text-[12px] text-[#7c8780]"
+                        dir="rtl"
+                        lang="ar"
+                      >
+                        {cat.nameAr}
+                      </span>
                     ) : null}
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={editable ? 9 : 8} className="px-3 py-6 text-center text-[12px] text-[#7c8780]">
-                    No items staged
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                    <span className="mt-1 block text-[11px] text-[#8a948e]">
+                      {(cat.items || []).length} item{(cat.items || []).length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {editable ? (
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        className={ghostBtn}
+                        onClick={() => setCatModal({ mode: 'edit', category: cat })}
+                        aria-label="Rename category"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className={ghostBtn}
+                        onClick={() =>
+                          setConfirmAction({
+                            type: 'category',
+                            id: cat.id,
+                            title: 'Delete category?',
+                            message: 'Delete this category and all its items? This cannot be undone.',
+                          })
+                        }
+                        aria-label="Delete category"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className={outlineBtn}
+                        onClick={() => setItemModal({ mode: 'create', categoryId: cat.id })}
+                      >
+                        <Plus size={14} />
+                        Item
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[640px] border-collapse text-left">
+                    <thead>
+                      <tr className="border-b border-[#edf0ee]">
+                        {[
+                          'Item (EN)',
+                          'Item (AR)',
+                          'Image',
+                          'Price (BHD)',
+                          'Description (EN)',
+                          'Description (AR)',
+                          editable ? '' : null,
+                        ]
+                          .filter((col) => col !== null)
+                          .map((col) => (
+                            <th
+                              key={col || 'actions'}
+                              className="whitespace-nowrap px-3 py-2 text-[10px] font-medium uppercase tracking-[0.05em] text-[#8a948e]"
+                            >
+                              {col}
+                            </th>
+                          ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(cat.items || []).length ? (
+                        cat.items.map((row) => (
+                          <tr key={row.id} className="border-b border-[#f3f5f3] last:border-b-0">
+                            <td className="px-3 py-2.5 text-[13px] font-semibold text-[#17231c]">
+                              {row.name}
+                            </td>
+                            <td className={arItemCellClass} dir="rtl" lang="ar">
+                              {row.nameAr || '—'}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {row.imageUrl ? (
+                                <AdminMediaImage
+                                  src={resolveAdminMediaUrl(row.imageUrl) || row.imageUrl}
+                                  alt={row.name}
+                                  className="size-10 rounded-[8px] border border-[#edf0ee] object-cover"
+                                />
+                              ) : (
+                                <span className="text-[11px] text-[#b0b8b3]">No image</span>
+                              )}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2.5 text-[12px]">
+                              {formatBhd(row.price)}
+                            </td>
+                            <td className="max-w-[200px] px-3 py-2.5 text-[12px] text-[#7c8780]">
+                              <span className="line-clamp-2">{row.description || '—'}</span>
+                            </td>
+                            <td className={`max-w-[200px] ${arCellClass}`} dir="rtl" lang="ar">
+                              <span className="line-clamp-2">{row.descriptionAr || '—'}</span>
+                            </td>
+                            {editable ? (
+                              <td className="px-3 py-2.5">
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    className={ghostBtn}
+                                    onClick={() =>
+                                      setItemModal({
+                                        mode: 'edit',
+                                        categoryId: cat.id,
+                                        item: row,
+                                      })
+                                    }
+                                    aria-label="Edit item"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className={ghostBtn}
+                                    onClick={() =>
+                                      setConfirmAction({
+                                        type: 'item',
+                                        id: row.id,
+                                        title: 'Delete item?',
+                                        message: 'Remove this item from the staged menu?',
+                                      })
+                                    }
+                                    aria-label="Delete item"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            ) : null}
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={editable ? 7 : 6}
+                            className="px-3 py-5 text-center text-[12px] text-[#7c8780]"
+                          >
+                            No items in this category
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-[10px] border border-[#edf0ee] px-3 py-6 text-center text-[12px] text-[#7c8780]">
+            No categories staged
+          </p>
+        )}
 
         {editable ? (
           <div className="mt-5 border-t border-[#edf0ee] pt-4">
@@ -449,21 +458,16 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
         />
       </SimpleModal>
 
-      <SimpleModal
+      <AdminEditImportItemModal
         open={Boolean(itemModal)}
-        title={itemModal?.mode === 'edit' ? 'Edit item' : 'Add item'}
+        mode={itemModal?.mode || 'create'}
+        categories={categories}
+        initialCategoryId={itemModal?.categoryId}
+        item={itemModal?.item}
+        busy={busy}
         onClose={() => setItemModal(null)}
-      >
-        <ItemForm
-          categories={categories}
-          mode={itemModal?.mode || 'create'}
-          initialCategoryId={itemModal?.categoryId}
-          item={itemModal?.item}
-          busy={busy}
-          onCancel={() => setItemModal(null)}
-          onSave={handleSaveItem}
-        />
-      </SimpleModal>
+        onSave={(data) => void handleSaveItem(data)}
+      />
 
       <AdminConfirmDialog
         open={Boolean(confirmAction)}
@@ -550,131 +554,6 @@ function CategoryForm({ initialName, initialNameAr, busy, onCancel, onSave }) {
           disabled={busy || !name.trim()}
           onClick={() => onSave({ name: name.trim(), nameAr: nameAr.trim() || undefined })}
         >
-          Save
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ItemForm({ categories, mode, initialCategoryId, item, busy, onCancel, onSave }) {
-  const [categoryId, setCategoryId] = useState(initialCategoryId || categories[0]?.id || '')
-  const [name, setName] = useState(item?.name || '')
-  const [nameAr, setNameAr] = useState(item?.nameAr || '')
-  const [price, setPrice] = useState(item ? item.price.toFixed(3) : '')
-  const [description, setDescription] = useState(item?.description || '')
-  const [descriptionAr, setDescriptionAr] = useState(item?.descriptionAr || '')
-  const [imageUrl, setImageUrl] = useState(item?.imageUrl || '')
-
-  useEffect(() => {
-    setCategoryId(initialCategoryId || categories[0]?.id || '')
-    setName(item?.name || '')
-    setNameAr(item?.nameAr || '')
-    setPrice(item ? item.price.toFixed(3) : '')
-    setDescription(item?.description || '')
-    setDescriptionAr(item?.descriptionAr || '')
-    setImageUrl(item?.imageUrl || '')
-  }, [initialCategoryId, item, categories])
-
-  const submit = () => {
-    const parsed = parseBhdInput(price)
-    if (!name.trim() || parsed === null || !categoryId) return
-    onSave({
-      categoryId,
-      name: name.trim(),
-      nameAr: nameAr.trim() || undefined,
-      price: parsed,
-      description: description.trim() || undefined,
-      descriptionAr: descriptionAr.trim() || undefined,
-      imageUrl: imageUrl.trim() || undefined,
-    })
-  }
-
-  return (
-    <div className="space-y-3">
-      {mode === 'create' ? (
-        <label className="block">
-          <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Category</span>
-          <select
-            className={inputClass}
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-          >
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : null}
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Item name (English)</span>
-        <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Item name (Arabic)</span>
-        <input
-          className={arInputClass}
-          value={nameAr}
-          dir="rtl"
-          lang="ar"
-          onChange={(e) => setNameAr(e.target.value)}
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Item image</span>
-        <AdminIconImageUpload
-          iconUrl={imageUrl || null}
-          onUrlChange={(url) => setImageUrl(url || '')}
-          size={72}
-          aspect={1}
-          feature="menu-import"
-          skipCrop
-          disabled={busy}
-        />
-        {imageUrl ? (
-          <button
-            type="button"
-            className="mt-2 text-[12px] font-medium text-[#a93e42] hover:underline"
-            onClick={() => setImageUrl('')}
-          >
-            Remove image
-          </button>
-        ) : null}
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Price (BHD)</span>
-        <input
-          className={inputClass}
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="1.500"
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Description (English)</span>
-        <input
-          className={inputClass}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-      </label>
-      <label className="block">
-        <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Description (Arabic)</span>
-        <input
-          className={arInputClass}
-          value={descriptionAr}
-          dir="rtl"
-          lang="ar"
-          onChange={(e) => setDescriptionAr(e.target.value)}
-        />
-      </label>
-      <div className="flex justify-end gap-2 pt-1">
-        <button type="button" className={outlineBtn} onClick={onCancel}>
-          Cancel
-        </button>
-        <button type="button" className={primaryBtn} disabled={busy} onClick={submit}>
           Save
         </button>
       </div>

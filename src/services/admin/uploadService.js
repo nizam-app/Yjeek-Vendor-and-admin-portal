@@ -161,7 +161,7 @@ export const adminUploadService = {
     }
 
     if (!file || !(file instanceof File)) {
-      throw new ApiError({ message: 'Please choose a PDF, image, or spreadsheet file.' })
+      throw new ApiError({ message: 'Please choose a PDF, image, spreadsheet, or ZIP file.' })
     }
 
     const type = String(file.type || '').toLowerCase()
@@ -180,11 +180,14 @@ export const adminUploadService = {
       type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       name.endsWith('.csv') ||
       name.endsWith('.xlsx') ||
-      name.endsWith('.xls')
+      name.endsWith('.xls') ||
+      type === 'application/zip' ||
+      type === 'application/x-zip-compressed' ||
+      name.endsWith('.zip')
 
     if (!allowed) {
       throw new ApiError({
-        message: 'Only JPEG, PNG, WebP, PDF, CSV, and Excel (.xlsx/.xls) files are allowed.',
+        message: 'Only JPEG, PNG, WebP, PDF, CSV, Excel (.xlsx/.xls), and ZIP files are allowed.',
       })
     }
 
