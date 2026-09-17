@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { GripVertical, Plus, X } from 'lucide-react'
 import AdminIconImageUpload from '../AdminIconImageUpload'
 import AdminMediaImage from '../AdminMediaImage'
+import AdminModifierImageThumb, { moveListItem } from '../AdminModifierImageThumb'
 import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
 import { parseBhdInput } from '../../../mappers/admin/mapAdminMenuImport'
 import {
@@ -74,8 +75,9 @@ function buildInitialForm(item, categories, initialCategoryId) {
           name: a.name || '',
           nameAr: a.nameAr || '',
           price: `+${Number(a.price ?? 0).toFixed(3)}`,
+          imageUrl: a.imageUrl || null,
         }))
-      : [{ name: '', nameAr: '', price: '+0.000' }]
+      : [{ name: '', nameAr: '', price: '+0.000', imageUrl: null }]
   const optionGroups = Array.isArray(item?.optionGroups)
     ? item.optionGroups.map((g) => ({
         title: g.title || g.name || '',
@@ -92,13 +94,17 @@ function buildInitialForm(item, categories, initialCategoryId) {
           (Array.isArray(g.options) ? g.options.map((o) => o.name).join(' · ') : '') ||
           (Array.isArray(g.choices) ? g.choices.map((c) => c.name).join(' · ') : ''),
         choices: Array.isArray(g.choices)
-          ? g.choices
+          ? g.choices.map((c) => ({
+              ...c,
+              imageUrl: c.imageUrl || null,
+            }))
           : Array.isArray(g.options)
             ? g.options.map((o) => ({
                 name: o.name,
                 nameAr: o.nameAr || '',
                 price: `+${Number(o.priceDelta ?? o.price ?? 0).toFixed(3)}`,
                 isDefault: Boolean(o.isDefault),
+                imageUrl: o.imageUrl || null,
               }))
             : [],
         options: Array.isArray(g.options) ? g.options : [],
@@ -157,6 +163,7 @@ export default function AdminEditImportItemModal({
   const [uploadError, setUploadError] = useState('')
   const [uploadingSlot, setUploadingSlot] = useState(null)
   const [optionModal, setOptionModal] = useState(null)
+  const [addonDragIndex, setAddonDragIndex] = useState(null)
   const fileRefs = useRef([])
 
   useEffect(() => {
@@ -227,6 +234,13 @@ export default function AdminEditImportItemModal({
     }))
   }
 
+  const reorderAddOns = (fromIndex, toIndex) => {
+    setForm((c) => ({
+      ...c,
+      addOns: moveListItem(c.addOns, fromIndex, toIndex),
+    }))
+  }
+
   const submit = () => {
     const parsed = parseBhdInput(form.price)
     if (!form.name.trim() || parsed === null || !form.categoryId) return
@@ -238,6 +252,7 @@ export default function AdminEditImportItemModal({
         name: a.name.trim(),
         nameAr: String(a.nameAr || '').trim() || undefined,
         price: parseAddonPrice(a.price),
+        imageUrl: a.imageUrl || null,
         sortOrder: index,
         isActive: true,
       }))
@@ -248,15 +263,28 @@ export default function AdminEditImportItemModal({
       maxSelect: g.maxSelect ?? (g.selection === 'single' ? 1 : 2),
       isRequired: Boolean(g.isRequired),
       sortOrder: index,
-      options: (Array.isArray(g.options) && g.options.length
-        ? g.options
-        : (g.choices || []).map((c) => ({
-            name: c.name,
-            nameAr: c.nameAr || undefined,
-            priceDelta: parseAddonPrice(c.price),
-            isDefault: Boolean(c.isDefault),
-            isAvailable: true,
-          }))
+      options: (
+        Array.isArray(g.choices) && g.choices.length
+          ? g.choices.map((c, choiceIndex) => ({
+              name: c.name,
+              nameAr: c.nameAr || undefined,
+              priceDelta: parseAddonPrice(c.price),
+              imageUrl: c.imageUrl || null,
+              isDefault: Boolean(c.isDefault),
+              isAvailable: true,
+              sortOrder: choiceIndex,
+            }))
+          : Array.isArray(g.options)
+            ? g.options.map((o, choiceIndex) => ({
+                name: o.name,
+                nameAr: o.nameAr || undefined,
+                priceDelta: parseAddonPrice(o.priceDelta ?? o.price),
+                imageUrl: o.imageUrl || null,
+                isDefault: Boolean(o.isDefault),
+                isAvailable: o.isAvailable !== false,
+                sortOrder: choiceIndex,
+              }))
+            : []
       ).filter((o) => o.name),
     }))
 
@@ -578,7 +606,10 @@ export default function AdminEditImportItemModal({
                   onClick={() =>
                     setForm((c) => ({
                       ...c,
-                      addOns: [...c.addOns, { name: '', nameAr: '', price: '+0.000' }],
+                      addOns: [
+                        ...c.addOns,
+                        { name: '', nameAr: '', price: '+0.000', imageUrl: null },
+                      ],
                     }))
                   }
                 >
@@ -589,10 +620,35 @@ export default function AdminEditImportItemModal({
                 {form.addOns.map((addon, idx) => (
                   <div
                     key={idx}
-                    className="space-y-1 rounded-[10px] bg-[#F2F7F2] px-3 py-2"
+                    draggable={!busy}
+                    onDragStart={() => setAddonDragIndex(idx)}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      event.dataTransfer.dropEffect = 'move'
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      if (addonDragIndex == null || addonDragIndex === idx) return
+                      reorderAddOns(addonDragIndex, idx)
+                      setAddonDragIndex(null)
+                    }}
+                    onDragEnd={() => setAddonDragIndex(null)}
+                    className={`space-y-1 rounded-[10px] bg-[#F2F7F2] px-3 py-2 ${
+                      addonDragIndex === idx ? 'opacity-60 ring-1 ring-[#1aa054]' : ''
+                    }`}
                   >
                     <div className="flex h-[40px] items-center gap-2">
-                      <GripVertical size={14} className="shrink-0 text-[#949C94]" />
+                      <span
+                        className="shrink-0 cursor-grab touch-none text-[#949C94] active:cursor-grabbing"
+                        aria-label="Reorder add-on"
+                      >
+                        <GripVertical size={14} />
+                      </span>
+                      <AdminModifierImageThumb
+                        imageUrl={addon.imageUrl || null}
+                        disabled={busy}
+                        onChange={(url) => updateAddOn(idx, 'imageUrl', url)}
+                      />
                       <input
                         className="min-w-0 flex-1 border-none bg-transparent text-[13px] outline-none"
                         placeholder="Add-on name (EN)"

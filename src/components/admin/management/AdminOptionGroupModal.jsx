@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { GripVertical, Plus, Trash2, X } from 'lucide-react'
+import AdminModifierImageThumb, { moveListItem } from '../AdminModifierImageThumb'
 
 const labelClass = 'text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -12,7 +13,24 @@ const ghostBtn =
   'inline-flex size-8 items-center justify-center rounded-full text-[#637068] hover:bg-[#f3f5f3] disabled:opacity-50'
 
 function emptyChoice() {
-  return { name: '', nameAr: '', price: '+0.000', isDefault: false }
+  return { name: '', nameAr: '', price: '+0.000', imageUrl: null, isDefault: false }
+}
+
+function mapChoice(c) {
+  return {
+    name: c.name || '',
+    nameAr: c.nameAr || '',
+    price:
+      c.price != null
+        ? String(c.price).startsWith('+')
+          ? c.price
+          : `+${Number(c.price).toFixed(3)}`
+        : c.priceDelta != null
+          ? `+${Number(c.priceDelta).toFixed(3)}`
+          : '+0.000',
+    imageUrl: c.imageUrl || null,
+    isDefault: Boolean(c.isDefault),
+  }
 }
 
 function buildForm(group) {
@@ -20,31 +38,9 @@ function buildForm(group) {
     group?.selection ||
     (Number(group?.maxSelect ?? group?.max ?? 1) > 1 ? 'multiple' : 'single')
   const choices = Array.isArray(group?.choices)
-    ? group.choices.map((c) => ({
-        name: c.name || '',
-        nameAr: c.nameAr || '',
-        price:
-          c.price != null
-            ? String(c.price).startsWith('+')
-              ? c.price
-              : `+${Number(c.price).toFixed(3)}`
-            : c.priceDelta != null
-              ? `+${Number(c.priceDelta).toFixed(3)}`
-              : '+0.000',
-        isDefault: Boolean(c.isDefault),
-      }))
+    ? group.choices.map(mapChoice)
     : Array.isArray(group?.options)
-      ? group.options.map((o) => ({
-          name: o.name || '',
-          nameAr: o.nameAr || '',
-          price:
-            o.price != null
-              ? `+${Number(o.price).toFixed(3)}`
-              : o.priceDelta != null
-                ? `+${Number(o.priceDelta).toFixed(3)}`
-                : '+0.000',
-          isDefault: Boolean(o.isDefault),
-        }))
+      ? group.options.map(mapChoice)
       : [emptyChoice(), emptyChoice()]
 
   return {
@@ -67,13 +63,16 @@ function parsePriceDelta(raw) {
 
 /**
  * Nested modal to add/edit an option group for staged import items.
+ * Supports choice image upload + drag reorder (same as product add-ons).
  */
 export default function AdminOptionGroupModal({ open, group, onClose, onSave }) {
   const [form, setForm] = useState(null)
+  const [dragIndex, setDragIndex] = useState(null)
 
   useEffect(() => {
     if (!open) return
     setForm(buildForm(group))
+    setDragIndex(null)
   }, [open, group])
 
   useEffect(() => {
@@ -102,16 +101,25 @@ export default function AdminOptionGroupModal({ open, group, onClose, onSave }) 
     })
   }
 
+  const reorderChoices = (fromIndex, toIndex) => {
+    setForm((c) => ({
+      ...c,
+      choices: moveListItem(c.choices, fromIndex, toIndex),
+    }))
+  }
+
   const submit = () => {
     const title = form.title.trim()
     const titleAr = form.titleAr.trim()
     const choices = form.choices
-      .map((c) => ({
+      .map((c, index) => ({
         name: String(c.name || '').trim(),
         nameAr: String(c.nameAr || '').trim() || undefined,
         priceDelta: parsePriceDelta(c.price),
+        imageUrl: c.imageUrl || null,
         isDefault: Boolean(c.isDefault),
         isAvailable: true,
+        sortOrder: index,
       }))
       .filter((c) => c.name)
     if (!title || !choices.length) return
@@ -145,7 +153,9 @@ export default function AdminOptionGroupModal({ open, group, onClose, onSave }) 
         name: c.name,
         nameAr: c.nameAr,
         price: `+${c.priceDelta.toFixed(3)}`,
+        imageUrl: c.imageUrl || null,
         isDefault: c.isDefault,
+        sortOrder: c.sortOrder,
       })),
       options: choices,
     })
@@ -243,10 +253,35 @@ export default function AdminOptionGroupModal({ open, group, onClose, onSave }) 
             {form.choices.map((choice, idx) => (
               <div
                 key={idx}
-                className="space-y-1.5 rounded-[10px] bg-[#F2F7F2] px-3 py-2"
+                draggable
+                onDragStart={() => setDragIndex(idx)}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  event.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={(event) => {
+                  event.preventDefault()
+                  if (dragIndex == null || dragIndex === idx) return
+                  reorderChoices(dragIndex, idx)
+                  setDragIndex(null)
+                }}
+                onDragEnd={() => setDragIndex(null)}
+                className={`space-y-1.5 rounded-[10px] bg-[#F2F7F2] px-3 py-2 ${
+                  dragIndex === idx ? 'opacity-60 ring-1 ring-[#1aa054]' : ''
+                }`}
               >
                 <div className="flex items-center gap-2">
-                  <GripVertical size={14} className="shrink-0 text-[#949C94]" />
+                  <span
+                    className="shrink-0 cursor-grab touch-none text-[#949C94] active:cursor-grabbing"
+                    aria-label="Reorder choice"
+                  >
+                    <GripVertical size={14} />
+                  </span>
+                  <AdminModifierImageThumb
+                    imageUrl={choice.imageUrl || null}
+                    sizeClass="size-9"
+                    onChange={(url) => updateChoice(idx, 'imageUrl', url)}
+                  />
                   <input
                     className="min-w-0 flex-1 border-none bg-transparent text-[13px] outline-none"
                     placeholder="Choice name (EN)"
