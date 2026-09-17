@@ -664,7 +664,7 @@ export default function AdminAddVendorPage({ onBack }) {
   const [commissionSaving, setCommissionSaving] = useState(false)
   const [commissionError, setCommissionError] = useState(null)
   const [serviceModes, setServiceModes] = useState(() =>
-    isAdminRealApiFeature('vendors') ? [] : ['Hot food · on demand', 'Pickup', 'Scheduled delivery'],
+    isAdminRealApiFeature('vendors') ? [] : [],
   )
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
   const [tierDraft, setTierDraft] = useState({ fromAmount: '0', ratePct: '15' })

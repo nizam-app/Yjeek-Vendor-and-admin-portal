@@ -470,6 +470,7 @@ export function buildAllowedModesFromStoreType(storeType) {
 /**
  * Branch order-mode UI gate.
  * Store type = which toggles may appear; vendor SLA = which may be enabled (except wizard draft).
+ * Branch only exposes Pickup / Dine-in (vendor-level modes live on SLA).
  */
 export function buildBranchModeGate({
   storeType = null,
@@ -482,18 +483,54 @@ export function buildBranchModeGate({
   const vendorSupportsPickup = vendorModeLabels.includes('Pickup')
   const vendorSupportsDineIn = vendorModeLabels.includes('Dine-in')
   const vendorModesKnown = vendorModeLabels.length > 0
+  const canTogglePickup =
+    showPickup && (isWizardDraft || !vendorModesKnown || vendorSupportsPickup)
+  const canToggleDineIn =
+    showDineIn && (isWizardDraft || !vendorModesKnown || vendorSupportsDineIn)
+
+  const visibleModes = []
+  if (showPickup) visibleModes.push('Pickup')
+  if (showDineIn) visibleModes.push('Dine-in')
+
+  const toggleableModes = []
+  if (canTogglePickup) toggleableModes.push('Pickup')
+  if (canToggleDineIn) toggleableModes.push('Dine-in')
 
   return {
     ready: Boolean(storeType?.id || storeType?.supportedOrderModes?.length),
     showPickup,
     showDineIn,
-    canTogglePickup:
-      showPickup && (isWizardDraft || !vendorModesKnown || vendorSupportsPickup),
-    canToggleDineIn:
-      showDineIn && (isWizardDraft || !vendorModesKnown || vendorSupportsDineIn),
+    canTogglePickup,
+    canToggleDineIn,
     vendorSupportsPickup,
     vendorSupportsDineIn,
+    visibleModes,
+    toggleableModes,
   }
+}
+
+/**
+ * Among toggleable branch modes, at least one must stay enabled.
+ * Returns an error message, or null when valid / nothing to enforce.
+ */
+export function branchOrderModesAtLeastOneError({
+  modeGate,
+  allowPickup,
+  allowDineIn,
+} = {}) {
+  const toggleable = Array.isArray(modeGate?.toggleableModes) ? modeGate.toggleableModes : []
+  if (!toggleable.length) return null
+
+  const enabledCount = toggleable.filter((mode) => {
+    if (mode === 'Pickup') return Boolean(allowPickup)
+    if (mode === 'Dine-in') return Boolean(allowDineIn)
+    return false
+  }).length
+
+  if (enabledCount === 0) {
+    return 'At least one branch order mode must stay enabled.'
+  }
+  return null
 }
 
 export function mergeBranchModesIntoServiceModes(

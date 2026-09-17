@@ -61,7 +61,21 @@ export function mapAdminDeliveryZonesResponse(data) {
       maxDistanceKm: asInputValue(general.maxDistanceKm),
       extraContributionPerKm: asInputValue(general.extraContributionPerKm),
       maxContribution: asInputValue(general.maxContribution),
+      customerDeliveryContribution: asInputValue(
+        general.customerDeliveryContribution ?? general.deliveryContribution,
+      ),
+      customerMaxDistanceKm: asInputValue(general.customerMaxDistanceKm ?? general.maxDistanceKm),
+      customerExtraContributionPerKm: asInputValue(
+        general.customerExtraContributionPerKm ?? general.extraContributionPerKm,
+      ),
+      customerMaxContribution: asInputValue(
+        general.customerMaxContribution ?? general.maxContribution,
+      ),
     },
+    branchDeliverySettings:
+      data.branchDeliverySettings && typeof data.branchDeliverySettings === 'object'
+        ? data.branchDeliverySettings
+        : {},
     overrides: branches
       .filter((branch) => branch && branch.id)
       .map((branch) => ({
@@ -129,6 +143,58 @@ export function mapAdminUpdateDeliveryZonesRequest(form = {}) {
 
   const maxContribution = num(form.maxContribution)
   if (maxContribution !== undefined) body.maxContribution = maxContribution
+
+  const customerDeliveryContribution = num(
+    form.customerDeliveryContribution ?? form.customerContribution,
+  )
+  if (customerDeliveryContribution !== undefined) {
+    body.customerDeliveryContribution = customerDeliveryContribution
+  }
+
+  const customerMaxDistanceKm = num(form.customerMaxDistanceKm)
+  if (customerMaxDistanceKm !== undefined) body.customerMaxDistanceKm = customerMaxDistanceKm
+
+  const customerExtraContributionPerKm = num(form.customerExtraContributionPerKm)
+  if (customerExtraContributionPerKm !== undefined) {
+    body.customerExtraContributionPerKm = customerExtraContributionPerKm
+  }
+
+  const customerMaxContribution = num(form.customerMaxContribution)
+  if (customerMaxContribution !== undefined) body.customerMaxContribution = customerMaxContribution
+
+  const branchId = form.branchId != null && String(form.branchId).trim() ? String(form.branchId) : undefined
+  if (branchId) body.branchId = branchId
+
+  const branchDeliveryContribution = num(form.branchDeliveryContribution)
+  if (branchDeliveryContribution !== undefined) {
+    body.branchDeliveryContribution = branchDeliveryContribution
+  }
+
+  const branchMaxDistanceKm = num(form.branchMaxDistanceKm)
+  if (branchMaxDistanceKm !== undefined) body.branchMaxDistanceKm = branchMaxDistanceKm
+
+  const branchExtraContributionPerKm = num(form.branchExtraContributionPerKm)
+  if (branchExtraContributionPerKm !== undefined) {
+    body.branchExtraContributionPerKm = branchExtraContributionPerKm
+  }
+
+  const branchMaxContribution = num(form.branchMaxContribution)
+  if (branchMaxContribution !== undefined) body.branchMaxContribution = branchMaxContribution
+
+  const hasBranchContribution =
+    branchDeliveryContribution !== undefined ||
+    branchMaxDistanceKm !== undefined ||
+    branchExtraContributionPerKm !== undefined ||
+    branchMaxContribution !== undefined
+
+  if (hasBranchContribution) {
+    const branchDeliveryRadiusKm = num(form.branchDeliveryRadiusKm)
+    if (branchDeliveryRadiusKm !== undefined) body.branchDeliveryRadiusKm = branchDeliveryRadiusKm
+  }
+
+  if (typeof form.applyVendorContributionToAll === 'boolean') {
+    body.applyVendorContributionToAll = form.applyVendorContributionToAll
+  }
 
   if (Object.keys(body).length === 0) {
     throw new ApiError({ message: 'No delivery zone fields to update.' })
