@@ -208,15 +208,19 @@ export default function AdminCreateGeofenceCampaignPage() {
           const result = await adminService.listVendorBranches(vendorId)
           if (cancelled) return
           const branches = Array.isArray(result?.data?.branches) ? result.data.branches : []
-          const hit = branches.find((branch) =>
+          const plottableBranches = branches.filter((branch) =>
             isPlottableLatLng(branch.latitude, branch.longitude),
           )
+          // Prefer primary branch; avoid picking an arbitrary far/misplaced branch.
+          const hit =
+            plottableBranches.find((b) => b.isPrimary) || plottableBranches[0]
           const vendorMeta = form.selectedVendors.find((v) => v.id === vendorId)
           if (hit) {
             plottable.push({
               latitude: Number(hit.latitude),
               longitude: Number(hit.longitude),
               label: vendorMeta?.label || vendorId,
+              vendorLocationId: hit.id ? String(hit.id) : undefined,
             })
           } else {
             warnings.push(vendorMeta?.label || vendorId)
@@ -340,7 +344,13 @@ export default function AdminCreateGeofenceCampaignPage() {
       endsAt,
       ...(form.promoCodeId ? { promoCodeId: form.promoCodeId } : {}),
       ...(mapLocations[0]
-        ? { latitude: mapLocations[0].latitude, longitude: mapLocations[0].longitude }
+        ? {
+            latitude: mapLocations[0].latitude,
+            longitude: mapLocations[0].longitude,
+            ...(mapLocations[0].vendorLocationId
+              ? { vendorLocationId: mapLocations[0].vendorLocationId }
+              : {}),
+          }
         : {}),
     }
 
