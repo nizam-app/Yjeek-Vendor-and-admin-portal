@@ -425,6 +425,27 @@ export const adminService = {
   exportAdminCashbackReport(params, options = {}) {
     return adminMarketingService.exportCashbackReport(params, options)
   },
+  getAdminReferral(options = {}) {
+    return adminMarketingService.getReferral(options)
+  },
+  updateAdminReferralSettings(body, options = {}) {
+    return adminMarketingService.updateReferralSettings(body, options)
+  },
+  updateAdminReferralValues(body, options = {}) {
+    return adminMarketingService.updateReferralValues(body, options)
+  },
+  listAdminReferralInvites(params, options = {}) {
+    return adminMarketingService.listReferralInvites(params, options)
+  },
+  exportAdminReferralInvites(params, options = {}) {
+    return adminMarketingService.exportReferralInvites(params, options)
+  },
+  blockAdminReferralInviter(customerId, body, options = {}) {
+    return adminMarketingService.blockReferralInviter(customerId, body, options)
+  },
+  unblockAdminReferralInviter(customerId, options = {}) {
+    return adminMarketingService.unblockReferralInviter(customerId, options)
+  },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)
   },

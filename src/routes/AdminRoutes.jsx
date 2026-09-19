@@ -28,6 +28,7 @@ import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDeta
 import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
 import AdminCashbackPage from '../pages/admin/management/AdminCashbackPage'
+import AdminReferralPage from '../pages/admin/management/AdminReferralPage'
 import AdminCreatePromoCodePage from '../pages/admin/management/AdminCreatePromoCodePage'
 import AdminGeofenceCampaignsPage from '../pages/admin/management/AdminGeofenceCampaignsPage'
 import AdminCreateGeofenceCampaignPage from '../pages/admin/management/AdminCreateGeofenceCampaignPage'
@@ -93,6 +94,7 @@ export const adminRoutes = (
     <Route path="marketing/promo-codes" element={<AdminMarketingPage />} />
     <Route path="marketing/promo-categories" element={<AdminMarketingPage />} />
     <Route path="marketing/cashback" element={<AdminCashbackPage />} />
+    <Route path="marketing/referral" element={<AdminReferralPage />} />
     <Route path="marketing" element={<AdminMarketingPage />} />
     <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
     <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />
