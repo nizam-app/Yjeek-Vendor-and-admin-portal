@@ -72,6 +72,7 @@ const pageTitles = {
   '/admin/marketing/promo-categories': 'Marketing · Promo categories',
   '/admin/marketing/geofence': 'Marketing · Geofence offers',
   '/admin/marketing/geofence/new': 'Marketing · New geofence offer',
+  '/admin/marketing/geofence/:campaignId/edit': 'Marketing · Edit geofence offer',
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
@@ -338,6 +339,9 @@ function AdminTopbar({ collapsed }) {
     || (pathname.startsWith('/admin/users/') ? 'Users & Roles · User' : null)
     || (/^\/admin\/marketing\/promo-codes\/[^/]+\/edit$/.test(pathname)
       ? 'Marketing · Edit promo code'
+      : null)
+    || (/^\/admin\/marketing\/geofence\/[^/]+\/edit$/.test(pathname)
+      ? 'Marketing · Edit geofence offer'
       : null)
     || (() => {
       const match = pathname.match(/^\/admin\/marketing\/notifications\/([^/]+)$/)

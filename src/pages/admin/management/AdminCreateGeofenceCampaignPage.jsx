@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
@@ -14,8 +14,14 @@ const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
 
 const STATUS_OPTIONS = ['DRAFT', 'ACTIVE', 'PAUSED']
+const ORDER_TYPE_OPTIONS = [
+  { value: 'DELIVERY', label: 'Delivery' },
+  { value: 'PICKUP', label: 'Pickup' },
+  { value: 'DINE_IN', label: 'Dine-in' },
+  { value: 'SERVICE', label: 'Service' },
+]
 const DEFAULT_OFFER_WINDOW_MINUTES = 120
-const MIN_OFFER_WINDOW_MINUTES = 15
+const MIN_OFFER_WINDOW_MINUTES = 5
 const MAX_OFFER_WINDOW_MINUTES = 24 * 60
 
 function Field({ label, children, className }) {
@@ -80,16 +86,18 @@ function combineDateAndTime(dateValue, timeValue) {
 }
 
 const emptyForm = {
-  vendorId: '',
-  vendorLabel: '',
-  vendorLocationId: '',
-  promoCodeId: '',
-  promoLabel: '',
+  selectedVendors: [],
   title: '',
   notificationTitle: '',
   notificationBody: '',
   radiusMeters: '500',
   offerWindowMinutes: String(DEFAULT_OFFER_WINDOW_MINUTES),
+  discountPercent: '25',
+  maxUses: '',
+  maxUsesPerCustomer: '1',
+  applicableOrderTypes: ['PICKUP'],
+  promoCodeId: '',
+  promoLabel: '',
   status: 'DRAFT',
   startsAtDate: '',
   startsAtTime: '00:00',
@@ -106,8 +114,9 @@ export default function AdminCreateGeofenceCampaignPage() {
   const [loading, setLoading] = useState(isEdit)
   const [error, setError] = useState('')
   const [stats, setStats] = useState(null)
-  const [vendorCoords, setVendorCoords] = useState(null)
+  const [mapLocations, setMapLocations] = useState([])
   const [coordsLoading, setCoordsLoading] = useState(false)
+  const [vendorGeoWarnings, setVendorGeoWarnings] = useState([])
 
   const goBack = () => navigate('/admin/marketing/geofence')
 
@@ -121,17 +130,42 @@ export default function AdminCreateGeofenceCampaignPage() {
         const result = await adminService.getAdminGeofenceCampaign(campaignId)
         const row = result?.data
         if (cancelled || !row) return
+
+        const vendorsFromApi = Array.isArray(row.vendors) ? row.vendors : []
+        const selectedVendors =
+          vendorsFromApi.length > 0
+            ? vendorsFromApi.map((v) => ({
+                id: String(v.vendorId || v.id),
+                label: String(v.vendorName || v.name || v.vendorId || v.id),
+              }))
+            : row.vendorId
+              ? [{ id: String(row.vendorId), label: String(row.vendorName || row.vendorId) }]
+              : []
+
         setForm({
-          vendorId: row.vendorId || '',
-          vendorLabel: row.vendorName || row.vendorId || '',
-          vendorLocationId: row.vendorLocationId || '',
-          promoCodeId: row.promoCodeId || '',
-          promoLabel: row.promoCode || row.promo?.code || row.promoCodeId || '',
+          selectedVendors,
           title: row.title || '',
           notificationTitle: row.notificationTitle || '',
           notificationBody: row.notificationBody || '',
           radiusMeters: String(row.radiusMeters ?? 500),
           offerWindowMinutes: String(row.offerWindowMinutes ?? DEFAULT_OFFER_WINDOW_MINUTES),
+          discountPercent: String(
+            row.discountPercent ??
+              (row.promo?.discountType === 'PERCENT' ? row.promo?.discountValue : '') ??
+              '',
+          ),
+          maxUses: row.maxUses != null ? String(row.maxUses) : row.promo?.maxUses != null ? String(row.promo.maxUses) : '',
+          maxUsesPerCustomer:
+            row.maxUsesPerCustomer != null
+              ? String(row.maxUsesPerCustomer)
+              : row.promo?.maxUsesPerCustomer != null
+                ? String(row.promo.maxUsesPerCustomer)
+                : '',
+          applicableOrderTypes: Array.isArray(row.applicableOrderTypes)
+            ? row.applicableOrderTypes
+            : [],
+          promoCodeId: row.promoCodeId || '',
+          promoLabel: row.promoCode || row.promo?.code || row.promoCodeId || '',
           status: row.status || 'DRAFT',
           startsAtDate: splitIsoToDateTime(row.startsAt).date,
           startsAtTime: splitIsoToDateTime(row.startsAt).time || '00:00',
@@ -139,6 +173,7 @@ export default function AdminCreateGeofenceCampaignPage() {
           endsAtTime: splitIsoToDateTime(row.endsAt).time || '23:59',
         })
         setStats(row.stats || null)
+        // Map pins load via selectedVendors effect (all plottable vendor locations).
       } catch (err) {
         if (!cancelled) setError(formatApiErrorMessage(err) || 'Failed to load campaign.')
       } finally {
@@ -150,59 +185,59 @@ export default function AdminCreateGeofenceCampaignPage() {
     }
   }, [campaignId, isEdit])
 
+  const selectedVendorIdsKey = useMemo(
+    () => form.selectedVendors.map((v) => v.id).join(','),
+    [form.selectedVendors],
+  )
+
   useEffect(() => {
-    const vendorId = String(form.vendorId || '').trim()
-    if (!vendorId) {
-      setVendorCoords(null)
-      setForm((prev) => (prev.vendorLocationId ? { ...prev, vendorLocationId: '' } : prev))
+    const vendorIds = form.selectedVendors.map((v) => String(v.id || '').trim()).filter(Boolean)
+    if (!vendorIds.length) {
+      setMapLocations([])
+      setVendorGeoWarnings([])
       return undefined
     }
 
     let cancelled = false
     setCoordsLoading(true)
     ;(async () => {
-      try {
-        const result = await adminService.listVendorBranches(vendorId)
-        if (cancelled) return
-        const branches = Array.isArray(result?.data?.branches) ? result.data.branches : []
-        const preferredId = String(form.vendorLocationId || '').trim()
-        const sorted = [...branches].sort((a, b) => {
-          if (preferredId) {
-            if (String(a.id) === preferredId) return -1
-            if (String(b.id) === preferredId) return 1
-          }
-          return Number(Boolean(b.isPrimary)) - Number(Boolean(a.isPrimary))
-        })
-        const hit = sorted.find((branch) => isPlottableLatLng(branch.latitude, branch.longitude))
-        if (hit) {
-          setVendorCoords({
-            latitude: Number(hit.latitude),
-            longitude: Number(hit.longitude),
-          })
-          setForm((prev) =>
-            prev.vendorLocationId === String(hit.id)
-              ? prev
-              : { ...prev, vendorLocationId: String(hit.id) },
+      const warnings = []
+      const plottable = []
+      for (const vendorId of vendorIds) {
+        try {
+          const result = await adminService.listVendorBranches(vendorId)
+          if (cancelled) return
+          const branches = Array.isArray(result?.data?.branches) ? result.data.branches : []
+          const hit = branches.find((branch) =>
+            isPlottableLatLng(branch.latitude, branch.longitude),
           )
-        } else {
-          setVendorCoords(null)
-          setForm((prev) => (prev.vendorLocationId ? { ...prev, vendorLocationId: '' } : prev))
+          const vendorMeta = form.selectedVendors.find((v) => v.id === vendorId)
+          if (hit) {
+            plottable.push({
+              latitude: Number(hit.latitude),
+              longitude: Number(hit.longitude),
+              label: vendorMeta?.label || vendorId,
+            })
+          } else {
+            warnings.push(vendorMeta?.label || vendorId)
+          }
+        } catch {
+          const vendorMeta = form.selectedVendors.find((v) => v.id === vendorId)
+          warnings.push(vendorMeta?.label || vendorId)
         }
-      } catch {
-        if (!cancelled) {
-          setVendorCoords(null)
-        }
-      } finally {
-        if (!cancelled) setCoordsLoading(false)
+      }
+      if (!cancelled) {
+        setMapLocations(plottable)
+        setVendorGeoWarnings(warnings)
+        setCoordsLoading(false)
       }
     })()
 
     return () => {
       cancelled = true
     }
-    // Re-resolve when vendor changes; preferred branch id from edit load is applied on first run.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch on vendorId
-  }, [form.vendorId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when vendor set changes
+  }, [selectedVendorIdsKey])
 
   const searchVendors = useCallback(async (query, options = {}) => {
     const result = await adminService.getVendors({
@@ -220,44 +255,24 @@ export default function AdminCreateGeofenceCampaignPage() {
     }))
   }, [])
 
-  const searchPromoCodes = useCallback(async (query, options = {}) => {
-    const result = await adminService.listAdminMarketingPromoCodes({
-      status: 'active',
-      limit: 50,
-      signal: options.signal,
-      params: { search: query },
+  function toggleOrderType(value) {
+    setForm((prev) => {
+      const has = prev.applicableOrderTypes.includes(value)
+      return {
+        ...prev,
+        applicableOrderTypes: has
+          ? prev.applicableOrderTypes.filter((t) => t !== value)
+          : [...prev.applicableOrderTypes, value],
+      }
     })
-    const rows = result?.data?.promoCodes?.rows || []
-    const term = String(query || '').trim().toLowerCase()
-    return rows
-      .filter((row) => {
-        if (!term) return true
-        return (
-          String(row.code || '')
-            .toLowerCase()
-            .includes(term) ||
-          String(row.description || '')
-            .toLowerCase()
-            .includes(term)
-        )
-      })
-      .map((row) => ({
-        id: String(row.id),
-        label: String(row.code || row.id),
-        meta: [row.description, row.type].filter((part) => part && part !== '—').join(' · '),
-      }))
-  }, [])
+  }
 
   async function onSubmit(event) {
     event.preventDefault()
     setError('')
 
-    if (!form.vendorId) {
-      setError('Select a vendor.')
-      return
-    }
-    if (!form.promoCodeId) {
-      setError('Select a promo code (create one under Promo codes first if needed).')
+    if (!form.selectedVendors.length) {
+      setError('Select at least one vendor.')
       return
     }
     if (!form.notificationTitle.trim() || !form.notificationBody.trim()) {
@@ -267,6 +282,7 @@ export default function AdminCreateGeofenceCampaignPage() {
 
     const radiusMeters = Number(form.radiusMeters)
     const offerWindowMinutes = Number(form.offerWindowMinutes)
+    const discountPercent = Number(form.discountPercent)
     if (!Number.isFinite(radiusMeters) || radiusMeters < 50 || radiusMeters > 5000) {
       setError('Radius must be between 50 and 5000 meters.')
       return
@@ -276,7 +292,17 @@ export default function AdminCreateGeofenceCampaignPage() {
       offerWindowMinutes < MIN_OFFER_WINDOW_MINUTES ||
       offerWindowMinutes > MAX_OFFER_WINDOW_MINUTES
     ) {
-      setError('Offer window must be between 15 and 1440 minutes.')
+      setError('Offer duration must be between 5 and 1440 minutes.')
+      return
+    }
+    if (!Number.isFinite(discountPercent) || discountPercent <= 0 || discountPercent > 100) {
+      setError('Discount percentage must be between 0 and 100.')
+      return
+    }
+    if (vendorGeoWarnings.length) {
+      setError(
+        `Vendors missing geolocation: ${vendorGeoWarnings.join(', ')}. Add branch/vendor coordinates first.`,
+      )
       return
     }
 
@@ -295,25 +321,27 @@ export default function AdminCreateGeofenceCampaignPage() {
       return
     }
 
-    if (!vendorCoords || !isPlottableLatLng(vendorCoords.latitude, vendorCoords.longitude)) {
-      setError('Selected vendor has no branch coordinates. Add a branch location first.')
-      return
-    }
+    const maxUsesRaw = String(form.maxUses || '').trim()
+    const maxUsesPerCustomerRaw = String(form.maxUsesPerCustomer || '').trim()
 
     const payload = {
-      vendorId: form.vendorId,
-      vendorLocationId: form.vendorLocationId || null,
-      promoCodeId: form.promoCodeId,
+      vendorIds: form.selectedVendors.map((v) => v.id),
       title: form.title.trim() || null,
       notificationTitle: form.notificationTitle.trim(),
       notificationBody: form.notificationBody.trim(),
       radiusMeters,
       offerWindowMinutes,
+      discountPercent,
+      maxUses: maxUsesRaw ? Number(maxUsesRaw) : null,
+      maxUsesPerCustomer: maxUsesPerCustomerRaw ? Number(maxUsesPerCustomerRaw) : null,
+      applicableOrderTypes: form.applicableOrderTypes,
       status: form.status,
       startsAt,
       endsAt,
-      latitude: vendorCoords.latitude,
-      longitude: vendorCoords.longitude,
+      ...(form.promoCodeId ? { promoCodeId: form.promoCodeId } : {}),
+      ...(mapLocations[0]
+        ? { latitude: mapLocations[0].latitude, longitude: mapLocations[0].longitude }
+        : {}),
     }
 
     setSaving(true)
@@ -351,6 +379,13 @@ export default function AdminCreateGeofenceCampaignPage() {
     )
   }
 
+  const mapLabel =
+    form.selectedVendors.length === 1
+      ? form.selectedVendors[0].label
+      : form.selectedVendors.length > 1
+        ? `${form.selectedVendors.length} vendors`
+        : 'Geofence'
+
   return (
     <div className="px-5 py-4 pb-10 max-[700px]:px-3">
       <button
@@ -367,8 +402,8 @@ export default function AdminCreateGeofenceCampaignPage() {
           {isEdit ? 'Edit geofence offer' : 'New geofence offer'}
         </h2>
         <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-          Link a vendor location + promo code. Customers who enter the radius get a push with a
-          time-limited unlock.
+          Configure multi-vendor radius offers, discount, order mode, and push copy. Discount and
+          usage limits are stored on the linked PromoCode.
         </p>
       </div>
 
@@ -402,28 +437,17 @@ export default function AdminCreateGeofenceCampaignPage() {
       >
         <div className="flex min-w-0 flex-col gap-4">
           <Card
-            title="Vendor & location"
-            subtitle="Uses the vendor branch location automatically. Change radius to update the fence on the map."
+            title="Vendors & radius"
+            subtitle="Select one or more participating vendors. Each vendor needs usable coordinates."
           >
             <div className="grid gap-3">
               <AdminEntitySearchPicker
-                label="Vendor"
-                placeholder="Search vendor…"
-                selected={
-                  form.vendorId
-                    ? [{ id: form.vendorId, label: form.vendorLabel || form.vendorId }]
-                    : []
-                }
-                onChange={(next) => {
-                  const item = next.length ? next[next.length - 1] : null
-                  setForm((prev) => ({
-                    ...prev,
-                    vendorId: item?.id || '',
-                    vendorLabel: item?.label || '',
-                    vendorLocationId: '',
-                  }))
-                  setVendorCoords(null)
-                }}
+                label="Vendors"
+                placeholder="Search vendors…"
+                helperText={`${form.selectedVendors.length} selected`}
+                minQueryLength={0}
+                selected={form.selectedVendors}
+                onChange={(selectedVendors) => setForm((prev) => ({ ...prev, selectedVendors }))}
                 searchFn={searchVendors}
               />
               <Field label="Radius (meters)">
@@ -436,74 +460,98 @@ export default function AdminCreateGeofenceCampaignPage() {
                   onChange={(e) => setForm((p) => ({ ...p, radiusMeters: e.target.value }))}
                 />
               </Field>
-              {form.vendorId && !coordsLoading && !vendorCoords ? (
+              {coordsLoading ? (
+                <p className="text-[12.5px] text-[#7c8780]">Checking vendor locations…</p>
+              ) : null}
+              {vendorGeoWarnings.length ? (
                 <p className="text-[12.5px] text-[#b42318]">
-                  This vendor has no branch coordinates yet. Add lat/lng on a branch first.
+                  Missing geolocation: {vendorGeoWarnings.join(', ')}. Add branch/vendor lat/lng
+                  before saving.
                 </p>
               ) : null}
-              {coordsLoading ? (
-                <p className="text-[12.5px] text-[#7c8780]">Loading vendor location…</p>
+              {!form.selectedVendors.length ? (
+                <p className="text-[12.5px] text-[#7c8780]">No vendors selected yet.</p>
               ) : null}
             </div>
           </Card>
 
           <Card
-            title="Coupon"
-            subtitle="Pick an existing code from Marketing → Promo codes (usage limits & discount live on that code)."
+            title="Discount & usage"
+            subtitle="Stored on the campaign PromoCode (percentage discount + usage caps)."
           >
-            <AdminEntitySearchPicker
-              label="Promo code"
-              placeholder="Search promo code…"
-              helperText="Lists active promo codes from Marketing."
-              minQueryLength={0}
-              allowRawIdAdd={false}
-              selected={
-                form.promoCodeId
-                  ? [{ id: form.promoCodeId, label: form.promoLabel || form.promoCodeId }]
-                  : []
-              }
-              onChange={(next) => {
-                const item = next.length ? next[next.length - 1] : null
-                setForm((prev) => ({
-                  ...prev,
-                  promoCodeId: item?.id || '',
-                  promoLabel: item?.label || '',
-                }))
-              }}
-              searchFn={searchPromoCodes}
-            />
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Discount %">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={100}
+                  step="0.1"
+                  value={form.discountPercent}
+                  onChange={(e) => setForm((p) => ({ ...p, discountPercent: e.target.value }))}
+                  required
+                />
+              </Field>
+              <Field label="Total usage limit">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  placeholder="Unlimited"
+                  value={form.maxUses}
+                  onChange={(e) => setForm((p) => ({ ...p, maxUses: e.target.value }))}
+                />
+              </Field>
+              <Field label="Per-customer limit">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  placeholder="Unlimited"
+                  value={form.maxUsesPerCustomer}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, maxUsesPerCustomer: e.target.value }))
+                  }
+                />
+              </Field>
+            </div>
+            {form.promoLabel ? (
+              <p className="mt-3 text-[12px] text-[#7c8780]">
+                Linked promo code: <span className="font-semibold text-[#17231c]">{form.promoLabel}</span>
+              </p>
+            ) : null}
           </Card>
 
-          <Card title="Notification & timing">
+          <Card title="Order mode & offer window">
             <div className="grid gap-3">
-              <Field label="Internal title (optional)">
-                <input
-                  className={inputClass}
-                  value={form.title}
-                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-                  placeholder="ABC Lunch geofence"
-                />
-              </Field>
-              <Field label="Push title">
-                <input
-                  className={inputClass}
-                  value={form.notificationTitle}
-                  onChange={(e) => setForm((p) => ({ ...p, notificationTitle: e.target.value }))}
-                  placeholder="You're near ABC Restaurant!"
-                  required
-                />
-              </Field>
-              <Field label="Push body">
-                <textarea
-                  className={cn(inputClass, 'h-auto min-h-[88px] py-2.5')}
-                  value={form.notificationBody}
-                  onChange={(e) => setForm((p) => ({ ...p, notificationBody: e.target.value }))}
-                  placeholder="Get 20% OFF for the next 2 hours. Use code ABC20."
-                  required
-                />
-              </Field>
+              <div>
+                <span className={labelClass}>Applicable order modes</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {ORDER_TYPE_OPTIONS.map((opt) => {
+                    const active = form.applicableOrderTypes.includes(opt.value)
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => toggleOrderType(opt.value)}
+                        className={cn(
+                          'h-[32px] rounded-full px-3.5 text-[12px] font-bold transition',
+                          active
+                            ? 'bg-[#e8f7ed] text-[#1aa054] ring-1 ring-[#b7e4c7]'
+                            : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4]',
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-[#8a948e]">
+                  Leave all unchecked for every order mode. Example: Pickup only → 25% OFF PICKUP.
+                </p>
+              </div>
               <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-                <Field label="Personal offer window (minutes)">
+                <Field label="Offer duration (minutes)">
                   <input
                     className={inputClass}
                     type="number"
@@ -528,6 +576,37 @@ export default function AdminCreateGeofenceCampaignPage() {
                   </Select>
                 </Field>
               </div>
+            </div>
+          </Card>
+
+          <Card title="Campaign & push">
+            <div className="grid gap-3">
+              <Field label="Campaign name">
+                <input
+                  className={inputClass}
+                  value={form.title}
+                  onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+                  placeholder="Lunch pickup near Seef"
+                />
+              </Field>
+              <Field label="Push title">
+                <input
+                  className={inputClass}
+                  value={form.notificationTitle}
+                  onChange={(e) => setForm((p) => ({ ...p, notificationTitle: e.target.value }))}
+                  placeholder="You're near a Yjeek offer!"
+                  required
+                />
+              </Field>
+              <Field label="Push message">
+                <textarea
+                  className={cn(inputClass, 'h-auto min-h-[88px] py-2.5')}
+                  value={form.notificationBody}
+                  onChange={(e) => setForm((p) => ({ ...p, notificationBody: e.target.value }))}
+                  placeholder="Get 25% OFF pickup for the next 10 minutes."
+                  required
+                />
+              </Field>
               <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
                 <div className="grid gap-2">
                   <Field label="Campaign starts">
@@ -600,11 +679,10 @@ export default function AdminCreateGeofenceCampaignPage() {
         <aside className="min-w-0 max-[980px]:order-first">
           <div className="sticky top-4">
             <AdminGeofenceRadiusMap
-              latitude={vendorCoords?.latitude}
-              longitude={vendorCoords?.longitude}
+              locations={mapLocations}
               radiusMeters={form.radiusMeters}
-              label={form.vendorLabel || 'Geofence'}
-              emptyHint="Select a vendor to preview its location and radius."
+              label={mapLabel}
+              emptyHint="Select vendors to preview all plottable locations and radius."
               heightClassName="h-[min(62vh,520px)] max-[980px]:h-[300px]"
             />
           </div>
