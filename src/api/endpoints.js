@@ -765,6 +765,17 @@ export const endpoints = {
         report: '/admin/marketing/cashback/report',
         reportExport: '/admin/marketing/cashback/report/export',
       },
+      referral: {
+        root: '/admin/marketing/referral',
+        settings: '/admin/marketing/referral/settings',
+        values: '/admin/marketing/referral/values',
+        invites: '/admin/marketing/referral/invites',
+        invitesExport: '/admin/marketing/referral/invites/export',
+        blockInviter: (customerId) =>
+          `/admin/marketing/referral/inviters/${encodeURIComponent(customerId)}/block`,
+        unblockInviter: (customerId) =>
+          `/admin/marketing/referral/inviters/${encodeURIComponent(customerId)}/unblock`,
+      },
     },
     /**
      * Confirmed Settings — Postman folder 13.

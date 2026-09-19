@@ -724,4 +724,103 @@ export const adminMarketingService = {
           : String(response.data)
     return { data: csv, meta: response?.meta ?? null }
   },
+
+  async getReferral(options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.referral.root, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateReferralSettings(body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.referral.settings, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateReferralValues(body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.referral.values, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listReferralInvites(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: { invites: [], total: 0, page: 1, limit: 50 }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.referral.invites, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async exportReferralInvites(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to export.')
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.referral.invitesExport, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    const csv =
+      typeof response?.data === 'string'
+        ? response.data
+        : response?.data == null
+          ? ''
+          : String(response.data)
+    return { data: csv, meta: response?.meta ?? null }
+  },
+
+  async blockReferralInviter(customerId, body = {}, options = {}) {
+    const id = String(customerId || '').trim()
+    if (!id) throw new Error('Customer id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.referral.blockInviter(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async unblockReferralInviter(customerId, options = {}) {
+    const id = String(customerId || '').trim()
+    if (!id) throw new Error('Customer id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.referral.unblockInviter(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
 }
