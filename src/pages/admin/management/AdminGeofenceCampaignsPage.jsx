@@ -8,7 +8,16 @@ import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 
 const VIEW_TABS = ['Notifications', 'Promo codes', 'Promo categories', 'Geofence offers']
-const COLUMNS = ['Vendor', 'Offer', 'Radius', 'Coupon', 'Window', 'Status', 'Triggered', 'Expiry', '']
+const COLUMNS = [
+  'Campaign',
+  'Vendors',
+  'Radius',
+  'Discount',
+  'Order mode',
+  'Duration',
+  'Status',
+  'Actions',
+]
 
 function useRealMarketing() {
   return isAdminRealApiFeature('marketing') || !apiConfig.adminUseMockApi
@@ -23,13 +32,17 @@ function statusTone(status) {
   return 'gray'
 }
 
-function formatExpiry(value) {
-  if (!value) return '—'
-  try {
-    return new Date(value).toLocaleString()
-  } catch {
-    return '—'
+function vendorCell(row) {
+  const count = Number(row.vendorCount ?? row.vendors?.length ?? 0)
+  if (count > 1) {
+    const names = (row.vendors || [])
+      .slice(0, 2)
+      .map((v) => v.vendorName || v.name)
+      .filter(Boolean)
+    const extra = count - names.length
+    return `${names.join(', ')}${extra > 0 ? ` +${extra}` : ''} (${count})`
   }
+  return row.vendors?.[0]?.vendorName || row.vendorName || '—'
 }
 
 export default function AdminGeofenceCampaignsPage() {
@@ -61,7 +74,7 @@ export default function AdminGeofenceCampaignsPage() {
             Geofence offers
           </h2>
           <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-            Push a time-limited coupon when a customer enters a vendor radius.
+            Multi-vendor promotional offers unlocked when a customer enters a store radius.
           </p>
         </div>
         <button
@@ -103,7 +116,7 @@ export default function AdminGeofenceCampaignsPage() {
         <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">All geofence campaigns</h3>
         <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
           <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
-            <table className="w-full min-w-[860px] border-collapse text-left">
+            <table className="w-full min-w-[960px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
                   {columns.map((column) => (
@@ -122,35 +135,29 @@ export default function AdminGeofenceCampaignsPage() {
                 ) : rows.length ? (
                   rows.map((row) => (
                     <tr key={row.id} className="border-b border-[#edf0ee] bg-white last:border-0">
-                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] font-semibold text-[#17231c]">
-                        {row.vendorName || '—'}
-                      </td>
-                      <td className="max-w-[220px] truncate px-4 py-3.5 text-[12.5px] text-[#455249]">
+                      <td className="max-w-[220px] truncate px-4 py-3.5 text-[12.5px] font-semibold text-[#17231c]">
                         {row.title || row.notificationTitle || '—'}
+                      </td>
+                      <td className="max-w-[240px] truncate px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {vendorCell(row)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
                         {row.radiusMeters}m
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] font-bold text-[#1aa054]">
-                        {row.promoCode || row.promo?.code || '—'}
+                        {row.discountLabel ||
+                          (row.discountPercent != null ? `${row.discountPercent}%` : null) ||
+                          row.promoCode ||
+                          '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
+                        {row.applicableOrderLabel || 'All modes'}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
                         {row.offerWindowMinutes} min
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5">
                         <Badge tone={statusTone(row.status)}>{row.status}</Badge>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                        {row.stats?.triggered ?? 0}
-                        {(row.stats?.opened != null || row.stats?.used != null) && (
-                          <span className="text-[#8a948e]">
-                            {' '}
-                            · {row.stats?.opened ?? 0} open · {row.stats?.used ?? 0} used
-                          </span>
-                        )}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
-                        {formatExpiry(row.endsAt)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-right">
                         <button
@@ -171,7 +178,7 @@ export default function AdminGeofenceCampaignsPage() {
                       colSpan={columns.length}
                       className="px-4 py-10 text-center text-[13px] text-[#7c8780]"
                     >
-                      No geofence offers yet. Create a promo code first, then link it here.
+                      No geofence offers yet. Create a multi-vendor campaign to get started.
                     </td>
                   </tr>
                 )}
