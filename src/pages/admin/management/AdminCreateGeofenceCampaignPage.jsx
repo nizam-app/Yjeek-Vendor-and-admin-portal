@@ -24,6 +24,25 @@ const DEFAULT_OFFER_WINDOW_MINUTES = 120
 const MIN_OFFER_WINDOW_MINUTES = 5
 const MAX_OFFER_WINDOW_MINUTES = 24 * 60
 
+function orderTypesFromSlaServiceModes(modes = {}) {
+  const types = []
+  if (modes.hotFoodOnDemand || modes.scheduledDelivery) types.push('DELIVERY')
+  if (modes.pickup) types.push('PICKUP')
+  if (modes.dineIn) types.push('DINE_IN')
+  if (modes.services) types.push('SERVICE')
+  return types
+}
+
+function unionOrderTypeOptions(selectedVendors) {
+  const allowed = new Set()
+  for (const vendor of selectedVendors) {
+    for (const type of vendor.orderTypes || []) {
+      allowed.add(String(type || '').trim().toUpperCase())
+    }
+  }
+  return ORDER_TYPE_OPTIONS.filter((opt) => allowed.has(opt.value))
+}
+
 function Field({ label, children, className }) {
   return (
     <label className={cn('block min-w-0', className)}>
@@ -95,7 +114,7 @@ const emptyForm = {
   discountPercent: '25',
   maxUses: '',
   maxUsesPerCustomer: '1',
-  applicableOrderTypes: ['PICKUP'],
+  applicableOrderTypes: [],
   promoCodeId: '',
   promoLabel: '',
   status: 'DRAFT',
@@ -137,6 +156,9 @@ export default function AdminCreateGeofenceCampaignPage() {
             ? vendorsFromApi.map((v) => ({
                 id: String(v.vendorId || v.id),
                 label: String(v.vendorName || v.name || v.vendorId || v.id),
+                orderTypes: Array.isArray(v.orderTypes)
+                  ? v.orderTypes.map((t) => String(t || '').trim().toUpperCase()).filter(Boolean)
+                  : [],
               }))
             : row.vendorId
               ? [{ id: String(row.vendorId), label: String(row.vendorName || row.vendorId) }]
@@ -189,6 +211,71 @@ export default function AdminCreateGeofenceCampaignPage() {
     () => form.selectedVendors.map((v) => v.id).join(','),
     [form.selectedVendors],
   )
+
+  const allowedOrderTypeOptions = useMemo(
+    () => unionOrderTypeOptions(form.selectedVendors),
+    [form.selectedVendors],
+  )
+
+  const allowedOrderTypeKey = useMemo(
+    () => allowedOrderTypeOptions.map((o) => o.value).join(','),
+    [allowedOrderTypeOptions],
+  )
+
+  useEffect(() => {
+    const missing = form.selectedVendors.filter(
+      (v) => !Array.isArray(v.orderTypes) || v.orderTypes.length === 0,
+    )
+    if (!missing.length) return undefined
+
+    let cancelled = false
+    ;(async () => {
+      const byId = new Map()
+      for (const vendor of missing) {
+        const vendorId = String(vendor.id || '').trim()
+        if (!vendorId) continue
+        try {
+          const result = await adminService.getVendorDetail(vendorId)
+          const types = result?.data?.orderTypes
+          if (Array.isArray(types) && types.length) {
+            byId.set(vendorId, types)
+            continue
+          }
+          const slaResult = await adminService.getVendorSla(vendorId)
+          const fromSla = orderTypesFromSlaServiceModes(slaResult?.data?.serviceModes)
+          if (fromSla.length) byId.set(vendorId, fromSla)
+        } catch {
+          /* keep chip; save may fail server-side if geo invalid */
+        }
+      }
+      if (cancelled || !byId.size) return
+      setForm((prev) => ({
+        ...prev,
+        selectedVendors: prev.selectedVendors.map((v) =>
+          byId.has(v.id) ? { ...v, orderTypes: byId.get(v.id) } : v,
+        ),
+      }))
+    })()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refetch when vendor set changes
+  }, [selectedVendorIdsKey])
+
+  useEffect(() => {
+    const allowed = new Set(allowedOrderTypeOptions.map((o) => o.value))
+    setForm((prev) => {
+      const nextTypes = prev.applicableOrderTypes.filter((t) => allowed.has(t))
+      if (
+        nextTypes.length === prev.applicableOrderTypes.length &&
+        nextTypes.every((t, i) => t === prev.applicableOrderTypes[i])
+      ) {
+        return prev
+      }
+      return { ...prev, applicableOrderTypes: nextTypes }
+    })
+  }, [allowedOrderTypeKey, allowedOrderTypeOptions])
 
   useEffect(() => {
     const vendorIds = form.selectedVendors.map((v) => String(v.id || '').trim()).filter(Boolean)
@@ -256,10 +343,12 @@ export default function AdminCreateGeofenceCampaignPage() {
       id: String(row.id),
       label: String(row.name || row.id),
       meta: [row.area || row.city, row.category].filter(Boolean).join(' · '),
+      orderTypes: Array.isArray(row.orderTypes) ? row.orderTypes : [],
     }))
   }, [])
 
   function toggleOrderType(value) {
+    if (!allowedOrderTypeOptions.some((o) => o.value === value)) return
     setForm((prev) => {
       const has = prev.applicableOrderTypes.includes(value)
       return {
@@ -306,6 +395,15 @@ export default function AdminCreateGeofenceCampaignPage() {
     if (vendorGeoWarnings.length) {
       setError(
         `Vendors missing geolocation: ${vendorGeoWarnings.join(', ')}. Add branch/vendor coordinates first.`,
+      )
+      return
+    }
+
+    const allowed = new Set(allowedOrderTypeOptions.map((o) => o.value))
+    const invalidModes = form.applicableOrderTypes.filter((t) => !allowed.has(t))
+    if (invalidModes.length) {
+      setError(
+        `Order mode not supported by selected vendor(s): ${invalidModes.join(', ')}.`,
       )
       return
     }
@@ -536,28 +634,40 @@ export default function AdminCreateGeofenceCampaignPage() {
             <div className="grid gap-3">
               <div>
                 <span className={labelClass}>Applicable order modes</span>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {ORDER_TYPE_OPTIONS.map((opt) => {
-                    const active = form.applicableOrderTypes.includes(opt.value)
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => toggleOrderType(opt.value)}
-                        className={cn(
-                          'h-[32px] rounded-full px-3.5 text-[12px] font-bold transition',
-                          active
-                            ? 'bg-[#e8f7ed] text-[#1aa054] ring-1 ring-[#b7e4c7]'
-                            : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4]',
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    )
-                  })}
-                </div>
+                {!form.selectedVendors.length ? (
+                  <p className="mt-1.5 text-[12.5px] text-[#7c8780]">
+                    Select vendor(s) first — only their supported order modes will appear here.
+                  </p>
+                ) : allowedOrderTypeOptions.length === 0 ? (
+                  <p className="mt-1.5 text-[12.5px] text-[#b42318]">
+                    Selected vendor(s) have no order modes configured. Update vendor SLA / service
+                    modes first.
+                  </p>
+                ) : (
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {allowedOrderTypeOptions.map((opt) => {
+                      const active = form.applicableOrderTypes.includes(opt.value)
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => toggleOrderType(opt.value)}
+                          className={cn(
+                            'h-[32px] rounded-full px-3.5 text-[12px] font-bold transition',
+                            active
+                              ? 'bg-[#e8f7ed] text-[#1aa054] ring-1 ring-[#b7e4c7]'
+                              : 'bg-white text-[#69756d] ring-1 ring-[#e4e8e4]',
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
                 <p className="mt-1.5 text-[11.5px] text-[#8a948e]">
-                  Leave all unchecked for every order mode. Example: Pickup only → 25% OFF PICKUP.
+                  Options match selected vendors (delivery, pickup, dine-in, service). Leave all
+                  unchecked for every supported mode. Example: Pickup only → 25% OFF PICKUP.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">

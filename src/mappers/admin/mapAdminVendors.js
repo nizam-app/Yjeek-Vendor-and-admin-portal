@@ -100,6 +100,9 @@ export function mapAdminVendorListItem(vendor) {
     city: vendor.city ?? null,
     logoUrl: vendor.logoUrl ?? null,
     createdAt: vendor.createdAt || vendor.created_at || null,
+    orderTypes: Array.isArray(vendor.orderTypes)
+      ? vendor.orderTypes.map((t) => String(t || '').trim().toUpperCase()).filter(Boolean)
+      : [],
   }
 }
 
@@ -299,6 +302,9 @@ export function mapAdminVendorDetailResponse(data) {
     forceClosedUntil: data.forceClosedUntil ?? null,
     forceClosedReason: data.forceClosedReason ?? null,
     forceClosedNote: data.forceClosedNote ?? null,
+    orderTypes: Array.isArray(data.orderTypes)
+      ? data.orderTypes.map((t) => String(t || '').trim().toUpperCase()).filter(Boolean)
+      : [],
     metrics: [
       { label: 'Orders (30d)', value: formatCount(kpis.orders30d) },
       { label: 'GMV (30d)', value: formatMoneyBhd(kpis.gmv30d) },
