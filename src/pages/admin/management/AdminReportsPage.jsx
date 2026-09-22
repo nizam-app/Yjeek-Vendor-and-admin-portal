@@ -36,6 +36,7 @@ const COLUMNS = [
   'Total km',
   'Items',
   'Value',
+  'Tip',
   'Pay method',
   'Pay status',
   'Placed',
@@ -48,6 +49,13 @@ const COLUMNS = [
   'SLA',
   'Rating',
   'Status',
+]
+
+const TIP_COLUMNS = ['#', 'Driver', 'Code', 'Tipped orders', 'Total tips']
+
+const REPORT_VIEWS = [
+  { id: 'orders', label: 'Orders' },
+  { id: 'champ-tips', label: 'Champ tips' },
 ]
 
 /** Filter controls — option values are UI labels; mapped to API enums on request. */
@@ -108,6 +116,7 @@ const PERIOD_OPTIONS = [
   'Period: Last 7 days',
   'Period: Last 30 days',
   'Period: Last 90 days',
+  'Period: This month',
   'Period: This year',
 ]
 
@@ -255,6 +264,7 @@ function toIsoEnd(dateYmd) {
 }
 
 export default function AdminReportsPage() {
+  const [reportView, setReportView] = useState('orders')
   const [period, setPeriod] = useState('Last 7 days')
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -267,6 +277,7 @@ export default function AdminReportsPage() {
   const [pageSize, setPageSize] = useState(10)
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
+  const [tipsData, setTipsData] = useState(null)
   const [error, setError] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
@@ -305,26 +316,53 @@ export default function AdminReportsPage() {
     setIsLoading(true)
     setError(null)
 
-    adminReportService
-      .getOrdersReport(requestFilters, { signal: controller.signal })
-      .then((response) => {
-        if (cancelled) return
-        setData(response?.data || null)
-      })
-      .catch((err) => {
-        if (cancelled || err?.name === 'AbortError') return
-        setError(err)
-        setData(null)
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
+    if (reportView === 'champ-tips') {
+      adminReportService
+        .getDriverTipsReport(
+          {
+            preset: requestFilters.preset,
+            from: requestFilters.from,
+            to: requestFilters.to,
+            limit: 100,
+          },
+          { signal: controller.signal },
+        )
+        .then((response) => {
+          if (cancelled) return
+          setTipsData(response?.data || null)
+          setData(null)
+        })
+        .catch((err) => {
+          if (cancelled || err?.name === 'AbortError') return
+          setError(err)
+          setTipsData(null)
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false)
+        })
+    } else {
+      adminReportService
+        .getOrdersReport(requestFilters, { signal: controller.signal })
+        .then((response) => {
+          if (cancelled) return
+          setData(response?.data || null)
+          setTipsData(null)
+        })
+        .catch((err) => {
+          if (cancelled || err?.name === 'AbortError') return
+          setError(err)
+          setData(null)
+        })
+        .finally(() => {
+          if (!cancelled) setIsLoading(false)
+        })
+    }
 
     return () => {
       cancelled = true
       controller.abort()
     }
-  }, [requestFilters, reloadToken])
+  }, [requestFilters, reloadToken, reportView])
 
   const filterOptions = useMemo(() => {
     const vendorNames = new Set()
@@ -352,25 +390,41 @@ export default function AdminReportsPage() {
   const shownFrom = totalOrders === 0 ? 0 : (page - 1) * pageSize + 1
   const shownTo = Math.min(page * pageSize, totalOrders)
   const rows = data?.rows || []
-  const stats = data?.stats || []
+  const stats = reportView === 'champ-tips' ? tipsData?.kpis || [] : data?.stats || []
+  const tipRows = tipsData?.rows || []
 
   async function handleExport() {
     if (exporting) return
     setExportError(null)
     setExporting(true)
     try {
-      const response = await adminReportService.exportOrdersReport({
-        ...requestFilters,
-        limit: Math.max(pageSize, 100),
-      })
-      const csv = response?.data || ''
-      if (!csv.trim()) {
-        setExportError('Export returned no CSV data.')
-        return
+      if (reportView === 'champ-tips') {
+        const response = await adminReportService.exportDriverTipsReport({
+          preset: requestFilters.preset,
+          from: requestFilters.from,
+          to: requestFilters.to,
+          limit: 100,
+        })
+        const csv = response?.data || ''
+        if (!csv.trim()) {
+          setExportError('Export returned no CSV data.')
+          return
+        }
+        downloadCsv(`champ-tips-report-${requestFilters.preset || 'export'}.csv`, csv)
+      } else {
+        const response = await adminReportService.exportOrdersReport({
+          ...requestFilters,
+          limit: Math.max(pageSize, 100),
+        })
+        const csv = response?.data || ''
+        if (!csv.trim()) {
+          setExportError('Export returned no CSV data.')
+          return
+        }
+        downloadCsv(`orders-report-${requestFilters.preset || 'export'}.csv`, csv)
       }
-      downloadCsv(`orders-report-${requestFilters.preset || 'export'}.csv`, csv)
     } catch (err) {
-      setExportError(err?.message || 'Failed to export orders report.')
+      setExportError(err?.message || 'Failed to export report.')
     } finally {
       setExporting(false)
     }
@@ -380,7 +434,30 @@ export default function AdminReportsPage() {
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">Orders report</h2>
+          <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+            {reportView === 'champ-tips' ? 'Champ tips report' : 'Orders report'}
+          </h2>
+          <div className="mt-2 inline-flex rounded-full border border-[#e4e8e4] bg-white p-0.5">
+            {REPORT_VIEWS.map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => {
+                  setReportView(view.id)
+                  setPage(1)
+                  setExportError(null)
+                }}
+                className={cn(
+                  'rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition',
+                  reportView === view.id
+                    ? 'bg-[#17231c] text-white'
+                    : 'text-[#7c8780] hover:text-[#17231c]',
+                )}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <FilterSelect
@@ -413,7 +490,14 @@ export default function AdminReportsPage() {
       ) : null}
 
       {stats.length ? (
-        <div className="mb-4 grid grid-cols-8 gap-2.5 max-[1400px]:grid-cols-4 max-[800px]:grid-cols-2 max-[480px]:grid-cols-1">
+        <div
+          className={cn(
+            'mb-4 grid gap-2.5 max-[800px]:grid-cols-2 max-[480px]:grid-cols-1',
+            reportView === 'champ-tips'
+              ? 'grid-cols-3'
+              : 'grid-cols-9 max-[1400px]:grid-cols-4',
+          )}
+        >
           {stats.map((stat) => (
             <div
               key={stat.key || stat.label}
@@ -428,6 +512,7 @@ export default function AdminReportsPage() {
         </div>
       ) : null}
 
+      {reportView === 'orders' ? (
       <div className="mb-3 rounded-[14px] border border-[#eceeec] bg-white p-3 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex h-[34px] min-w-[220px] flex-1 items-center gap-2 rounded-full border border-[#e4e8e4] bg-white px-3 text-[12px] text-[#455249] max-[700px]:min-w-full">
@@ -486,9 +571,76 @@ export default function AdminReportsPage() {
           />
         </div>
       </div>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[14px] border border-[#eceeec] bg-white p-3 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+          <DateFilter
+            label="From"
+            value={fromDate}
+            onChange={(value) => {
+              setFromDate(value)
+              setPage(1)
+            }}
+          />
+          <DateFilter
+            label="To"
+            value={toDate}
+            onChange={(value) => {
+              setToDate(value)
+              setPage(1)
+            }}
+          />
+          <p className="text-[12px] text-[#7c8780]">
+            Monthly tracking: choose Period (This month) or a custom From / To range.
+          </p>
+        </div>
+      )}
 
-      {error && !data ? (
+      {error && !(reportView === 'orders' ? data : tipsData) ? (
         <ApiState isLoading={false} error={error} onRetry={() => setReloadToken((n) => n + 1)} />
+      ) : reportView === 'champ-tips' ? (
+        <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+          <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[640px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-[#edf0ee] bg-[#f6f8f6]">
+                  {TIP_COLUMNS.map((column) => (
+                    <th
+                      key={column}
+                      className="whitespace-nowrap px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.05em] text-[#8a948e]"
+                    >
+                      {column}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading && !tipRows.length ? (
+                  <tr>
+                    <td colSpan={TIP_COLUMNS.length} className="px-3 py-10 text-center text-[12px] text-[#7c8780]">
+                      Loading champ tips…
+                    </td>
+                  </tr>
+                ) : null}
+                {!isLoading && !tipRows.length ? (
+                  <tr>
+                    <td colSpan={TIP_COLUMNS.length} className="px-3 py-10 text-center text-[12px] text-[#7c8780]">
+                      No tips for this period.
+                    </td>
+                  </tr>
+                ) : null}
+                {tipRows.map((row) => (
+                  <tr key={row.key} className="border-b border-[#edf0ee] text-[12px] text-[#455249]">
+                    <td className="whitespace-nowrap px-3 py-2.5">{row.rank}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-semibold text-[#17231c]">{row.driver}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{row.displayCode}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{row.tippedOrders}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-[#17231c]">{row.totalTips}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       ) : (
         <section className="overflow-hidden rounded-[14px] border border-[#eceeec] bg-white shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
@@ -548,6 +700,7 @@ export default function AdminReportsPage() {
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5">{row.items}</td>
                     <td className="whitespace-nowrap px-3 py-2.5 font-medium text-[#17231c]">{row.value}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-[#17231c]">{row.tip}</td>
                     <td className="whitespace-nowrap px-3 py-2.5">{row.payMethod}</td>
                     <td className="whitespace-nowrap px-3 py-2.5">
                       <StatusBadge value={row.payStatus} toneFn={payStatusTone} />
@@ -628,6 +781,7 @@ export default function AdminReportsPage() {
         </section>
       )}
 
+      {reportView === 'orders' ? (
       <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-[#7c8780]">
         <span>Rows per page:</span>
         {PAGE_SIZE_OPTIONS.map((size) => (
@@ -652,6 +806,7 @@ export default function AdminReportsPage() {
           Showing {shownFrom}–{shownTo} of {totalOrders.toLocaleString()}
         </span>
       </div>
+      ) : null}
     </div>
   )
 }

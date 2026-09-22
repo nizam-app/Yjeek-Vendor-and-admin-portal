@@ -15,7 +15,8 @@ import AdminMessageChampModal from '../../../components/admin/AdminMessageChampM
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
 import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
 import AdminReconcilePodModal from '../../../components/admin/AdminReconcilePodModal'
-import { AdminChampEarnings } from '../../../components/admin/management/AdminChampEarnings'
+import { AdminChampEarnings, defaultEarningsFromDate, defaultEarningsToDate } from '../../../components/admin/management/AdminChampEarnings'
+import { localDateToEndIso, localDateToStartIso } from '../../../components/admin/AdminDatePicker'
 import { cn } from '../../../components/admin/cn'
 
 function tierTone(tier) {
@@ -67,6 +68,8 @@ export default function AdminChampDetailPage() {
   const [actionBusy, setActionBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+  const [earningsFrom, setEarningsFrom] = useState(defaultEarningsFromDate)
+  const [earningsTo, setEarningsTo] = useState(defaultEarningsToDate)
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => adminService.getChampDetail(champId),
@@ -82,12 +85,17 @@ export default function AdminChampDetailPage() {
     () => {
       if (tab !== 'Earnings') return Promise.resolve({ data: null })
       if (useRealFleet) {
-        return adminService.getAdminFleetChampEarnings(champId, { limit: 30 })
+        const params = { limit: 90 }
+        const fromIso = localDateToStartIso(earningsFrom)
+        const toIso = localDateToEndIso(earningsTo)
+        if (fromIso) params.from = fromIso
+        if (toIso) params.to = toIso
+        return adminService.getAdminFleetChampEarnings(champId, params)
       }
       // Mock overview may embed earnings.
       return Promise.resolve({ data: data?.earnings || null })
     },
-    [tab, champId, useRealFleet, data?.earnings],
+    [tab, champId, useRealFleet, data?.earnings, earningsFrom, earningsTo],
   )
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
@@ -505,7 +513,13 @@ export default function AdminChampDetailPage() {
             </button>
           </div>
         ) : earnings ? (
-          <AdminChampEarnings earnings={earnings} />
+          <AdminChampEarnings
+            earnings={earnings}
+            fromDate={earningsFrom}
+            toDate={earningsTo}
+            onFromDateChange={setEarningsFrom}
+            onToDateChange={setEarningsTo}
+          />
         ) : (
           <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-10 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
             <p className="text-[14px] font-medium text-[#17231c]">Earnings</p>

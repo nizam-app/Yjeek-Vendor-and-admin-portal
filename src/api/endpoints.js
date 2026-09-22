@@ -825,6 +825,10 @@ export const endpoints = {
       ordersMeta: '/admin/reports/orders/meta',
       /** Confirmed: GET /admin/reports/orders/export?preset=&limit= → CSV */
       ordersExport: '/admin/reports/orders/export',
+      /** Champ tip totals by driver for a date range / month */
+      driverTips: '/admin/reports/driver-tips',
+      /** Champ tips CSV export */
+      driverTipsExport: '/admin/reports/driver-tips/export',
       /** Vendor settlement recovery obligations from incidents */
       vendorCostRecovery: '/admin/reports/vendor-cost-recovery',
     },

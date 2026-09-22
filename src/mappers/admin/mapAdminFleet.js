@@ -1718,6 +1718,7 @@ export function mapAdminChampEarningsResponse(data) {
   const week = summary.week && typeof summary.week === 'object' ? summary.week : {}
   const lifetime =
     summary.lifetime && typeof summary.lifetime === 'object' ? summary.lifetime : {}
+  const periodRaw = summary.period && typeof summary.period === 'object' ? summary.period : null
 
   const breakdown = Array.isArray(data.breakdown)
     ? data.breakdown
@@ -1742,12 +1743,34 @@ export function mapAdminChampEarningsResponse(data) {
 
   return {
     summary: [
-      { label: 'Today', value: formatEarningsMoney(today.earnings) },
-      { label: 'This week', value: formatEarningsMoney(week.earnings) },
-      { label: 'Lifetime', value: formatEarningsMoney(lifetime.earnings) },
+      {
+        label: 'Today',
+        value: formatEarningsMoney(today.earnings),
+        tips: formatEarningsMoney(today.tips),
+      },
+      {
+        label: 'This week',
+        value: formatEarningsMoney(week.earnings),
+        tips: formatEarningsMoney(week.tips),
+      },
+      {
+        label: 'Lifetime',
+        value: formatEarningsMoney(lifetime.earnings),
+        tips: formatEarningsMoney(lifetime.tips),
+      },
     ],
+    period: periodRaw
+      ? {
+          from: periodRaw.from ?? null,
+          to: periodRaw.to ?? null,
+          deliveries: formatCount(periodRaw.deliveries ?? 0),
+          earnings: formatEarningsMoney(periodRaw.earnings),
+          tips: formatEarningsMoney(periodRaw.tips),
+          incentive: formatIncentiveMoney(periodRaw.incentive),
+        }
+      : null,
     // Keep raw buckets for future UI (deliveries / tips) if needed.
-    buckets: { today, week, lifetime },
+    buckets: { today, week, lifetime, period: periodRaw },
     rows,
   }
 }
