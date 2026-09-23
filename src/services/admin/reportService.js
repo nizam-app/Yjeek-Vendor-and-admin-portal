@@ -106,4 +106,47 @@ export const adminReportService = {
     })
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
+
+  /**
+   * CSV exports for Automation Audit Log (server-side, not client-built rows).
+   * GET /admin/reports/dispatch-evaluations|dispatch-attempts|vendor-acceptance/export
+   */
+  async exportDispatchEvaluationsCsv(filters = {}, options = {}) {
+    return exportDispatchCsv(endpoints.admin.reports.dispatchEvaluationsExport, filters, options)
+  },
+
+  async exportDispatchAttemptsCsv(filters = {}, options = {}) {
+    return exportDispatchCsv(endpoints.admin.reports.dispatchAttemptsExport, filters, options)
+  },
+
+  async exportVendorAcceptanceCsv(filters = {}, options = {}) {
+    return exportDispatchCsv(endpoints.admin.reports.vendorAcceptanceExport, filters, options)
+  },
+}
+
+async function exportDispatchCsv(url, filters = {}, options = {}) {
+  if (!useRealReportsApi() && !isAdminRealApiFeature('automation')) {
+    throw new Error('Real API is required to export dispatch audit CSVs.')
+  }
+  const params = {
+    from: filters.from || undefined,
+    to: filters.to || undefined,
+    orderId: filters.orderId || undefined,
+    vendorId: filters.vendorId || undefined,
+    limit: filters.limit || 2000,
+  }
+  const response = await apiClient.get(url, {
+    ...options,
+    scope: 'admin',
+    feature: useRealReportsApi() ? 'reports' : 'automation',
+    forceReal: true,
+    params,
+  })
+  const csv =
+    typeof response?.data === 'string'
+      ? response.data
+      : response?.data == null
+        ? ''
+        : String(response.data)
+  return { data: csv, meta: response?.meta ?? null }
 }

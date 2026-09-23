@@ -14,6 +14,7 @@ import AdminAddVendorUser from '../pages/admin/vendors/AdminAddVendorUser'
 import AdminVendorsPage from '../pages/admin/management/AdminVendorsPage'
 import AdminVendorDetailPage from '../pages/admin/management/AdminVendorDetailPage'
 import AdminStoresPage from '../pages/admin/management/AdminStoresPage'
+import AdminProductsPage from '../pages/admin/management/AdminProductsPage'
 import AdminCreateStoreTypePage from '../pages/admin/management/AdminCreateStoreTypePage'
 import AdminFleetPage from '../pages/admin/management/AdminFleetPage'
 import AdminChampDetailPage from '../pages/admin/management/AdminChampDetailPage'
@@ -34,6 +35,16 @@ import AdminSendCustomerNotificationPage from '../pages/admin/management/AdminSe
 import AdminSendVendorNotificationPage from '../pages/admin/management/AdminSendVendorNotificationPage'
 import AdminNotificationDetailPage from '../pages/admin/management/AdminNotificationDetailPage'
 import AdminSlaModelsPage from '../pages/admin/management/AdminSlaModelsPage'
+import AdminAutomationLayout from '../layout/AdminAutomationLayout'
+import AdminChampScoringPage from '../pages/admin/automation/AdminChampScoringPage'
+import AdminDispatchRulesPage from '../pages/admin/automation/AdminDispatchRulesPage'
+import AdminPayOnDeliveryPage from '../pages/admin/automation/AdminPayOnDeliveryPage'
+import AdminRadiusExpansionPage from '../pages/admin/automation/AdminRadiusExpansionPage'
+import AdminScheduledTiersPage from '../pages/admin/automation/AdminScheduledTiersPage'
+import AdminChampStatusPage from '../pages/admin/automation/AdminChampStatusPage'
+import AdminAuditLogPage from '../pages/admin/automation/AdminAuditLogPage'
+import AdminStackingPage from '../pages/admin/automation/AdminStackingPage'
+import AdminVendorStatusPage from '../pages/admin/automation/AdminVendorStatusPage'
 import AdminUsersPage from '../pages/admin/management/AdminUsersPage'
 import AdminCreateRolePage from '../pages/admin/management/AdminCreateRolePage'
 import AdminCreateUserPage from '../pages/admin/management/AdminCreateUserPage'
@@ -65,6 +76,7 @@ export const adminRoutes = (
     <Route path="vendors/:vendorId/users/:userId" element={<AdminAddVendorUser />} />
     <Route path="vendors/:vendorId" element={<AdminVendorDetailPage />} />
     <Route path="vendors" element={<AdminVendorsPage />} />
+    <Route path="stores/products" element={<AdminProductsPage />} />
     <Route path="stores/new" element={<AdminCreateStoreTypePage />} />
     <Route path="stores/:storeTypeId" element={<AdminCreateStoreTypePage />} />
     <Route path="stores" element={<AdminStoresPage />} />
@@ -95,6 +107,19 @@ export const adminRoutes = (
     <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
     <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />
     <Route path="sla-models" element={<AdminSlaModelsPage />} />
+
+    <Route path="automation" element={<AdminAutomationLayout />}>
+      <Route index element={<Navigate to="/admin/automation/dispatch-rules" replace />} />
+      <Route path="dispatch-rules" element={<AdminDispatchRulesPage />} />
+      <Route path="champ-scoring" element={<AdminChampScoringPage />} />
+      <Route path="stacking" element={<AdminStackingPage />} />
+      <Route path="radius-expansion" element={<AdminRadiusExpansionPage />} />
+      <Route path="vendor-status" element={<AdminVendorStatusPage />} />
+      <Route path="pay-on-delivery" element={<AdminPayOnDeliveryPage />} />
+      <Route path="scheduled-tiers" element={<AdminScheduledTiersPage />} />
+      <Route path="champ-status" element={<AdminChampStatusPage />} />
+      <Route path="audit-log" element={<AdminAuditLogPage />} />
+    </Route>
 
     <Route path="ui-editor" element={<AdminUiEditorPage />} />
     <Route path="users/new" element={<AdminCreateUserPage />} />

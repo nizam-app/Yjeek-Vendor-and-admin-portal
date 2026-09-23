@@ -15,6 +15,7 @@ import {
   ShoppingBag,
   Store,
   Users,
+  Workflow,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
@@ -41,6 +42,7 @@ const navItems = [
   ['Customer Management', '/admin/customers', Users],
   ['Marketing', '/admin/marketing', Megaphone],
   ['SLA Models', '/admin/sla-models', Clock3],
+  ['Automation', '/admin/automation', Workflow],
   ['UI Editor', '/admin/ui-editor', PanelTop],
   ['Users', '/admin/users', ShieldCheck],
   ['Reports', '/admin/reports', BarChart3],
@@ -58,6 +60,7 @@ const pageTitles = {
   '/admin/vendors/new': 'Vendor Management',
   '/admin/stores': 'Store Management',
   '/admin/stores/new': 'Store Management',
+  '/admin/stores/products': 'Store Management · Products',
   '/admin/fleet': 'Fleet Management · Champs',
   '/admin/fleet/new': 'Fleet Management · Champs',
   '/admin/fleet/notify': 'Fleet Management · Champs',
@@ -76,6 +79,16 @@ const pageTitles = {
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
+  '/admin/automation': 'Automation · Dispatch Rules',
+  '/admin/automation/dispatch-rules': 'Automation · Dispatch Rules',
+  '/admin/automation/champ-scoring': 'Automation · Champ Scoring',
+  '/admin/automation/stacking': 'Automation · Stacking',
+  '/admin/automation/radius-expansion': 'Automation · Radius Expansion',
+  '/admin/automation/vendor-status': 'Automation · Vendor Status',
+  '/admin/automation/pay-on-delivery': 'Automation · Pay on Delivery',
+  '/admin/automation/scheduled-tiers': 'Automation · Scheduled Tiers',
+  '/admin/automation/champ-status': 'Automation · Champ Status',
+  '/admin/automation/audit-log': 'Automation · Audit Log',
 
   '/admin/ui-editor': 'UI Editor',
   '/admin/users': 'Users & Roles · Users',
@@ -239,7 +252,7 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
             ) : null}
           </>
         )}
-        {navItems.map(([label, to, Icon]) => (
+        {navItems.map(([label, to, Icon, badge]) => (
           <NavLink
             key={to}
             to={to}
@@ -266,7 +279,16 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
                   strokeWidth={1.8}
                   className={isActive ? 'text-[#2EC75E]' : undefined}
                 />
-                {!collapsed ? label : null}
+                {!collapsed ? (
+                  <>
+                    <span className="min-w-0 flex-1">{label}</span>
+                    {badge ? (
+                      <span className="shrink-0 rounded-[10px] bg-[#CAA34D] px-1.5 py-px text-[9px] font-bold leading-none text-white">
+                        {badge}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
               </>
             )}
           </NavLink>

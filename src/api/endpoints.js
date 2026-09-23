@@ -325,6 +325,16 @@ export const endpoints = {
      * Confirmed Store types — Postman folder 11.
      * List also used by Edit vendor Store type dropdown.
      */
+    storesCatalog: {
+      /** Confirmed: GET /admin/stores/products */
+      products: '/admin/stores/products',
+      /**
+       * Confirmed: GET + PATCH + DELETE /admin/stores/products/:productId
+       * @param {string} productId
+       */
+      product: (productId) =>
+        `/admin/stores/products/${encodeURIComponent(String(productId || '').trim())}`,
+    },
     storeTypes: {
       /** Confirmed: GET /admin/store-types/summary */
       summary: '/admin/store-types/summary',
@@ -420,6 +430,54 @@ export const endpoints = {
        */
       versionUsage: (slaModelId) =>
         `/admin/sla-models/${encodeURIComponent(slaModelId)}/version-usage`,
+    },
+    /**
+     * Dispatch Automation Admin (P2B).
+     * Feature flag: `automation`
+     */
+    dispatchAutomation: {
+      /** Confirmed: GET /admin/dispatch-automation/overview */
+      overview: '/admin/dispatch-automation/overview',
+      /** Confirmed: GET /admin/dispatch-automation/log */
+      log: '/admin/dispatch-automation/log',
+    },
+    /**
+     * Dispatch rule sets (versioned config).
+     * Feature flag: `automation`
+     */
+    dispatchRules: {
+      list: '/admin/dispatch-rules',
+      template: '/admin/dispatch-rules/template',
+      /**
+       * @param {string} ruleSetId
+       */
+      detail: (ruleSetId) => `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}`,
+      /**
+       * @param {string} ruleSetId
+       */
+      activate: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/activate`,
+      /**
+       * @param {string} ruleSetId
+       */
+      simulate: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/simulate`,
+      simulateStacking: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/simulate-stacking`,
+      /**
+       * Enter Test Mode (DRAFT → TEST). Does not affect live ACTIVE dispatch.
+       * @param {string} ruleSetId
+       */
+      test: (ruleSetId) => `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/test`,
+      /**
+       * @param {string} ruleSetId
+       */
+      pause: (ruleSetId) => `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/pause`,
+      /**
+       * @param {string} ruleSetId
+       */
+      rollback: (ruleSetId) =>
+        `/admin/dispatch-rules/${encodeURIComponent(ruleSetId)}/rollback`,
     },
     /**
      * Confirmed Customers — Postman folder 08.
@@ -827,6 +885,12 @@ export const endpoints = {
       ordersExport: '/admin/reports/orders/export',
       /** Vendor settlement recovery obligations from incidents */
       vendorCostRecovery: '/admin/reports/vendor-cost-recovery',
+      /** Confirmed: GET /admin/reports/dispatch-evaluations/export */
+      dispatchEvaluationsExport: '/admin/reports/dispatch-evaluations/export',
+      /** Confirmed: GET /admin/reports/dispatch-attempts/export */
+      dispatchAttemptsExport: '/admin/reports/dispatch-attempts/export',
+      /** Confirmed: GET /admin/reports/vendor-acceptance/export */
+      vendorAcceptanceExport: '/admin/reports/vendor-acceptance/export',
     },
   },
 }
