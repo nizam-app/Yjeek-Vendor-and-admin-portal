@@ -40,7 +40,8 @@ export function getScheduledTiersMock() {
   return {
     header: {
       title: 'Scheduled Tier Configuration',
-      subtitle: 'KPI windows, cutoff times, payment windows, and double-confirm rules per tier',
+      subtitle:
+        'Reference · Managed by scheduled dispatch · Not configurable here · KPI / cutoff / payment window documentation',
     },
     paymentBanner: {
       label: '5-minute payment window — scheduled + dine-in only',

@@ -179,6 +179,7 @@ export const adminDispatchRulesService = {
 
   /**
    * Save Automation — activate/publish current draft.
+   * Also resumes a PAUSED rule set by publishing draft/config as ACTIVE.
    */
   async activate(ruleSetId, note, options = {}) {
     const id = String(ruleSetId || '').trim()
@@ -204,7 +205,86 @@ export const adminDispatchRulesService = {
   },
 
   /**
-   * Side-effect-free shadow simulate. Backend max = 100.
+   * DRAFT → TEST. Does not change live ACTIVE dispatch.
+   */
+  async enterTestMode(ruleSetId, options = {}) {
+    const id = String(ruleSetId || '').trim()
+    if (!id) throw new Error('Dispatch rule set id is required.')
+
+    const response = await apiClient.post(
+      endpoints.admin.dispatchRules.test(id),
+      {},
+      automationRequestOptions(options),
+    )
+    const rule = response?.data
+    return {
+      data: {
+        rule,
+        meta: mapRuleSetMeta(rule),
+        draftConfig: getEditableConfig(rule),
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * ACTIVE → PAUSED. Stops automated dispatch offers until activate/resume.
+   * Does not modify SLA, payment, or stacking liveEnabled.
+   */
+  async pause(ruleSetId, options = {}) {
+    const id = String(ruleSetId || '').trim()
+    if (!id) throw new Error('Dispatch rule set id is required.')
+
+    const response = await apiClient.post(
+      endpoints.admin.dispatchRules.pause(id),
+      {},
+      automationRequestOptions(options),
+    )
+    const rule = response?.data
+    return {
+      data: {
+        rule,
+        meta: mapRuleSetMeta(rule),
+        draftConfig: getEditableConfig(rule),
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Publish a prior immutable version as a new ACTIVE version.
+   * @param {string} ruleSetId
+   * @param {{ version: number, note?: string }} input
+   */
+  async rollback(ruleSetId, input = {}, options = {}) {
+    const id = String(ruleSetId || '').trim()
+    if (!id) throw new Error('Dispatch rule set id is required.')
+    const version = Number(input.version)
+    if (!Number.isFinite(version) || version < 1) {
+      throw new Error('A valid published version number is required for rollback.')
+    }
+
+    const body = { version: Math.floor(version) }
+    if (input.note) body.note = input.note
+
+    const response = await apiClient.post(
+      endpoints.admin.dispatchRules.rollback(id),
+      body,
+      automationRequestOptions(options),
+    )
+    const rule = response?.data
+    return {
+      data: {
+        rule,
+        meta: mapRuleSetMeta(rule),
+        draftConfig: getEditableConfig(rule),
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Side-effect-free shadow simulate. Backend max = 500 (buyer requirement).
    */
   async simulate(ruleSetId, input = {}, options = {}) {
     const id = String(ruleSetId || '').trim()
@@ -221,6 +301,32 @@ export const adminDispatchRulesService = {
 
     const response = await apiClient.post(
       endpoints.admin.dispatchRules.simulate(id),
+      body,
+      automationRequestOptions(options),
+    )
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Stacking dry-run (Phase 1). Side-effect free — never enables live stacking.
+   */
+  async simulateStacking(ruleSetId, input = {}, options = {}) {
+    const id = String(ruleSetId || '').trim()
+    if (!id) throw new Error('Dispatch rule set id is required.')
+
+    const body = {
+      limit: Math.min(Math.max(Number(input.limit) || 24, 2), 40),
+      maxCandidates: Math.min(Math.max(Number(input.maxCandidates) || 20, 1), 40),
+    }
+    if (Array.isArray(input.orderIds) && input.orderIds.length) {
+      body.orderIds = input.orderIds.slice(0, 40)
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.dispatchRules.simulateStacking(id),
       body,
       automationRequestOptions(options),
     )

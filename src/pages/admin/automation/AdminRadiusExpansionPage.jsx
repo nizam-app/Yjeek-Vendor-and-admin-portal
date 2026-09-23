@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AutomationGapBanner } from '../../../components/admin/automation/AutomationGapBanner'
 import {
   AutomationDurationField,
   AutomationOperatorNumberField,
@@ -8,7 +7,6 @@ import {
   AutomationFieldRow,
   AutomationSectionCard,
 } from '../../../components/admin/automation/AutomationSectionCard'
-import { DispatchRuleSetScopeNotice } from '../../../components/admin/automation/DispatchRuleSetScopeNotice'
 import { RadiusEscalationStageChain } from '../../../components/admin/automation/RadiusEscalationStageChain'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
@@ -27,16 +25,30 @@ import {
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
 import { showError, showInfo, showSuccess } from '../../../utils/toast'
 
-const TIMER_FIELD_KEYS = new Set([
+/** Read-only timer keys (SLA offer TTLs + fixed no-Champ cancel display). */
+const READONLY_TIMER_KEYS = new Set([
   'hotFoodOffer',
   'otherOnDemandOffer',
-  'stage2To3',
-  'stage3To4',
   'overallAutoCancel',
 ])
 
+/** Both map to DispatchRuleSet radius.expansionDelaySec — keep in sync in the UI. */
+const EXPANSION_DELAY_KEYS = new Set(['stage2To3', 'stage3To4'])
+
 function cloneEditable(editable) {
   return structuredClone(editable)
+}
+
+function radiusPersistSnapshot(editable) {
+  if (!editable) return null
+  return {
+    s1: editable.stage1RadiusKm,
+    s2: editable.stage2RadiusKm,
+    s3: editable.stage3RadiusKm,
+    s4: editable.stage4BroadcastKm,
+    d23: editable.stage2To3,
+    d34: editable.stage3To4,
+  }
 }
 
 function MockRadiusExpansionPage() {
@@ -61,7 +73,14 @@ function MockRadiusExpansionPage() {
   }, [catalog.stages, draft])
 
   function updateField(key, value) {
-    setDraft((prev) => ({ ...prev, [key]: value }))
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value }
+      if (EXPANSION_DELAY_KEYS.has(key)) {
+        next.stage2To3 = { ...value, operator: '≤' }
+        next.stage3To4 = { ...value, operator: '≤' }
+      }
+      return next
+    })
     setValidationError(null)
   }
 
@@ -122,12 +141,17 @@ function MockRadiusExpansionPage() {
 
       <AutomationSectionCard title={catalog.timers.title}>
         {catalog.timers.rows.map((row) => (
-          <AutomationFieldRow key={row.id} label={row.label}>
+          <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
             <AutomationDurationField
               value={draft[row.fieldKey]}
+              disabled={Boolean(row.readOnly)}
               operatorLocked
               operators={[row.operator]}
-              onChange={(next) => updateField(row.fieldKey, { ...next, operator: row.operator })}
+              onChange={(next) =>
+                row.readOnly
+                  ? undefined
+                  : updateField(row.fieldKey, { ...next, operator: row.operator })
+              }
             />
           </AutomationFieldRow>
         ))}
@@ -178,31 +202,23 @@ function RealRadiusExpansionPage() {
     setDraft(cloneEditable(editable))
   }, [ruleSet.draftConfig, ruleSet.meta?.id, ruleSet.meta?.updatedAt])
 
-  const dirtyRadii = useMemo(() => {
+  const dirty = useMemo(() => {
     if (!baseline || !draft) return false
     return (
-      JSON.stringify({
-        s1: baseline.stage1RadiusKm,
-        s2: baseline.stage2RadiusKm,
-        s3: baseline.stage3RadiusKm,
-      }) !==
-      JSON.stringify({
-        s1: draft.stage1RadiusKm,
-        s2: draft.stage2RadiusKm,
-        s3: draft.stage3RadiusKm,
-      })
+      JSON.stringify(radiusPersistSnapshot(baseline)) !==
+      JSON.stringify(radiusPersistSnapshot(draft))
     )
   }, [baseline, draft])
 
   useEffect(() => {
-    if (!dirtyRadii) return undefined
+    if (!dirty) return undefined
     const onBeforeUnload = (event) => {
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [dirtyRadii])
+  }, [dirty])
 
   const stageChain = useMemo(() => {
     if (!draft) return catalog.stages
@@ -219,8 +235,16 @@ function RealRadiusExpansionPage() {
   }, [catalog.stages, draft])
 
   function updateField(key, value) {
-    if (TIMER_FIELD_KEYS.has(key)) return
-    setDraft((prev) => ({ ...prev, [key]: value }))
+    if (READONLY_TIMER_KEYS.has(key)) return
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value }
+      if (EXPANSION_DELAY_KEYS.has(key)) {
+        const synced = { ...value, operator: '≤' }
+        next.stage2To3 = synced
+        next.stage3To4 = synced
+      }
+      return next
+    })
     setValidationError(null)
   }
 
@@ -234,10 +258,13 @@ function RealRadiusExpansionPage() {
     }
     try {
       const result = await ruleSet.mergeAndPatch((latest, editable) => {
-        const beforeDelay = latest.radius?.expansionDelaySec
+        const beforeStacking = latest?.stacking?.liveEnabled
         const fullConfig = applyRadiusEdits(latest, editable)
-        if (fullConfig.radius?.expansionDelaySec !== beforeDelay) {
-          throw new Error('Safety abort: expansionDelaySec must not change from Radius timer UI.')
+        if (fullConfig.stacking?.liveEnabled !== false) {
+          throw new Error('Safety abort: stacking.liveEnabled must remain false.')
+        }
+        if (beforeStacking === true && fullConfig.stacking?.liveEnabled !== false) {
+          throw new Error('Safety abort: stacking live unlock is not allowed.')
         }
         return fullConfig
       }, draft)
@@ -248,7 +275,9 @@ function RealRadiusExpansionPage() {
       setBaseline(cloneEditable(nextEditable))
       setDraft(cloneEditable(nextEditable))
       setValidationError(null)
-      showSuccess('Stage radii draft saved. Timer fields were not persisted. Live dispatch unchanged until activate.')
+      showSuccess(
+        'Radius draft saved (stages, broadcastRadiusKm, expansionDelaySec). Live dispatch unchanged until activate.',
+      )
     } catch (error) {
       showError(error?.message || 'Failed to save radius draft.')
     }
@@ -256,24 +285,33 @@ function RealRadiusExpansionPage() {
 
   async function handleSaveAutomation() {
     if (!ruleSet.meta?.id) return
-    if (dirtyRadii) {
+    if (dirty) {
       showInfo('Save Changes first, then activate — activation publishes the server draft.')
       return
     }
     const confirmed = window.confirm(
-      `Activate DispatchRuleSet “${ruleSet.meta.name || ruleSet.meta.id}” (v${ruleSet.meta.version})?\n\nOnly Stage 1–3 radii from the draft are published from this screen’s supported fields. Timers are not wired.`,
+      `Activate DispatchRuleSet “${ruleSet.meta.name || ruleSet.meta.id}” (v${ruleSet.meta.version})?\n\n` +
+        'Publishes Stage 1–3 radii, Stage 4 broadcastRadiusKm, and expansionDelaySec from the draft.\n' +
+        'SLA offer TTLs and stacking liveEnabled are not changed by this screen.',
     )
     if (!confirmed) return
     try {
       const result = await ruleSet.activate('Activated from Automation → Radius Expansion')
-      const nextConfig = result?.data?.draftConfig
+      const nextConfig = result?.data?.draftConfig || result?.data?.rule?.config
       if (nextConfig) {
         const nextEditable = mapConfigToRadiusEditable(nextConfig)
         setServerConfig(structuredClone(nextConfig))
         setBaseline(cloneEditable(nextEditable))
         setDraft(cloneEditable(nextEditable))
       }
-      showSuccess(`Activated version ${result?.data?.meta?.version ?? ''}.`.trim())
+      const published = nextConfig?.radius || result?.data?.rule?.config?.radius
+      const delay = published?.expansionDelaySec
+      const broadcast = published?.broadcastRadiusKm
+      showSuccess(
+        `Activated v${result?.data?.meta?.version ?? ''}` +
+          (delay != null ? ` · expansionDelaySec=${delay}` : '') +
+          (broadcast != null ? ` · broadcastRadiusKm=${broadcast}` : ''),
+      )
     } catch (error) {
       showError(error?.message || 'Activation failed. Previous active version remains.')
     }
@@ -294,29 +332,22 @@ function RealRadiusExpansionPage() {
           {ruleSet.meta ? (
             <p className="mt-1 text-[11px] text-[#6b7280]">
               Rule set: {ruleSet.meta.name} · {ruleSet.meta.status} · v{ruleSet.meta.version}
-              {dirtyRadii ? ' · unsaved radius edits' : ''}
+              {dirty ? ' · unsaved radius edits' : ''}
+              {serverConfig?.radius?.expansionDelaySec != null
+                ? ` · delay ${serverConfig.radius.expansionDelaySec}s`
+                : ''}
             </p>
           ) : null}
         </div>
         <button
           type="button"
           onClick={handleSaveChanges}
-          disabled={ruleSet.isSaving || !dirtyRadii}
+          disabled={ruleSet.isSaving || !dirty}
           className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#1D6A33] bg-[#1D6A33] px-3.5 text-[12px] font-semibold text-white transition hover:bg-[#114225] disabled:cursor-not-allowed disabled:opacity-50"
         >
           Save Changes
         </button>
       </div>
-
-      <DispatchRuleSetScopeNotice />
-
-      <AutomationGapBanner tone="amber" label="Timers not wired in P2B">
-        <p>
-          Offer windows (45s / 90s), Stage 2→3 / 3→4 delays, and no-Champ 900s cancel are{' '}
-          <strong>disabled</strong>. They are not mapped into the single backend{' '}
-          <code>expansionDelaySec</code>. Stage 4 remains Open Broadcast (read-only). Phase P7.
-        </p>
-      </AutomationGapBanner>
 
       <RadiusEscalationStageChain stages={stageChain} />
 
@@ -340,17 +371,24 @@ function RealRadiusExpansionPage() {
       </AutomationSectionCard>
 
       <AutomationSectionCard title={catalog.timers.title}>
-        {catalog.timers.rows.map((row) => (
-          <AutomationFieldRow key={row.id} label={row.label}>
-            <AutomationDurationField
-              value={draft[row.fieldKey]}
-              disabled
-              operatorLocked
-              operators={[row.operator]}
-              onChange={() => {}}
-            />
-          </AutomationFieldRow>
-        ))}
+        {catalog.timers.rows.map((row) => {
+          const readOnly = Boolean(row.readOnly) || READONLY_TIMER_KEYS.has(row.fieldKey)
+          return (
+            <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
+              <AutomationDurationField
+                value={draft[row.fieldKey]}
+                disabled={readOnly}
+                operatorLocked
+                operators={[row.operator]}
+                onChange={(next) =>
+                  readOnly
+                    ? undefined
+                    : updateField(row.fieldKey, { ...next, operator: row.operator })
+                }
+              />
+            </AutomationFieldRow>
+          )
+        })}
       </AutomationSectionCard>
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">

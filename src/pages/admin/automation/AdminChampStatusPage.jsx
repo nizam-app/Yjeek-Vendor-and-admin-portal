@@ -19,9 +19,8 @@ import {
   cloneChampStatusEditable,
   createChampStatusEditableDefaults,
   getChampStatusMock,
-  validateChampStatus,
 } from '../../../mocks/adminAutomationChampStatus.mock'
-import { showError, showInfo, showSuccess } from '../../../utils/toast'
+import { showInfo } from '../../../utils/toast'
 
 function RowPill({ pill }) {
   if (!pill) return null
@@ -44,75 +43,43 @@ function SchemaBlock({ codes, label }) {
   )
 }
 
-function DurationControl({
-  value,
-  onChange,
-  operators,
-  showSeconds = true,
-  hint,
-}) {
+function DurationControl({ value, operators, showSeconds = true, hint }) {
   return (
     <AutomationDurationField
       value={value}
+      disabled
       operatorLocked
       operators={operators}
       showSeconds={showSeconds}
       hint={hint}
-      onChange={(next) =>
-        onChange({
-          ...next,
-          operator: value?.operator || operators?.[0] || next.operator,
-        })
-      }
+      onChange={() => undefined}
     />
   )
 }
 
-function LabeledToggle({ checked, label, onChange }) {
+function LabeledToggle({ checked, label }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <ToggleSwitch checked={checked} label={label} onChange={onChange} />
+      <ToggleSwitch checked={checked} label={label} disabled onChange={() => undefined} />
       <span className="text-[12px] font-semibold text-[#15803d]">{label}</span>
     </div>
   )
 }
 
+/**
+ * Reference documentation for Champ operational statuses.
+ * Not connected to DispatchRuleSet or a Champ-status config API.
+ */
 export default function AdminChampStatusPage() {
   const catalog = useMemo(() => getChampStatusMock(), [])
-  const [baseline, setBaseline] = useState(() =>
+  const [display] = useState(() =>
     cloneChampStatusEditable(catalog.editable || createChampStatusEditableDefaults()),
   )
-  const [draft, setDraft] = useState(() => cloneChampStatusEditable(baseline))
-  const [validationError, setValidationError] = useState(null)
 
-  function updateSetting(key, value) {
-    setDraft((prev) => ({ ...prev, [key]: value }))
-    setValidationError(null)
-  }
-
-  function tryPersist(message) {
-    const error = validateChampStatus(draft)
-    if (error) {
-      setValidationError(error)
-      showError(error)
-      return
-    }
-    const next = cloneChampStatusEditable(draft)
-    setBaseline(next)
-    setDraft(cloneChampStatusEditable(next))
-    setValidationError(null)
-    showSuccess(message)
-  }
-
-  function handleReset() {
-    setDraft(cloneChampStatusEditable(baseline))
-    setValidationError(null)
-    showInfo('Champ Status fields restored to the last saved local mock values.')
-  }
-
-  function handleSaveAutomation() {
-    tryPersist(
-      'Champ Status saved locally via Save Automation (frontend mock only). Backend was not updated.',
+  function handleReferenceAction(action) {
+    showInfo(
+      `Champ Status is reference-only. ${action} does not save config or call an API. ` +
+        'Live status is managed by Champ app / fleet runtime (stored ONLINE/BUSY/OFFLINE; buyer labels AVAILABLE/ON_ORDER/OFFLINE) — not editable here.',
     )
   }
 
@@ -120,61 +87,34 @@ export default function AdminChampStatusPage() {
     if (control === 'breakReminder') {
       return (
         <DurationControl
-          value={draft.breakReminder}
+          value={display.breakReminder}
           operators={['≥']}
           showSeconds={false}
           hint={controlHint}
-          onChange={(breakReminder) => updateSetting('breakReminder', breakReminder)}
         />
       )
     }
     if (control === 'gpsOfflineTimeout') {
-      return (
-        <DurationControl
-          value={draft.gpsOfflineTimeout}
-          operators={['≥']}
-          onChange={(gpsOfflineTimeout) => updateSetting('gpsOfflineTimeout', gpsOfflineTimeout)}
-        />
-      )
+      return <DurationControl value={display.gpsOfflineTimeout} operators={['≥']} />
     }
     if (control === 'reassignmentDeadline') {
-      return (
-        <DurationControl
-          value={draft.reassignmentDeadline}
-          operators={['≤']}
-          onChange={(reassignmentDeadline) =>
-            updateSetting('reassignmentDeadline', reassignmentDeadline)
-          }
-        />
-      )
+      return <DurationControl value={display.reassignmentDeadline} operators={['≤']} />
     }
     if (control === 'preLockWindow') {
       return (
-        <DurationControl
-          value={draft.preLockWindow}
-          operators={['−']}
-          hint={controlHint}
-          onChange={(preLockWindow) => updateSetting('preLockWindow', preLockWindow)}
-        />
+        <DurationControl value={display.preLockWindow} operators={['−']} hint={controlHint} />
       )
     }
     if (control === 'incidentCustomerNotify') {
       return (
-        <LabeledToggle
-          checked={draft.incidentCustomerNotify}
-          label="Always send immediately"
-          onChange={(incidentCustomerNotify) =>
-            updateSetting('incidentCustomerNotify', incidentCustomerNotify)
-          }
-        />
+        <LabeledToggle checked={display.incidentCustomerNotify} label="Always send immediately" />
       )
     }
     if (control === 'suspendedAutoLift') {
       return (
         <LabeledToggle
-          checked={draft.suspendedAutoLift}
+          checked={display.suspendedAutoLift}
           label="Auto-lift on suspension_end_at"
-          onChange={(suspendedAutoLift) => updateSetting('suspendedAutoLift', suspendedAutoLift)}
         />
       )
     }
@@ -225,25 +165,6 @@ export default function AdminChampStatusPage() {
         <p className="mt-1 text-[12px] text-[#6b7280]">{catalog.header.subtitle}</p>
       </div>
 
-      <AutomationCallout tone="blue" label={catalog.rootCallout.label} className="!mx-0 mb-5">
-        <p>
-          Every automation decision starts by reading{' '}
-          <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">champ.status</code>. Status
-          is the single field the dispatch engine reads first — at Gate 1, before any scoring. Get
-          this wrong and dispatch is broken. Status transitions must be atomic — no partial states.
-          Each status has exactly one set of triggers (what causes it) and one set of automation
-          consequences (what the system does when it reads it). Statuses set by the system are never
-          manually overridable by the Champ app. Statuses set by Admin or Dispatcher are logged with
-          who set them, when, and why.
-        </p>
-      </AutomationCallout>
-
-      {validationError ? (
-        <div className="mb-4 rounded-[10px] border border-[#f2cccc] bg-[#fff5f5] px-4 py-3 text-[12.5px] text-[#a93e42]">
-          {validationError}
-        </div>
-      ) : null}
-
       <ChampStatusSectionCard
         title={available.title}
         subtitle={available.subtitle}
@@ -283,10 +204,11 @@ export default function AdminChampStatusPage() {
       >
         <AutomationCallout tone="blue" label={stacked.architectureCallout.label}>
           <p>
+            Runtime{' '}
             <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">champ.status</code> stays{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">&apos;ON_ORDER&apos;</code>{' '}
-            in the database throughout. The stacked label is computed at read time by the API layer:
-            if{' '}
+            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">&apos;BUSY&apos;</code>{' '}
+            (buyer <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">ON_ORDER</code>)
+            throughout. The stacked label is computed at read time by the API layer: if{' '}
             <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">active_orders &gt; 1</code>,
             format the display as{' '}
             <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">
@@ -520,13 +442,17 @@ export default function AdminChampStatusPage() {
       </AutomationSectionCard>
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
-        <Button type="button" onClick={handleReset} className="rounded-full px-5">
+        <Button
+          type="button"
+          onClick={() => handleReferenceAction('Reset')}
+          className="rounded-full px-5"
+        >
           Reset
         </Button>
         <Button
           type="button"
           primary
-          onClick={handleSaveAutomation}
+          onClick={() => handleReferenceAction('Save Automation')}
           className="rounded-full px-6"
         >
           Save Automation

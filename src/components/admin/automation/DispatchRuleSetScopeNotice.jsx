@@ -12,9 +12,10 @@ export function DispatchRuleSetScopeNotice({ className }) {
     >
       <p>
         <strong>Save Changes</strong> updates the DispatchRuleSet <em>draft</em> only.{' '}
-        <strong>Save Automation</strong> activates/publishes that draft. These actions do{' '}
-        <strong>not</strong> publish SLA Models, Pay on Delivery, Vendor Status, Scheduled
-        Tiers, or Champ Status settings.
+        <strong>Save Automation</strong> activates/publishes that draft (also resumes PAUSED).{' '}
+        <strong>Pause / Rollback / Test Mode</strong> are Admin lifecycle controls on this rule set
+        only. These actions do <strong>not</strong> publish SLA Models, Pay on Delivery, Vendor
+        Status, Scheduled Tiers, or Champ Status settings, and do not enable stacking.
       </p>
     </AutomationGapBanner>
   )

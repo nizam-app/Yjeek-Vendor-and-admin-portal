@@ -5,10 +5,15 @@ import { createDuration, createOperatorNumber } from './adminAutomationDispatchR
 export function createStackingEditableDefaults() {
   return {
     dropZoneRadiusKm: createOperatorNumber('≤', 2),
+    companionDropKm: createOperatorNumber('≤', 2),
     longDistanceThresholdKm: createOperatorNumber('≥', 10),
     holdWindow: createDuration('≤', 0, 1, 30),
     reevaluateAtStage3: true,
     interVendorPickupRadiusKm: createOperatorNumber('≤', 4),
+    requiredFailedOffers: createOperatorNumber('≥', 2),
+    maxCarOrders: createOperatorNumber('≤', 3),
+    trigger1Enabled: true,
+    trigger2Enabled: true,
     trigger3Enabled: true,
   }
 }
@@ -26,6 +31,8 @@ export function getStackingMock() {
     vehicleCapacity: {
       title: 'Vehicle stacking capacity',
       columns: ['Vehicle', 'Max active orders', 'Trigger 1', 'Trigger 2', 'Trigger 3'],
+      maxCarOrdersLabel: 'Car max active orders (stacking.maxCarOrders)',
+      maxCarOrdersUnit: 'orders (2–3)',
       rows: [
         {
           id: 'bike',
@@ -59,6 +66,8 @@ export function getStackingMock() {
       subtitle: 'Fires even when free Champs are available — same vendor same zone is always more efficient',
       status: 'Always Active',
       statusTone: 'on',
+      enabledLabel: 'Trigger 1 enabled',
+      enabledToggleLabel: 'Active',
       dropZoneLabel: 'Same drop zone radius',
       dropZoneUnit: 'km between any pair of drops',
       bikeStackingLabel: 'Bike stacking under Trigger 1',
@@ -68,11 +77,15 @@ export function getStackingMock() {
     },
     trigger2: {
       title: 'Trigger 2 · Long Distance Economics',
-      subtitle: 'Activates 90s hold window on orders beyond the distance threshold · car only',
+      subtitle: 'Activates hold window on orders beyond the distance threshold · car only',
       status: 'Active',
       statusTone: 'on',
+      enabledLabel: 'Trigger 2 enabled',
+      enabledToggleLabel: 'Active',
       longDistanceLabel: 'Long distance threshold',
       longDistanceUnit: 'km from vendor to drop',
+      companionDropLabel: 'Companion drop radius',
+      companionDropUnit: 'km from primary drop',
       holdWindowLabel: 'Hold window before solo dispatch',
       reevaluateLabel: 'Re-evaluate at expansion Stage 3+',
       reevaluateToggleLabel: 'Check companion bundling when radius hits 12km',
@@ -85,8 +98,20 @@ export function getStackingMock() {
       statusTone: 'warn',
       pickupRadiusLabel: 'Inter-vendor pickup radius',
       pickupRadiusUnit: 'km between all vendor pickups',
+      requiredFailedOffersLabel: 'Required failed direct offers',
+      requiredFailedOffersUnit: 'offers before T3',
       enabledLabel: 'Trigger 3 enabled',
       enabledToggleLabel: 'Active',
+    },
+    dryRun: {
+      title: 'Stacking dry-run',
+      subtitle:
+        'Evaluates T1/T2/T3 against recent same-vendor order pools. Side-effect free — no offers, holds, or RoutePlans.',
+      buttonLabel: 'Run stacking dry-run',
+    },
+    activity: {
+      title: 'Recent stacking activity',
+      empty: 'No stacking RoutePlans yet (expected while liveEnabled=false).',
     },
     editable: createStackingEditableDefaults(),
   }

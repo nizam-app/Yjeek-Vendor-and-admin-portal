@@ -1,24 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AutomationCallout } from '../../../components/admin/automation/AutomationCallout'
-import { AutomationGapBanner } from '../../../components/admin/automation/AutomationGapBanner'
-import {
-  AutomationDurationField,
-  AutomationOperatorNumberField,
-} from '../../../components/admin/automation/AutomationFields'
-import {
-  AutomationFieldRow,
-  AutomationSectionCard,
-} from '../../../components/admin/automation/AutomationSectionCard'
-import { AutomationStatusPill } from '../../../components/admin/automation/AutomationStatusPill'
-import { DispatchRuleSetScopeNotice } from '../../../components/admin/automation/DispatchRuleSetScopeNotice'
-import { VehicleStackingCapacityTable } from '../../../components/admin/automation/VehicleStackingCapacityTable'
+import { StackingEditorSections } from '../../../components/admin/automation/StackingEditorSections'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
-import { ToggleSwitch } from '../../../components/admin/ui-editor/ExclusiveOfferRow'
 import { useDispatchRuleSet } from '../../../hooks/admin/useDispatchRuleSet'
 import {
   applyStackingEdits,
+  mapConfigToStackingCapacityRows,
   mapConfigToStackingEditable,
+  validateStackingEdits,
 } from '../../../mappers/admin/mapDispatchAutomation'
 import {
   cloneStackingEditable,
@@ -27,15 +17,6 @@ import {
 } from '../../../mocks/adminAutomationStacking.mock'
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
 import { showError, showInfo, showSuccess } from '../../../utils/toast'
-
-function ToggleWithLabel({ checked, onChange, label, disabled = false }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <ToggleSwitch checked={checked} onChange={onChange} label={label} disabled={disabled} />
-      <span className="text-[12px] text-[#6b7280]">{label}</span>
-    </div>
-  )
-}
 
 function cloneEditable(editable) {
   return structuredClone(editable)
@@ -58,6 +39,8 @@ function MockStackingPage() {
     setDraft(cloneStackingEditable(next))
     showSuccess(message)
   }
+
+  const capacityRows = catalog.vehicleCapacity.rows
 
   return (
     <div className="pb-20">
@@ -83,107 +66,12 @@ function MockStackingPage() {
         <p>{catalog.corePrinciple.body}</p>
       </AutomationCallout>
 
-      <AutomationSectionCard title={catalog.vehicleCapacity.title}>
-        <VehicleStackingCapacityTable
-          columns={catalog.vehicleCapacity.columns}
-          rows={catalog.vehicleCapacity.rows}
-        />
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger1.title}
-        subtitle={catalog.trigger1.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger1.statusTone} showDot>
-            {catalog.trigger1.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger1.dropZoneLabel}>
-          <AutomationOperatorNumberField
-            value={draft.dropZoneRadiusKm}
-            unit={catalog.trigger1.dropZoneUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('dropZoneRadiusKm', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger1.bikeStackingLabel}>
-          <AutomationStatusPill tone="off">{catalog.trigger1.bikeStackingBadge}</AutomationStatusPill>
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger1.multiVendorLabel}>
-          <ToggleWithLabel
-            checked={false}
-            disabled
-            label={catalog.trigger1.multiVendorToggleLabel}
-            onChange={() => {}}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger2.title}
-        subtitle={catalog.trigger2.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger2.statusTone} showDot>
-            {catalog.trigger2.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger2.longDistanceLabel}>
-          <AutomationOperatorNumberField
-            value={draft.longDistanceThresholdKm}
-            unit={catalog.trigger2.longDistanceUnit}
-            operatorLocked
-            operators={['≥']}
-            onChange={(next) => updateField('longDistanceThresholdKm', { ...next, operator: '≥' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger2.holdWindowLabel}>
-          <AutomationDurationField
-            value={draft.holdWindow}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('holdWindow', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger2.reevaluateLabel}>
-          <ToggleWithLabel
-            checked={draft.reevaluateAtStage3}
-            label={catalog.trigger2.reevaluateToggleLabel}
-            onChange={(next) => updateField('reevaluateAtStage3', next)}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger3.title}
-        subtitle={catalog.trigger3.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger3.statusTone} showDot>
-            {catalog.trigger3.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger3.pickupRadiusLabel}>
-          <AutomationOperatorNumberField
-            value={draft.interVendorPickupRadiusKm}
-            unit={catalog.trigger3.pickupRadiusUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) =>
-              updateField('interVendorPickupRadiusKm', { ...next, operator: '≤' })
-            }
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger3.enabledLabel}>
-          <ToggleWithLabel
-            checked={draft.trigger3Enabled}
-            label={catalog.trigger3.enabledToggleLabel}
-            onChange={(next) => updateField('trigger3Enabled', next)}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
+      <StackingEditorSections
+        catalog={catalog}
+        draft={draft}
+        updateField={updateField}
+        capacityRows={capacityRows}
+      />
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
         <Button
@@ -249,6 +137,11 @@ function RealStackingPage() {
 
   async function handleSaveChanges() {
     if (!draft || !ruleSet.meta?.id) return
+    const validationError = validateStackingEdits(draft)
+    if (validationError) {
+      showError(validationError)
+      return
+    }
     try {
       const result = await ruleSet.mergeAndPatch(applyStackingEdits, draft)
       const nextConfig = result?.data?.draftConfig
@@ -260,7 +153,9 @@ function RealStackingPage() {
       setServerConfig(structuredClone(nextConfig))
       setBaseline(cloneEditable(nextEditable))
       setDraft(cloneEditable(nextEditable))
-      showSuccess('Stacking draft saved. liveEnabled remains false. Live dispatch unchanged until activate.')
+      showSuccess(
+        'Stacking draft saved. liveEnabled remains false. Live dispatch unchanged until activate.',
+      )
     } catch (error) {
       showError(error?.message || 'Failed to save stacking draft.')
     }
@@ -285,7 +180,7 @@ function RealStackingPage() {
         setBaseline(cloneEditable(nextEditable))
         setDraft(cloneEditable(nextEditable))
       }
-      showSuccess(`Activated version ${result?.data?.meta?.version ?? ''}.`.trim())
+      showSuccess(`Activated version ${result?.data?.meta?.version ?? ''}`.trim())
     } catch (error) {
       showError(error?.message || 'Activation failed. Previous active version remains.')
     }
@@ -297,7 +192,13 @@ function RealStackingPage() {
   }
   if (!draft) return <ApiState isLoading error={null} />
 
-  const liveEnabled = serverConfig?.stacking?.liveEnabled
+  const capacityRows = mapConfigToStackingCapacityRows(serverConfig || ruleSet.draftConfig)
+  const trigger1Status = draft.trigger1Enabled
+    ? { label: 'Active', tone: 'on' }
+    : { label: 'Disabled', tone: 'off' }
+  const trigger2Status = draft.trigger2Enabled
+    ? { label: 'Active', tone: 'on' }
+    : { label: 'Disabled', tone: 'off' }
 
   return (
     <div className="pb-20">
@@ -322,121 +223,18 @@ function RealStackingPage() {
         </button>
       </div>
 
-      <DispatchRuleSetScopeNotice />
-
-      <AutomationGapBanner tone="amber" label="Stacking live rollout locked OFF">
-        <p>
-          Backend <code>stacking.liveEnabled</code> is{' '}
-          <strong>{liveEnabled === false ? 'false' : String(liveEnabled)}</strong>. P2B never
-          enables live stacking. This control is not exposed in the UI.
-        </p>
-      </AutomationGapBanner>
-
       <AutomationCallout tone="green" label={catalog.corePrinciple.label} className="!mx-0 mb-5">
         <p>{catalog.corePrinciple.body}</p>
       </AutomationCallout>
 
-      <AutomationSectionCard title={catalog.vehicleCapacity.title}>
-        <VehicleStackingCapacityTable
-          columns={catalog.vehicleCapacity.columns}
-          rows={catalog.vehicleCapacity.rows}
-        />
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger1.title}
-        subtitle={catalog.trigger1.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger1.statusTone} showDot>
-            {catalog.trigger1.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger1.dropZoneLabel}>
-          <AutomationOperatorNumberField
-            value={draft.dropZoneRadiusKm}
-            unit={catalog.trigger1.dropZoneUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('dropZoneRadiusKm', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger1.bikeStackingLabel}>
-          <AutomationStatusPill tone="off">{catalog.trigger1.bikeStackingBadge}</AutomationStatusPill>
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger1.multiVendorLabel}>
-          <ToggleWithLabel
-            checked={false}
-            disabled
-            label={catalog.trigger1.multiVendorToggleLabel}
-            onChange={() => {}}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger2.title}
-        subtitle={catalog.trigger2.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger2.statusTone} showDot>
-            {catalog.trigger2.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger2.longDistanceLabel}>
-          <AutomationOperatorNumberField
-            value={draft.longDistanceThresholdKm}
-            unit={catalog.trigger2.longDistanceUnit}
-            operatorLocked
-            operators={['≥']}
-            onChange={(next) => updateField('longDistanceThresholdKm', { ...next, operator: '≥' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger2.holdWindowLabel}>
-          <AutomationDurationField
-            value={draft.holdWindow}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('holdWindow', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger2.reevaluateLabel}>
-          <ToggleWithLabel
-            checked={draft.reevaluateAtStage3}
-            label={catalog.trigger2.reevaluateToggleLabel}
-            onChange={(next) => updateField('reevaluateAtStage3', next)}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
-
-      <AutomationSectionCard
-        title={catalog.trigger3.title}
-        subtitle={catalog.trigger3.subtitle}
-        actions={
-          <AutomationStatusPill tone={catalog.trigger3.statusTone} showDot>
-            {catalog.trigger3.status}
-          </AutomationStatusPill>
-        }
-      >
-        <AutomationFieldRow label={catalog.trigger3.pickupRadiusLabel}>
-          <AutomationOperatorNumberField
-            value={draft.interVendorPickupRadiusKm}
-            unit={catalog.trigger3.pickupRadiusUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) =>
-              updateField('interVendorPickupRadiusKm', { ...next, operator: '≤' })
-            }
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.trigger3.enabledLabel}>
-          <ToggleWithLabel
-            checked={draft.trigger3Enabled}
-            label={catalog.trigger3.enabledToggleLabel}
-            onChange={(next) => updateField('trigger3Enabled', next)}
-          />
-        </AutomationFieldRow>
-      </AutomationSectionCard>
+      <StackingEditorSections
+        catalog={catalog}
+        draft={draft}
+        updateField={updateField}
+        capacityRows={capacityRows}
+        trigger1Status={trigger1Status}
+        trigger2Status={trigger2Status}
+      />
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
         <Button

@@ -96,3 +96,83 @@ export function AutomationRuleChangeLogTable({ columns, rows }) {
     </div>
   )
 }
+
+/** Read-only dispatch candidate evaluations (Audit Log). */
+export function DispatchEvaluationsLogTable({ columns, rows }) {
+  return (
+    <div className="w-full max-w-full overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-[860px] border-collapse text-left text-[12px]">
+        <thead>
+          <tr className="border-b border-[#e5e7eb] bg-[#f9fafb]">
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="px-3.5 py-2.5 text-[10.5px] font-semibold tracking-[0.04em] text-[#6b7280]"
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-[#f9fafb]">
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 whitespace-nowrap text-[#111827]">
+                {row.timestamp}
+              </td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.order}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.champ}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.eligible}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.selected}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.score}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.radiusKm}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** Read-only dispatch attempts (Audit Log). */
+export function DispatchAttemptsLogTable({ columns, rows }) {
+  return (
+    <div className="w-full max-w-full overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-[980px] border-collapse text-left text-[12px]">
+        <thead>
+          <tr className="border-b border-[#e5e7eb] bg-[#f9fafb]">
+            {columns.map((column) => (
+              <th
+                key={column}
+                className="px-3.5 py-2.5 text-[10.5px] font-semibold tracking-[0.04em] text-[#6b7280]"
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="hover:bg-[#f9fafb]">
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 whitespace-nowrap text-[#111827]">
+                {row.timestamp}
+              </td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.order}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">
+                {row.attemptNo}
+              </td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.status}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.champ}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.score}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.etaSec}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">{row.radiusKm}</td>
+              <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[#111827]">
+                {row.ruleVersion}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}

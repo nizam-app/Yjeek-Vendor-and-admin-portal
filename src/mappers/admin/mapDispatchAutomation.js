@@ -6,7 +6,8 @@
  * the existing stored draft — never send a partial subsection alone.
  */
 
-export const SIMULATE_MAX_LIMIT = 100
+/** Buyer requirement: shadow-simulate last 500 historical orders. */
+export const SIMULATE_MAX_LIMIT = 500
 
 export function deepCloneConfig(config) {
   if (config == null || typeof config !== 'object') return {}
@@ -69,9 +70,8 @@ export function forceLiveEnabledFalse(config) {
 }
 
 /**
- * Strip fields that must never be mutated from Automation UI in P2B.
- * Weights stay as server literals; POD bonus / SLA timers / radius timers
- * are not written from FE edits (edits never applied in apply* functions).
+ * Strip fields that must never be mutated from Automation UI.
+ * Always forces stacking.liveEnabled false.
  */
 export function stripForbiddenMutations(config) {
   return forceLiveEnabledFalse(config)
@@ -222,14 +222,71 @@ export function mapConfigToStackingEditable(config) {
   const t2 = asRecord(stacking.trigger2)
   const t3 = asRecord(stacking.trigger3)
   const reevaluateStage = Number(t2.reevaluateFromRadiusStage)
+  const maxCar = Number(stacking.maxCarOrders)
+  const requiredFailed = Number(t3.requiredFailedOffers)
   return {
     dropZoneRadiusKm: createOperatorNumber('≤', t1.maxPairwiseDropKm ?? 2),
+    companionDropKm: createOperatorNumber('≤', t2.companionDropKm ?? 2),
     longDistanceThresholdKm: createOperatorNumber('≥', t2.longDistanceKm ?? 10),
     holdWindow: secondsToDuration(t2.holdWindowSec ?? 90, '≤'),
     reevaluateAtStage3: Number.isFinite(reevaluateStage) ? reevaluateStage <= 2 : true,
     interVendorPickupRadiusKm: createOperatorNumber('≤', t3.maxPairwisePickupKm ?? 4),
+    requiredFailedOffers: createOperatorNumber(
+      '≥',
+      Number.isFinite(requiredFailed) ? requiredFailed : 2,
+    ),
+    maxCarOrders: createOperatorNumber(
+      '≤',
+      Number.isFinite(maxCar) && maxCar >= 2 ? Math.min(3, Math.floor(maxCar)) : 3,
+    ),
+    trigger1Enabled: t1.enabled !== false,
+    trigger2Enabled: t2.enabled !== false,
     trigger3Enabled: t3.enabled !== false,
   }
+}
+
+/**
+ * Capacity matrix derived from DispatchRuleSet stacking + eligibility config.
+ * Bike stacking stays off at launch; cargo remains Phase 2 display.
+ */
+export function mapConfigToStackingCapacityRows(config) {
+  const stacking = asRecord(config?.stacking)
+  const eligibility = asRecord(config?.eligibility)
+  const byVehicle = asRecord(eligibility.maxActiveOrdersByVehicle)
+  const maxCar = Number(stacking.maxCarOrders)
+  const carCap =
+    Number.isFinite(maxCar) && maxCar >= 2 ? Math.min(3, Math.floor(maxCar)) : 3
+  const bikeCap = Number(byVehicle.BIKE)
+  const bikeText = Number.isFinite(bikeCap) ? String(Math.floor(bikeCap)) : '2'
+  const carYes = { kind: 'yes', text: `✓ up to ${carCap}` }
+
+  return [
+    {
+      id: 'bike',
+      vehicle: 'Bike',
+      maxActiveOrders: { kind: 'value', text: bikeText },
+      trigger1: { kind: 'pill', text: 'Off at launch', tone: 'off' },
+      trigger2: { kind: 'no', text: '✗' },
+      trigger3: { kind: 'no', text: '✗' },
+    },
+    {
+      id: 'car',
+      vehicle: 'Car',
+      maxActiveOrders: { kind: 'value', text: String(carCap) },
+      trigger1: carYes,
+      trigger2: { ...carYes },
+      trigger3: { ...carYes },
+    },
+    {
+      id: 'cargo',
+      vehicle: 'Cargo Van',
+      maxActiveOrders: { kind: 'phase2', text: 'TBD Phase 2' },
+      trigger1: { kind: 'phase2', text: 'Phase 2' },
+      trigger2: { kind: 'phase2', text: 'Phase 2' },
+      trigger3: { kind: 'phase2', text: 'Phase 2' },
+      phase2: true,
+    },
+  ]
 }
 
 export function applyStackingEdits(fullServerConfig, editable) {
@@ -241,6 +298,9 @@ export function applyStackingEdits(fullServerConfig, editable) {
 
   const dropKm = parsePositiveNumber(editable?.dropZoneRadiusKm?.value, null)
   if (dropKm != null) next.stacking.trigger1.maxPairwiseDropKm = dropKm
+
+  const companionKm = parsePositiveNumber(editable?.companionDropKm?.value, null)
+  if (companionKm != null) next.stacking.trigger2.companionDropKm = companionKm
 
   const longKm = parsePositiveNumber(editable?.longDistanceThresholdKm?.value, null)
   if (longKm != null) next.stacking.trigger2.longDistanceKm = longKm
@@ -256,6 +316,22 @@ export function applyStackingEdits(fullServerConfig, editable) {
   const pickupKm = parsePositiveNumber(editable?.interVendorPickupRadiusKm?.value, null)
   if (pickupKm != null) next.stacking.trigger3.maxPairwisePickupKm = pickupKm
 
+  const failedOffers = parseIntSec(editable?.requiredFailedOffers?.value, null)
+  if (failedOffers != null) {
+    next.stacking.trigger3.requiredFailedOffers = Math.min(10, Math.max(2, failedOffers))
+  }
+
+  const maxCar = parseIntSec(editable?.maxCarOrders?.value, null)
+  if (maxCar != null) {
+    next.stacking.maxCarOrders = Math.min(3, Math.max(2, maxCar))
+  }
+
+  if (typeof editable?.trigger1Enabled === 'boolean') {
+    next.stacking.trigger1.enabled = editable.trigger1Enabled
+  }
+  if (typeof editable?.trigger2Enabled === 'boolean') {
+    next.stacking.trigger2.enabled = editable.trigger2Enabled
+  }
   if (typeof editable?.trigger3Enabled === 'boolean') {
     next.stacking.trigger3.enabled = editable.trigger3Enabled
   }
@@ -267,29 +343,112 @@ export function applyStackingEdits(fullServerConfig, editable) {
   return stripForbiddenMutations(next)
 }
 
+/**
+ * Client-side clamps mirroring backend dispatch-config stacking zod bounds.
+ * Returns an error string or null when valid.
+ */
+export function validateStackingEdits(editable) {
+  const dropKm = Number.parseFloat(editable?.dropZoneRadiusKm?.value)
+  if (Number.isFinite(dropKm) && (dropKm <= 0 || dropKm > 10)) {
+    return 'Trigger 1 drop-zone radius must be between 0 and 10 km (exclusive of 0).'
+  }
+
+  const companionKm = Number.parseFloat(editable?.companionDropKm?.value)
+  if (Number.isFinite(companionKm) && (companionKm <= 0 || companionKm > 10)) {
+    return 'Trigger 2 companion drop radius must be between 0 and 10 km (exclusive of 0).'
+  }
+
+  const longKm = Number.parseFloat(editable?.longDistanceThresholdKm?.value)
+  if (Number.isFinite(longKm) && (longKm <= 0 || longKm > 100)) {
+    return 'Trigger 2 long-distance threshold must be between 0 and 100 km (exclusive of 0).'
+  }
+
+  const pickupKm = Number.parseFloat(editable?.interVendorPickupRadiusKm?.value)
+  if (Number.isFinite(pickupKm) && (pickupKm <= 0 || pickupKm > 20)) {
+    return 'Trigger 3 inter-vendor pickup radius must be between 0 and 20 km (exclusive of 0).'
+  }
+
+  const holdSec = durationToSeconds(editable?.holdWindow)
+  if (holdSec != null && (holdSec < 0 || holdSec > 600)) {
+    return 'Trigger 2 hold window must be between 0 and 600 seconds.'
+  }
+
+  const failedOffers = Number.parseInt(String(editable?.requiredFailedOffers?.value ?? ''), 10)
+  if (Number.isFinite(failedOffers) && (failedOffers < 2 || failedOffers > 10)) {
+    return 'Trigger 3 required failed offers must be between 2 and 10.'
+  }
+
+  const maxCar = Number.parseInt(String(editable?.maxCarOrders?.value ?? ''), 10)
+  if (Number.isFinite(maxCar) && (maxCar < 2 || maxCar > 3)) {
+    return 'Max car orders in a stack must be 2 or 3.'
+  }
+
+  return null
+}
+
+/** Overview stackingActivity → table rows (empty until live stacking exists). */
+export function mapOverviewToStackingActivity(overview) {
+  const rows = Array.isArray(overview?.stackingActivity) ? overview.stackingActivity : []
+  return rows.map((row) => {
+    const r = asRecord(row)
+    return {
+      id: String(r.id || ''),
+      at: r.at ?? null,
+      trigger: String(r.trigger || ''),
+      triggerLabel: String(r.triggerLabel || r.trigger || '—'),
+      orderCount: Number(r.orderCount) || 0,
+      orders: Array.isArray(r.orders) ? r.orders.map(String) : [],
+      vendorName: String(r.vendorName || '—'),
+      vehicleType: String(r.vehicleType || '—'),
+      slaClear: r.slaClear !== false,
+      outcome: String(r.outcome || r.status || '—'),
+      status: String(r.status || ''),
+    }
+  })
+}
+
 // ---------------------------------------------------------------------------
-// Radius UI ↔ config (stages only — timers excluded)
+// Radius UI ↔ config
+// Editable DispatchRuleSet fields: stagesKm[0..2], expansionDelaySec, broadcastRadiusKm
+// Read-only (not DispatchRuleSet): Champ/SLA offer TTLs, fixed no-Champ cancel display
 // ---------------------------------------------------------------------------
+
+/** SLA / Champ offer TTL display defaults (not persisted from this screen). */
+const DISPLAY_HOT_FOOD_OFFER_SEC = 45
+const DISPLAY_OTHER_ON_DEMAND_OFFER_SEC = 90
+/** Fixed no-Champ cancel policy display (not a DispatchRuleSet radius field). */
+const DISPLAY_NO_CHAMP_CANCEL_SEC = 900
 
 export function mapConfigToRadiusEditable(config) {
   const radius = asRecord(config?.radius)
   const stages = Array.isArray(radius.stagesKm) ? radius.stagesKm : [5, 8, 12]
+  const delaySec = Number(radius.expansionDelaySec)
+  const expansionDelaySec =
+    Number.isFinite(delaySec) && delaySec >= 1 ? Math.floor(delaySec) : 90
+  const broadcast = Number(radius.broadcastRadiusKm)
+  const broadcastRadiusKm =
+    Number.isFinite(broadcast) && broadcast > 0 ? broadcast : 25
+
   return {
     stage1RadiusKm: createOperatorNumber('≤', stages[0] ?? 5),
     stage2RadiusKm: createOperatorNumber('≤', stages[1] ?? 8),
     stage3RadiusKm: createOperatorNumber('≤', stages[2] ?? 12),
-    // Timers: reference-only in P2B — seeded for display, never PATCHed
-    hotFoodOffer: secondsToDuration(45, '≤'),
-    otherOnDemandOffer: secondsToDuration(90, '≤'),
-    stage2To3: secondsToDuration(120, '≤'),
-    stage3To4: secondsToDuration(180, '≤'),
-    overallAutoCancel: secondsToDuration(900, '≥'),
+    stage4BroadcastKm: createOperatorNumber('≤', broadcastRadiusKm),
+    // Backend has one expansionDelaySec — both stage timers reflect that value.
+    stage2To3: secondsToDuration(expansionDelaySec, '≤'),
+    stage3To4: secondsToDuration(expansionDelaySec, '≤'),
+    // SLA / Champ offer windows — display only
+    hotFoodOffer: secondsToDuration(DISPLAY_HOT_FOOD_OFFER_SEC, '≤'),
+    otherOnDemandOffer: secondsToDuration(DISPLAY_OTHER_ON_DEMAND_OFFER_SEC, '≤'),
+    // Fixed policy display — not written to DispatchRuleSet
+    overallAutoCancel: secondsToDuration(DISPLAY_NO_CHAMP_CANCEL_SEC, '≥'),
   }
 }
 
 /**
- * Apply Stage 1–3 radii only. Preserves broadcastRadiusKm, expansionDelaySec,
- * and any other radius keys. Never writes timer fields into expansionDelaySec.
+ * Apply Stage 1–3 radii, Stage 4 broadcastRadiusKm, and expansionDelaySec.
+ * Preserves unknown radius keys and never enables stacking.
+ * Does not write SLA offer TTLs or no-Champ cancel into config.
  */
 export function applyRadiusEdits(fullServerConfig, editable) {
   const next = deepCloneConfig(fullServerConfig)
@@ -306,7 +465,22 @@ export function applyRadiusEdits(fullServerConfig, editable) {
   if (s3 != null) stages[2] = s3
   next.radius.stagesKm = stages
 
-  // Explicitly do NOT touch expansionDelaySec / offer timers / noChampCancelSec
+  const broadcast = parsePositiveNumber(
+    editable?.stage4BroadcastKm?.value,
+    next.radius.broadcastRadiusKm,
+  )
+  if (broadcast != null) {
+    next.radius.broadcastRadiusKm = broadcast
+  }
+
+  // Prefer stage2To3; fall back to stage3To4 if needed (both represent expansionDelaySec).
+  const delayFromUi =
+    durationToSeconds(editable?.stage2To3) ?? durationToSeconds(editable?.stage3To4)
+  if (delayFromUi != null) {
+    const clamped = Math.min(600, Math.max(1, Math.floor(delayFromUi)))
+    next.radius.expansionDelaySec = clamped
+  }
+
   return stripForbiddenMutations(next)
 }
 
@@ -320,6 +494,26 @@ export function validateRadiusStageOrder(editable) {
   if (!(s1 < s2 && s2 < s3)) {
     return `Invalid radius sequence: Stage 1 (${s1} km) < Stage 2 (${s2} km) < Stage 3 (${s3} km) is required.`
   }
+
+  const broadcast = Number.parseFloat(editable?.stage4BroadcastKm?.value)
+  if (Number.isFinite(broadcast)) {
+    if (!(broadcast > s3)) {
+      return `Stage 4 broadcast radius (${broadcast} km) must be greater than Stage 3 (${s3} km).`
+    }
+  }
+
+  const delayA = durationToSeconds(editable?.stage2To3)
+  const delayB = durationToSeconds(editable?.stage3To4)
+  if (delayA != null && (delayA < 1 || delayA > 600)) {
+    return 'Expansion delay (Stage 2→3) must be between 1 and 600 seconds.'
+  }
+  if (delayB != null && (delayB < 1 || delayB > 600)) {
+    return 'Expansion delay (Stage 3→4) must be between 1 and 600 seconds.'
+  }
+  if (delayA != null && delayB != null && delayA !== delayB) {
+    return 'Stage 2→3 and Stage 3→4 timers both map to expansionDelaySec and must match.'
+  }
+
   return null
 }
 
@@ -413,7 +607,9 @@ export function mapOverviewToKpis(overview, options = {}) {
       id: 'active-champs',
       value: String(champs.total ?? 0),
       label: 'Active Champs right now',
-      delta: `${champs.occupied ?? 0} Occupied · ${champs.available ?? 0} Available`,
+      // Buyer labels: ON_ORDER (runtime BUSY) · AVAILABLE (runtime ONLINE).
+      // Prefer additive onOrder when present; fall back to legacy occupied bucket.
+      delta: `${champs.onOrder ?? champs.occupied ?? 0} On order · ${champs.available ?? 0} Available`,
       deltaTone: 'muted',
       accent: 'green',
       unavailable: false,
@@ -432,6 +628,14 @@ export function mapOverviewToKpis(overview, options = {}) {
 
 export function mapRuleSetMeta(rule) {
   if (!rule) return null
+  const versions = Array.isArray(rule.versions)
+    ? rule.versions.map((row) => ({
+        version: row.version,
+        note: row.note ?? null,
+        publishedAt: row.publishedAt ?? row.createdAt ?? null,
+        publishedByName: row.publishedByName ?? null,
+      }))
+    : []
   return {
     id: rule.id,
     name: rule.name,
@@ -439,14 +643,18 @@ export function mapRuleSetMeta(rule) {
     version: rule.version,
     updatedAt: rule.updatedAt,
     activatedAt: rule.activatedAt,
+    pausedAt: rule.pausedAt ?? null,
+    versions,
   }
 }
 
-/** Prefer ACTIVE, else first DRAFT/TEST/PAUSED by updatedAt desc (list already ordered). */
+/** Prefer ACTIVE, then PAUSED (resume target), else first DRAFT/TEST by list order. */
 export function pickWorkingRuleSet(list) {
   const rows = Array.isArray(list) ? list : []
   const active = rows.find((r) => r.status === 'ACTIVE')
   if (active) return active
+  const paused = rows.find((r) => r.status === 'PAUSED')
+  if (paused) return paused
   return rows[0] ?? null
 }
 
@@ -528,17 +736,49 @@ export function mapAuditLogResponse(log, catalogShell) {
 
   const ruleRows = (log?.ruleChanges ?? []).map((row) => {
     const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {}
+    const changedPaths = Array.isArray(meta.changedPaths) ? meta.changedPaths.join(', ') : null
     return {
       id: row.id,
       timestamp: formatStamp(row.at),
       module: 'Dispatch Rules',
       fieldChanged: row.action || '—',
       changedBy: row.actorName || '—',
-      from: meta.from != null ? String(meta.from) : '—',
-      to: meta.to != null ? String(meta.to) : meta.version != null ? `v${meta.version}` : '—',
-      reason: meta.note || meta.reason || row.target || '—',
+      from: meta.from != null ? String(meta.from) : meta.sourceVersion != null ? `v${meta.sourceVersion}` : '—',
+      to:
+        meta.to != null
+          ? String(meta.to)
+          : meta.publishedVersion != null
+            ? `v${meta.publishedVersion}`
+            : meta.version != null
+              ? `v${meta.version}`
+              : changedPaths || '—',
+      reason: meta.note || meta.reason || changedPaths || row.target || '—',
     }
   })
+
+  const evaluationRows = (log?.evaluations ?? []).map((row) => ({
+    id: row.id,
+    timestamp: formatStamp(row.at),
+    order: row.orderNumber || row.orderId || '—',
+    champ: row.champName || row.champId || '—',
+    eligible: row.eligible === true ? 'Yes' : row.eligible === false ? 'No' : '—',
+    selected: row.selected === true ? 'Yes' : row.selected === false ? 'No' : '—',
+    score: row.champScore == null ? '—' : String(row.champScore),
+    radiusKm: row.radiusStageKm == null ? '—' : `${row.radiusStageKm} km`,
+  }))
+
+  const attemptRows = (log?.attempts ?? []).map((row) => ({
+    id: row.id,
+    timestamp: formatStamp(row.at),
+    order: row.orderNumber || row.orderId || '—',
+    attemptNo: row.attemptNo == null ? '—' : String(row.attemptNo),
+    status: row.status || '—',
+    champ: row.champName || row.champId || '—',
+    score: row.champScore == null ? '—' : String(row.champScore),
+    etaSec: row.pickupEtaSec == null ? '—' : `${row.pickupEtaSec}s`,
+    radiusKm: row.radiusStageKm == null ? '—' : `${row.radiusStageKm} km`,
+    ruleVersion: row.dispatchRuleVersion == null ? '—' : `v${row.dispatchRuleVersion}`,
+  }))
 
   return {
     header: catalogShell?.header ?? {
@@ -572,6 +812,34 @@ export function mapAuditLogResponse(log, catalogShell) {
         'Reason',
       ],
       rows: ruleRows,
+    },
+    evaluations: {
+      title: catalogShell?.evaluations?.title ?? 'Dispatch candidate evaluations',
+      columns: catalogShell?.evaluations?.columns ?? [
+        'Timestamp',
+        'Order',
+        'Champ',
+        'Eligible',
+        'Selected',
+        'Score',
+        'Radius',
+      ],
+      rows: evaluationRows,
+    },
+    attempts: {
+      title: catalogShell?.attempts?.title ?? 'Dispatch attempts',
+      columns: catalogShell?.attempts?.columns ?? [
+        'Timestamp',
+        'Order',
+        'Attempt',
+        'Status',
+        'Champ',
+        'Score',
+        'ETA',
+        'Radius',
+        'Rule ver.',
+      ],
+      rows: attemptRows,
     },
     from: log?.from,
     to: log?.to,

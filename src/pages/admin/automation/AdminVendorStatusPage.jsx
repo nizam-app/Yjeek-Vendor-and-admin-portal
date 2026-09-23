@@ -15,7 +15,8 @@ export default function AdminVendorStatusPage() {
 
   function handleReadOnlyAction(action) {
     showInfo(
-      `Vendor Status is read-only reference UI. ${action} does not change configuration or call the backend.`,
+      `Vendor Status is reference-only. ${action} does not save config or call an API. ` +
+        'Hours and operational status are managed in Vendor Admin / Vendor app — not DispatchRuleSet.',
     )
   }
 

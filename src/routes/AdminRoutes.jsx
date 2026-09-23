@@ -14,6 +14,7 @@ import AdminAddVendorUser from '../pages/admin/vendors/AdminAddVendorUser'
 import AdminVendorsPage from '../pages/admin/management/AdminVendorsPage'
 import AdminVendorDetailPage from '../pages/admin/management/AdminVendorDetailPage'
 import AdminStoresPage from '../pages/admin/management/AdminStoresPage'
+import AdminProductsPage from '../pages/admin/management/AdminProductsPage'
 import AdminCreateStoreTypePage from '../pages/admin/management/AdminCreateStoreTypePage'
 import AdminFleetPage from '../pages/admin/management/AdminFleetPage'
 import AdminChampDetailPage from '../pages/admin/management/AdminChampDetailPage'
@@ -75,6 +76,7 @@ export const adminRoutes = (
     <Route path="vendors/:vendorId/users/:userId" element={<AdminAddVendorUser />} />
     <Route path="vendors/:vendorId" element={<AdminVendorDetailPage />} />
     <Route path="vendors" element={<AdminVendorsPage />} />
+    <Route path="stores/products" element={<AdminProductsPage />} />
     <Route path="stores/new" element={<AdminCreateStoreTypePage />} />
     <Route path="stores/:storeTypeId" element={<AdminCreateStoreTypePage />} />
     <Route path="stores" element={<AdminStoresPage />} />

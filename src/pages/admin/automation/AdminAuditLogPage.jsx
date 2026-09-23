@@ -1,9 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   AutomationRuleChangeLogTable,
   VendorAcceptanceLogTable,
 } from '../../../components/admin/automation/AuditLogTables'
-import { AutomationGapBanner } from '../../../components/admin/automation/AutomationGapBanner'
 import { AutomationSectionCard } from '../../../components/admin/automation/AutomationSectionCard'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
@@ -14,7 +13,8 @@ import {
   getAuditLogMock,
 } from '../../../mocks/adminAutomationAuditLog.mock'
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
-import { showInfo, showSuccess } from '../../../utils/toast'
+import { adminReportService } from '../../../services/admin/reportService'
+import { showError, showInfo, showSuccess } from '../../../utils/toast'
 
 function MockAuditLogPage() {
   const catalog = useMemo(() => getAuditLogMock(), [])
@@ -84,19 +84,58 @@ function MockAuditLogPage() {
 
 function RealAuditLogPage() {
   const shell = useMemo(() => getAuditLogMock(), [])
-  const { catalog, isLoading, error, refetch, enabled } = useAdminDispatchAuditLog({
+  const { catalog, isLoading, error, refetch } = useAdminDispatchAuditLog({
     section: 'all',
     limit: 100,
   })
+  const [exporting, setExporting] = useState(false)
 
-  function handleExportCsv() {
-    if (!catalog) {
-      showInfo('No audit data loaded yet.')
-      return
+  async function handleExportCsv() {
+    setExporting(true)
+    try {
+      const [evaluations, attempts, acceptance] = await Promise.all([
+        adminReportService.exportDispatchEvaluationsCsv({ limit: 2000 }),
+        adminReportService.exportDispatchAttemptsCsv({ limit: 2000 }),
+        adminReportService.exportVendorAcceptanceCsv({ limit: 2000 }),
+      ])
+
+      const ruleCsv =
+        catalog != null
+          ? buildAuditLogCsv({
+              ...catalog,
+              vendorAcceptance: { ...catalog.vendorAcceptance, rows: [] },
+              evaluations: { ...catalog.evaluations, rows: [] },
+              attempts: { ...catalog.attempts, rows: [] },
+            })
+          : ''
+
+      const parts = [
+        '# Yjeek Automation Audit Export',
+        '# Source: GET /admin/reports/*/export (server CSV) + rule-change rows from loaded log',
+        '',
+        '## Vendor acceptance (server)',
+        acceptance.data || '',
+        '',
+        '## Dispatch evaluations (server)',
+        evaluations.data || '',
+        '',
+        '## Dispatch attempts (server)',
+        attempts.data || '',
+      ]
+      if (ruleCsv.trim()) {
+        parts.push('', '## Rule changes (from loaded Automation log)', ruleCsv.trim())
+      }
+
+      downloadAuditLogCsv(
+        catalog?.exportFilename || shell.exportFilename || 'yjeek-automation-audit-log.csv',
+        `${parts.join('\n')}\n`,
+      )
+      showSuccess('Audit Log CSV exported from server report endpoints (not limited to on-screen rows).')
+    } catch (err) {
+      showError(err?.message || 'Could not export audit CSV from reports API.')
+    } finally {
+      setExporting(false)
     }
-    const csv = buildAuditLogCsv(catalog)
-    downloadAuditLogCsv(catalog.exportFilename || shell.exportFilename, csv)
-    showSuccess('Audit Log CSV exported from currently loaded real API rows.')
   }
 
   function handleReadOnlyFooter(action) {
@@ -130,20 +169,13 @@ function RealAuditLogPage() {
         </div>
         <button
           type="button"
+          disabled={exporting}
           onClick={handleExportCsv}
-          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#d1d5db] bg-white px-3.5 text-[12px] font-medium text-[#374151] transition hover:border-[#1D6A33] hover:text-[#1D6A33]"
+          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#d1d5db] bg-white px-3.5 text-[12px] font-medium text-[#374151] transition hover:border-[#1D6A33] hover:text-[#1D6A33] disabled:opacity-50"
         >
-          ↓ Export CSV
+          ↓ {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
-
-      <AutomationGapBanner tone="blue" label="Read-only · permanent">
-        <p>
-          Real API mode ({enabled ? 'on' : 'off'}). Vendor acceptance and rule-change rows come from{' '}
-          <code>GET /admin/dispatch-automation/log</code>. Reset / Save Automation are inert on this
-          route.
-        </p>
-      </AutomationGapBanner>
 
       <AutomationSectionCard title={data.vendorAcceptance.title}>
         {data.vendorAcceptance.rows.length === 0 ? (

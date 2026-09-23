@@ -12,11 +12,14 @@ import {
   mapConfigToDispatchRulesEditable,
   mapConfigToRadiusEditable,
   mapConfigToScoringDisplay,
+  mapConfigToStackingCapacityRows,
   mapConfigToStackingEditable,
   mapOverviewToKpis,
+  mapOverviewToStackingActivity,
   secondsToDuration,
   SIMULATE_MAX_LIMIT,
   validateRadiusStageOrder,
+  validateStackingEdits,
 } from '../src/mappers/admin/mapDispatchAutomation.js'
 
 const SAMPLE_CONFIG = {
@@ -116,29 +119,75 @@ test('duration seconds round-trip', () => {
 test('Stacking fields round-trip and liveEnabled stays false', () => {
   const editable = mapConfigToStackingEditable(SAMPLE_CONFIG)
   assert.equal(editable.dropZoneRadiusKm.value, '2')
+  assert.equal(editable.companionDropKm.value, '2')
   assert.equal(editable.longDistanceThresholdKm.value, '10')
   assert.equal(durationToSeconds(editable.holdWindow), 90)
   assert.equal(editable.reevaluateAtStage3, true)
   assert.equal(editable.interVendorPickupRadiusKm.value, '4')
+  assert.equal(editable.requiredFailedOffers.value, '2')
+  assert.equal(editable.maxCarOrders.value, '3')
+  assert.equal(editable.trigger1Enabled, true)
+  assert.equal(editable.trigger2Enabled, true)
   assert.equal(editable.trigger3Enabled, true)
 
   editable.dropZoneRadiusKm = { operator: '≤', value: '1.5' }
+  editable.companionDropKm = { operator: '≤', value: '1.2' }
   editable.holdWindow = secondsToDuration(60, '≤')
   editable.reevaluateAtStage3 = false
   editable.trigger3Enabled = false
+  editable.trigger1Enabled = false
+  editable.requiredFailedOffers = { operator: '≥', value: '3' }
+  editable.maxCarOrders = { operator: '≤', value: '2' }
 
   const withLiveTrue = deepCloneConfig(SAMPLE_CONFIG)
   withLiveTrue.stacking.liveEnabled = true
 
   const next = applyStackingEdits(withLiveTrue, editable)
   assert.equal(next.stacking.liveEnabled, false)
+  assert.equal(next.stacking.bikeStackingEnabled, false)
   assert.equal(next.stacking.trigger1.maxPairwiseDropKm, 1.5)
+  assert.equal(next.stacking.trigger1.enabled, false)
+  assert.equal(next.stacking.trigger2.companionDropKm, 1.2)
   assert.equal(next.stacking.trigger2.holdWindowSec, 60)
   assert.equal(next.stacking.trigger2.reevaluateFromRadiusStage, 99)
   assert.equal(next.stacking.trigger3.enabled, false)
+  assert.equal(next.stacking.trigger3.requiredFailedOffers, 3)
+  assert.equal(next.stacking.maxCarOrders, 2)
   assert.equal(next.stacking.experimentalFlag, true)
   assert.equal(next.radius.stagesKm[0], 5)
   assert.deepEqual(next.unknownTopLevel, SAMPLE_CONFIG.unknownTopLevel)
+})
+
+test('Stacking capacity rows bind to maxCarOrders from config', () => {
+  const rows = mapConfigToStackingCapacityRows(SAMPLE_CONFIG)
+  const car = rows.find((row) => row.id === 'car')
+  assert.equal(car.maxActiveOrders.text, '3')
+  assert.match(car.trigger1.text, /up to 3/)
+})
+
+test('Overview stacking activity maps empty safely', () => {
+  assert.deepEqual(mapOverviewToStackingActivity({}), [])
+  assert.deepEqual(mapOverviewToStackingActivity({ stackingActivity: [] }), [])
+  const rows = mapOverviewToStackingActivity({
+    stackingActivity: [
+      {
+        id: 'p1',
+        trigger: 'TRIGGER_1_SAME_VENDOR',
+        triggerLabel: 'T1 Same vendor',
+        orderCount: 2,
+        orders: ['A', 'B'],
+        vendorName: 'Cafe',
+        vehicleType: 'CAR',
+        slaClear: true,
+        outcome: 'Stacked',
+        status: 'OFFERED',
+        at: '2026-07-20T12:00:00.000Z',
+      },
+    ],
+  })
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].triggerLabel, 'T1 Same vendor')
+  assert.equal(rows[0].outcome, 'Stacked')
 })
 
 test('forceLiveEnabledFalse always clears live stacking', () => {
@@ -147,33 +196,43 @@ test('forceLiveEnabledFalse always clears live stacking', () => {
   assert.equal(cfg.stacking.x, 1)
 })
 
-test('Radius stages map correctly; timers never touch expansionDelaySec', () => {
+test('Radius stages, expansionDelaySec, and broadcastRadiusKm round-trip', () => {
   const editable = mapConfigToRadiusEditable(SAMPLE_CONFIG)
   assert.equal(editable.stage1RadiusKm.value, '5')
   assert.equal(editable.stage2RadiusKm.value, '8')
   assert.equal(editable.stage3RadiusKm.value, '12')
+  assert.equal(editable.stage4BroadcastKm.value, '25')
+  assert.equal(durationToSeconds(editable.stage2To3), 90)
+  assert.equal(durationToSeconds(editable.stage3To4), 90)
 
   editable.stage1RadiusKm = { operator: '≤', value: '4' }
   editable.stage2RadiusKm = { operator: '≤', value: '7' }
   editable.stage3RadiusKm = { operator: '≤', value: '11' }
-  // Poison timer fields — must not affect config
-  editable.stage2To3 = secondsToDuration(1, '≤')
+  editable.stage4BroadcastKm = { operator: '≤', value: '30' }
+  editable.stage2To3 = secondsToDuration(120, '≤')
+  editable.stage3To4 = secondsToDuration(120, '≤')
+  // SLA / fixed displays must not be written
+  editable.hotFoodOffer = secondsToDuration(1, '≤')
   editable.overallAutoCancel = secondsToDuration(1, '≥')
 
   const next = applyRadiusEdits(SAMPLE_CONFIG, editable)
   assert.deepEqual(next.radius.stagesKm, [4, 7, 11])
-  assert.equal(next.radius.expansionDelaySec, 90)
-  assert.equal(next.radius.broadcastRadiusKm, 25)
+  assert.equal(next.radius.expansionDelaySec, 120)
+  assert.equal(next.radius.broadcastRadiusKm, 30)
   assert.equal(next.radius.futureRadiusKey, 'keep-me')
   assert.equal(next.stacking.liveEnabled, false)
+  assert.deepEqual(next.scoring, SAMPLE_CONFIG.scoring)
 })
 
-test('validateRadiusStageOrder', () => {
+test('validateRadiusStageOrder requires broadcast > stage3 and matching delays', () => {
   assert.equal(
     validateRadiusStageOrder({
       stage1RadiusKm: { value: '5' },
       stage2RadiusKm: { value: '8' },
       stage3RadiusKm: { value: '12' },
+      stage4BroadcastKm: { value: '25' },
+      stage2To3: secondsToDuration(90, '≤'),
+      stage3To4: secondsToDuration(90, '≤'),
     }),
     null,
   )
@@ -185,6 +244,47 @@ test('validateRadiusStageOrder', () => {
     }),
     /Invalid radius sequence/,
   )
+  assert.match(
+    validateRadiusStageOrder({
+      stage1RadiusKm: { value: '5' },
+      stage2RadiusKm: { value: '8' },
+      stage3RadiusKm: { value: '12' },
+      stage4BroadcastKm: { value: '10' },
+    }),
+    /broadcast radius/,
+  )
+  assert.match(
+    validateRadiusStageOrder({
+      stage1RadiusKm: { value: '5' },
+      stage2RadiusKm: { value: '8' },
+      stage3RadiusKm: { value: '12' },
+      stage4BroadcastKm: { value: '25' },
+      stage2To3: secondsToDuration(90, '≤'),
+      stage3To4: secondsToDuration(120, '≤'),
+    }),
+    /must match/,
+  )
+})
+
+test('validateStackingEdits mirrors backend km clamps', () => {
+  assert.equal(
+    validateStackingEdits({
+      dropZoneRadiusKm: { value: '2' },
+      companionDropKm: { value: '2' },
+      longDistanceThresholdKm: { value: '10' },
+      interVendorPickupRadiusKm: { value: '4' },
+      holdWindow: secondsToDuration(90, '≤'),
+      requiredFailedOffers: { value: '2' },
+      maxCarOrders: { value: '3' },
+    }),
+    null,
+  )
+  assert.match(validateStackingEdits({ dropZoneRadiusKm: { value: '15' } }), /drop-zone/)
+  assert.match(
+    validateStackingEdits({ longDistanceThresholdKm: { value: '150' } }),
+    /long-distance/,
+  )
+  assert.match(validateStackingEdits({ maxCarOrders: { value: '5' } }), /Max car orders/)
 })
 
 test('Scoring display reads locked weights; applyScoringEdits does not change them', () => {
@@ -259,8 +359,8 @@ test('audit mapper maps outcomes without inventing rows', () => {
   assert.equal(mapped.ruleChanges.rows[0].to, 'v3')
 })
 
-test('simulate max limit is 100 not 500', () => {
-  assert.equal(SIMULATE_MAX_LIMIT, 100)
+test('simulate max limit is 500 (buyer requirement)', () => {
+  assert.equal(SIMULATE_MAX_LIMIT, 500)
 })
 
 test('real-mode SLA editable fields use backend effective timing (not hardcoded 60/120)', async () => {
@@ -419,4 +519,141 @@ test('audit CSV escapes commas quotes and newlines', async () => {
   const csv = buildAuditLogCsv(catalog)
   assert.match(csv, /"Cafe, ""Downtown"""/)
   assert.match(csv, /"line1\nline2, with ""quotes"""/)
+})
+
+test('pickWorkingRuleSet prefers ACTIVE then PAUSED', async () => {
+  const { pickWorkingRuleSet } = await import('../src/mappers/admin/mapDispatchAutomation.js')
+  const rows = [
+    { id: 'd1', status: 'DRAFT' },
+    { id: 'p1', status: 'PAUSED' },
+    { id: 'a1', status: 'ACTIVE' },
+  ]
+  assert.equal(pickWorkingRuleSet(rows).id, 'a1')
+  assert.equal(pickWorkingRuleSet(rows.filter((r) => r.status !== 'ACTIVE')).id, 'p1')
+})
+
+test('mapRuleSetMeta includes versions and pausedAt', async () => {
+  const { mapRuleSetMeta } = await import('../src/mappers/admin/mapDispatchAutomation.js')
+  const meta = mapRuleSetMeta({
+    id: 'r1',
+    name: 'Rules',
+    status: 'PAUSED',
+    version: 4,
+    pausedAt: '2026-09-23T05:00:00.000Z',
+    versions: [
+      { version: 4, note: 'latest', publishedByName: 'ops' },
+      { version: 3, note: 'prior', publishedByName: 'ops' },
+    ],
+  })
+  assert.equal(meta.status, 'PAUSED')
+  assert.equal(meta.pausedAt, '2026-09-23T05:00:00.000Z')
+  assert.equal(meta.versions.length, 2)
+  assert.equal(meta.versions[1].version, 3)
+})
+
+test('audit mapper maps evaluations and attempts without inventing rows', () => {
+  const mapped = mapAuditLogResponse(
+    {
+      vendorAcceptance: [],
+      ruleChanges: [
+        {
+          id: 'rc1',
+          at: '2026-09-23T05:00:00.000Z',
+          actorName: 'ops',
+          action: 'Rolled back dispatch rules',
+          target: 'r1',
+          metadata: { sourceVersion: 2, publishedVersion: 5, note: 'rollback' },
+        },
+      ],
+      evaluations: [
+        {
+          id: 'e1',
+          at: '2026-09-23T05:01:00.000Z',
+          orderNumber: 'YJK-9',
+          champName: 'Ali',
+          eligible: true,
+          selected: false,
+          champScore: 81.2,
+          radiusStageKm: 5,
+        },
+      ],
+      attempts: [
+        {
+          id: 'a1',
+          at: '2026-09-23T05:02:00.000Z',
+          orderNumber: 'YJK-9',
+          attemptNo: 1,
+          status: 'OFFERED',
+          champName: 'Ali',
+          champScore: 81.2,
+          pickupEtaSec: 420,
+          radiusStageKm: 5,
+          dispatchRuleVersion: 4,
+        },
+      ],
+    },
+    {},
+  )
+  assert.equal(mapped.ruleChanges.rows[0].from, 'v2')
+  assert.equal(mapped.ruleChanges.rows[0].to, 'v5')
+  assert.equal(mapped.evaluations.rows.length, 1)
+  assert.equal(mapped.evaluations.rows[0].order, 'YJK-9')
+  assert.equal(mapped.attempts.rows.length, 1)
+  assert.equal(mapped.attempts.rows[0].ruleVersion, 'v4')
+  assert.equal(mapAuditLogResponse({}, {}).evaluations.rows.length, 0)
+  assert.equal(mapAuditLogResponse({}, {}).attempts.rows.length, 0)
+})
+
+test('audit CSV includes evaluations and attempts sections when present', async () => {
+  const { buildAuditLogCsv } = await import('../src/mocks/adminAutomationAuditLog.mock.js')
+  const csv = buildAuditLogCsv({
+    vendorAcceptance: { columns: ['Order'], rows: [] },
+    ruleChanges: { columns: ['Time'], rows: [] },
+    evaluations: {
+      title: 'Dispatch candidate evaluations',
+      columns: ['Timestamp', 'Order', 'Champ', 'Eligible', 'Selected', 'Score', 'Radius'],
+      rows: [
+        {
+          timestamp: '10:00',
+          order: 'YJK-1',
+          champ: 'Ali',
+          eligible: 'Yes',
+          selected: 'No',
+          score: '80',
+          radiusKm: '5 km',
+        },
+      ],
+    },
+    attempts: {
+      title: 'Dispatch attempts',
+      columns: [
+        'Timestamp',
+        'Order',
+        'Attempt',
+        'Status',
+        'Champ',
+        'Score',
+        'ETA',
+        'Radius',
+        'Rule ver.',
+      ],
+      rows: [
+        {
+          timestamp: '10:01',
+          order: 'YJK-1',
+          attemptNo: '1',
+          status: 'OFFERED',
+          champ: 'Ali',
+          score: '80',
+          etaSec: '400s',
+          radiusKm: '5 km',
+          ruleVersion: 'v4',
+        },
+      ],
+    },
+  })
+  assert.match(csv, /Dispatch candidate evaluations/)
+  assert.match(csv, /YJK-1,Ali,Yes,No,80/)
+  assert.match(csv, /Dispatch attempts/)
+  assert.match(csv, /OFFERED,Ali,80,400s/)
 })

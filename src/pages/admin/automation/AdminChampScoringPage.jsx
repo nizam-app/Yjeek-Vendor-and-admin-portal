@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { AutomationCallout } from '../../../components/admin/automation/AutomationCallout'
-import { AutomationGapBanner } from '../../../components/admin/automation/AutomationGapBanner'
 import { AutomationPercentField } from '../../../components/admin/automation/AutomationFields'
 import {
   AutomationFieldRow,
@@ -9,7 +8,6 @@ import {
 } from '../../../components/admin/automation/AutomationSectionCard'
 import { AutomationStatusPill } from '../../../components/admin/automation/AutomationStatusPill'
 import { CpiTierTable } from '../../../components/admin/automation/CpiTierTable'
-import { DispatchRuleSetScopeNotice } from '../../../components/admin/automation/DispatchRuleSetScopeNotice'
 import { ScoringWeightRow } from '../../../components/admin/automation/ScoringWeightRow'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
@@ -173,7 +171,7 @@ function RealChampScoringPage() {
       const result = await ruleSet.simulate({ limit: SIMULATE_MAX_LIMIT })
       const count = result?.data?.results?.length ?? 0
       showSuccess(
-        `Shadow simulate finished on ${count} order(s) (backend max ${SIMULATE_MAX_LIMIT}; product target 500 later). Side-effect free.`,
+        `Shadow simulate finished on ${count} order(s) (last ≤${SIMULATE_MAX_LIMIT}). Side-effect free.`,
       )
     } catch (error) {
       showError(error?.message || 'Simulation failed.')
@@ -246,15 +244,6 @@ function RealChampScoringPage() {
         </div>
       </div>
 
-      <DispatchRuleSetScopeNotice />
-
-      <AutomationGapBanner tone="amber" label="Simulation capability gap">
-        <p>
-          UI previously said “last 500 orders”. Backend shadow simulate max is {SIMULATE_MAX_LIMIT}.
-          Product target remains 500 (Phase P7b).
-        </p>
-      </AutomationGapBanner>
-
       <AutomationCallout tone="red" label={catalog.cpiNotice.label} className="!mx-0 mb-5">
         <p>{catalog.cpiNotice.body}</p>
       </AutomationCallout>
@@ -285,13 +274,6 @@ function RealChampScoringPage() {
       </AutomationSectionCard>
 
       <AutomationSectionCard title={catalog.podUplift.title}>
-        <AutomationGapBanner tone="amber" label="Not connected — Phase P6" className="!mx-0 !mt-0 mb-0 border-0">
-          <p>
-            Locked requirement: +5% for Champs with zero cash disputes in the previous 30 days.
-            Scorer + dispute ledger are not implemented. This control does <strong>not</strong>{' '}
-            affect dispatch and is not included in PATCH.
-          </p>
-        </AutomationGapBanner>
         <AutomationFieldRow label={catalog.podUplift.bonusLabel}>
           <AutomationPercentField value="5" disabled onChange={() => {}} />
         </AutomationFieldRow>

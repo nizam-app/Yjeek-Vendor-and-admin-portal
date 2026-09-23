@@ -18,17 +18,42 @@ export function getChampStatusMock() {
     header: {
       title: 'Champ Status Reference',
       subtitle:
-        'Every possible status · what triggers it · what automation fires · what the developer must implement',
+        'Reference · Buyer labels AVAILABLE / ON_ORDER / OFFLINE · Stored runtime ONLINE / BUSY / OFFLINE · Not configurable here',
     },
     rootCallout: {
       label: 'Developer note — status is the root of all dispatch logic',
       body: 'Every automation decision starts by reading champ.status. Status is the single field the dispatch engine reads first — at Gate 1, before any scoring. Get this wrong and dispatch is broken. Status transitions must be atomic — no partial states. Each status has exactly one set of triggers (what causes it) and one set of automation consequences (what the system does when it reads it). Statuses set by the system are never manually overridable by the Champ app. Statuses set by Admin or Dispatcher are logged with who set them, when, and why.',
     },
+    terminology: {
+      label: 'Runtime ↔ buyer terminology (Phase A6)',
+      body: 'Database / Champ app contracts keep DriverStatus ONLINE, BUSY, OFFLINE (plus reserved FLEET_OCCUPIED / ON_BREAK / SUSPENDED). Buyer Automation language maps ONLINE→AVAILABLE, BUSY→ON_ORDER, OFFLINE→OFFLINE. Free is not an enum — it means AVAILABLE with activeOrderCount=0. Dispatch Gate 1 still uses internal OCCUPIED for BUSY so eligibility stays unchanged. Stacked labels are computed at read time from active_orders — never stored.',
+      mappings: [
+        {
+          runtime: 'ONLINE',
+          buyer: 'AVAILABLE',
+          dispatch: 'AVAILABLE',
+          note: 'Free when activeOrderCount=0',
+        },
+        {
+          runtime: 'BUSY',
+          buyer: 'ON_ORDER',
+          dispatch: 'OCCUPIED',
+          note: 'Stack display derived from active_orders',
+        },
+        {
+          runtime: 'OFFLINE',
+          buyer: 'OFFLINE',
+          dispatch: 'OFFLINE',
+          note: null,
+        },
+      ],
+    },
     statuses: {
       available: {
         key: 'AVAILABLE',
         title: 'AVAILABLE',
-        subtitle: 'Champ is online, has capacity, and can receive orders',
+        subtitle:
+          'Buyer label for runtime ONLINE — Champ is online, has capacity, and can receive orders',
         headerBg: '#f0fdf4',
         titleColor: '#15803d',
         dotColor: '#16a34a',
@@ -50,7 +75,7 @@ export function getChampStatusMock() {
           {
             id: 'dispatch',
             label: 'Dispatch engine behaviour',
-            help: 'Passes Gate 1. Enters scoring pool. Ranked by ETA (40%) + CPI tier (30%) + active load (20%) + category fit (10%). Can receive offer.',
+            help: 'Passes Gate 1. Enters scoring pool. Ranked by ETA (40%) + CPI tier (30%) + active load (20%) + category fit (10%). Can receive offer. Free = AVAILABLE + active_orders=0.',
             pill: { tone: 'on', text: 'Eligible for offers' },
           },
           {
@@ -63,12 +88,18 @@ export function getChampStatusMock() {
             },
           },
         ],
-        schema: ["champ.status = 'AVAILABLE'"],
+        schema: [
+          "Runtime (stored): champ.status = 'ONLINE'",
+          "Buyer / Automation label: AVAILABLE",
+          "Dispatch Gate 1 alias: AVAILABLE",
+          'Free (derived): AVAILABLE + active_orders = 0',
+        ],
       },
       onOrder: {
         key: 'ON_ORDER',
         title: 'ON_ORDER',
-        subtitle: 'Champ has accepted an order and is actively fulfilling it',
+        subtitle:
+          'Buyer label for runtime BUSY — Champ has accepted an order and is actively fulfilling it',
         headerBg: '#eff6ff',
         titleColor: '#1d4ed8',
         dotColor: '#2563eb',
@@ -78,7 +109,7 @@ export function getChampStatusMock() {
           {
             id: 'set-by',
             label: 'Set by',
-            help: 'System — automatically when Champ accepts an order offer',
+            help: 'System — automatically when Champ accepts an order offer (stored as BUSY)',
             pill: { tone: 'on', text: 'System-set' },
           },
           {
@@ -90,7 +121,7 @@ export function getChampStatusMock() {
           {
             id: 'dispatch',
             label: 'Dispatch engine behaviour',
-            help: 'Still in pool — active_orders increments. Can receive additional orders via stacking triggers (T1, T2, T3) if active_orders < vehicle cap (car = 3). Score penalised by load factor: 1 order = 0.75×, 2 orders = 0.50×. At cap → excluded from new offers.',
+            help: 'Still in pool — active_orders increments. Can receive additional orders via stacking triggers (T1, T2, T3) if active_orders < vehicle cap (car = 3). Score penalised by load factor: 1 order = 0.75×, 2 orders = 0.50×. At cap → excluded from new offers. Gate 1 reads this as OCCUPIED (internal alias for BUSY).',
             pill: { tone: 'warn', text: 'Stack eligible until cap' },
           },
           {
@@ -109,7 +140,12 @@ export function getChampStatusMock() {
             },
           },
         ],
-        schema: ["champ.status = 'ON_ORDER'", 'champ.active_orders = N (1–3)'],
+        schema: [
+          "Runtime (stored): champ.status = 'BUSY'",
+          "Buyer / Automation label: ON_ORDER",
+          "Dispatch Gate 1 alias: OCCUPIED",
+          'champ.active_orders = N (1–3)',
+        ],
       },
       stacked: {
         key: 'ON_ORDER_STACKED',
@@ -126,7 +162,7 @@ export function getChampStatusMock() {
         badgeClassName: 'bg-[#dbeafe] text-[#1d4ed8]',
         architectureCallout: {
           label: 'Architecture rule — derived label, not a stored enum',
-          body: "champ.status stays 'ON_ORDER' in the database throughout. The stacked label is computed at read time by the API layer: if active_orders > 1, format the display as ON_ORDER · STACKED (N) where N = active_orders. Never store ON_ORDER_STACKED_2 as an enum value — you would need a new migration every time the cap changes and a status write on every delivery confirmation. One integer field does the job.",
+          body: "Runtime champ.status stays 'BUSY' (buyer ON_ORDER) throughout. The stacked label is computed at read time by the API layer: if active_orders > 1, format the display as ON_ORDER · STACKED (N) where N = active_orders. Never store ON_ORDER_STACKED_2 as an enum value — you would need a new migration every time the cap changes and a status write on every delivery confirmation. One integer field does the job.",
         },
         maintenanceTitle: 'How active_orders is maintained',
         maintenanceRows: [
@@ -245,7 +281,7 @@ export function getChampStatusMock() {
         ],
         schemaTitle: 'Schema — what is stored vs what is computed',
         stored: [
-          "champ.status = 'ON_ORDER'  ← never changes while carrying orders",
+          "Runtime (stored): champ.status = 'BUSY'  ← never changes while carrying orders",
           'champ.active_orders = N  ← integer, atomic increment/decrement',
           "champ.vehicle_type = 'BIKE' | 'CAR' | 'CARGO'  ← determines cap",
         ],
@@ -338,7 +374,11 @@ export function getChampStatusMock() {
             },
           },
         ],
-        schema: ["champ.status = 'OFFLINE'", 'champ.last_seen_at = timestamp'],
+        schema: [
+          "Runtime (stored): champ.status = 'OFFLINE'",
+          "Buyer / Automation label: OFFLINE",
+          'champ.last_seen_at = timestamp',
+        ],
       },
       incident: {
         key: 'INCIDENT',

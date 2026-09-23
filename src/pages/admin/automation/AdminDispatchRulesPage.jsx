@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Play, Plus, RefreshCw } from 'lucide-react'
 import { AcceptanceTimeline } from '../../../components/admin/automation/AcceptanceTimeline'
 import { AutomationCallout } from '../../../components/admin/automation/AutomationCallout'
-import { AutomationGapBanner } from '../../../components/admin/automation/AutomationGapBanner'
 import {
   AutomationDurationField,
   AutomationKpiCard,
@@ -14,7 +13,6 @@ import {
   AutomationSubsectionTitle,
 } from '../../../components/admin/automation/AutomationSectionCard'
 import { AutomationStatusPill } from '../../../components/admin/automation/AutomationStatusPill'
-import { DispatchRuleSetScopeNotice } from '../../../components/admin/automation/DispatchRuleSetScopeNotice'
 import { ApiErrorBanner, ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
 import { useAdminDispatchOverview } from '../../../hooks/admin/useAdminDispatchOverview'
@@ -22,7 +20,6 @@ import { useDispatchRuleSet } from '../../../hooks/admin/useDispatchRuleSet'
 import {
   applyDispatchRulesEdits,
   buildVendorAcceptanceTimelineFromEffective,
-  formatVendorAcceptanceEffectiveSummary,
   mapConfigToDispatchRulesEditable,
   mapOverviewToKpis,
   SIMULATE_MAX_LIMIT,
@@ -379,7 +376,7 @@ function RealDispatchRulesPage() {
       const result = await ruleSet.simulate({ limit: SIMULATE_MAX_LIMIT })
       const count = result?.data?.results?.length ?? 0
       showSuccess(
-        `${scope} shadow simulate finished on ${count} order(s) (backend max ${SIMULATE_MAX_LIMIT}; product target 500 is a later phase). Side-effect free.`,
+        `${scope} shadow simulate finished on ${count} order(s) (last ≤${SIMULATE_MAX_LIMIT}). Side-effect free.`,
       )
     } catch (error) {
       showError(error?.message || 'Simulation failed.')
@@ -457,7 +454,6 @@ function RealDispatchRulesPage() {
       })
     : catalog.kpis
   const acceptanceTimeline = buildVendorAcceptanceTimelineFromEffective(slaEffective.hotFood)
-  const acceptanceSummary = formatVendorAcceptanceEffectiveSummary(slaEffective.hotFood)
 
   return (
     <div className="pb-20">
@@ -504,8 +500,6 @@ function RealDispatchRulesPage() {
         </div>
       </div>
 
-      <DispatchRuleSetScopeNotice />
-
       {overview.error ? (
         <ApiErrorBanner error={overview.error} onRetry={overview.refetch} className="mb-4" />
       ) : null}
@@ -543,12 +537,6 @@ function RealDispatchRulesPage() {
           </>
         }
       >
-        <AutomationGapBanner tone="amber" label="Simulation capability" className="!mx-0 !mt-0 mb-0 border-0">
-          <p>
-            Buyer target is last 500 orders. Current backend shadow simulate supports max{' '}
-            {SIMULATE_MAX_LIMIT} (side-effect free). Limit raise is Phase P7b.
-          </p>
-        </AutomationGapBanner>
         {catalog.gate1.rows.map((row) => (
           <AutomationFieldRow key={row.id} label={row.label}>
             {row.kind === 'enforced' ? (
@@ -575,9 +563,6 @@ function RealDispatchRulesPage() {
           </AutomationStatusPill>
         }
       >
-        <AutomationGapBanner tone="blue" label="Reference display" className="!mx-0 !mt-0 mb-0 border-0">
-          <p>Gate 2 vehicle rules are shown as approved reference. P2B does not mutate vehicleMatrix.</p>
-        </AutomationGapBanner>
         {catalog.gate2.rows.map((row) => (
           <AutomationFieldRow key={row.id} label={row.label}>
             <AutomationStatusPill tone={row.tone}>{row.value}</AutomationStatusPill>
@@ -594,30 +579,6 @@ function RealDispatchRulesPage() {
           </AutomationStatusPill>
         }
       >
-        <AutomationGapBanner tone="amber" label="Owned by SLA Models — not DispatchRuleSet">
-          {slaEffective.error ? (
-            <p>
-              Effective vendor acceptance SLA could not be loaded. Timing values are unavailable —
-              this screen will not show placeholder 60/120 seconds. Edit timing in{' '}
-              <strong>SLA Models</strong>, then refresh.
-            </p>
-          ) : slaEffective.isLoading && !slaEffective.hotFood ? (
-            <p>Loading effective vendor acceptance timing from SLA Models…</p>
-          ) : acceptanceSummary ? (
-            <p>
-              Current effective timing (hot food on-demand): <strong>{acceptanceSummary}</strong>.
-              Thresholds are <strong>not</strong> editable or saved here. Runtime deadline comes from
-              SLA Models → <code>vendorAcceptDeadline</code>. Change values in SLA Admin, then
-              refresh this page.
-            </p>
-          ) : (
-            <p>
-              No effective SLA timing is available from the server yet. Open SLA Models to configure
-              vendor acceptance, then refresh. This screen will not invent 60/120 placeholders.
-            </p>
-          )}
-        </AutomationGapBanner>
-
         {slaEffective.error ? (
           <ApiErrorBanner
             error={slaEffective.error}

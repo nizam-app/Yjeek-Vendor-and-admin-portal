@@ -41,6 +41,16 @@ export function useDispatchRuleSet() {
   const simulateMutation = useApiMutation((ruleSetId, input) =>
     adminDispatchRulesService.simulate(ruleSetId, input),
   )
+  const simulateStackingMutation = useApiMutation((ruleSetId, input) =>
+    adminDispatchRulesService.simulateStacking(ruleSetId, input),
+  )
+  const testModeMutation = useApiMutation((ruleSetId) =>
+    adminDispatchRulesService.enterTestMode(ruleSetId),
+  )
+  const pauseMutation = useApiMutation((ruleSetId) => adminDispatchRulesService.pause(ruleSetId))
+  const rollbackMutation = useApiMutation((ruleSetId, input) =>
+    adminDispatchRulesService.rollback(ruleSetId, input),
+  )
 
   const applyServerResult = useCallback(
     (result) => {
@@ -67,6 +77,12 @@ export function useDispatchRuleSet() {
     }
   }, [applyServerResult])
 
+  const requireId = () => {
+    const id = resource.data?.rule?.id
+    if (!id) throw new Error('No dispatch rule set loaded.')
+    return id
+  }
+
   return {
     enabled,
     isLoading: resource.isLoading,
@@ -79,36 +95,49 @@ export function useDispatchRuleSet() {
     createDefault,
     isCreating: creating,
     patchDraft: async (fullConfig) => {
-      const id = resource.data?.rule?.id
-      if (!id) throw new Error('No dispatch rule set loaded.')
-      const result = await patchMutation.mutate(id, fullConfig)
+      const result = await patchMutation.mutate(requireId(), fullConfig)
       return applyServerResult(result)
     },
     /**
      * Preferred Save Changes path: re-fetch latest draft, apply section edits, PATCH.
      */
     mergeAndPatch: async (applyEdits, editable) => {
-      const id = resource.data?.rule?.id
-      if (!id) throw new Error('No dispatch rule set loaded.')
-      const result = await mergePatchMutation.mutate(id, applyEdits, editable)
+      const result = await mergePatchMutation.mutate(requireId(), applyEdits, editable)
       return applyServerResult(result)
     },
     activate: async (note) => {
-      const id = resource.data?.rule?.id
-      if (!id) throw new Error('No dispatch rule set loaded.')
-      const result = await activateMutation.mutate(id, note)
+      const result = await activateMutation.mutate(requireId(), note)
+      return applyServerResult(result)
+    },
+    enterTestMode: async () => {
+      const result = await testModeMutation.mutate(requireId())
+      return applyServerResult(result)
+    },
+    pause: async () => {
+      const result = await pauseMutation.mutate(requireId())
+      return applyServerResult(result)
+    },
+    rollback: async (input) => {
+      const result = await rollbackMutation.mutate(requireId(), input)
       return applyServerResult(result)
     },
     simulate: async (input) => {
-      const id = resource.data?.rule?.id
-      if (!id) throw new Error('No dispatch rule set loaded.')
-      return simulateMutation.mutate(id, input)
+      return simulateMutation.mutate(requireId(), input)
+    },
+    simulateStacking: async (input) => {
+      return simulateStackingMutation.mutate(requireId(), input)
     },
     isSaving: patchMutation.isLoading || mergePatchMutation.isLoading,
     isActivating: activateMutation.isLoading,
     isSimulating: simulateMutation.isLoading,
+    isSimulatingStacking: simulateStackingMutation.isLoading,
+    isEnteringTestMode: testModeMutation.isLoading,
+    isPausing: pauseMutation.isLoading,
+    isRollingBack: rollbackMutation.isLoading,
     patchError: patchMutation.error || mergePatchMutation.error,
     activateError: activateMutation.error,
-    simulateError: simulateMutation.error,
+    simulateError: simulateMutation.error || simulateStackingMutation.error,
+    lifecycleError:
+      testModeMutation.error || pauseMutation.error || rollbackMutation.error || null,
   }
 }

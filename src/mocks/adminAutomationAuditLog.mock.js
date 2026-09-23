@@ -167,6 +167,50 @@ export function buildAuditLogCsv(catalog = getAuditLogMock()) {
     )
   })
 
+  if (catalog.evaluations?.columns && Array.isArray(catalog.evaluations.rows)) {
+    lines.push('')
+    lines.push(catalog.evaluations.title || 'Dispatch candidate evaluations')
+    lines.push(catalog.evaluations.columns.map(csvEscape).join(','))
+    catalog.evaluations.rows.forEach((row) => {
+      lines.push(
+        [
+          row.timestamp,
+          row.order,
+          row.champ,
+          row.eligible,
+          row.selected,
+          row.score,
+          row.radiusKm,
+        ]
+          .map(csvEscape)
+          .join(','),
+      )
+    })
+  }
+
+  if (catalog.attempts?.columns && Array.isArray(catalog.attempts.rows)) {
+    lines.push('')
+    lines.push(catalog.attempts.title || 'Dispatch attempts')
+    lines.push(catalog.attempts.columns.map(csvEscape).join(','))
+    catalog.attempts.rows.forEach((row) => {
+      lines.push(
+        [
+          row.timestamp,
+          row.order,
+          row.attemptNo,
+          row.status,
+          row.champ,
+          row.score,
+          row.etaSec,
+          row.radiusKm,
+          row.ruleVersion,
+        ]
+          .map(csvEscape)
+          .join(','),
+      )
+    })
+  }
+
   return `${lines.join('\n')}\n`
 }
 

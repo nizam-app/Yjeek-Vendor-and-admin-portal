@@ -4,7 +4,8 @@ export function getVendorStatusMock() {
   return {
     header: {
       title: 'Vendor Status Rules',
-      subtitle: 'How vendor status affects checkout · all statuses remain visible in customer search',
+      subtitle:
+        'Reference · Managed by Vendor Admin / Vendor app · Not configurable here · checkout visibility rules',
     },
     searchBanner: {
       label: 'All statuses show in customer search — none hide the vendor',
