@@ -7,8 +7,8 @@ import { mapAdminUploadImageResponse } from '../../mappers/admin/mapAdminUpload'
 /** Backend-aligned client limit for banner / admin image uploads (5 MB). */
 export const ADMIN_IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 
-/** Menu-source uploads (PDF / Excel / ZIP) — aligned with backend UPLOAD_MAX_SIZE_MB (25). */
-export const ADMIN_MENU_SOURCE_MAX_BYTES = 25 * 1024 * 1024
+/** Menu-source uploads (PDF / Excel / ZIP) — aligned with backend UPLOAD_MAX_SIZE_MB (100). */
+export const ADMIN_MENU_SOURCE_MAX_BYTES = 100 * 1024 * 1024
 
 export const ADMIN_IMAGE_UPLOAD_ACCEPT = 'image/jpeg,image/png,image/webp'
 

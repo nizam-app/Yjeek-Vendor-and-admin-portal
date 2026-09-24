@@ -334,6 +334,30 @@ export const endpoints = {
        */
       product: (productId) =>
         `/admin/stores/products/${encodeURIComponent(String(productId || '').trim())}`,
+      /**
+       * Live vendor menu (Menu Settings → Menu).
+       * GET /admin/stores/vendors/:vendorId/catalog
+       * @param {string} vendorId
+       */
+      vendorCatalog: (vendorId) =>
+        `/admin/stores/vendors/${encodeURIComponent(String(vendorId || '').trim())}/catalog`,
+      /**
+       * POST /admin/stores/vendors/:vendorId/products
+       * @param {string} vendorId
+       */
+      vendorProducts: (vendorId) =>
+        `/admin/stores/vendors/${encodeURIComponent(String(vendorId || '').trim())}/products`,
+      /**
+       * POST /admin/stores/vendors/:vendorId/catalog-categories
+       * PATCH + DELETE /admin/stores/vendors/:vendorId/catalog-categories/:categoryId
+       * @param {string} vendorId
+       * @param {string} [categoryId]
+       */
+      vendorCatalogCategory: (vendorId, categoryId) => {
+        const base = `/admin/stores/vendors/${encodeURIComponent(String(vendorId || '').trim())}/catalog-categories`
+        if (categoryId == null || categoryId === '') return base
+        return `${base}/${encodeURIComponent(String(categoryId).trim())}`
+      },
     },
     storeTypes: {
       /** Confirmed: GET /admin/store-types/summary */
