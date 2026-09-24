@@ -77,4 +77,21 @@ export const adminStoresCatalogService = {
     })
     return mapProduct(response?.data ?? response)
   },
+
+  async getVendorCatalog(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) throw new Error('Vendor id is required.')
+    const response = await apiClient.get(endpoints.admin.storesCatalog.vendorCatalog(id), {
+      ...options,
+      scope: 'admin',
+    })
+    const data = response?.data ?? response
+    return {
+      vendor: data?.vendor ?? null,
+      catalogCategories: Array.isArray(data?.catalogCategories) ? data.catalogCategories : [],
+      products: Array.isArray(data?.products)
+        ? data.products.map(mapProduct).filter(Boolean)
+        : [],
+    }
+  },
 }

@@ -823,4 +823,318 @@ export const adminMarketingService = {
     )
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
+
+  async listVoucherTemplates(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: { templates: [], total: 0, page: 1, limit: 50 }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.voucherTemplates.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getVoucherTemplate(templateId, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.get(endpoints.admin.marketing.voucherTemplates.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createVoucherTemplate(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.voucherTemplates.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateVoucherTemplate(templateId, body, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.voucherTemplates.update(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async sendVoucherForAcceptance(templateId, body, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherTemplates.sendForAcceptance(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listVoucherVendorRequests(templateId, params = {}, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.get(
+      endpoints.admin.marketing.voucherTemplates.vendorRequests(id),
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+        params,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async confirmVoucherVendorRequest(requestId, body = {}, options = {}) {
+    const id = String(requestId || '').trim()
+    if (!id) throw new Error('Request id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherVendorRequests.confirm(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateVoucherVendorExclusions(requestId, body, options = {}) {
+    const id = String(requestId || '').trim()
+    if (!id) throw new Error('Request id is required.')
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.voucherVendorRequests.exclusions(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async removeVoucherVendorRequest(requestId, options = {}) {
+    const id = String(requestId || '').trim()
+    if (!id) throw new Error('Request id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherVendorRequests.remove(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async resendVoucherVendorRequest(requestId, body, options = {}) {
+    const id = String(requestId || '').trim()
+    if (!id) throw new Error('Request id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherVendorRequests.resend(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async previewVoucherVendorApplicability(templateId, body, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherTemplates.previewApplicability(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /** M03 B6 — grant by phone or segment (Grant UI + CX limits = B10) */
+  async grantVoucher(templateId, body, options = {}) {
+    const id = String(templateId || '').trim()
+    if (!id) throw new Error('Template id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.voucherTemplates.grant(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /** M03 B10 — issued vouchers list */
+  async listIssuedVouchers(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: { vouchers: [], total: 0, page: 1, limit: 50 }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.vouchers.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async revokeVoucher(voucherId, options = {}) {
+    const id = String(voucherId || '').trim()
+    if (!id) throw new Error('Voucher id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.vouchers.revoke(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getVoucherSettlement(params = {}, options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.vouchers.settlement, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async exportVoucherSettlement(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to export.')
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.vouchers.settlementExport, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    const csv =
+      typeof response?.data === 'string'
+        ? response.data
+        : response?.data == null
+          ? ''
+          : String(response.data)
+    return { data: csv, meta: response?.meta ?? null }
+  },
+
+  /** M03 B7 — Distribution rules CRUD + MANUAL run */
+  async listDistributionRules(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return {
+        data: {
+          rules: [],
+          total: 0,
+          page: 1,
+          limit: 50,
+          deferredTriggers: [],
+          wiredTriggers: [],
+        },
+        meta: null,
+      }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.distributionRules.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createDistributionRule(body, options = {}) {
+    const response = await apiClient.post(
+      endpoints.admin.marketing.distributionRules.create,
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateDistributionRule(ruleId, body, options = {}) {
+    const id = String(ruleId || '').trim()
+    if (!id) throw new Error('Rule id is required.')
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.distributionRules.update(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async runDistributionRule(ruleId, body = {}, options = {}) {
+    const id = String(ruleId || '').trim()
+    if (!id) throw new Error('Rule id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.distributionRules.run(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
 }

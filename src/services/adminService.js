@@ -446,6 +446,66 @@ export const adminService = {
   unblockAdminReferralInviter(customerId, options = {}) {
     return adminMarketingService.unblockReferralInviter(customerId, options)
   },
+  listAdminVoucherTemplates(params, options = {}) {
+    return adminMarketingService.listVoucherTemplates(params, options)
+  },
+  getAdminVoucherTemplate(templateId, options = {}) {
+    return adminMarketingService.getVoucherTemplate(templateId, options)
+  },
+  createAdminVoucherTemplate(body, options = {}) {
+    return adminMarketingService.createVoucherTemplate(body, options)
+  },
+  updateAdminVoucherTemplate(templateId, body, options = {}) {
+    return adminMarketingService.updateVoucherTemplate(templateId, body, options)
+  },
+  sendAdminVoucherForAcceptance(templateId, body, options = {}) {
+    return adminMarketingService.sendVoucherForAcceptance(templateId, body, options)
+  },
+  listAdminVoucherVendorRequests(templateId, params, options = {}) {
+    return adminMarketingService.listVoucherVendorRequests(templateId, params, options)
+  },
+  confirmAdminVoucherVendorRequest(requestId, body, options = {}) {
+    return adminMarketingService.confirmVoucherVendorRequest(requestId, body, options)
+  },
+  updateAdminVoucherVendorExclusions(requestId, body, options = {}) {
+    return adminMarketingService.updateVoucherVendorExclusions(requestId, body, options)
+  },
+  removeAdminVoucherVendorRequest(requestId, options = {}) {
+    return adminMarketingService.removeVoucherVendorRequest(requestId, options)
+  },
+  resendAdminVoucherVendorRequest(requestId, body, options = {}) {
+    return adminMarketingService.resendVoucherVendorRequest(requestId, body, options)
+  },
+  previewAdminVoucherVendorApplicability(templateId, body, options = {}) {
+    return adminMarketingService.previewVoucherVendorApplicability(templateId, body, options)
+  },
+  grantAdminVoucher(templateId, body, options = {}) {
+    return adminMarketingService.grantVoucher(templateId, body, options)
+  },
+  listAdminIssuedVouchers(params, options = {}) {
+    return adminMarketingService.listIssuedVouchers(params, options)
+  },
+  revokeAdminVoucher(voucherId, options = {}) {
+    return adminMarketingService.revokeVoucher(voucherId, options)
+  },
+  getAdminVoucherSettlement(params, options = {}) {
+    return adminMarketingService.getVoucherSettlement(params, options)
+  },
+  exportAdminVoucherSettlement(params, options = {}) {
+    return adminMarketingService.exportVoucherSettlement(params, options)
+  },
+  listAdminDistributionRules(params, options = {}) {
+    return adminMarketingService.listDistributionRules(params, options)
+  },
+  createAdminDistributionRule(body, options = {}) {
+    return adminMarketingService.createDistributionRule(body, options)
+  },
+  updateAdminDistributionRule(ruleId, body, options = {}) {
+    return adminMarketingService.updateDistributionRule(ruleId, body, options)
+  },
+  runAdminDistributionRule(ruleId, body, options = {}) {
+    return adminMarketingService.runDistributionRule(ruleId, body, options)
+  },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)
   },

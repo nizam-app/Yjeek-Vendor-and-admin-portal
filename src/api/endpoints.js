@@ -334,6 +334,13 @@ export const endpoints = {
        */
       product: (productId) =>
         `/admin/stores/products/${encodeURIComponent(String(productId || '').trim())}`,
+      /**
+       * Confirmed: GET /admin/stores/vendors/:vendorId/catalog
+       * Catalog categories + products for voucher exclusion pickers (M03 B5).
+       * @param {string} vendorId
+       */
+      vendorCatalog: (vendorId) =>
+        `/admin/stores/vendors/${encodeURIComponent(String(vendorId || '').trim())}/catalog`,
     },
     storeTypes: {
       /** Confirmed: GET /admin/store-types/summary */
@@ -775,6 +782,44 @@ export const endpoints = {
           `/admin/marketing/referral/inviters/${encodeURIComponent(customerId)}/block`,
         unblockInviter: (customerId) =>
           `/admin/marketing/referral/inviters/${encodeURIComponent(customerId)}/unblock`,
+      },
+      /** OG §03 Admin › Marketing › Vouchers › Templates + vendor acceptance (M03 B2–B5) */
+      voucherTemplates: {
+        list: '/admin/marketing/voucher-templates',
+        create: '/admin/marketing/voucher-templates',
+        detail: (id) => `/admin/marketing/voucher-templates/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/voucher-templates/${encodeURIComponent(id)}`,
+        sendForAcceptance: (id) =>
+          `/admin/marketing/voucher-templates/${encodeURIComponent(id)}/send-for-acceptance`,
+        vendorRequests: (id) =>
+          `/admin/marketing/voucher-templates/${encodeURIComponent(id)}/vendor-requests`,
+        previewApplicability: (id) =>
+          `/admin/marketing/voucher-templates/${encodeURIComponent(id)}/preview-applicability`,
+        grant: (id) =>
+          `/admin/marketing/voucher-templates/${encodeURIComponent(id)}/grant`,
+      },
+      vouchers: {
+        list: '/admin/marketing/vouchers',
+        revoke: (id) => `/admin/marketing/vouchers/${encodeURIComponent(id)}/revoke`,
+        settlement: '/admin/marketing/vouchers/settlement',
+        settlementExport: '/admin/marketing/vouchers/settlement/export',
+      },
+      voucherVendorRequests: {
+        confirm: (requestId) =>
+          `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/confirm`,
+        exclusions: (requestId) =>
+          `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/exclusions`,
+        remove: (requestId) =>
+          `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/remove`,
+        resend: (requestId) =>
+          `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/resend`,
+      },
+      distributionRules: {
+        list: '/admin/marketing/distribution-rules',
+        create: '/admin/marketing/distribution-rules',
+        detail: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}`,
+        run: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}/run`,
       },
     },
     /**

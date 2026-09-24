@@ -9,10 +9,11 @@ export const MARKETING_VIEW_TABS = [
   { id: 'geofence', label: 'Geofence offers', path: '/admin/marketing/geofence' },
   { id: 'cashback', label: 'Cashback', path: '/admin/marketing/cashback' },
   { id: 'referral', label: 'Referral', path: '/admin/marketing/referral' },
+  { id: 'vouchers', label: 'Vouchers', path: '/admin/marketing/vouchers' },
 ]
 
 /**
- * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' }} props
+ * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' | 'vouchers' }} props
  */
 export function MarketingViewTabs({ active }) {
   const navigate = useNavigate()
