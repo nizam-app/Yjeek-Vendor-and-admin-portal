@@ -417,6 +417,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
   }
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
+  applyItemClassFields(body, form)
 
   return body
 }
@@ -482,8 +483,30 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
   }
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: true })
+  applyItemClassFields(body, form)
 
   return body
+}
+
+/**
+ * Delivery Fees v1 / D05 — item class flags (+ convert confirm when narrowing).
+ */
+function applyItemClassFields(body, form = {}) {
+  const classes =
+    form.itemClasses && typeof form.itemClasses === 'object' ? form.itemClasses : form
+
+  if (classes.allowsNormalItems !== undefined) {
+    body.allowsNormalItems = Boolean(classes.allowsNormalItems)
+  }
+  if (classes.allowsSpecialItems !== undefined) {
+    body.allowsSpecialItems = Boolean(classes.allowsSpecialItems)
+  }
+  if (form.confirmConvert === true) {
+    body.confirmConvert = true
+  }
+  if (form.convertAction === 'convert_to_normal' || form.convertAction === 'convert_to_special') {
+    body.convertAction = form.convertAction
+  }
 }
 
 /**
@@ -500,6 +523,17 @@ function applyStoreTypeIconFields(body, form = {}, { clearWhenEmpty = false } = 
     } else if (clearWhenEmpty) {
       body.iconUrl = null
     }
+  }
+}
+
+/** Default both on — OG §03 / D05. */
+export function normalizeItemClasses(value) {
+  if (!value || typeof value !== 'object') {
+    return { allowsNormalItems: true, allowsSpecialItems: true }
+  }
+  return {
+    allowsNormalItems: value.allowsNormalItems !== false,
+    allowsSpecialItems: value.allowsSpecialItems !== false,
   }
 }
 
@@ -533,6 +567,7 @@ export function mapAdminStoreTypeDetail(data) {
     orderModeLabels: Array.isArray(data.orderModeLabels)
       ? data.orderModeLabels.map((label) => String(label))
       : [],
+    itemClasses: normalizeItemClasses(data.itemClasses ?? data),
     structure: data.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
     subTypes: Array.isArray(data.subTypes)
       ? data.subTypes

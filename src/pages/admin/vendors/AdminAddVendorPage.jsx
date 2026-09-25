@@ -17,6 +17,7 @@ import { parseAdminPhone } from '../../../lib/adminPhone'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import AdminVendorImageUpload from '../../../components/admin/AdminVendorImageUpload'
+import AdminStoreTypeChangeModal from '../../../components/admin/management/AdminStoreTypeChangeModal'
 import { showError, showFlashMessage, showInfo, showSuccess } from '../../../utils/toast'
 import {
   matchAdminStoreTypeId,
@@ -649,6 +650,19 @@ export default function AdminAddVendorPage({ onBack }) {
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileError, setProfileError] = useState(null)
+  /** Baseline store type from last successful load/save — OG §10 change detection. */
+  const [savedStoreTypeId, setSavedStoreTypeId] = useState('')
+  const [storeTypeChangeChoice, setStoreTypeChangeChoice] = useState(null)
+  const [storeTypeChangeModal, setStoreTypeChangeModal] = useState({
+    open: false,
+    pendingStoreTypeId: '',
+    fromName: '',
+    toName: '',
+    preview: null,
+    previewLoading: false,
+    previewError: null,
+    choice: 'load_defaults',
+  })
   const [branches, setBranches] = useState(() => (useRealCreateApi ? [] : INITIAL_BRANCHES))
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [branchesError, setBranchesError] = useState(null)
@@ -1149,6 +1163,9 @@ export default function AdminAddVendorPage({ onBack }) {
             ? [String(matchedTypeId)]
             : []
 
+        setSavedStoreTypeId(matchedTypeId ? String(matchedTypeId) : '')
+        setStoreTypeChangeChoice(null)
+
         setForm((prev) => ({
           ...prev,
           storeName: vendor.name || '',
@@ -1454,7 +1471,25 @@ export default function AdminAddVendorPage({ onBack }) {
     setProfileError(null)
     setProfileSaving(true)
     try {
-      const response = await adminService.updateVendor(editVendorId, form)
+      const nextStoreTypeId = String(form.storeTypeId || '').trim()
+      const storeTypeChanged =
+        Boolean(savedStoreTypeId) &&
+        Boolean(nextStoreTypeId) &&
+        nextStoreTypeId !== String(savedStoreTypeId)
+
+      if (storeTypeChanged && !storeTypeChangeChoice) {
+        setProfileError(
+          'Confirm how to handle delivery settings when changing store type (Load defaults or Keep current).',
+        )
+        return false
+      }
+
+      const response = await adminService.updateVendor(editVendorId, {
+        ...form,
+        ...(storeTypeChanged && storeTypeChangeChoice
+          ? { deliverySettingsOnStoreTypeChange: storeTypeChangeChoice }
+          : {}),
+      })
       const vendor = response?.data
       if (vendor) {
         setForm((prev) => ({
@@ -1490,6 +1525,10 @@ export default function AdminAddVendorPage({ onBack }) {
           crNumber: vendor.crNumber ?? prev.crNumber,
           vatNumber: vendor.vatNumber ?? prev.vatNumber,
         }))
+        if (vendor.storeTypeId) {
+          setSavedStoreTypeId(String(vendor.storeTypeId))
+        }
+        setStoreTypeChangeChoice(null)
       }
       return true
     } catch (err) {
@@ -2080,18 +2119,79 @@ export default function AdminAddVendorPage({ onBack }) {
                       const value = e.target.value
                       const primary = storeTypes.find((t) => String(t.id) === String(value))
                       setCreateError(null)
-                      setForm((prev) => ({
-                        ...prev,
-                        catalogIds: value ? [value] : [],
-                        storeTypeId: value,
-                        storeType: primary?.name || '',
-                        categoryLabel: primary?.name || '',
-                        subcategoryId: '',
-                        storeSubTypeId: '',
-                        serviceSubTypeId: '',
-                        subCategory: 'None',
-                      }))
-                      setServiceModes([])
+
+                      const applyStoreTypeLocally = () => {
+                        setForm((prev) => ({
+                          ...prev,
+                          catalogIds: value ? [value] : [],
+                          storeTypeId: value,
+                          storeType: primary?.name || '',
+                          categoryLabel: primary?.name || '',
+                          subcategoryId: '',
+                          storeSubTypeId: '',
+                          serviceSubTypeId: '',
+                          subCategory: 'None',
+                        }))
+                        setServiceModes([])
+                        if (!value || value === String(savedStoreTypeId || '')) {
+                          setStoreTypeChangeChoice(null)
+                        }
+                      }
+
+                      // OG §10 — edit with an existing store type: confirm before overwrite.
+                      if (
+                        useRealStoreApi &&
+                        savedStoreTypeId &&
+                        value &&
+                        value !== String(savedStoreTypeId)
+                      ) {
+                        const fromType = storeTypes.find(
+                          (t) => String(t.id) === String(savedStoreTypeId),
+                        )
+                        setStoreTypeChangeModal({
+                          open: true,
+                          pendingStoreTypeId: value,
+                          fromName: fromType?.name || form.storeType || 'Current type',
+                          toName: primary?.name || 'New type',
+                          preview: null,
+                          previewLoading: true,
+                          previewError: null,
+                          choice: 'load_defaults',
+                        })
+                        adminService
+                          .getStoreTypeChangePreview(editVendorId, value)
+                          .then((res) => {
+                            setStoreTypeChangeModal((prev) =>
+                              prev.open && prev.pendingStoreTypeId === value
+                                ? {
+                                    ...prev,
+                                    preview: res?.data || null,
+                                    previewLoading: false,
+                                    previewError: null,
+                                    fromName: res?.data?.fromStoreTypeName || prev.fromName,
+                                    toName: res?.data?.toStoreTypeName || prev.toName,
+                                  }
+                                : prev,
+                            )
+                          })
+                          .catch((err) => {
+                            setStoreTypeChangeModal((prev) =>
+                              prev.open && prev.pendingStoreTypeId === value
+                                ? {
+                                    ...prev,
+                                    previewLoading: false,
+                                    previewError: formatApiErrorMessage(
+                                      err,
+                                      'Failed to load store-type change preview.',
+                                    ),
+                                  }
+                                : prev,
+                            )
+                          })
+                        return
+                      }
+
+                      applyStoreTypeLocally()
                     }}
                   >
                     <option value="">Select store type</option>
@@ -2734,6 +2834,61 @@ export default function AdminAddVendorPage({ onBack }) {
           </button>
         )}
       </div>
+
+      <AdminStoreTypeChangeModal
+        open={storeTypeChangeModal.open}
+        fromName={storeTypeChangeModal.fromName}
+        toName={storeTypeChangeModal.toName}
+        preview={storeTypeChangeModal.preview}
+        previewLoading={storeTypeChangeModal.previewLoading}
+        previewError={storeTypeChangeModal.previewError}
+        choice={storeTypeChangeModal.choice}
+        confirming={false}
+        onChoiceChange={(nextChoice) => {
+          setStoreTypeChangeModal((prev) => ({ ...prev, choice: nextChoice }))
+        }}
+        onCancel={() => {
+          setStoreTypeChangeModal({
+            open: false,
+            pendingStoreTypeId: '',
+            fromName: '',
+            toName: '',
+            preview: null,
+            previewLoading: false,
+            previewError: null,
+            choice: 'load_defaults',
+          })
+        }}
+        onConfirm={() => {
+          const value = storeTypeChangeModal.pendingStoreTypeId
+          const choice = storeTypeChangeModal.choice
+          const primary = storeTypes.find((t) => String(t.id) === String(value))
+          if (!value || !choice) return
+          setStoreTypeChangeChoice(choice)
+          setForm((prev) => ({
+            ...prev,
+            catalogIds: value ? [value] : [],
+            storeTypeId: value,
+            storeType: primary?.name || storeTypeChangeModal.toName || '',
+            categoryLabel: primary?.name || storeTypeChangeModal.toName || '',
+            subcategoryId: '',
+            storeSubTypeId: '',
+            serviceSubTypeId: '',
+            subCategory: 'None',
+          }))
+          setServiceModes([])
+          setStoreTypeChangeModal({
+            open: false,
+            pendingStoreTypeId: '',
+            fromName: '',
+            toName: '',
+            preview: null,
+            previewLoading: false,
+            previewError: null,
+            choice: 'load_defaults',
+          })
+        }}
+      />
 
       <LeaveWizardModal
         open={leaveModalOpen}

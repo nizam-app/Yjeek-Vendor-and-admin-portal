@@ -24,7 +24,9 @@ import AdminIconImageUpload from '../../../components/admin/AdminIconImageUpload
 import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
+import AdminItemClassConvertModal from '../../../components/admin/management/AdminItemClassConvertModal'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
+import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -81,6 +83,17 @@ const EMPTY_MODES = {
   Services: false,
 }
 
+const DEFAULT_ALLOWED_VEHICLES = { bike: true, car: true }
+const DEFAULT_ITEM_CLASSES = { allowsNormalItems: true, allowsSpecialItems: true }
+
+function normalizeAllowedVehicles(value) {
+  if (!value || typeof value !== 'object') return { ...DEFAULT_ALLOWED_VEHICLES }
+  return {
+    bike: value.bike !== undefined ? Boolean(value.bike) : true,
+    car: value.car !== undefined ? Boolean(value.car) : true,
+  }
+}
+
 function useRealStoreTypes() {
   return isAdminRealApiFeature('store-types') || !apiConfig.adminUseMockApi
 }
@@ -93,6 +106,8 @@ function serializeStoreTypeState(state) {
     visibleInApp: Boolean(state.visibleInApp),
     iconUrl: state.iconUrl || null,
     modes: state.modes || {},
+    allowedVehicles: normalizeAllowedVehicles(state.allowedVehicles),
+    itemClasses: normalizeItemClasses(state.itemClasses),
     structure: state.structure || 'SINGLE',
     subTypes: state.subTypes || [],
     categories: state.categories || [],
@@ -114,6 +129,8 @@ function mockInitialValues(storeTypeId, isEdit) {
       visibleInApp: true,
       iconUrl: null,
       modes: { ...EMPTY_MODES },
+      allowedVehicles: { ...DEFAULT_ALLOWED_VEHICLES },
+      itemClasses: { ...DEFAULT_ITEM_CLASSES },
       structure: 'SINGLE',
       subTypes: [],
       categories: [],
@@ -139,6 +156,8 @@ function mockInitialValues(storeTypeId, isEdit) {
       Scheduled: false,
       Services: false,
     },
+    allowedVehicles: { ...DEFAULT_ALLOWED_VEHICLES },
+    itemClasses: { ...DEFAULT_ITEM_CLASSES },
     structure: 'SINGLE',
     subTypes: [],
     categories: DEFAULT_CATEGORIES,
@@ -146,7 +165,7 @@ function mockInitialValues(storeTypeId, isEdit) {
   }
 }
 
-function initialFromDetail(detail) {
+function initialFromDetail(detail, allowedVehicles = null) {
   const slug = detail.internalKey || detail.slug || ''
 
   return {
@@ -156,6 +175,10 @@ function initialFromDetail(detail) {
     visibleInApp: Boolean(detail.visibleInApp),
     iconUrl: detail.iconUrl || null,
     modes: detail.modes || { ...EMPTY_MODES },
+    allowedVehicles: normalizeAllowedVehicles(
+      allowedVehicles ?? detail.allowedVehicles ?? DEFAULT_ALLOWED_VEHICLES,
+    ),
+    itemClasses: normalizeItemClasses(detail.itemClasses),
     structure: detail.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
     subTypes: Array.isArray(detail.subTypes)
       ? detail.subTypes.map((sub) => ({
@@ -518,6 +541,21 @@ function StoreTypeForm({
   const [visibleInApp, setVisibleInApp] = useState(initial.visibleInApp)
   const [iconUrl, setIconUrl] = useState(initial.iconUrl)
   const [modes, setModes] = useState(initial.modes)
+  const [allowedVehicles, setAllowedVehicles] = useState(() =>
+    normalizeAllowedVehicles(initial.allowedVehicles),
+  )
+  const [itemClasses, setItemClasses] = useState(() =>
+    normalizeItemClasses(initial.itemClasses),
+  )
+  const [itemClassConvertConfirm, setItemClassConvertConfirm] = useState(null)
+  const [convertModal, setConvertModal] = useState({
+    open: false,
+    disable: null,
+    preview: null,
+    previewLoading: false,
+    previewError: null,
+    choice: 'convert',
+  })
   const [structure, setStructure] = useState(initial.structure || 'SINGLE')
   const [subTypes, setSubTypes] = useState(
     Array.isArray(initial.subTypes) ? initial.subTypes : [],
@@ -548,6 +586,8 @@ function StoreTypeForm({
         visibleInApp,
         iconUrl,
         modes,
+        allowedVehicles,
+        itemClasses,
         structure,
         subTypes,
         categories,
@@ -560,6 +600,8 @@ function StoreTypeForm({
       visibleInApp,
       iconUrl,
       modes,
+      allowedVehicles,
+      itemClasses,
       structure,
       subTypes,
       categories,
@@ -590,10 +632,115 @@ function StoreTypeForm({
     isActive: visible,
     iconUrl: iconUrl || null,
     modes,
+    itemClasses: normalizeItemClasses(itemClasses),
+    ...(itemClassConvertConfirm
+      ? {
+          confirmConvert: true,
+          convertAction: itemClassConvertConfirm.convertAction,
+        }
+      : {}),
     structure,
     subTypes,
     publishStatus,
   })
+
+  const persistAllowedVehicles = async (targetStoreTypeId) => {
+    const id = String(targetStoreTypeId || '').trim()
+    if (!id) return
+    await adminService.updateAdminStoreTypeAllowedVehicles(id, {
+      bike: Boolean(allowedVehicles.bike),
+      car: Boolean(allowedVehicles.car),
+    })
+  }
+
+  const closeConvertModal = () => {
+    setConvertModal({
+      open: false,
+      disable: null,
+      preview: null,
+      previewLoading: false,
+      previewError: null,
+      choice: 'convert',
+    })
+  }
+
+  const applyItemClassNarrow = (disable) => {
+    const remaining = disable === 'SPECIAL' ? 'NORMAL' : 'SPECIAL'
+    setItemClasses({
+      allowsNormalItems: remaining === 'NORMAL',
+      allowsSpecialItems: remaining === 'SPECIAL',
+    })
+    setItemClassConvertConfirm({
+      convertAction: remaining === 'NORMAL' ? 'convert_to_normal' : 'convert_to_special',
+      disable,
+    })
+    closeConvertModal()
+  }
+
+  const handleConvertModalConfirm = () => {
+    if (convertModal.choice === 'cancel_change') {
+      closeConvertModal()
+      return
+    }
+    if (convertModal.disable === 'NORMAL' || convertModal.disable === 'SPECIAL') {
+      applyItemClassNarrow(convertModal.disable)
+    }
+  }
+
+  const requestItemClassToggle = async (key) => {
+    const currentlyOn = Boolean(itemClasses[key])
+    if (!currentlyOn) {
+      setItemClasses((prev) => ({ ...prev, [key]: true }))
+      setItemClassConvertConfirm(null)
+      setSaveError('')
+      return
+    }
+
+    const otherKey = key === 'allowsNormalItems' ? 'allowsSpecialItems' : 'allowsNormalItems'
+    if (!itemClasses[otherKey]) {
+      setSaveError('At least one item class (Normal or Special) must stay enabled.')
+      return
+    }
+
+    const disable = key === 'allowsNormalItems' ? 'NORMAL' : 'SPECIAL'
+
+    // Create / mock: no vendors yet — toggle locally without convert modal.
+    if (!isEditMode || !canSaveRemote || !storeTypeId) {
+      applyItemClassNarrow(disable)
+      setItemClassConvertConfirm(null)
+      return
+    }
+
+    setSaveError('')
+    setConvertModal({
+      open: true,
+      disable,
+      preview: null,
+      previewLoading: true,
+      previewError: null,
+      choice: 'convert',
+    })
+
+    try {
+      const result = await adminService.getAdminStoreTypeItemClassConvertPreview(
+        storeTypeId,
+        disable,
+      )
+      setConvertModal((prev) => ({
+        ...prev,
+        previewLoading: false,
+        preview: result?.data ?? null,
+        previewError: null,
+      }))
+    } catch (err) {
+      setConvertModal((prev) => ({
+        ...prev,
+        previewLoading: false,
+        preview: null,
+        previewError: formatApiErrorMessage(err, 'Failed to load convert preview.'),
+      }))
+    }
+  }
 
   const handleSave = async (intent = 'DRAFT') => {
     if (!canSaveRemote) {
@@ -631,8 +778,15 @@ function StoreTypeForm({
           storeTypeId,
           buildFormPayload(publishStatus, nextVisible),
         )
+        await persistAllowedVehicles(storeTypeId)
       } else {
-        await adminService.createAdminStoreType(buildFormPayload(publishStatus, nextVisible))
+        const created = await adminService.createAdminStoreType(
+          buildFormPayload(publishStatus, nextVisible),
+        )
+        const createdId = created?.data?.id
+        if (createdId) {
+          await persistAllowedVehicles(createdId)
+        }
       }
       allowLeave()
       onBack()
@@ -650,6 +804,13 @@ function StoreTypeForm({
 
   const toggleMode = (modeKey) => {
     setModes((prev) => ({ ...prev, [modeKey]: !prev[modeKey] }))
+  }
+
+  const toggleAllowedVehicle = (key) => {
+    setAllowedVehicles((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
   }
 
   const insertCategoryInTree = (nodes, parentId, child) => {
@@ -1137,6 +1298,59 @@ function StoreTypeForm({
         </Card>
 
         <Card
+          title="Allowed vehicles"
+          subtitle="Which vehicles may carry orders for this store type. A vendor may narrow this further, never widen it."
+        >
+          <div className="flex w-fit flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+              <span className="text-[13px] font-medium text-[#17231c]">Bike</span>
+              <Toggle
+                checked={Boolean(allowedVehicles.bike)}
+                onChange={() => toggleAllowedVehicle('bike')}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+              <span className="text-[13px] font-medium text-[#17231c]">Car</span>
+              <Toggle
+                checked={Boolean(allowedVehicles.car)}
+                onChange={() => toggleAllowedVehicle('car')}
+              />
+            </div>
+          </div>
+          <div className="mt-3 rounded-[8px] border border-[#b9cfe9] bg-[#eaf2fc] px-3.5 py-2.5 text-[12px] leading-[1.5] text-[#2b66a5]">
+            Set <strong>Car only</strong> where goods cannot travel by bike — for example pharmacy
+            items needing refrigeration. When both are allowed, the system forces Car if the order
+            exceeds the bike capacity threshold.
+          </div>
+        </Card>
+
+        <Card
+          title="Item classes"
+          subtitle="Which item classes stores of this type may carry. This is what opens or closes the choice for everything below."
+        >
+          <div className="flex w-fit flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+              <span className="text-[13px] font-medium text-[#17231c]">Normal items</span>
+              <Toggle
+                checked={Boolean(itemClasses.allowsNormalItems)}
+                onChange={() => requestItemClassToggle('allowsNormalItems')}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+              <span className="text-[13px] font-medium text-[#17231c]">Special items</span>
+              <Toggle
+                checked={Boolean(itemClasses.allowsSpecialItems)}
+                onChange={() => requestItemClassToggle('allowsSpecialItems')}
+              />
+            </div>
+          </div>
+          <div className="mt-3 rounded-[8px] border border-[#b9cfe9] bg-[#eaf2fc] px-3.5 py-2.5 text-[12px] leading-[1.5] text-[#2b66a5]">
+            Both on ⇒ the class can be chosen per vendor, per category and per item. Only one on ⇒
+            that class is forced everywhere and cannot be changed at any level.
+          </div>
+        </Card>
+
+        <Card
           title="Menu categories"
           action={(
             <button
@@ -1313,6 +1527,20 @@ function StoreTypeForm({
         </div>
       </div>
 
+      <AdminItemClassConvertModal
+        open={convertModal.open}
+        storeTypeName={displayName.trim() || 'this store type'}
+        disable={convertModal.disable}
+        preview={convertModal.preview}
+        previewLoading={convertModal.previewLoading}
+        previewError={convertModal.previewError}
+        choice={convertModal.choice}
+        confirming={saving}
+        onChoiceChange={(next) => setConvertModal((prev) => ({ ...prev, choice: next }))}
+        onCancel={closeConvertModal}
+        onConfirm={handleConvertModalConfirm}
+      />
+
       <AdminLeaveFormModal
         open={leaveModalOpen}
         busy={saving}
@@ -1345,17 +1573,41 @@ export default function AdminCreateStoreTypePage() {
     [storeTypeId, isEdit, useReal],
   )
 
+  const {
+    data: deliveryDefaults,
+    error: deliveryDefaultsError,
+    isLoading: deliveryDefaultsLoading,
+    refetch: refetchDeliveryDefaults,
+  } = useApiResource(
+    () => {
+      if (!isEdit || !useReal) {
+        return Promise.resolve({ data: null, meta: null })
+      }
+      return adminService.getAdminStoreTypeDeliveryDefaults(storeTypeId)
+    },
+    [storeTypeId, isEdit, useReal],
+  )
+
   const goBack = () => navigate('/admin/stores')
 
   if (isEdit && useReal) {
-    if (!detail) {
-      return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
+    if (!detail || (isLoading || (deliveryDefaultsLoading && !deliveryDefaults && !deliveryDefaultsError))) {
+      return (
+        <ApiState
+          isLoading={isLoading || deliveryDefaultsLoading}
+          error={error}
+          onRetry={() => {
+            refetch()
+            refetchDeliveryDefaults()
+          }}
+        />
+      )
     }
 
     return (
       <StoreTypeForm
         key={detail.id}
-        initial={initialFromDetail(detail)}
+        initial={initialFromDetail(detail, deliveryDefaults?.allowedVehicles)}
         onBack={goBack}
         storeTypeId={detail.id}
         mode="edit"

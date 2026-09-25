@@ -12,6 +12,7 @@ import AdminSuspendVendorModal from '../../../components/admin/AdminSuspendVendo
 import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { AdminVendorBranches } from '../../../components/admin/management/AdminVendorBranches'
 import { AdminVendorDeliveryZones } from '../../../components/admin/management/AdminVendorDeliveryZones'
+import AdminVendorDeliverySettings from '../../../components/admin/management/AdminVendorDeliverySettings'
 import { AdminVendorUsers } from '../../../components/admin/management/AdminVendorUsers'
 import { AdminVendorPromotions } from '../../../components/admin/management/AdminVendorPromotions'
 import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
@@ -1070,6 +1071,14 @@ export default function AdminVendorDetailPage() {
         </>
       ) : tab === 'Delivery zones' ? (
         <div className="space-y-3">
+          {isAdminRealApiFeature('vendors') ? (
+            <AdminVendorDeliverySettings
+              vendorId={vendorId}
+              storeName={data?.name}
+              branchCount={branchesCount || branches.length || data?.branches?.length || 0}
+              canEdit
+            />
+          ) : null}
           {deliveryZonesError ? (
             <p className="text-[12px] text-[#d64044]">{deliveryZonesError}</p>
           ) : null}

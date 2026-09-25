@@ -19,6 +19,11 @@ import {
   mapAdminChampDetailToForm,
 } from '../../../mappers/admin/mapAdminFleet'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
+import AdminChampEligibilityPanel, {
+  EMPTY_CHAMP_ELIGIBILITY,
+  normalizeChampEligibility,
+  validateChampEligibility,
+} from '../../../components/admin/management/AdminChampEligibilityPanel'
 import { adminService } from '../../../services/adminService'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import {
@@ -98,11 +103,20 @@ const EMPTY_CHAMP_FORM = {
   dailyLimit: '',
   orderLimit: '',
   onLimit: '',
+  eligibility: { ...EMPTY_CHAMP_ELIGIBILITY, specialStoreTypeIds: [] },
 }
 
 function serializeChampDraft(form, docs, selectedSlugs, specialTypes) {
+  const eligibility = normalizeChampEligibility(form?.eligibility)
   return JSON.stringify({
-    form,
+    form: {
+      ...form,
+      eligibility: {
+        enabledModes: [...eligibility.enabledModes].sort(),
+        scheduledClasses: eligibility.scheduledClasses,
+        specialStoreTypeIds: [...eligibility.specialStoreTypeIds].sort(),
+      },
+    },
     docs,
     selectedSlugs: [...(selectedSlugs || [])].sort(),
     specialTypes: [...(specialTypes || [])].sort(),
@@ -460,9 +474,17 @@ export default function AdminAddChampPage() {
           storeTypes: nextStoreTypes,
           specialTypes: nextSpecialTypes,
           docs: nextDocs,
+          eligibility: nextEligibility,
           ...nextForm
         } = mapped
-        setForm((prev) => ({ ...prev, ...nextForm }))
+        const hydratedEligibility = normalizeChampEligibility(
+          nextEligibility || nextForm.eligibility,
+        )
+        setForm((prev) => ({
+          ...prev,
+          ...nextForm,
+          eligibility: hydratedEligibility,
+        }))
         const hydratedSlugs = Array.isArray(nextSelectedSlugs)
           ? nextSelectedSlugs
           : Array.isArray(nextStoreTypes)
@@ -485,7 +507,11 @@ export default function AdminAddChampPage() {
           : []
         setEditBaseline(
           serializeChampDraft(
-            { ...EMPTY_CHAMP_FORM, ...nextForm },
+            {
+              ...EMPTY_CHAMP_FORM,
+              ...nextForm,
+              eligibility: hydratedEligibility,
+            },
             nextDocs && typeof nextDocs === 'object' ? { ...EMPTY_DOCS, ...nextDocs } : EMPTY_DOCS,
             hydratedSlugsFinal,
             specialFinal,
@@ -540,10 +566,20 @@ export default function AdminAddChampPage() {
       return
     }
 
+    const eligibilityCheck = validateChampEligibility(form.eligibility)
+    if (!eligibilityCheck.ok) {
+      setSubmitError(eligibilityCheck.message)
+      return
+    }
+
     setSaving(true)
     try {
       const payload = {
         ...form,
+        eligibility: eligibilityCheck.eligibility,
+        enabledModes: eligibilityCheck.eligibility.enabledModes,
+        scheduledClasses: eligibilityCheck.eligibility.scheduledClasses,
+        specialStoreTypeIds: eligibilityCheck.eligibility.specialStoreTypeIds,
         selectedSlugs,
         storeTypes: selectedSlugs,
         allowedCategories: selectedSlugs,
@@ -891,6 +927,26 @@ export default function AdminAddChampPage() {
           onDocChange={onDocChange}
         />
         <DocSection title="Vehicle insurance" slots={['insurance']} docs={docs} onDocChange={onDocChange} />
+
+        <Card title="Delivery eligibility">
+          <p className="mb-4 text-[12px] font-medium text-[#7c8780]">
+            What this champ can carry for hot food and scheduled orders. Editable any time — not
+            only at onboarding.
+          </p>
+          <AdminChampEligibilityPanel
+            value={normalizeChampEligibility(form.eligibility)}
+            onChange={(next) =>
+              setForm((prev) => ({
+                ...prev,
+                eligibility: normalizeChampEligibility(next),
+              }))
+            }
+            storeTypeOptions={storeTypeOptions}
+            storeTypesLoading={storeTypesLoading}
+            storeTypesError={storeTypesError}
+            disabled={saving || loadingEdit}
+          />
+        </Card>
 
         <Card title="Delivery permissions & limits">
           <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">

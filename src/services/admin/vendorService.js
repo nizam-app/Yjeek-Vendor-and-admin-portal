@@ -880,6 +880,216 @@ export const adminVendorService = {
   },
 
   /**
+   * Branch delivery settings v1 (modes + hot-food inheritance).
+   * Confirmed: GET /admin/vendors/:vendorId/locations/:locationId/delivery-settings
+   *
+   * @param {string} vendorId
+   * @param {string} locationId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getBranchDeliverySettings(vendorId, locationId, options = {}) {
+    const vid = String(vendorId || '').trim()
+    const lid = String(locationId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+    if (!lid) throw new Error('Location id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load branch delivery settings.')
+    }
+
+    const response = await apiClient.get(
+      endpoints.admin.vendors.locationDeliverySettings(vid, lid),
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Update branch delivery settings (mode toggles and/or hot-food field writes).
+   * Confirmed: PUT /admin/vendors/:vendorId/locations/:locationId/delivery-settings
+   *
+   * @param {string} vendorId
+   * @param {string} locationId
+   * @param {{ modes?: object, hotFoodOnDemand?: object, scheduled?: object }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async updateBranchDeliverySettings(vendorId, locationId, body = {}, options = {}) {
+    const vid = String(vendorId || '').trim()
+    const lid = String(locationId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+    if (!lid) throw new Error('Location id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update branch delivery settings.')
+    }
+
+    const response = await apiClient.put(
+      endpoints.admin.vendors.locationDeliverySettings(vid, lid),
+      body,
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Reset one hot-food field to retained defaultValue (state → inherited).
+   * Confirmed: POST .../locations/:locationId/delivery-settings/reset-field
+   *
+   * @param {string} vendorId
+   * @param {string} locationId
+   * @param {{ path: string }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async resetBranchDeliverySettingsField(vendorId, locationId, body = {}, options = {}) {
+    const vid = String(vendorId || '').trim()
+    const lid = String(locationId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+    if (!lid) throw new Error('Location id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to reset branch delivery fields.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.vendors.locationDeliverySettingsResetField(vid, lid),
+      body,
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Vendor delivery settings template (OG §09).
+   * Confirmed: GET /admin/vendors/:vendorId/delivery-settings
+   *
+   * @param {string} vendorId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getVendorDeliverySettings(vendorId, options = {}) {
+    const vid = String(vendorId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load vendor delivery settings.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.vendorDeliverySettings(vid), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Save vendor delivery settings template.
+   * Confirmed: PUT /admin/vendors/:vendorId/delivery-settings
+   *
+   * @param {string} vendorId
+   * @param {{ modes?: object, hotFoodOnDemand?: object, scheduled?: object }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async updateVendorDeliverySettings(vendorId, body = {}, options = {}) {
+    const vid = String(vendorId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update vendor delivery settings.')
+    }
+
+    const response = await apiClient.put(
+      endpoints.admin.vendors.vendorDeliverySettings(vid),
+      body,
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Reset one vendor-template hot-food field to retained defaultValue.
+   * Confirmed: POST .../delivery-settings/reset-field
+   *
+   * @param {string} vendorId
+   * @param {{ path: string }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async resetVendorDeliverySettingsField(vendorId, body = {}, options = {}) {
+    const vid = String(vendorId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to reset vendor delivery fields.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.vendors.vendorDeliverySettingsResetField(vid),
+      body,
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Push vendor template → all active branches (overwrite all fields).
+   * Confirmed: POST .../delivery-settings/push-to-branches — body must include confirm: true.
+   *
+   * @param {string} vendorId
+   * @param {{ confirm: true }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async pushVendorDeliverySettingsToBranches(vendorId, body = {}, options = {}) {
+    const vid = String(vendorId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+    if (body?.confirm !== true) {
+      throw new Error('Push requires confirm: true.')
+    }
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to push vendor delivery settings.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.vendors.vendorDeliverySettingsPushToBranches(vid),
+      body,
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Preview impact of changing vendor store type (OG §10 / D02 Batch 6).
+   * Confirmed: GET .../delivery-settings/store-type-change-preview?toStoreTypeId=
+   *
+   * @param {string} vendorId
+   * @param {string} toStoreTypeId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getStoreTypeChangePreview(vendorId, toStoreTypeId, options = {}) {
+    const vid = String(vendorId || '').trim()
+    const toId = String(toStoreTypeId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+    if (!toId) throw new Error('Target store type id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to preview store-type change.')
+    }
+
+    const response = await apiClient.get(
+      endpoints.admin.vendors.vendorStoreTypeChangePreview(vid, toId),
+      { ...options, scope: 'admin', feature: 'vendors' },
+    )
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
    * Get commission & fees.
    * Confirmed: GET /admin/vendors/:vendorId/commission
    *

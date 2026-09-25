@@ -525,6 +525,38 @@ function appendChampExtendedFields(body, form = {}, docs = {}) {
       : null
   if (specialItemTypes) body.specialItemTypes = specialItemTypes
 
+  // D07 Batch 4 — OG §07 delivery eligibility (progressive disclosure fields).
+  const eligibilitySource =
+    form.eligibility && typeof form.eligibility === 'object' ? form.eligibility : form
+  if (
+    Array.isArray(eligibilitySource.enabledModes) ||
+    eligibilitySource.scheduledClasses != null ||
+    Array.isArray(eligibilitySource.specialStoreTypeIds)
+  ) {
+    if (Array.isArray(eligibilitySource.enabledModes)) {
+      body.enabledModes = eligibilitySource.enabledModes
+        .map((mode) => String(mode || '').trim().toUpperCase())
+        .filter((mode) => mode === 'HOT_FOOD_ON_DEMAND' || mode === 'SCHEDULED')
+    }
+    if (eligibilitySource.scheduledClasses != null) {
+      const classes = String(eligibilitySource.scheduledClasses || '')
+        .trim()
+        .toUpperCase()
+      if (classes === 'NORMAL_ONLY' || classes === 'SPECIAL_ONLY' || classes === 'BOTH') {
+        body.scheduledClasses = classes
+      }
+    }
+    if (Array.isArray(eligibilitySource.specialStoreTypeIds)) {
+      body.specialStoreTypeIds = [
+        ...new Set(
+          eligibilitySource.specialStoreTypeIds
+            .map((id) => String(id || '').trim())
+            .filter(Boolean),
+        ),
+      ]
+    }
+  }
+
   if (form.orderLimit != null || form.perOrderCashLimit != null) {
     body.perOrderCashLimit = parseDailyCashLimit(form.perOrderCashLimit ?? form.orderLimit)
   }
@@ -797,6 +829,42 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
     vehicleType,
     specialItems: profile.specialItemsEnabled != null ? Boolean(profile.specialItemsEnabled) : true,
     specialTypes: Array.isArray(profile.specialItemTypes) ? profile.specialItemTypes : [],
+    eligibility: (() => {
+      const rawEligibility =
+        profile.eligibility && typeof profile.eligibility === 'object'
+          ? profile.eligibility
+          : profile
+      const enabledModes = Array.isArray(rawEligibility.enabledModes)
+        ? rawEligibility.enabledModes
+            .map((mode) => String(mode || '').trim().toUpperCase())
+            .filter((mode) => mode === 'HOT_FOOD_ON_DEMAND' || mode === 'SCHEDULED')
+        : []
+      const scheduledClassesRaw = String(rawEligibility.scheduledClasses || '')
+        .trim()
+        .toUpperCase()
+      const scheduledClasses =
+        scheduledClassesRaw === 'SPECIAL_ONLY' ||
+        scheduledClassesRaw === 'BOTH' ||
+        scheduledClassesRaw === 'NORMAL_ONLY'
+          ? scheduledClassesRaw
+          : 'NORMAL_ONLY'
+      const specialStoreTypeIds = Array.isArray(rawEligibility.specialStoreTypeIds)
+        ? [
+            ...new Set(
+              rawEligibility.specialStoreTypeIds
+                .map((id) => String(id || '').trim())
+                .filter(Boolean),
+            ),
+          ]
+        : []
+      return {
+        enabledModes: enabledModes.length
+          ? enabledModes
+          : ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
+        scheduledClasses,
+        specialStoreTypeIds,
+      }
+    })(),
     dailyLimit,
     orderLimit,
     onLimit: CASH_LIMIT_ACTION_TO_FORM[profile.cashLimitAction] || 'Stop cash orders',

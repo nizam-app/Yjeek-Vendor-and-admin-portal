@@ -402,6 +402,29 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
       .filter(Boolean)
   }
 
+  if (
+    form.deliverySettingsOnStoreTypeChange === 'load_defaults' ||
+    form.deliverySettingsOnStoreTypeChange === 'keep_current'
+  ) {
+    body.deliverySettingsOnStoreTypeChange = form.deliverySettingsOnStoreTypeChange
+  }
+
+  // OG §03 / D05 — vendor-level item class flags (Menu Settings).
+  if (form.allowsNormalItems !== undefined) {
+    body.allowsNormalItems = Boolean(form.allowsNormalItems)
+  }
+  if (form.allowsSpecialItems !== undefined) {
+    body.allowsSpecialItems = Boolean(form.allowsSpecialItems)
+  }
+  if (form.itemClasses && typeof form.itemClasses === 'object') {
+    if (form.itemClasses.allowsNormalItems !== undefined) {
+      body.allowsNormalItems = Boolean(form.itemClasses.allowsNormalItems)
+    }
+    if (form.itemClasses.allowsSpecialItems !== undefined) {
+      body.allowsSpecialItems = Boolean(form.itemClasses.allowsSpecialItems)
+    }
+  }
+
   if (Object.keys(body).length === 0) {
     throw new ApiError({ message: 'No store profile fields to update.' })
   }

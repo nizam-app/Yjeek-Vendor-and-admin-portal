@@ -265,6 +265,58 @@ export const endpoints = {
       deliveryZoneBranch: (vendorId, branchId) =>
         `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones/branches/${encodeURIComponent(branchId)}`,
       /**
+       * Delivery Fees v1 — branch delivery settings (D02).
+       * Confirmed: GET + PUT /admin/vendors/:vendorId/locations/:locationId/delivery-settings
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliverySettings: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-settings`,
+      /**
+       * Delivery Fees v1 — reset one inherited hot-food field (D02).
+       * Confirmed: POST .../locations/:locationId/delivery-settings/reset-field
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliverySettingsResetField: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-settings/reset-field`,
+      /**
+       * Delivery Fees v1 — admin fee dry-run (D03 Batch 4).
+       * Confirmed: POST .../locations/:locationId/delivery-fee/preview
+       * Body: { distanceKm, itemsNet }
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliveryFeePreview: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-fee/preview`,
+      /**
+       * Delivery Fees v1 — vendor template (D02 Batch 5 / OG §09).
+       * Confirmed: GET + PUT /admin/vendors/:vendorId/delivery-settings
+       * @param {string} vendorId
+       */
+      vendorDeliverySettings: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings`,
+      /**
+       * Confirmed: POST .../delivery-settings/reset-field
+       * @param {string} vendorId
+       */
+      vendorDeliverySettingsResetField: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/reset-field`,
+      /**
+       * Confirmed: POST .../delivery-settings/push-to-branches (body: { confirm: true })
+       * @param {string} vendorId
+       */
+      vendorDeliverySettingsPushToBranches: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/push-to-branches`,
+      /**
+       * Delivery Fees v1 — store-type change preview (D02 Batch 6 / OG §10).
+       * Confirmed: GET .../delivery-settings/store-type-change-preview?toStoreTypeId=
+       * @param {string} vendorId
+       * @param {string} toStoreTypeId
+       */
+      vendorStoreTypeChangePreview: (vendorId, toStoreTypeId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/store-type-change-preview?toStoreTypeId=${encodeURIComponent(toStoreTypeId)}`,
+      /**
        * Confirmed: GET/PATCH /admin/vendors/:vendorId/commission
        * @param {string} vendorId
        */
@@ -407,6 +459,28 @@ export const endpoints = {
        */
       badge: (storeTypeId, badgeId) =>
         `/admin/store-types/${encodeURIComponent(storeTypeId)}/badges/${encodeURIComponent(badgeId)}`,
+      /**
+       * Delivery Fees v1 — store-type defaults (D01).
+       * Confirmed: GET + PUT /admin/store-types/:storeTypeId/delivery-defaults
+       * @param {string} storeTypeId
+       */
+      deliveryDefaults: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/delivery-defaults`,
+      /**
+       * Delivery Fees v1 — allowed vehicles only.
+       * Confirmed: PUT /admin/store-types/:storeTypeId/allowed-vehicles
+       * @param {string} storeTypeId
+       */
+      allowedVehicles: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/allowed-vehicles`,
+      /**
+       * Delivery Fees v1 / D05 — item-class convert preview (OG §03).
+       * Confirmed: GET /admin/store-types/:storeTypeId/item-classes/convert-preview?disable=SPECIAL|NORMAL
+       * @param {string} storeTypeId
+       * @param {'NORMAL'|'SPECIAL'} disable
+       */
+      itemClassConvertPreview: (storeTypeId, disable) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/item-classes/convert-preview?disable=${encodeURIComponent(disable)}`,
     },
     /**
      * Confirmed SLA models (Postman folder 07).

@@ -86,6 +86,18 @@ export const adminService = {
   deleteAdminStoreTypeBadge(storeTypeId, badgeId, options = {}) {
     return adminStoreTypeService.deleteBadge(storeTypeId, badgeId, options)
   },
+  getAdminStoreTypeDeliveryDefaults(storeTypeId, options = {}) {
+    return adminStoreTypeService.getDeliveryDefaults(storeTypeId, options)
+  },
+  updateAdminStoreTypeAllowedVehicles(storeTypeId, vehicles, options = {}) {
+    return adminStoreTypeService.updateAllowedVehicles(storeTypeId, vehicles, options)
+  },
+  updateAdminStoreTypeDeliveryDefaults(storeTypeId, body, options = {}) {
+    return adminStoreTypeService.updateDeliveryDefaults(storeTypeId, body, options)
+  },
+  getAdminStoreTypeItemClassConvertPreview(storeTypeId, disable, options = {}) {
+    return adminStoreTypeService.getItemClassConvertPreview(storeTypeId, disable, options)
+  },
   getAdminFleetSummary(options = {}) {
     return adminFleetService.getFleetSummary(options)
   },
@@ -277,6 +289,30 @@ export const adminService = {
   },
   applyVendorDeliveryZonesToAll(vendorId, options = {}) {
     return adminVendorService.applyDeliveryZonesToAll(vendorId, options)
+  },
+  getBranchDeliverySettings(vendorId, locationId, options = {}) {
+    return adminVendorService.getBranchDeliverySettings(vendorId, locationId, options)
+  },
+  updateBranchDeliverySettings(vendorId, locationId, body, options = {}) {
+    return adminVendorService.updateBranchDeliverySettings(vendorId, locationId, body, options)
+  },
+  resetBranchDeliverySettingsField(vendorId, locationId, body, options = {}) {
+    return adminVendorService.resetBranchDeliverySettingsField(vendorId, locationId, body, options)
+  },
+  getVendorDeliverySettings(vendorId, options = {}) {
+    return adminVendorService.getVendorDeliverySettings(vendorId, options)
+  },
+  updateVendorDeliverySettings(vendorId, body, options = {}) {
+    return adminVendorService.updateVendorDeliverySettings(vendorId, body, options)
+  },
+  resetVendorDeliverySettingsField(vendorId, body, options = {}) {
+    return adminVendorService.resetVendorDeliverySettingsField(vendorId, body, options)
+  },
+  pushVendorDeliverySettingsToBranches(vendorId, body, options = {}) {
+    return adminVendorService.pushVendorDeliverySettingsToBranches(vendorId, body, options)
+  },
+  getStoreTypeChangePreview(vendorId, toStoreTypeId, options = {}) {
+    return adminVendorService.getStoreTypeChangePreview(vendorId, toStoreTypeId, options)
   },
   getVendorCommission(vendorId, options = {}) {
     return adminVendorService.getCommission(vendorId, options)
