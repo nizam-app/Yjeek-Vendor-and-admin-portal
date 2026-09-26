@@ -1,0 +1,17 @@
+---
+description: Admin Automation — no mock/demo data on any tab
+globs: "**/automation/**/*,**/adminAutomation*.mock.*,**/dispatchAutomation*,**/admin/automation/**"
+alwaysApply: false
+---
+
+# Automation: no mock / demo data
+
+Hard rule for **every** Admin Automation tab/page (Dispatch Rules, Champ Scoring, Stacking, Radius Expansion, Vendor Status, Scheduled Tiers, Pay on Delivery, Champ Status, Audit Log, and any future Automation screen):
+
+1. **Never ship or rely on mock/demo data** for Automation UI or its services.
+2. Data must come from **live APIs** (and SLA / dispatch rule / policy sources of truth where applicable).
+3. Do not add new `*.mock.js` usage for Automation screens; when touching a tab that still has mocks, **replace with real API wiring** — do not extend the mock.
+4. Feature flag `automation` (`isAutomationRealApi`) must be the live path; do not leave mock-only pages as the default for production work.
+5. Display values (thresholds, toggles, timelines) must not hardcode demo numbers when the backend/SLA already owns them.
+
+When implementing or reviewing any Automation page from now on, apply this rule first.

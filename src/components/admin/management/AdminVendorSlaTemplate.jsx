@@ -1104,6 +1104,13 @@ const scheduledTierFields = [
     type: 'duration',
     default: duration('00', '30', '00'),
   }),
+  withUnits({
+    key: 'paymentWindow',
+    label: 'Customer payment window (after accept)',
+    type: 'duration',
+    default: duration('00', '05', '00'),
+    hint: 'Next Day / Standard / Economy only. Same Day is always N/A (uses hot-food after-accept window).',
+  }),
 ]
 
 export const VENDOR_SLA_SECTIONS = [
@@ -1143,6 +1150,13 @@ export const VENDOR_SLA_SECTIONS = [
       { key: 'vpiPrep', label: 'VPI · Prep time weight', type: 'percent', default: percent('25', '=') },
       { key: 'vpiReliability', label: 'VPI · Reliability weight', type: 'percent', default: percent('50', '=') },
       { key: 'nonDelivery', label: 'Non-delivery investigation', type: 'duration', default: duration('00', '15', '00') },
+      withUnits({
+        key: 'paymentWindow',
+        label: 'Customer payment window (waiting → payment)',
+        type: 'duration',
+        default: duration('00', '05', '00'),
+        hint: 'On-demand and Same Day standard after-accept deadline',
+      }),
       { key: 'geoFence', label: 'GPS geo-fence check', type: 'geofence', default: number('50', '=') },
       { key: 'notifyDelay', label: 'Notify customer of delay', type: 'duration', default: duration('00', '10', '00') },
     ],
@@ -1165,6 +1179,13 @@ export const VENDOR_SLA_SECTIONS = [
       { key: 'reservationHonored', label: 'Reservation honored', type: 'percent', default: percent('100') },
       withUnits({ key: 'billDispute', label: 'Bill dispute report window', type: 'duration', default: duration('02', '00', '00') }),
       withUnits({ key: 'reservationNotice', label: 'Reservation notice (advance)', type: 'duration', default: duration('02', '00', '00', '≥') }),
+      withUnits({
+        key: 'paymentWindow',
+        label: 'Customer payment window (after accept)',
+        type: 'duration',
+        default: duration('00', '05', '00'),
+        hint: 'Scheduled + dine-in 5-minute payment window feature',
+      }),
       withUnits({ key: 'billQuality', label: 'Bill / quality review', type: 'duration', default: duration('04', '00', '00') }),
     ],
   },
@@ -1185,6 +1206,12 @@ export const VENDOR_SLA_SECTIONS = [
       },
       withUnits({ key: 'maxCustomerWait', label: 'Max customer wait', type: 'duration', default: duration('00', '15', '00') }),
       withUnits({ key: 'orderHold', label: 'Order hold (no-show)', type: 'duration', default: duration('00', '30', '00', '≥') }),
+      withUnits({
+        key: 'paymentWindow',
+        label: 'Customer payment window (after accept)',
+        type: 'duration',
+        default: duration('00', '02', '00'),
+      }),
       { key: 'onTimePrep', label: 'On-time prep', type: 'percent', default: percent('90') },
       withUnits({ key: 'notifyDelay', label: 'Notify customer of delay', type: 'duration', default: duration('00', '10', '00') }),
     ],

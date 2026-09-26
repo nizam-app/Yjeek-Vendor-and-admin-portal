@@ -121,6 +121,7 @@ test('Stacking fields round-trip and liveEnabled stays false', () => {
   assert.equal(editable.dropZoneRadiusKm.value, '2')
   assert.equal(editable.companionDropKm.value, '2')
   assert.equal(editable.longDistanceThresholdKm.value, '10')
+  assert.equal(editable.longDistanceThresholdKm.operator, '>')
   assert.equal(durationToSeconds(editable.holdWindow), 90)
   assert.equal(editable.reevaluateAtStage3, true)
   assert.equal(editable.interVendorPickupRadiusKm.value, '4')
@@ -132,12 +133,14 @@ test('Stacking fields round-trip and liveEnabled stays false', () => {
 
   editable.dropZoneRadiusKm = { operator: '≤', value: '1.5' }
   editable.companionDropKm = { operator: '≤', value: '1.2' }
+  editable.longDistanceThresholdKm = { operator: '>', value: '12' }
   editable.holdWindow = secondsToDuration(60, '≤')
   editable.reevaluateAtStage3 = false
   editable.trigger3Enabled = false
   editable.trigger1Enabled = false
   editable.requiredFailedOffers = { operator: '≥', value: '3' }
   editable.maxCarOrders = { operator: '≤', value: '2' }
+  editable.liveEnabled = false
 
   const withLiveTrue = deepCloneConfig(SAMPLE_CONFIG)
   withLiveTrue.stacking.liveEnabled = true
@@ -148,6 +151,7 @@ test('Stacking fields round-trip and liveEnabled stays false', () => {
   assert.equal(next.stacking.trigger1.maxPairwiseDropKm, 1.5)
   assert.equal(next.stacking.trigger1.enabled, false)
   assert.equal(next.stacking.trigger2.companionDropKm, 1.2)
+  assert.equal(next.stacking.trigger2.longDistanceKm, 12)
   assert.equal(next.stacking.trigger2.holdWindowSec, 60)
   assert.equal(next.stacking.trigger2.reevaluateFromRadiusStage, 99)
   assert.equal(next.stacking.trigger3.enabled, false)
@@ -190,9 +194,10 @@ test('Overview stacking activity maps empty safely', () => {
   assert.equal(rows[0].outcome, 'Stacked')
 })
 
-test('forceLiveEnabledFalse always clears live stacking', () => {
-  const cfg = forceLiveEnabledFalse({ stacking: { liveEnabled: true, x: 1 } })
-  assert.equal(cfg.stacking.liveEnabled, false)
+test('forceLiveEnabledFalse / stripForbiddenMutations only locks bike stacking', () => {
+  const cfg = forceLiveEnabledFalse({ stacking: { liveEnabled: true, bikeStackingEnabled: true, x: 1 } })
+  assert.equal(cfg.stacking.liveEnabled, true)
+  assert.equal(cfg.stacking.bikeStackingEnabled, false)
   assert.equal(cfg.stacking.x, 1)
 })
 
@@ -287,7 +292,7 @@ test('validateStackingEdits mirrors backend km clamps', () => {
   assert.match(validateStackingEdits({ maxCarOrders: { value: '5' } }), /Max car orders/)
 })
 
-test('Scoring display reads locked weights; applyScoringEdits does not change them', () => {
+test('Scoring display reads weights; applyScoringEdits patches them when valid', () => {
   const display = mapConfigToScoringDisplay(SAMPLE_CONFIG)
   assert.deepEqual(display, {
     etaWeight: 40,
@@ -295,9 +300,30 @@ test('Scoring display reads locked weights; applyScoringEdits does not change th
     activeLoadWeight: 20,
     categoryFitWeight: 10,
   })
-  const next = applyScoringEdits(SAMPLE_CONFIG)
-  assert.deepEqual(next.scoring, SAMPLE_CONFIG.scoring)
+  const unchanged = applyScoringEdits(SAMPLE_CONFIG)
+  assert.deepEqual(unchanged.scoring, SAMPLE_CONFIG.scoring)
+  assert.equal(unchanged.stacking.liveEnabled, false)
+
+  const next = applyScoringEdits(SAMPLE_CONFIG, {
+    etaWeight: 50,
+    cpiWeight: 20,
+    activeLoadWeight: 20,
+    categoryFitWeight: 10,
+  })
+  assert.equal(next.scoring.etaWeight, 50)
+  assert.equal(next.scoring.cpiWeight, 20)
   assert.equal(next.stacking.liveEnabled, false)
+
+  assert.throws(
+    () =>
+      applyScoringEdits(SAMPLE_CONFIG, {
+        etaWeight: 50,
+        cpiWeight: 30,
+        activeLoadWeight: 20,
+        categoryFitWeight: 10,
+      }),
+    /sum to 100/,
+  )
 })
 
 test('Full config PATCH path does not reset unrelated sections', () => {

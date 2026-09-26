@@ -361,8 +361,21 @@ export function parseChampPhone(rawPhone, defaultCountryCode = '+973') {
 function parseDailyCashLimit(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   const digits = String(value || '').replace(/[^\d.]/g, '')
+  if (!digits) return 0
   const numeric = Number(digits)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+/** Blank / empty → null (optional per-order cash limit). */
+function parseOptionalCashLimit(value) {
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const digits = raw.replace(/[^\d.]/g, '')
+  if (!digits) return null
+  const numeric = Number(digits)
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 /** Parse DD/MM/YYYY or YYYY-MM-DD → ISO date string (YYYY-MM-DD). */
@@ -525,14 +538,35 @@ function appendChampExtendedFields(body, form = {}, docs = {}) {
       : null
   if (specialItemTypes) body.specialItemTypes = specialItemTypes
 
-  if (form.orderLimit != null || form.perOrderCashLimit != null) {
-    body.perOrderCashLimit = parseDailyCashLimit(form.perOrderCashLimit ?? form.orderLimit)
+  const allowCash =
+    form.allowCash != null || form.podEnabled != null
+      ? Boolean(form.allowCash != null ? form.allowCash : form.podEnabled)
+      : null
+  if (allowCash != null) {
+    body.podEnabled = allowCash
+  }
+
+  // Optional per-order: blank → null (no per-order cap).
+  if (
+    form.orderLimit !== undefined ||
+    form.perOrderCashLimit !== undefined ||
+    allowCash === false
+  ) {
+    if (allowCash === false) {
+      body.perOrderCashLimit = null
+    } else {
+      body.perOrderCashLimit = parseOptionalCashLimit(
+        form.perOrderCashLimit ?? form.orderLimit,
+      )
+    }
   }
 
   const cashLimitAction =
-    CASH_LIMIT_ACTION_TO_API[form.onLimit] ||
-    CASH_LIMIT_ACTION_TO_API[form.cashLimitAction] ||
-    null
+    allowCash === false
+      ? 'STOP_CASH_ORDERS'
+      : CASH_LIMIT_ACTION_TO_API[form.onLimit] ||
+        CASH_LIMIT_ACTION_TO_API[form.cashLimitAction] ||
+        null
   if (cashLimitAction) body.cashLimitAction = cashLimitAction
 
   const documents = buildChampDocumentsPayload(docs, form)
@@ -591,6 +625,20 @@ export function mapAdminCreateChampRequest(form = {}) {
   }
 
   appendChampExtendedFields(body, form, docs)
+
+  // Keep POD float aligned with daily cash limit while dual fields coexist.
+  const allowCash = Boolean(form.allowCash ?? form.podEnabled)
+  body.podEnabled = allowCash
+  if (allowCash) {
+    body.podMaxFloat = body.dailyCashLimit
+    if (!Number.isFinite(body.dailyCashLimit) || body.dailyCashLimit <= 0) {
+      throw new ApiError({ message: 'Daily cash limit is required when Allow cash is enabled.' })
+    }
+  } else {
+    body.podMaxFloat = 0
+    body.perOrderCashLimit = null
+    body.cashLimitAction = 'STOP_CASH_ORDERS'
+  }
 
   if (!body.email) delete body.email
   if (!body.cprNumber) delete body.cprNumber
@@ -673,6 +721,26 @@ export function mapAdminUpdateChampRequest(form = {}) {
 
   appendChampExtendedFields(body, form, docs)
 
+  if (form.allowCash != null || form.podEnabled != null || form.dailyCashLimit != null || form.dailyLimit != null) {
+    const allowCash = Boolean(form.allowCash ?? form.podEnabled)
+    body.podEnabled = allowCash
+    if (allowCash) {
+      const daily =
+        body.dailyCashLimit != null
+          ? body.dailyCashLimit
+          : parseDailyCashLimit(form.dailyCashLimit ?? form.dailyLimit)
+      body.dailyCashLimit = daily
+      body.podMaxFloat = daily
+      if (!Number.isFinite(daily) || daily <= 0) {
+        throw new ApiError({ message: 'Daily cash limit is required when Allow cash is enabled.' })
+      }
+    } else {
+      body.podMaxFloat = 0
+      body.perOrderCashLimit = null
+      body.cashLimitAction = 'STOP_CASH_ORDERS'
+    }
+  }
+
   if (!Object.keys(body).length) {
     throw new ApiError({ message: 'No champ fields to update.' })
   }
@@ -725,11 +793,18 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
 
   const orderLimitRaw = profile.perOrderCashLimit
   const orderLimit =
-    typeof orderLimitRaw === 'number'
-      ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
-      : orderLimitRaw != null
+    orderLimitRaw == null || orderLimitRaw === ''
+      ? ''
+      : typeof orderLimitRaw === 'number'
         ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
-        : 'BHD 20.000'
+        : `BHD ${Number(orderLimitRaw).toFixed(3)}`
+
+  const allowCash =
+    profile.pod && typeof profile.pod === 'object' && profile.pod.enabled != null
+      ? Boolean(profile.pod.enabled)
+      : profile.podEnabled != null
+        ? Boolean(profile.podEnabled)
+        : false
 
   const tierRaw = profile.tier || detail.tier || 'BRONZE'
   const tier = mapFleetTierToApi(tierRaw) || String(tierRaw).toUpperCase() || 'BRONZE'
@@ -797,6 +872,7 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
     vehicleType,
     specialItems: profile.specialItemsEnabled != null ? Boolean(profile.specialItemsEnabled) : true,
     specialTypes: Array.isArray(profile.specialItemTypes) ? profile.specialItemTypes : [],
+    allowCash,
     dailyLimit,
     orderLimit,
     onLimit: CASH_LIMIT_ACTION_TO_FORM[profile.cashLimitAction] || 'Stop cash orders',

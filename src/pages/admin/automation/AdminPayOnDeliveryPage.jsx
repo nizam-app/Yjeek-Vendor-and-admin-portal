@@ -1,198 +1,46 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Plus } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiState } from '../../../components/admin/ApiState'
-import { AutomationCallout } from '../../../components/admin/automation/AutomationCallout'
 import { AutomationOperatorNumberField } from '../../../components/admin/automation/AutomationFields'
 import {
   AutomationFieldRow,
   AutomationSectionCard,
 } from '../../../components/admin/automation/AutomationSectionCard'
 import { PodChampPermissionsTable } from '../../../components/admin/automation/PodChampPermissionsTable'
+import { POD_UI } from '../../../components/admin/automation/podUiCatalog'
 import { Button } from '../../../components/admin/Button'
 import { ToggleSwitch } from '../../../components/admin/ui-editor/ExclusiveOfferRow'
 import { formatApiErrorMessage } from '../../../api/errors'
 import {
   clonePodEditable,
-  createPodEditableDefaults,
   editableFromPodApi,
-  getPayOnDeliveryMock,
   validatePodSettings,
-} from '../../../mocks/adminAutomationPayOnDelivery.mock'
+} from '../../../mappers/admin/mapAdminPodAutomation'
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
 import { adminPodAutomationService } from '../../../services/admin/podAutomationService'
 import { showError, showInfo, showSuccess } from '../../../utils/toast'
 
-function MockPayOnDeliveryPage() {
-  const catalog = useMemo(() => getPayOnDeliveryMock(), [])
-  const [baseline, setBaseline] = useState(() =>
-    clonePodEditable(catalog.editable || createPodEditableDefaults()),
-  )
-  const [draft, setDraft] = useState(() => clonePodEditable(baseline))
-  const [validationError, setValidationError] = useState(null)
-
-  function updateField(key, value) {
-    setDraft((prev) => ({ ...prev, [key]: value }))
-    setValidationError(null)
-  }
-
-  function tryPersist(message) {
-    const error = validatePodSettings(draft)
-    if (error) {
-      setValidationError(error)
-      showError(error)
-      return
-    }
-    const next = clonePodEditable(draft)
-    setBaseline(next)
-    setDraft(clonePodEditable(next))
-    setValidationError(null)
-    showSuccess(message)
-  }
-
-  function handleEnableSelected() {
-    showInfo(
-      'Enable POD for selected is frontend-only in this phase. No row selection UI is defined in the approved reference, so no bulk change was applied.',
-    )
-  }
-
-  function handleEdit(champ) {
-    showInfo(
-      `Edit POD for ${champ.name} is not fully specified in the approved reference. No editor modal was invented. Local mock only.`,
-    )
-  }
-
-  function handleNearLimit(champ) {
-    showInfo(
-      `${champ.name} is near the cash-float limit (${champ.currentCashBhd} / ${champ.maxFloatBhd} BHD). Display only — no account suspension was triggered.`,
-    )
-  }
-
-  function handleEnable(champ) {
-    const defaultFloat = Number.parseFloat(draft.defaultMaxFloatBhd?.value)
-    const maxFloat = Number.isFinite(defaultFloat) && defaultFloat > 0 ? defaultFloat : 100
-    setDraft((prev) => ({
-      ...prev,
-      champs: prev.champs.map((row) =>
-        row.id === champ.id
-          ? {
-              ...row,
-              podEnabled: true,
-              maxFloatBhd: maxFloat,
-              currentCashBhd: 0,
-              disputes30d: null,
-              effectivePodEligible: true,
-              floatBlocked: false,
-            }
-          : row,
-      ),
-    }))
-    showInfo(
-      `${champ.name} POD enabled in local mock only (max float ${maxFloat} BHD). Backend was not updated.`,
-    )
-  }
-
-  function handleReset() {
-    setDraft(clonePodEditable(baseline))
-    setValidationError(null)
-    showInfo('Pay on Delivery fields restored to the last saved local mock values.')
-  }
-
-  function handleSaveAutomation() {
-    tryPersist(
-      'Pay on Delivery saved locally via Save (frontend mock only). Backend was not updated.',
-    )
-  }
-
-  return (
-    <div className="pb-20">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[17px] font-bold text-[#111827]">{catalog.header.title}</h2>
-          <p className="mt-1 text-[12px] text-[#6b7280]">{catalog.header.subtitle}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handleEnableSelected}
-          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#1D6A33] bg-[#1D6A33] px-3.5 text-[12px] font-semibold text-white transition hover:bg-[#114225]"
-        >
-          <Plus size={14} strokeWidth={2.2} aria-hidden />
-          Enable POD for selected
-        </button>
+/**
+ * Automation → Pay on Delivery.
+ * Live Fleet + SystemConfig.platformSettings.pod — no mock/demo champs.
+ */
+export default function AdminPayOnDeliveryPage() {
+  if (!isAutomationRealApi()) {
+    return (
+      <div className="rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+        Enable the <code className="font-semibold">automation</code> feature flag
+        (<code>VITE_ADMIN_REAL_API_FEATURES</code>) to load Pay on Delivery from live Fleet and
+        SystemConfig. Mock data is not used.
       </div>
+    )
+  }
 
-      <AutomationCallout tone="amber" label={catalog.banner.label} className="!mx-0 mb-5">
-        <p>{catalog.banner.body}</p>
-      </AutomationCallout>
-
-      <AutomationSectionCard title={catalog.globalSettings.title}>
-        <AutomationFieldRow label={catalog.globalSettings.defaultFloatLabel}>
-          <AutomationOperatorNumberField
-            value={draft.defaultMaxFloatBhd}
-            unit={catalog.globalSettings.defaultFloatUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('defaultMaxFloatBhd', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.globalSettings.warningLabel}>
-          <AutomationOperatorNumberField
-            value={draft.warningThresholdPercent}
-            unit={catalog.globalSettings.warningUnit}
-            operatorLocked
-            operators={['≥']}
-            onChange={(next) =>
-              updateField('warningThresholdPercent', { ...next, operator: '≥' })
-            }
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.globalSettings.autoSuspendLabel}>
-          <div className="flex flex-wrap items-center gap-2">
-            <ToggleSwitch
-              checked={draft.autoSuspendOnBreach}
-              label={catalog.globalSettings.autoSuspendToggleLabel}
-              onChange={(next) => updateField('autoSuspendOnBreach', next)}
-            />
-            <span className="text-[12px] text-[#6b7280]">
-              {catalog.globalSettings.autoSuspendToggleLabel}
-            </span>
-          </div>
-        </AutomationFieldRow>
-        {validationError ? (
-          <div className="border-t border-[#f2cccc] bg-[#fff5f5] px-5 py-3 text-[12.5px] text-[#a93e42]">
-            {validationError}
-          </div>
-        ) : null}
-      </AutomationSectionCard>
-
-      <AutomationSectionCard title={catalog.champTable.title}>
-        <PodChampPermissionsTable
-          columns={catalog.champTable.columns}
-          champs={draft.champs}
-          warningThresholdPercent={draft.warningThresholdPercent?.value}
-          onEdit={handleEdit}
-          onEnable={handleEnable}
-          onNearLimit={handleNearLimit}
-        />
-      </AutomationSectionCard>
-
-      <AutomationCallout tone="amber" label={catalog.scoringNote.label} className="!mx-0 mt-5">
-        <p>{catalog.scoringNote.body}</p>
-      </AutomationCallout>
-
-      <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
-        <Button type="button" onClick={handleReset} className="rounded-full px-5">
-          Reset
-        </Button>
-        <Button type="button" primary onClick={handleSaveAutomation} className="rounded-full px-6">
-          Save POD settings
-        </Button>
-      </div>
-    </div>
-  )
+  return <RealPayOnDeliveryPage />
 }
 
 function RealPayOnDeliveryPage() {
-  const catalog = useMemo(() => getPayOnDeliveryMock(), [])
+  const catalog = POD_UI
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [baseline, setBaseline] = useState(null)
@@ -294,33 +142,7 @@ function RealPayOnDeliveryPage() {
   }
 
   function handleEdit(champ) {
-    const raw = window.prompt(
-      `Set per-Champ max float (BHD) for ${champ.name}.\nUse 0 to inherit the global default.`,
-      String(champ.maxFloatBhd ?? ''),
-    )
-    if (raw == null) return
-    const next = Number.parseFloat(raw)
-    if (!Number.isFinite(next) || next < 0) {
-      showError('Max float must be a non-negative number.')
-      return
-    }
-    setActionBusyId(champ.id)
-    adminPodAutomationService
-      .setChampPodMaxFloat(champ.id, next)
-      .then(async () => {
-        showSuccess(`${champ.name}: max float updated.`)
-        await reload()
-      })
-      .catch((err) => {
-        showError(formatApiErrorMessage(err, 'Failed to update max float.'))
-      })
-      .finally(() => setActionBusyId(null))
-  }
-
-  function handleEnableSelected() {
-    showInfo(
-      'Bulk enable is not implemented. Use Enable on individual Champ rows (Fleet API).',
-    )
+    navigate(`/admin/fleet/${encodeURIComponent(champ.id)}/edit`)
   }
 
   function handleReset() {
@@ -330,17 +152,19 @@ function RealPayOnDeliveryPage() {
     showInfo('POD draft restored to last loaded SystemConfig values.')
   }
 
-  if (loading) {
-    return <ApiState status="loading" message="Loading POD Fleet + SystemConfig…" />
+  if (loading && !draft) {
+    return <ApiState isLoading error={null} />
   }
 
-  if (error || !draft) {
+  if (error && !draft) {
+    return <ApiState isLoading={false} error={error} onRetry={() => reload()} />
+  }
+
+  if (!draft) {
     return (
-      <ApiState
-        status="error"
-        message={error || 'POD data unavailable.'}
-        onRetry={reload}
-      />
+      <div className="rounded-[10px] border border-[#e5e7eb] bg-white px-4 py-6 text-[13px] text-[#6b7280]">
+        POD data unavailable.
+      </div>
     )
   }
 
@@ -350,25 +174,33 @@ function RealPayOnDeliveryPage() {
         <div className="min-w-0">
           <h2 className="text-[17px] font-bold text-[#111827]">{catalog.header.title}</h2>
           <p className="mt-1 text-[12px] text-[#6b7280]">
-            Live Fleet + SystemConfig.platformSettings.pod · not DispatchRuleSet
+            Live Fleet + SystemConfig.platformSettings.pod · not DispatchRuleSet · no demo data
+            {draft.champs?.length != null ? ` · ${draft.champs.length} champs` : ''}
           </p>
         </div>
         <button
           type="button"
-          onClick={handleEnableSelected}
-          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#d1d5db] bg-white px-3.5 text-[12px] font-semibold text-[#6b7280]"
+          onClick={() => navigate('/admin/fleet')}
+          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#d1d5db] bg-white px-3.5 text-[12px] font-semibold text-[#374151] transition hover:border-[#1D6A33] hover:text-[#1D6A33]"
         >
-          <Plus size={14} strokeWidth={2.2} aria-hidden />
-          Enable POD for selected
+          Open Fleet
         </button>
       </div>
 
-      <AutomationCallout tone="amber" label={catalog.banner.label} className="!mx-0 mb-5">
-        <p>{catalog.banner.body}</p>
-      </AutomationCallout>
+      {error ? (
+        <div className="mb-4 rounded-[8px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[12.5px] text-[#92400e]">
+          {error}{' '}
+          <button type="button" className="font-semibold underline" onClick={() => reload()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <AutomationSectionCard title={catalog.globalSettings.title}>
-        <AutomationFieldRow label={catalog.globalSettings.defaultFloatLabel}>
+        <AutomationFieldRow
+          label={catalog.globalSettings.defaultFloatLabel}
+          help={catalog.globalSettings.defaultFloatHelp}
+        >
           <AutomationOperatorNumberField
             value={draft.defaultMaxFloatBhd}
             unit={catalog.globalSettings.defaultFloatUnit}
@@ -408,21 +240,21 @@ function RealPayOnDeliveryPage() {
       </AutomationSectionCard>
 
       <AutomationSectionCard title={catalog.champTable.title}>
-        <PodChampPermissionsTable
-          realMode
-          columns={catalog.champTable.columns}
-          champs={draft.champs}
-          warningThresholdPercent={draft.warningThresholdPercent?.value}
-          onEdit={actionBusyId ? undefined : handleEdit}
-          onEnable={actionBusyId ? undefined : handleEnable}
-          onDisable={actionBusyId ? undefined : handleDisable}
-          onReconcile={actionBusyId ? undefined : handleReconcile}
-        />
+        {draft.champs.length === 0 ? (
+          <p className="px-1 py-4 text-[12.5px] text-[#6b7280]">{catalog.champTable.empty}</p>
+        ) : (
+          <PodChampPermissionsTable
+            columns={catalog.champTable.columns}
+            champs={draft.champs}
+            warningThresholdPercent={draft.warningThresholdPercent?.value}
+            busyChampId={actionBusyId}
+            onEdit={actionBusyId ? undefined : handleEdit}
+            onEnable={actionBusyId ? undefined : handleEnable}
+            onDisable={actionBusyId ? undefined : handleDisable}
+            onReconcile={actionBusyId ? undefined : handleReconcile}
+          />
+        )}
       </AutomationSectionCard>
-
-      <AutomationCallout tone="amber" label={catalog.scoringNote.label} className="!mx-0 mt-5">
-        <p>{catalog.scoringNote.body}</p>
-      </AutomationCallout>
 
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
         <Button type="button" onClick={handleReset} disabled={saving} className="rounded-full px-5">
@@ -440,9 +272,4 @@ function RealPayOnDeliveryPage() {
       </div>
     </div>
   )
-}
-
-export default function AdminPayOnDeliveryPage() {
-  if (!isAutomationRealApi()) return <MockPayOnDeliveryPage />
-  return <RealPayOnDeliveryPage />
 }

@@ -88,6 +88,13 @@ export const endpoints = {
       flagVendor: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/flag-vendor`,
       cancel: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/cancel`,
       suspendChamp: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/suspend-champ`,
+      podCashApproval: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval`,
+      approvePodCash: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval/approve`,
+      rejectPodCash: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval/reject`,
+      forcePickup: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/force-pickup`,
     },
     incidents: {
       /**
@@ -440,6 +447,12 @@ export const endpoints = {
       overview: '/admin/dispatch-automation/overview',
       /** Confirmed: GET /admin/dispatch-automation/log */
       log: '/admin/dispatch-automation/log',
+      /** Confirmed: GET /admin/dispatch-automation/scheduled-tiers */
+      scheduledTiers: '/admin/dispatch-automation/scheduled-tiers',
+      /** Confirmed: GET /admin/dispatch-automation/champ-scoring */
+      champScoring: '/admin/dispatch-automation/champ-scoring',
+      /** Confirmed: GET /admin/dispatch-automation/champ-status */
+      champStatus: '/admin/dispatch-automation/champ-status',
     },
     /**
      * Dispatch rule sets (versioned config).

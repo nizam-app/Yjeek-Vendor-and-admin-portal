@@ -163,6 +163,38 @@ export const adminOrderService = {
     })
   },
 
+  async getPodCashApproval(orderId, options = {}) {
+    return apiClient.get(endpoints.admin.orders.podCashApproval(orderId), {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+  },
+
+  async approvePodCash(orderId, options = {}) {
+    return apiClient.post(
+      endpoints.admin.orders.approvePodCash(orderId),
+      {},
+      { ...options, scope: 'admin', feature: 'dashboard' },
+    )
+  },
+
+  async rejectPodCash(orderId, options = {}) {
+    return apiClient.post(
+      endpoints.admin.orders.rejectPodCash(orderId),
+      {},
+      { ...options, scope: 'admin', feature: 'dashboard' },
+    )
+  },
+
+  async forcePickup(orderId, body, options = {}) {
+    return apiClient.post(endpoints.admin.orders.forcePickup(orderId), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'dashboard',
+    })
+  },
+
   /** POST /admin/orders/:orderId/flag-vendor */
   async flagVendor(orderId, body, options = {}) {
     return apiClient.post(endpoints.admin.orders.flagVendor(orderId), body, {

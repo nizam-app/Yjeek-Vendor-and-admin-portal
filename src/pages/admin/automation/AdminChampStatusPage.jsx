@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { ApiState } from '../../../components/admin/ApiState'
 import { AutomationCallout } from '../../../components/admin/automation/AutomationCallout'
 import { AutomationDurationField } from '../../../components/admin/automation/AutomationFields'
 import {
@@ -13,13 +14,15 @@ import {
   ChampStatusSectionCard,
   ChampStatusTransitionTable,
 } from '../../../components/admin/automation/ChampStatusSectionCard'
+import {
+  applyLiveChampStatus,
+  getChampStatusCatalog,
+} from '../../../components/admin/automation/champStatusUiCatalog'
 import { Button } from '../../../components/admin/Button'
 import { ToggleSwitch } from '../../../components/admin/ui-editor/ExclusiveOfferRow'
-import {
-  cloneChampStatusEditable,
-  createChampStatusEditableDefaults,
-  getChampStatusMock,
-} from '../../../mocks/adminAutomationChampStatus.mock'
+import { formatApiErrorMessage } from '../../../api/errors'
+import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
+import { adminDispatchAutomationService } from '../../../services/admin/dispatchAutomationService'
 import { showInfo } from '../../../utils/toast'
 
 function RowPill({ pill }) {
@@ -67,23 +70,71 @@ function LabeledToggle({ checked, label }) {
 }
 
 /**
- * Reference documentation for Champ operational statuses.
- * Not connected to DispatchRuleSet or a Champ-status config API.
+ * Automation → Champ Status.
+ * Live caps / load factors / clocks from dispatch-automation/champ-status.
+ * Reference sections kept; developer comment callouts removed; inputs remain (read-only).
  */
 export default function AdminChampStatusPage() {
-  const catalog = useMemo(() => getChampStatusMock(), [])
-  const [display] = useState(() =>
-    cloneChampStatusEditable(catalog.editable || createChampStatusEditableDefaults()),
-  )
+  if (!isAutomationRealApi()) {
+    return (
+      <div className="rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+        Enable the <code className="font-semibold">automation</code> feature flag
+        (<code>VITE_ADMIN_REAL_API_FEATURES</code>) to load Champ Status from the live dispatch
+        engine. Mock data is not used.
+      </div>
+    )
+  }
 
-  function handleReferenceAction(action) {
+  return <RealChampStatusPage />
+}
+
+function RealChampStatusPage() {
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [catalog, setCatalog] = useState(null)
+  const [display, setDisplay] = useState(null)
+  const [meta, setMeta] = useState(null)
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await adminDispatchAutomationService.getChampStatus()
+      const live = result?.data
+      if (!live) {
+        throw new Error('Champ Status payload was empty.')
+      }
+      const base = getChampStatusCatalog()
+      const merged = applyLiveChampStatus(base, live)
+      setCatalog(merged.catalog)
+      setDisplay(merged.editable)
+      setMeta({
+        ruleSetId: live.ruleSetId,
+        ruleSetVersion: live.ruleSetVersion,
+        configSource: live.configSource,
+      })
+    } catch (err) {
+      setCatalog(null)
+      setDisplay(null)
+      setError(formatApiErrorMessage(err, 'Failed to load Champ Status from dispatch engine.'))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    reload()
+  }, [reload])
+
+  function handleOwnedAction(action) {
     showInfo(
-      `Champ Status is reference-only. ${action} does not save config or call an API. ` +
-        'Live status is managed by Champ app / fleet runtime (stored ONLINE/BUSY/OFFLINE; buyer labels AVAILABLE/ON_ORDER/OFFLINE) — not editable here.',
+      `${action} is owned by Champ app / Fleet runtime and DispatchRuleSet. ` +
+        'Champ Status is reference-only here — live ONLINE/BUSY/OFFLINE (buyer AVAILABLE/ON_ORDER/OFFLINE) and vehicle caps are not edited on this tab.',
     )
   }
 
   function renderControl(control, controlHint) {
+    if (!display) return null
     if (control === 'breakReminder') {
       return (
         <DurationControl
@@ -122,7 +173,7 @@ export default function AdminChampStatusPage() {
   }
 
   function renderRows(rows) {
-    return rows.map((row) => (
+    return (rows || []).map((row) => (
       <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
         {row.control ? renderControl(row.control, row.controlHint) : null}
         {row.pill ? <RowPill pill={row.pill} /> : null}
@@ -146,6 +197,22 @@ export default function AdminChampStatusPage() {
     ))
   }
 
+  if (loading && !catalog) {
+    return <ApiState isLoading error={null} />
+  }
+
+  if (error && !catalog) {
+    return <ApiState isLoading={false} error={error} onRetry={() => reload()} />
+  }
+
+  if (!catalog || !display) {
+    return (
+      <div className="rounded-[10px] border border-[#e5e7eb] bg-white px-4 py-6 text-[13px] text-[#6b7280]">
+        Champ Status unavailable.
+      </div>
+    )
+  }
+
   const {
     available,
     onOrder,
@@ -162,8 +229,21 @@ export default function AdminChampStatusPage() {
     <div className="pb-20">
       <div className="mb-5">
         <h2 className="text-[17px] font-bold text-[#111827]">{catalog.header.title}</h2>
-        <p className="mt-1 text-[12px] text-[#6b7280]">{catalog.header.subtitle}</p>
+        <p className="mt-1 text-[12px] text-[#6b7280]">
+          {catalog.header.subtitle}
+          {meta?.ruleSetVersion != null ? ` · RuleSet v${meta.ruleSetVersion}` : ''}
+          {' · No mock/demo data'}
+        </p>
       </div>
+
+      {error ? (
+        <div className="mb-4 rounded-[8px] border border-[#fde68a] bg-[#fffbeb] px-3.5 py-2.5 text-[12.5px] text-[#92400e]">
+          {error}{' '}
+          <button type="button" className="font-semibold underline" onClick={() => reload()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
 
       <ChampStatusSectionCard
         title={available.title}
@@ -202,27 +282,6 @@ export default function AdminChampStatusPage() {
         badge={stacked.badge}
         badgeClassName={stacked.badgeClassName}
       >
-        <AutomationCallout tone="blue" label={stacked.architectureCallout.label}>
-          <p>
-            Runtime{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">champ.status</code> stays{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">&apos;BUSY&apos;</code>{' '}
-            (buyer <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">ON_ORDER</code>)
-            throughout. The stacked label is computed at read time by the API layer: if{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">active_orders &gt; 1</code>,
-            format the display as{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">
-              ON_ORDER · STACKED (N)
-            </code>{' '}
-            where N ={' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">active_orders</code>. Never
-            store{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">ON_ORDER_STACKED_2</code>{' '}
-            as an enum value — you would need a new migration every time the cap changes and a status
-            write on every delivery confirmation. One integer field does the job.
-          </p>
-        </AutomationCallout>
-
         <AutomationSubsectionTitle>{stacked.maintenanceTitle}</AutomationSubsectionTitle>
         {renderRows(stacked.maintenanceRows)}
 
@@ -292,9 +351,11 @@ export default function AdminChampStatusPage() {
         badge={incident.badge}
         badgeClassName={incident.badgeClassName}
       >
-        <AutomationCallout tone={incident.callout.tone} label={incident.callout.label}>
-          <p>{incident.callout.body}</p>
-        </AutomationCallout>
+        {incident.callout ? (
+          <AutomationCallout tone={incident.callout.tone} label={incident.callout.label}>
+            <p>{incident.callout.body}</p>
+          </AutomationCallout>
+        ) : null}
         {renderRows(incident.rows)}
         <SchemaBlock codes={incident.schema} />
       </ChampStatusSectionCard>
@@ -322,15 +383,6 @@ export default function AdminChampStatusPage() {
         badge={fleetOccupied.badge}
         badgeTone={fleetOccupied.badgeTone}
       >
-        <AutomationCallout tone={fleetOccupied.callout.tone} label={fleetOccupied.callout.label}>
-          <p>
-            FLEET_OCCUPIED must exist in the{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">champ.status</code> enum
-            from day one even though the Fleet product does not launch at Phase 1. Adding an enum
-            value to an existing column after launch requires a migration across all active records.
-            Reserve it now at zero cost.
-          </p>
-        </AutomationCallout>
         {renderRows(fleetOccupied.rows)}
         <SchemaBlock codes={fleetOccupied.schema} label={fleetOccupied.schemaLabel} />
       </ChampStatusSectionCard>
@@ -344,21 +396,14 @@ export default function AdminChampStatusPage() {
         badge={scheduledLocked.badge}
         badgeClassName={scheduledLocked.badgeClassName}
       >
-        <AutomationCallout
-          tone={scheduledLocked.callout.tone}
-          label={scheduledLocked.callout.label}
-        >
-          <p>
-            The pre-lock fires automatically at a configurable window before{' '}
-            <code className="rounded bg-[#dbeafe] px-1 py-0.5 text-[11px]">
-              order.assigned_timeslot.pickup_at
-            </code>
-            . The Champ cannot receive any new on-demand offers from that moment. However, the lock
-            releases only when the scheduled order is marked delivered and confirmed — not when the
-            delivery window opens, not at a fixed time. If the order is cancelled during the lock
-            window, the Champ immediately returns to AVAILABLE for on-demand.
-          </p>
-        </AutomationCallout>
+        {scheduledLocked.callout ? (
+          <AutomationCallout
+            tone={scheduledLocked.callout.tone}
+            label={scheduledLocked.callout.label}
+          >
+            <p>{scheduledLocked.callout.body}</p>
+          </AutomationCallout>
+        ) : null}
 
         <div className="grid border-t border-[#e5e7eb] max-[1100px]:grid-cols-1 min-[1100px]:grid-cols-4">
           {scheduledLocked.timeline.map((step, index) => (
@@ -444,7 +489,9 @@ export default function AdminChampStatusPage() {
       <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
         <Button
           type="button"
-          onClick={() => handleReferenceAction('Reset')}
+          disabled
+          title="Champ Status is not configurable in Automation"
+          onClick={() => handleOwnedAction('Reset')}
           className="rounded-full px-5"
         >
           Reset
@@ -452,7 +499,9 @@ export default function AdminChampStatusPage() {
         <Button
           type="button"
           primary
-          onClick={() => handleReferenceAction('Save Automation')}
+          disabled
+          title="Champ Status is not configurable in Automation"
+          onClick={() => handleOwnedAction('Save Automation')}
           className="rounded-full px-6"
         >
           Save Automation

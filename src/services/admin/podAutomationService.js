@@ -8,6 +8,33 @@ import {
 } from '../../mappers/admin/mapAdminPodAutomation'
 import { automationRequestOptions } from './dispatchAutomationFeature'
 
+async function loadAllFleetChamps(requestOpts) {
+  const limit = 100
+  let page = 1
+  let total = Infinity
+  const champs = []
+  let lastMeta = null
+
+  while (champs.length < total && page <= 20) {
+    const response = await apiClient.get(endpoints.admin.fleet.champs, {
+      ...requestOpts,
+      params: { limit, page, statusTab: 'all' },
+    })
+    const data = response?.data ?? {}
+    const batch = Array.isArray(data.champs) ? data.champs : []
+    champs.push(...batch)
+    lastMeta = response?.meta ?? null
+    total = Number.isFinite(Number(data.total)) ? Number(data.total) : champs.length
+    if (!batch.length || batch.length < limit) break
+    page += 1
+  }
+
+  return {
+    data: { page: 1, limit: champs.length, total: champs.length, champs },
+    meta: lastMeta,
+  }
+}
+
 /**
  * Automation → Pay on Delivery real APIs (Fleet + SystemConfig).
  * Does NOT call DispatchRuleSet.
@@ -17,10 +44,8 @@ export const adminPodAutomationService = {
     const requestOpts = automationRequestOptions({ ...options, forceReal: true })
     const [settingsResponse, champsResponse] = await Promise.all([
       apiClient.get(endpoints.admin.settings.root, requestOpts),
-      apiClient.get(endpoints.admin.fleet.champs, {
-        ...requestOpts,
-        params: { limit: 100, page: 1, statusTab: 'all' },
-      }),
+      // Same Fleet list source as Fleet Management (statusTab=all), paginated to full total.
+      loadAllFleetChamps(requestOpts),
     ])
 
     const settingsRaw = settingsResponse?.data ?? null
@@ -36,6 +61,21 @@ export const adminPodAutomationService = {
         settings: settingsResponse?.meta ?? null,
         champs: champsResponse?.meta ?? null,
       },
+    }
+  },
+
+  /** Platform POD globals only (default max float ceiling for new champs). */
+  async getPlatformSettings(options = {}) {
+    const response = await apiClient.get(endpoints.admin.settings.root, {
+      ...options,
+      scope: 'admin',
+      feature: 'settings',
+      forceReal: true,
+    })
+    return {
+      settings: mapPodSettingsFromApi(response?.data),
+      raw: response?.data ?? null,
+      meta: response?.meta ?? null,
     }
   },
 
@@ -74,9 +114,10 @@ export const adminPodAutomationService = {
     if (!Number.isFinite(max) || max < 0) {
       throw new Error('Max float must be a non-negative number.')
     }
+    // Keep dual fields aligned while both exist in schema.
     const response = await apiClient.patch(
       endpoints.admin.fleet.champ(id),
-      { podMaxFloat: max },
+      { podMaxFloat: max, dailyCashLimit: max },
       automationRequestOptions({ ...options, forceReal: true }),
     )
     return { data: response?.data ?? null, meta: response?.meta ?? null }

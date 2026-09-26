@@ -29,6 +29,11 @@ export const adminDispatchAutomationService = {
         raw: data,
         kpis: mapOverviewToKpis(data),
         activeRuleSet: mapRuleSetMeta(data.activeRuleSet) ?? data.activeRuleSet ?? null,
+        stackingRollout: data.stackingRollout ?? null,
+        noChampCancelSec:
+          Number.isFinite(Number(data.noChampCancelSec)) && Number(data.noChampCancelSec) > 0
+            ? Math.floor(Number(data.noChampCancelSec))
+            : null,
         generatedAt: data.generatedAt,
       },
       meta: response?.meta ?? null,
@@ -54,6 +59,45 @@ export const adminDispatchAutomationService = {
     const shell = getAuditLogMock()
     return {
       data: mapAuditLogResponse(response?.data ?? {}, shell),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Read-only scheduled tiers: published SLA + dispatch policy (no mocks).
+   */
+  async getScheduledTiers(options = {}) {
+    const response = await apiClient.get(endpoints.admin.dispatchAutomation.scheduledTiers, {
+      ...automationRequestOptions(options),
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Read-only Champ Scoring catalog: DSA CPI table + factor notes (no mocks).
+   */
+  async getChampScoring(options = {}) {
+    const response = await apiClient.get(endpoints.admin.dispatchAutomation.champScoring, {
+      ...automationRequestOptions(options),
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Live Champ Status: runtime enum, caps, load factors, control clocks (no mocks).
+   */
+  async getChampStatus(options = {}) {
+    const response = await apiClient.get(endpoints.admin.dispatchAutomation.champStatus, {
+      ...automationRequestOptions(options),
+    })
+    return {
+      data: response?.data ?? null,
       meta: response?.meta ?? null,
     }
   },

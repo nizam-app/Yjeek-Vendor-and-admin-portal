@@ -44,6 +44,7 @@ export default function AdminReassignChampModal({
   currentChamp = null,
   reasons = [],
   incidentId = null,
+  overrideRules = false,
   onSuccess,
 }) {
   const [driverId, setDriverId] = useState('')
@@ -151,6 +152,7 @@ export default function AdminReassignChampModal({
         driverId: nextId,
         reason: String(reason).trim(),
         notifyCustomer,
+        overrideRules: Boolean(overrideRules),
         ...(incidentId ? { incidentId: String(incidentId) } : {}),
       })
       onSuccess?.()
@@ -180,12 +182,18 @@ export default function AdminReassignChampModal({
         <div className="flex shrink-0 items-start gap-3 px-5 pt-5 pb-3">
           <div className="min-w-0 flex-1">
             <h2 id="reassign-champ-title" className="text-[16px] font-bold text-[#17231c]">
-              Reassign champ
+              {overrideRules ? 'Manual dispatch (override)' : 'Reassign champ'}
             </h2>
+            {overrideRules ? (
+              <p className="mt-0.5 text-[11px] text-[#b45309]">
+                Overrides soft rules (offline / COD / distance). Stage 2+ expansion only.
+              </p>
+            ) : (
             <p className="mt-0.5 truncate text-[12px] text-[#7c8780]">
               #{headerOrder}
               {headerStatus ? ` · ${String(headerStatus).toLowerCase().replace(/_/g, ' ')}` : ''}
             </p>
+            )}
           </div>
           <button
             type="button"

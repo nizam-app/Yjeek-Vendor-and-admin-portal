@@ -21,6 +21,7 @@ import { AdminIncidentDetailModal } from '../../../components/admin/operations/A
 import { AdminIncidentDetailContent } from '../../../components/admin/operations/AdminIncidentDetailContent'
 import { AdminOrderTakeActionPanel } from '../../../components/admin/operations/AdminOrderTakeActionPanel'
 import AdminReassignChampModal from '../../../components/admin/AdminReassignChampModal'
+import AdminPodCashApprovalModal from '../../../components/admin/AdminPodCashApprovalModal'
 import AdminRedispatchOrderModal from '../../../components/admin/AdminRedispatchOrderModal'
 import AdminRefundModal from '../../../components/admin/AdminRefundModal'
 import AdminRefundApprovalsPanel from '../../../components/admin/AdminRefundApprovalsPanel'
@@ -857,6 +858,8 @@ function AdminLiveOrdersFullView({
   onOrderClick,
   onChatClick,
   onRefreshBoard,
+  onPodApprovalClick,
+  onManualDispatchClick,
 }) {
   const [refreshing, setRefreshing] = useState(false)
   const bucket = adminLiveOrdersBucketForColumnId(column.id)
@@ -980,6 +983,8 @@ function AdminLiveOrdersFullView({
             onIncidentClick={onIncidentClick}
             onContactClick={onContactClick}
             onOrderClick={onOrderClick}
+            onPodApprovalClick={onPodApprovalClick}
+            onManualDispatchClick={onManualDispatchClick}
           />
         ))}
       </div>
@@ -1006,6 +1011,8 @@ export default function AdminLiveOrdersPage() {
   const [incidentOrder, setIncidentOrder] = useState(null)
   const [selectedIncident, setSelectedIncident] = useState(null)
   const [activeChats, setActiveChats] = useState([])
+  const [podApprovalOrderId, setPodApprovalOrderId] = useState(null)
+  const [manualDispatchOrder, setManualDispatchOrder] = useState(null)
   const boardQuery = useMemo(() => parseLiveOrderQuery(searchParams), [searchParams])
 
   function patchBoardQuery(nextQuery) {
@@ -1294,6 +1301,8 @@ export default function AdminLiveOrdersPage() {
           onOrderClick={setSelectedOrder}
           onChatClick={openChatPanel}
           onRefreshBoard={handleRefresh}
+          onPodApprovalClick={(order) => setPodApprovalOrderId(order.orderId || order.id)}
+          onManualDispatchClick={setManualDispatchOrder}
         />
         {selectedOrder ? <AdminOrderDetailModal order={selectedOrder} onClose={() => setSelectedOrder(null)} /> : null}
         {incidentOrder ? (
@@ -1441,6 +1450,8 @@ export default function AdminLiveOrdersPage() {
                       onIncidentClick={setIncidentOrder}
                       onContactClick={openOrderChat}
                       onOrderClick={setSelectedOrder}
+                      onPodApprovalClick={(o) => setPodApprovalOrderId(o.orderId || o.id)}
+                      onManualDispatchClick={setManualDispatchOrder}
                     />
                   ))}
                   {(column.orders || []).length === 0 ? (
@@ -1541,6 +1552,32 @@ export default function AdminLiveOrdersPage() {
         onClose={closeChatPanel}
         onMarkedRead={handleChatMarkedRead}
       />
+      {podApprovalOrderId ? (
+        <AdminPodCashApprovalModal
+          open
+          orderId={podApprovalOrderId}
+          onClose={() => setPodApprovalOrderId(null)}
+          onDone={() => refetch()}
+        />
+      ) : null}
+      {manualDispatchOrder ? (
+        <AdminReassignChampModal
+          open
+          overrideRules
+          orderId={manualDispatchOrder.orderId || manualDispatchOrder.id}
+          orderNumber={manualDispatchOrder.id}
+          reasons={[
+            'Manual dispatch during radius expansion',
+            'Known Champ nearby — ops override',
+            'Ops override',
+          ]}
+          onClose={() => setManualDispatchOrder(null)}
+          onSuccess={async () => {
+            setManualDispatchOrder(null)
+            await refetch()
+          }}
+        />
+      ) : null}
     </div>
   )
 }

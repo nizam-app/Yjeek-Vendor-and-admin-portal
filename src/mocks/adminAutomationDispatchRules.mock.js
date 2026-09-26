@@ -125,7 +125,7 @@ export function getDispatchRulesMock() {
     vendorAcceptance: {
       title: 'Vendor Acceptance — Fully Automated · On-Demand',
       subtitle:
-        'Customer sees "Waiting for vendor to confirm" — no payment screen before acceptance · no dispatcher involvement in normal flow',
+        'Customer sees "Waiting for vendor to confirm" — no payment screen before acceptance',
       status: 'Core rule · always on',
       callout: {
         label: 'Dispatcher does not intervene in the acceptance flow',
@@ -144,7 +144,7 @@ export function getDispatchRulesMock() {
           id: 'breach',
           time: '60s',
           title: 'At Risk Breach',
-          body: 'SLA breach recorded. Order flag flips to At Risk on Live Dashboard. Breach timestamped. VPI component hit. Vendor can still accept.',
+          body: 'On-time SLA crossed. Live Dashboard flips to At Risk. alertedAt (at_risk_breach_at) recorded. VPI component hit. Vendor can still accept.',
           badge: '⚠ At Risk',
           tone: 'yellow',
         },
@@ -152,7 +152,7 @@ export function getDispatchRulesMock() {
           id: 'window',
           time: '61–119s',
           title: 'At Risk Window',
-          body: 'Every second beyond 60 is logged. Vendor can still accept during this window. No dispatcher action. Order card stays amber.',
+          body: 'Accept still allowed until the critical deadline. Order card stays amber. No dispatcher action.',
           badge: '⚠ At Risk',
           tone: 'orange',
         },
@@ -160,7 +160,7 @@ export function getDispatchRulesMock() {
           id: 'critical',
           time: '120s',
           title: 'Critical — Auto-Cancel',
-          body: 'System auto-cancels from vendor. Customer notified + full refund auto-triggered. Champ released. All events timestamped. Feeds VPI.',
+          body: 'System auto-cancels (VENDOR_NO_RESPONSE). Customer notified. Authorized payment voided/refunded. Champ/offers released if any. Feeds VPI.',
           badge: '✗ Critical → Cancelled',
           tone: 'red',
         },
@@ -176,7 +176,7 @@ export function getDispatchRulesMock() {
           id: 'critical-threshold',
           fieldKey: 'criticalThreshold',
           label: 'Critical threshold — auto-cancel fires',
-          help: 'System auto-cancels order from vendor at this point. Customer receives full refund automatically. Champ released. No dispatcher action required.',
+          help: 'System auto-cancels with cancellation_reason = VENDOR_NO_RESPONSE. Customer notified. Authorized payment voided. No dispatcher action required.',
         },
       ],
       events: [
@@ -194,7 +194,7 @@ export function getDispatchRulesMock() {
         },
         {
           id: 'breach',
-          label: 'at_risk_breach_at (when 60s crossed)',
+          label: 'at_risk_breach_at / alertedAt (when on-time SLA crossed)',
           badge: 'Recorded on breach',
           tone: 'warn',
         },
@@ -206,7 +206,7 @@ export function getDispatchRulesMock() {
         },
         {
           id: 'refund',
-          label: 'refund_triggered_at · refund_method = ORIGINAL_PAYMENT',
+          label: 'refund_triggered_at · void authorized payment (ORIGINAL_PAYMENT)',
           badge: 'Recorded on auto-cancel',
           tone: 'warn',
         },
@@ -226,8 +226,6 @@ export function getDispatchRulesMock() {
         ],
         derivedLabel: 'Flags are derived from elapsed time — never manually set or overridden',
         derivedBadge: 'Read-only on Live Dashboard',
-        dispatcherLabel: 'Dispatcher view on auto-cancel',
-        dispatcherBadge: 'Sees order flip Critical → Cancelled · no action required',
       },
     },
     editable: createDispatchRulesEditableDefaults(),

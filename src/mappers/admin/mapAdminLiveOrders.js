@@ -75,6 +75,15 @@ export function mapAdminLiveOrderItem(item) {
       name: champ?.name || 'Unassigned',
     },
     priorityLabel: item.priorityLabel ?? null,
+    lastDispatchRadiusKm: item.lastDispatchRadiusKm ?? null,
+    dispatchStartedAt: item.dispatchStartedAt ?? null,
+    dispatchDeadlineAt: item.dispatchDeadlineAt ?? null,
+    dispatchEscalation: item.dispatchEscalation ?? null,
+    podCashApproval:
+      item.podCashApproval && typeof item.podCashApproval === 'object'
+        ? item.podCashApproval
+        : null,
+    manualDispatchEnabled: Boolean(item.manualDispatchEnabled),
   }
 }
 

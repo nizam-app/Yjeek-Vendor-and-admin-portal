@@ -20,6 +20,7 @@ import {
 } from '../../../mappers/admin/mapAdminFleet'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import { adminService } from '../../../services/adminService'
+import { adminPodAutomationService } from '../../../services/admin/podAutomationService'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
@@ -27,6 +28,7 @@ import {
   adminUploadService,
   validateAdminImageFile,
 } from '../../../services/admin/uploadService'
+import { DEFAULT_POD_PLATFORM_SETTINGS } from '../../../mappers/admin/mapAdminPodAutomation'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -95,6 +97,7 @@ const EMPTY_CHAMP_FORM = {
   year: '',
   vehicleType: 'Bike',
   specialItems: false,
+  allowCash: false,
   dailyLimit: '',
   orderLimit: '',
   onLimit: '',
@@ -109,11 +112,26 @@ function serializeChampDraft(form, docs, selectedSlugs, specialTypes) {
   })
 }
 
-function Field({ label, children, className }) {
+function formatDailyCashLimitBhd(amount) {
+  const n = Number(amount)
+  if (!Number.isFinite(n) || n <= 0) return ''
+  return `BHD ${n.toFixed(3)}`
+}
+
+function parseDailyCashLimitInput(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const digits = String(value || '').replace(/[^\d.]/g, '')
+  if (!digits) return 0
+  const numeric = Number(digits)
+  return Number.isFinite(numeric) ? numeric : 0
+}
+
+function Field({ label, children, className, hint }) {
   return (
     <label className={cn('block min-w-0', className)}>
       <span className={labelClass}>{label}</span>
       {children}
+      {hint ? <span className="mt-1 block text-[11px] text-[#7c8780]">{hint}</span> : null}
     </label>
   )
 }
@@ -337,6 +355,9 @@ export default function AdminAddChampPage() {
   const [storeTypesError, setStoreTypesError] = useState('')
   const [suppliers, setSuppliers] = useState([])
   const [suppliersError, setSuppliersError] = useState('')
+  const [platformMaxFloatBhd, setPlatformMaxFloatBhd] = useState(
+    DEFAULT_POD_PLATFORM_SETTINGS.defaultMaxFloatBhd,
+  )
   const [saving, setSaving] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [createdResult, setCreatedResult] = useState(null)
@@ -436,6 +457,24 @@ export default function AdminAddChampPage() {
       cancelled = true
     }
   }, [useRealFleet, isEdit])
+
+  useEffect(() => {
+    if (!useRealFleet) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const result = await adminPodAutomationService.getPlatformSettings()
+        if (cancelled) return
+        const max = Number(result?.settings?.defaultMaxFloatBhd)
+        if (Number.isFinite(max) && max > 0) setPlatformMaxFloatBhd(max)
+      } catch {
+        // Keep DEFAULT_POD_PLATFORM_SETTINGS fallback — create still enforced on backend.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [useRealFleet])
 
   useEffect(() => {
     if (!isEdit || !champId || !useRealFleet) {
@@ -540,6 +579,20 @@ export default function AdminAddChampPage() {
       return
     }
 
+    if (form.allowCash) {
+      const daily = parseDailyCashLimitInput(form.dailyLimit)
+      if (!(daily > 0)) {
+        setSubmitError('Daily cash limit is required when Allow cash is enabled.')
+        return
+      }
+      if (daily > platformMaxFloatBhd) {
+        setSubmitError(
+          `Daily cash limit cannot exceed platform max float (BHD ${platformMaxFloatBhd}). Change Automation → Pay on Delivery default max to raise the ceiling.`,
+        )
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const payload = {
@@ -547,8 +600,9 @@ export default function AdminAddChampPage() {
         selectedSlugs,
         storeTypes: selectedSlugs,
         allowedCategories: selectedSlugs,
-        specialTypes,
-        specialItemTypes: specialTypes,
+        specialTypes: form.specialItems ? specialTypes : [],
+        specialItemTypes: form.specialItems ? specialTypes : [],
+        specialItems: Boolean(form.specialItems),
         docs,
       }
 
@@ -904,7 +958,13 @@ export default function AdminAddChampPage() {
               type="button"
               role="switch"
               aria-checked={form.specialItems}
-              onClick={() => setForm((prev) => ({ ...prev, specialItems: !prev.specialItems }))}
+              onClick={() =>
+                setForm((prev) => {
+                  const nextEnabled = !prev.specialItems
+                  if (!nextEnabled) setSpecialTypes([])
+                  return { ...prev, specialItems: nextEnabled }
+                })
+              }
               className={cn(
                 'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
                 form.specialItems ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
@@ -919,7 +979,7 @@ export default function AdminAddChampPage() {
             </button>
           </div>
 
-          <div className="mb-5">
+          <div className={cn('mb-5', !form.specialItems && 'pointer-events-none opacity-50')}>
             <p className="mb-2.5 text-[12px] font-medium text-[#7c8780]">Special item types allowed</p>
             <div className="flex flex-wrap gap-2">
               {SPECIAL_ITEMS.map((item) => (
@@ -927,7 +987,10 @@ export default function AdminAddChampPage() {
                   key={item}
                   label={item}
                   selected={specialTypes.includes(item)}
-                  onClick={() => toggleChip(specialTypes, setSpecialTypes, item)}
+                  onClick={() => {
+                    if (!form.specialItems) return
+                    toggleChip(specialTypes, setSpecialTypes, item)
+                  }}
                 />
               ))}
             </div>
@@ -955,25 +1018,85 @@ export default function AdminAddChampPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 max-[900px]:grid-cols-1">
-            <Field label="Daily cash limit (COD)">
+          <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+            <div>
+              <p className="text-[13px] font-bold text-[#17231c] mb-1">Allow cash (Pay on delivery)</p>
+              <p className="text-[12px] font-medium text-[#7c8780]">
+                When off, this champ only receives prepaid orders
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={form.allowCash}
+              onClick={() =>
+                setForm((prev) => {
+                  const next = !prev.allowCash
+                  if (!next) {
+                    return { ...prev, allowCash: false, onLimit: 'Stop cash orders' }
+                  }
+                  const hasLimit = Boolean(String(prev.dailyLimit || '').trim())
+                  return {
+                    ...prev,
+                    allowCash: true,
+                    onLimit: prev.onLimit || 'Stop cash orders',
+                    // New champs: prefill Automation default max float (cannot exceed it).
+                    dailyLimit:
+                      !isEdit && !hasLimit
+                        ? formatDailyCashLimitBhd(platformMaxFloatBhd)
+                        : prev.dailyLimit,
+                  }
+                })
+              }
+              className={cn(
+                'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
+                form.allowCash ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
+                  form.allowCash ? 'left-[23px]' : 'left-[3px]',
+                )}
+              />
+            </button>
+          </div>
+
+          <div
+            className={cn(
+              'grid grid-cols-3 gap-3 max-[900px]:grid-cols-1',
+              !form.allowCash && 'pointer-events-none opacity-50',
+            )}
+          >
+            <Field
+              label="Daily cash limit (COD) *"
+              hint={`Max BHD ${platformMaxFloatBhd} (Automation → Pay on Delivery default)`}
+            >
               <input
                 className={inputClass}
                 value={form.dailyLimit}
                 onChange={update('dailyLimit')}
-                placeholder={isEdit ? undefined : 'BHD 50.000'}
+                disabled={!form.allowCash}
+                placeholder={
+                  isEdit ? undefined : formatDailyCashLimitBhd(platformMaxFloatBhd) || 'BHD 100.000'
+                }
               />
             </Field>
-            <Field label="Per-order cash limit">
+            <Field label="Per-order cash limit (optional)">
               <input
                 className={inputClass}
                 value={form.orderLimit}
                 onChange={update('orderLimit')}
-                placeholder={isEdit ? undefined : 'BHD 20.000'}
+                disabled={!form.allowCash}
+                placeholder="Leave blank for no per-order cap"
               />
             </Field>
             <Field label="On reaching limit">
-              <Select value={form.onLimit} onChange={update('onLimit')}>
+              <Select
+                value={form.onLimit}
+                onChange={update('onLimit')}
+                disabled={!form.allowCash}
+              >
                 <option value="" disabled>
                   Select action
                 </option>

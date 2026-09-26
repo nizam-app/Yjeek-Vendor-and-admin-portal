@@ -173,7 +173,7 @@ function MockDispatchRulesPage() {
           <p>{catalog.vendorAcceptance.callout.body}</p>
         </AutomationCallout>
         <AcceptanceTimeline stages={catalog.vendorAcceptance.timeline} />
-        <AutomationSubsectionTitle>Configurable thresholds</AutomationSubsectionTitle>
+        <AutomationSubsectionTitle>Configurable thresholds (SLA-owned · read-only)</AutomationSubsectionTitle>
         {catalog.vendorAcceptance.thresholds.map((row) => {
           const lockedOperator = draft[row.fieldKey]?.operator || '≤'
           return (
@@ -182,9 +182,8 @@ function MockDispatchRulesPage() {
                 value={draft[row.fieldKey]}
                 operatorLocked
                 operators={[lockedOperator]}
-                onChange={(next) =>
-                  updateField(row.fieldKey, { ...next, operator: lockedOperator })
-                }
+                disabled
+                onChange={() => {}}
               />
             </AutomationFieldRow>
           )
@@ -214,11 +213,6 @@ function MockDispatchRulesPage() {
         <AutomationFieldRow label={catalog.vendorAcceptance.liveDashboard.derivedLabel} mutedLabel>
           <AutomationStatusPill tone="on">
             {catalog.vendorAcceptance.liveDashboard.derivedBadge}
-          </AutomationStatusPill>
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.vendorAcceptance.liveDashboard.dispatcherLabel} mutedLabel>
-          <AutomationStatusPill tone="off">
-            {catalog.vendorAcceptance.liveDashboard.dispatcherBadge}
           </AutomationStatusPill>
         </AutomationFieldRow>
       </AutomationSectionCard>
@@ -625,7 +619,7 @@ function RealDispatchRulesPage() {
           const onSec = slaEffective.hotFood?.onTimeThresholdSec
           const label =
             row.id === 'breach' && Number.isFinite(onSec)
-              ? `at_risk_breach_at (when ${onSec}s crossed)`
+              ? `at_risk_breach_at / alertedAt (when ${onSec}s crossed)`
               : row.label
           return (
             <AutomationFieldRow key={row.id} label={label}>
@@ -654,11 +648,6 @@ function RealDispatchRulesPage() {
         <AutomationFieldRow label={catalog.vendorAcceptance.liveDashboard.derivedLabel} mutedLabel>
           <AutomationStatusPill tone="on">
             {catalog.vendorAcceptance.liveDashboard.derivedBadge}
-          </AutomationStatusPill>
-        </AutomationFieldRow>
-        <AutomationFieldRow label={catalog.vendorAcceptance.liveDashboard.dispatcherLabel} mutedLabel>
-          <AutomationStatusPill tone="off">
-            {catalog.vendorAcceptance.liveDashboard.dispatcherBadge}
           </AutomationStatusPill>
         </AutomationFieldRow>
       </AutomationSectionCard>
