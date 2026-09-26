@@ -16,18 +16,24 @@ import { AdminVendorUsers } from '../../../components/admin/management/AdminVend
 import { AdminVendorPromotions } from '../../../components/admin/management/AdminVendorPromotions'
 import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
 import { AdminVendorSla } from '../../../components/admin/management/AdminVendorSla'
-import { AdminVendorMenuImport } from '../../../components/admin/management/AdminVendorMenuImport'
+import { AdminVendorMenuSettings } from '../../../components/admin/management/AdminVendorMenuSettings'
 import { cn } from '../../../components/admin/cn'
 import {
   emptyAdminDeliveryZones,
   mapAdminDeliveryZoneOverridesFromBranches,
 } from '../../../mappers/admin/mapAdminVendors'
 
+function normalizeVendorDetailTab(raw) {
+  const tab = String(raw || '').trim()
+  if (tab === 'Menu import') return 'Menu Settings'
+  return tab || 'Overview'
+}
+
 export default function AdminVendorDetailPage() {
   const { vendorId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const [tab, setTab] = useState(location.state?.tab ?? 'Overview')
+  const [tab, setTab] = useState(normalizeVendorDetailTab(location.state?.tab ?? 'Overview'))
   const [storeOnline, setStoreOnline] = useState(null)
   const [storeVisible, setStoreVisible] = useState(null)
   const [forceCloseOpen, setForceCloseOpen] = useState(false)
@@ -69,7 +75,7 @@ export default function AdminVendorDetailPage() {
   )
 
   useEffect(() => {
-    if (location.state?.tab) setTab(location.state.tab)
+    if (location.state?.tab) setTab(normalizeVendorDetailTab(location.state.tab))
   }, [location.state?.tab])
 
   useEffect(() => {
@@ -1137,10 +1143,11 @@ export default function AdminVendorDetailPage() {
             </div>
           )}
         </div>
-      ) : tab === 'Menu import' ? (
-        <AdminVendorMenuImport
+      ) : tab === 'Menu Settings' || tab === 'Menu import' ? (
+        <AdminVendorMenuSettings
           vendorId={data.backendId || vendorId}
           storeName={data.name}
+          initialSubTab={location.state?.menuSettingsTab === 'import' ? 'import' : 'menu'}
         />
       ) : (
         <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
