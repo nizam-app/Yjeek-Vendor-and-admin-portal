@@ -16,7 +16,15 @@ import {
 import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
 import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
-import AdminBranchDeliverySettings from '../../../components/admin/management/AdminBranchDeliverySettings'
+import AdminBranchDeliverySettings, {
+  BRANCH_DELIVERY_MODE_ORDER,
+  buildBranchDeliveryModesPayload,
+  previewBranchDeliveryModes,
+} from '../../../components/admin/management/AdminBranchDeliverySettings'
+import {
+  buildHotFoodDefaultsPayload,
+  hotFoodSeedMissingMessage,
+} from '../../../components/admin/management/AdminStoreTypeHotFoodDefaults'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -92,6 +100,25 @@ function Field({ label, children, className = '' }) {
       {children}
     </label>
   )
+}
+
+function formatAreaCity(area, city) {
+  const clean = (value) => {
+    const text = String(value || '').trim()
+    if (!text || /governorate/i.test(text)) return ''
+    return text
+  }
+  const place = clean(area)
+  const town = clean(city)
+  if (place && town && place.toLowerCase() !== town.toLowerCase()) return `${place}, ${town}`
+  return town || place
+}
+
+function orderModeLocks(modeGate) {
+  return {
+    PICKUP: Boolean(modeGate?.ready && modeGate.showPickup && !modeGate.canTogglePickup),
+    DINE_IN: Boolean(modeGate?.ready && modeGate.showDineIn && !modeGate.canToggleDineIn),
+  }
 }
 
 function Toggle({ checked, onChange, label, disabled = false }) {
@@ -471,7 +498,7 @@ export default function AdminAddVendorBrunchs() {
   const [loadError, setLoadError] = useState(null)
   const [form, setForm] = useState(() => ({
     name: '',
-    areaCity: 'Seef',
+    areaCity: '',
     address: '',
     phone: '',
     pinnedLocation: '',
@@ -508,6 +535,12 @@ export default function AdminAddVendorBrunchs() {
     toggleableModes: [],
     ready: false,
   })
+  const [supportedOrderModes, setSupportedOrderModes] = useState([])
+  const [orderModesReady, setOrderModesReady] = useState(false)
+  const [draftDeliveryModes, setDraftDeliveryModes] = useState(null)
+  const [draftHotFood, setDraftHotFood] = useState(null)
+  const [createdBranchId, setCreatedBranchId] = useState(null)
+  const draftModesEdited = useRef(false)
   /** Store type display name for Delivery Settings seed banner (OG §02). */
   const [storeTypeName, setStoreTypeName] = useState('')
   const [freeDeliveryEnabled, setFreeDeliveryEnabled] = useState(true)
@@ -633,12 +666,22 @@ export default function AdminAddVendorBrunchs() {
         setStoreTypeName(
           String(storeType?.name || storeType?.title || storeType?.label || '').trim(),
         )
+        setSupportedOrderModes(
+          Array.isArray(storeType?.supportedOrderModes)
+            ? storeType.supportedOrderModes.map((code) => String(code))
+            : [],
+        )
+        setOrderModesReady(true)
         const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
         const vendorModeLabels = mapAdminServiceModesToLabels(modes)
         setModeGate(buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: false }))
       })
       .catch((err) => {
-        if (!cancelled) setLoadError(err?.message || 'Failed to load branch.')
+        if (!cancelled) {
+          setLoadError(err?.message || 'Failed to load branch.')
+          setSupportedOrderModes([])
+          setOrderModesReady(true)
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -659,22 +702,42 @@ export default function AdminAddVendorBrunchs() {
     const vendorModeLabels = Array.isArray(draft?.serviceModes) ? draft.serviceModes : []
 
     if (!draftStoreTypeId || !isAdminRealApiFeature('vendors')) {
+      setSupportedOrderModes([])
+      setOrderModesReady(true)
       setModeGate(buildBranchModeGate({ storeType: null, vendorModeLabels, isWizardDraft: true }))
       return undefined
     }
+
+    setOrderModesReady(false)
 
     adminService
       .listStoreTypes()
       .then((response) => {
         if (cancelled) return
-        const storeTypes = response?.data?.storeTypes || []
+        const payload = response?.data
+        const storeTypes = Array.isArray(payload?.storeTypes)
+          ? payload.storeTypes
+          : Array.isArray(payload?.items)
+            ? payload.items
+            : []
         const storeType = storeTypes.find((row) => String(row.id) === draftStoreTypeId) || null
+        setStoreTypeName(
+          String(storeType?.name || storeType?.title || storeType?.label || '').trim(),
+        )
+        setSupportedOrderModes(
+          Array.isArray(storeType?.supportedOrderModes)
+            ? storeType.supportedOrderModes.map((code) => String(code))
+            : [],
+        )
+        setOrderModesReady(true)
         setModeGate(
           buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: true }),
         )
       })
       .catch(() => {
         if (!cancelled) {
+          setSupportedOrderModes([])
+          setOrderModesReady(true)
           setModeGate(buildBranchModeGate({ storeType: null, vendorModeLabels, isWizardDraft: true }))
         }
       })
@@ -748,6 +811,10 @@ export default function AdminAddVendorBrunchs() {
     if (!src) return
     if (typeof src.allowsPickup === 'boolean') setAllowPickup(src.allowsPickup)
     if (typeof src.allowsDineIn === 'boolean') setAllowDineIn(src.allowsDineIn)
+    if (src.deliveryModes && typeof src.deliveryModes === 'object') {
+      draftModesEdited.current = true
+      setDraftDeliveryModes(src.deliveryModes)
+    }
   }, [useRealBranchApi, isNewBranch, state?.branch])
 
   // If store type drops a mode, force branch flags off in UI state.
@@ -756,6 +823,75 @@ export default function AdminAddVendorBrunchs() {
     if (!modeGate.showPickup) setAllowPickup(false)
     if (!modeGate.showDineIn) setAllowDineIn(false)
   }, [modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
+
+  const showPreviewModes = !useRealBranchApi || isNewBranch
+  const modeLocks = useMemo(
+    () => orderModeLocks(modeGate),
+    [modeGate],
+  )
+  const supportedModesKey = supportedOrderModes.join('|')
+  const modeLockKey = `${modeLocks.PICKUP ? 1 : 0}:${modeLocks.DINE_IN ? 1 : 0}`
+
+  useEffect(() => {
+    if (!showPreviewModes || !orderModesReady) return
+    if (draftModesEdited.current) {
+      setDraftDeliveryModes((prev) => {
+        if (!prev) return prev
+        const next = { ...prev }
+        if (modeLocks.PICKUP && next.PICKUP) {
+          next.PICKUP = { ...next.PICKUP, locked: true, enabled: false }
+        }
+        if (modeLocks.DINE_IN && next.DINE_IN) {
+          next.DINE_IN = { ...next.DINE_IN, locked: true, enabled: false }
+        }
+        return next
+      })
+      return
+    }
+    const next = previewBranchDeliveryModes(supportedOrderModes, modeLocks)
+    const savedLocal = !useRealBranchApi && !isNewBranch ? state?.branch : null
+    if (savedLocal && typeof savedLocal.allowsPickup === 'boolean' && next.PICKUP) {
+      next.PICKUP = {
+        ...next.PICKUP,
+        enabled: savedLocal.allowsPickup && !next.PICKUP.locked,
+      }
+    }
+    if (savedLocal && typeof savedLocal.allowsDineIn === 'boolean' && next.DINE_IN) {
+      next.DINE_IN = {
+        ...next.DINE_IN,
+        enabled: savedLocal.allowsDineIn && !next.DINE_IN.locked,
+      }
+    }
+    setDraftDeliveryModes(next)
+  }, [
+    showPreviewModes,
+    orderModesReady,
+    supportedModesKey,
+    modeLockKey,
+    modeLocks,
+    supportedOrderModes,
+    useRealBranchApi,
+    isNewBranch,
+    state?.branch,
+  ])
+
+  useEffect(() => {
+    if (!draftDeliveryModes) return
+    setAllowPickup(
+      Boolean(
+        draftDeliveryModes.PICKUP?.supportedByStoreType &&
+          draftDeliveryModes.PICKUP.enabled &&
+          !draftDeliveryModes.PICKUP.locked,
+      ),
+    )
+    setAllowDineIn(
+      Boolean(
+        draftDeliveryModes.DINE_IN?.supportedByStoreType &&
+          draftDeliveryModes.DINE_IN.enabled &&
+          !draftDeliveryModes.DINE_IN.locked,
+      ),
+    )
+  }, [draftDeliveryModes])
 
   const isBranchForceClosed = useMemo(() => {
     if (!branch || isNewBranch) return false
@@ -902,12 +1038,8 @@ export default function AdminAddVendorBrunchs() {
         next.address = String(address)
       }
 
-      // Only fill area/city from map when empty (don't overwrite Seef etc.).
-      if (area && !String(prev.areaCity || '').trim()) {
-        next.areaCity = city && area !== city ? `${area}, ${city}` : area
-      } else if (city && !String(prev.areaCity || '').trim()) {
-        next.areaCity = city
-      }
+      const place = formatAreaCity(area, city)
+      if (place) next.areaCity = place
 
       return next
     })
@@ -1096,6 +1228,29 @@ export default function AdminAddVendorBrunchs() {
       return
     }
 
+    if (showPreviewModes && draftDeliveryModes) {
+      const toggleable = BRANCH_DELIVERY_MODE_ORDER.filter(
+        (key) =>
+          draftDeliveryModes[key]?.supportedByStoreType && !draftDeliveryModes[key]?.locked,
+      )
+      const enabled = toggleable.filter((key) => draftDeliveryModes[key]?.enabled)
+      if (toggleable.length > 0 && enabled.length === 0) {
+        setSaveError('At least one order mode must stay on.')
+        return
+      }
+      if (
+        draftDeliveryModes.HOT_FOOD_ON_DEMAND?.enabled &&
+        draftDeliveryModes.HOT_FOOD_ON_DEMAND?.supportedByStoreType &&
+        !draftDeliveryModes.HOT_FOOD_ON_DEMAND?.locked
+      ) {
+        const feeError = hotFoodSeedMissingMessage(draftHotFood)
+        if (feeError) {
+          setSaveError(feeError)
+          return
+        }
+      }
+    }
+
     setSaveError(null)
 
     if (!useRealBranchApi) {
@@ -1122,6 +1277,7 @@ export default function AdminAddVendorBrunchs() {
           operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
           allowsPickup: allowPickup,
           allowsDineIn: allowDineIn,
+          deliveryModes: draftDeliveryModes,
           customerRadiusKm: form.customerRadiusKm,
           deliveryContribution: form.deliveryContribution,
           maxDistanceKm: form.maxDistanceKm,
@@ -1157,19 +1313,23 @@ export default function AdminAddVendorBrunchs() {
         allowsDineIn: allowDineIn,
       }
 
-      let savedBranchId = !isNewBranch ? String(branchId) : null
-      if (isNewBranch) {
+      let savedBranchId = !isNewBranch ? String(branchId) : createdBranchId
+      if (isNewBranch && !createdBranchId) {
+        const existing = await adminService.listVendorBranches(vendorId)
+        const previousIds = new Set(
+          (existing?.data?.branches || []).map((item) => String(item.id)),
+        )
         const created = await adminService.createVendorBranch(vendorId, payload)
         const createdBranches = created?.data?.branches || []
-        const previousIds = new Set((allBranches || []).map((b) => String(b.id)))
         const createdBranch =
           createdBranches.find((b) => !previousIds.has(String(b.id))) ||
           createdBranches.find((b) => String(b.name) === String(form.name).trim()) ||
           createdBranches[createdBranches.length - 1] ||
           null
         savedBranchId = createdBranch?.id != null ? String(createdBranch.id) : null
-      } else {
-        await adminService.updateVendorBranch(vendorId, branchId, payload)
+        if (savedBranchId) setCreatedBranchId(savedBranchId)
+      } else if (savedBranchId) {
+        await adminService.updateVendorBranch(vendorId, savedBranchId, payload)
       }
 
       // Persist independent vendor-scope (per branch) + customer-scope delivery settings.
@@ -1199,6 +1359,28 @@ export default function AdminAddVendorBrunchs() {
 
       if (applyVendorDeliveryToAll || applyCustomerDeliveryToAll) {
         await adminService.applyVendorDeliveryZonesToAll(vendorId)
+      }
+
+      if (savedBranchId && showPreviewModes) {
+        const modePayload = buildBranchDeliveryModesPayload(draftDeliveryModes)
+        const seededKeys = ['HOT_FOOD_ON_DEMAND', 'SCHEDULED']
+        const simple = {}
+        const seeded = {}
+        for (const [key, value] of Object.entries(modePayload)) {
+          if (seededKeys.includes(key)) seeded[key] = value
+          else simple[key] = value
+        }
+        if (Object.keys(simple).length) {
+          await adminService.updateBranchDeliverySettings(vendorId, savedBranchId, { modes: simple })
+        }
+        if (Object.keys(seeded).length) {
+          await adminService.updateBranchDeliverySettings(vendorId, savedBranchId, {
+            modes: seeded,
+            ...(seeded.HOT_FOOD_ON_DEMAND
+              ? { hotFoodOnDemand: buildHotFoodDefaultsPayload(draftHotFood) }
+              : {}),
+          })
+        }
       }
 
       navigate(returnPath, { state: returnState })
@@ -1312,32 +1494,12 @@ export default function AdminAddVendorBrunchs() {
             </Field>
 
             <Field label="Area / city">
-              <div className="relative">
-                <select
-                  className={cn(inputClass, 'appearance-none pr-9')}
-                  value={form.areaCity}
-                  onChange={(e) => updateField('areaCity', e.target.value)}
-                >
-                  {[
-                    'Manama',
-                    'Muharraq',
-                    'Riffa',
-                    'Juffair',
-                    'Seef',
-                    form.areaCity,
-                  ]
-                    .filter(Boolean)
-                    .filter((item, index, all) => all.indexOf(item) === index)
-                    .map((area) => (
-                      <option key={area} value={area}>
-                        {area}
-                      </option>
-                    ))}
-                </select>
-                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[10px] leading-none text-[#69756d]">
-                  ▾
-                </span>
-              </div>
+              <input
+                className={inputClass}
+                value={form.areaCity}
+                onChange={(e) => updateField('areaCity', e.target.value)}
+                placeholder="Filled when you pin the map"
+              />
             </Field>
 
             <Field label="Address" className="col-span-2 max-[700px]:col-span-1">
@@ -1689,14 +1851,21 @@ export default function AdminAddVendorBrunchs() {
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <h2 className="mb-3 text-[16px] font-bold text-[#17231c]">Status &amp; controls</h2>
 
-          {useRealBranchApi ? (
-            <AdminBranchDeliverySettings
-              vendorId={vendorId}
-              locationId={isNewBranch ? null : branchId}
-              storeTypeName={storeTypeName}
-              disabled={loading}
-            />
-          ) : null}
+          <AdminBranchDeliverySettings
+            vendorId={vendorId}
+            locationId={useRealBranchApi && !isNewBranch ? branchId : null}
+            storeTypeName={storeTypeName}
+            disabled={loading}
+            supportedOrderModes={supportedOrderModes}
+            previewReady={orderModesReady}
+            draftModes={draftDeliveryModes}
+            onDraftModesChange={(next) => {
+              draftModesEdited.current = true
+              setDraftDeliveryModes(next)
+            }}
+            draftHotFood={draftHotFood}
+            onDraftHotFoodChange={setDraftHotFood}
+          />
 
           <div className="mt-3 flex items-center justify-between gap-4 rounded-[10px] bg-[#fff7d8] px-3.5 py-3">
             <div className="min-w-0">

@@ -13,6 +13,8 @@ import AdminStoreTypeHotFoodDefaults, {
   EMPTY_HOT_FOOD_DEFAULTS,
   buildHotFoodDefaultsPayload,
   extractHotFoodFieldMeta,
+  hotFoodSeedMissingMessage,
+  isHotFoodDefaultsMissingError,
   normalizeHotFoodDefaults,
 } from './AdminStoreTypeHotFoodDefaults'
 import AdminScheduledFeesPanel, {
@@ -55,6 +57,63 @@ const MODES_WITH_PANEL = new Set(['HOT_FOOD_ON_DEMAND', 'SCHEDULED'])
 
 const LAST_MODE_OFF_MESSAGE = 'At least one order mode must stay on'
 const UNSUPPORTED_MODE_MESSAGE = 'Mode not available for this store type'
+
+const ORDER_MODE_CODE_TO_KEY = {
+  delivery: 'HOT_FOOD_ON_DEMAND',
+  pickup: 'PICKUP',
+  dine_in: 'DINE_IN',
+  scheduled: 'SCHEDULED',
+  services: 'SERVICES',
+}
+
+/**
+ * Local order-mode rows for a branch that has not been saved yet.
+ * Supported store-type modes start on. Locked keys (vendor SLA ceiling) stay off.
+ */
+export function previewBranchDeliveryModes(codes = [], locks = {}) {
+  const normalized = new Set(
+    (Array.isArray(codes) ? codes : []).map((code) =>
+      String(code).trim().toLowerCase().replace(/-/g, '_'),
+    ),
+  )
+  const supportedKeys = new Set()
+  for (const [code, key] of Object.entries(ORDER_MODE_CODE_TO_KEY)) {
+    if (normalized.has(code)) supportedKeys.add(key)
+  }
+
+  const base = emptyModesLocal()
+  for (const key of BRANCH_DELIVERY_MODE_ORDER) {
+    const supported = supportedKeys.has(key)
+    const locked = Boolean(locks[key])
+    base[key] = {
+      ...base[key],
+      supportedByStoreType: supported,
+      locked,
+      enabled: supported && !locked,
+    }
+  }
+
+  if (countEnabled(base) === 0) {
+    const fallback = BRANCH_DELIVERY_MODE_ORDER.find(
+      (key) => base[key].supportedByStoreType && !base[key].locked,
+    )
+    if (fallback) base[fallback] = { ...base[fallback], enabled: true }
+  }
+
+  return base
+}
+
+/** Enabled, store-type-supported modes to send on the first delivery-settings write. */
+export function buildBranchDeliveryModesPayload(modes) {
+  const payload = {}
+  if (!modes) return payload
+  for (const key of BRANCH_DELIVERY_MODE_ORDER) {
+    const mode = modes[key]
+    if (!mode?.supportedByStoreType || mode.locked || !mode.enabled) continue
+    payload[key] = { enabled: true }
+  }
+  return payload
+}
 
 function emptyModesLocal() {
   return {
@@ -197,6 +256,12 @@ function applyServerPayload(
  *   locationId: string | null,
  *   storeTypeName?: string,
  *   disabled?: boolean,
+ *   supportedOrderModes?: string[],
+ *   previewReady?: boolean,
+ *   draftModes?: object | null,
+ *   onDraftModesChange?: (modes: object) => void,
+ *   draftHotFood?: object | null,
+ *   onDraftHotFoodChange?: (form: object) => void,
  * }} props
  */
 export default function AdminBranchDeliverySettings({
@@ -204,6 +269,12 @@ export default function AdminBranchDeliverySettings({
   locationId,
   storeTypeName = '',
   disabled = false,
+  supportedOrderModes = [],
+  previewReady = false,
+  draftModes = null,
+  onDraftModesChange,
+  draftHotFood = null,
+  onDraftHotFoodChange,
 }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -229,6 +300,7 @@ export default function AdminBranchDeliverySettings({
   const [dirtyScheduled, setDirtyScheduled] = useState(false)
   const [dirtyDriverRates, setDirtyDriverRates] = useState(false)
   const [dirtyAllowedVehicles, setDirtyAllowedVehicles] = useState(false)
+  const [hotFoodEnableDraft, setHotFoodEnableDraft] = useState(false)
 
   const canEdit = Boolean(vendorId && locationId) && !disabled
   const dirtyFields =
@@ -338,6 +410,36 @@ export default function AdminBranchDeliverySettings({
     setSaveOk(false)
   }
 
+  const enableHotFoodWithFees = async () => {
+    const feeError = hotFoodSeedMissingMessage(hotFoodForm)
+    if (feeError) {
+      setError(feeError)
+      return false
+    }
+    setTogglingMode('HOT_FOOD_ON_DEMAND')
+    setError(null)
+    setSaveOk(false)
+    try {
+      const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, {
+        modes: { HOT_FOOD_ON_DEMAND: { enabled: true } },
+        hotFoodOnDemand: buildHotFoodDefaultsPayload(hotFoodForm),
+      })
+      applyPayload(res?.data)
+      setHotFoodEnableDraft(false)
+      setDirtyHotFood(false)
+      setDirtyScheduled(false)
+      setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setSaveOk(true)
+      return true
+    } catch (err) {
+      setError(formatApiErrorMessage(err, 'Failed to enable hot food.'))
+      return false
+    } finally {
+      setTogglingMode(null)
+    }
+  }
+
   const handleModeToggle = async (modeKey, nextEnabled) => {
     if (!canEdit || togglingMode) return
     const current = modes[modeKey]
@@ -353,6 +455,17 @@ export default function AdminBranchDeliverySettings({
       return
     }
 
+    if (modeKey === 'HOT_FOOD_ON_DEMAND' && !nextEnabled && hotFoodEnableDraft && !current.enabled) {
+      setHotFoodEnableDraft(false)
+      setError(null)
+      return
+    }
+
+    if (modeKey === 'HOT_FOOD_ON_DEMAND' && nextEnabled && hotFoodEnableDraft) {
+      await enableHotFoodWithFees()
+      return
+    }
+
     setTogglingMode(modeKey)
     setError(null)
     setSaveOk(false)
@@ -362,12 +475,19 @@ export default function AdminBranchDeliverySettings({
         modes: { [modeKey]: { enabled: nextEnabled } },
       })
       applyPayload(res?.data)
+      setHotFoodEnableDraft(false)
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
       setDirtyAllowedVehicles(false)
     } catch (err) {
-      setError(formatApiErrorMessage(err, 'Failed to update order mode.'))
+      const message = formatApiErrorMessage(err, 'Failed to update order mode.')
+      if (modeKey === 'HOT_FOOD_ON_DEMAND' && nextEnabled && isHotFoodDefaultsMissingError(message)) {
+        setHotFoodEnableDraft(true)
+        setError('This store type has no hot-food fees yet. Fill the fees below, then enable.')
+      } else {
+        setError(message)
+      }
     } finally {
       setTogglingMode(null)
     }
@@ -468,13 +588,119 @@ export default function AdminBranchDeliverySettings({
     }
   }
 
+  const handlePreviewModeToggle = (modeKey, nextEnabled) => {
+    const currentModes = draftModes || previewBranchDeliveryModes(supportedOrderModes)
+    const current = currentModes[modeKey]
+    if (!current || disabled) return
+
+    if (nextEnabled && (current.supportedByStoreType === false || current.locked)) {
+      setError(current.locked ? 'Turn this mode on for the vendor before enabling it here.' : UNSUPPORTED_MODE_MESSAGE)
+      return
+    }
+
+    if (!nextEnabled && current.enabled && countEnabled(currentModes) <= 1) {
+      setError(LAST_MODE_OFF_MESSAGE)
+      return
+    }
+
+    setError(null)
+    const next = {
+      ...currentModes,
+      [modeKey]: { ...current, enabled: nextEnabled },
+    }
+    onDraftModesChange?.(next)
+  }
+
   if (!locationId) {
+    const previewModes = draftModes || previewBranchDeliveryModes(supportedOrderModes)
+    const anySupported = BRANCH_DELIVERY_MODE_ORDER.some(
+      (key) => previewModes[key]?.supportedByStoreType,
+    )
+
     return (
-      <div className="rounded-[12px] border border-[#eceeec] bg-[#fafbfa] px-4 py-4">
-        <h3 className="text-[15px] font-bold text-[#17231c]">Delivery Settings</h3>
-        <p className="mt-1 text-[12px] leading-[16px] text-[#7c8780]">
-          Save the branch first to configure order modes and delivery fees.
-        </p>
+      <div className="rounded-[12px] border border-[#eceeec] bg-white">
+        <div className="border-b border-[#eceeec] px-4 py-3">
+          <h3 className="text-[15px] font-bold text-[#17231c]">Order modes</h3>
+          <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
+            Saved with this branch. Delivery fees, vehicles, and driver rates open after the branch is saved.
+          </p>
+        </div>
+        <div className="space-y-2 px-4 py-4">
+          {!previewReady ? (
+            <p className="text-[12px] text-[#7c8780]">Loading order modes…</p>
+          ) : null}
+
+          {previewReady && !anySupported ? (
+            <p className="text-[12px] leading-[16px] text-[#7c8780]">
+              {storeTypeName
+                ? 'No order modes are configured for this store type in Store Management.'
+                : 'Select a store type to see available order modes.'}
+            </p>
+          ) : null}
+
+          {error ? (
+            <div className="rounded-[8px] border border-[#f5c2c0] bg-[#fdecea] px-3 py-2 text-[12px] leading-[16px] text-[#b42318]">
+              {error}
+            </div>
+          ) : null}
+
+          {previewReady && anySupported
+            ? BRANCH_DELIVERY_MODE_ORDER.map((modeKey) => {
+                const mode = previewModes[modeKey] || {}
+                const supported = mode.supportedByStoreType !== false
+                const enabled = Boolean(mode.enabled)
+                const label = BRANCH_DELIVERY_MODE_LABELS[modeKey]
+
+                const showPreviewFees = modeKey === 'HOT_FOOD_ON_DEMAND' && enabled && supported
+
+                return (
+                  <div
+                    key={modeKey}
+                    className={cn(
+                      'overflow-hidden rounded-[10px] border border-[#eceeec]',
+                      (!supported || mode.locked) && 'opacity-60',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[#17231c]">
+                          {label}
+                          {!supported ? (
+                            <span className="ml-2 inline-flex items-center rounded-[4px] bg-[#eef0ee] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#5c665f]">
+                              Off for this store type
+                            </span>
+                          ) : null}
+                          {supported && mode.locked ? (
+                            <span className="ml-2 inline-flex items-center rounded-[4px] bg-[#eef0ee] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em] text-[#5c665f]">
+                              Off for this vendor
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
+                      <ModeToggle
+                        checked={enabled}
+                        disabled={disabled || mode.locked || (!supported && !enabled)}
+                        label={label}
+                        onChange={(next) => handlePreviewModeToggle(modeKey, next)}
+                      />
+                    </div>
+                    {showPreviewFees ? (
+                      <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
+                        <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                          These fees are saved with the branch. Fill them before saving if this store type has no hot-food defaults.
+                        </p>
+                        <AdminStoreTypeHotFoodDefaults
+                          value={draftHotFood || EMPTY_HOT_FOOD_DEFAULTS}
+                          onChange={(next) => onDraftHotFoodChange?.(next)}
+                          disabled={disabled}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })
+            : null}
+        </div>
       </div>
     )
   }
@@ -531,6 +757,7 @@ export default function AdminBranchDeliverySettings({
           const enabled = Boolean(mode.enabled)
           const label = BRANCH_DELIVERY_MODE_LABELS[modeKey]
           const open = enabled && MODES_WITH_PANEL.has(modeKey)
+          const showHotFoodDraft = modeKey === 'HOT_FOOD_ON_DEMAND' && hotFoodEnableDraft && !enabled
           const busy = togglingMode === modeKey
 
           return (
@@ -558,12 +785,33 @@ export default function AdminBranchDeliverySettings({
                   </p>
                 </div>
                 <ModeToggle
-                  checked={enabled}
-                  disabled={!canEdit || loading || saving || busy || (!supported && !enabled)}
+                  checked={enabled || showHotFoodDraft}
+                  disabled={!canEdit || loading || saving || busy || (!supported && !enabled && !showHotFoodDraft)}
                   label={label}
                   onChange={(next) => handleModeToggle(modeKey, next)}
                 />
               </div>
+
+              {showHotFoodDraft ? (
+                <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
+                  <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                    This store type has no hot-food defaults yet. Enter the fees here to turn this mode on for this branch.
+                  </p>
+                  <AdminStoreTypeHotFoodDefaults
+                    value={hotFoodForm}
+                    onChange={onHotFoodChange}
+                    disabled={!canEdit || saving || Boolean(togglingMode)}
+                  />
+                  <button
+                    type="button"
+                    onClick={enableHotFoodWithFees}
+                    disabled={!canEdit || saving || Boolean(togglingMode)}
+                    className="inline-flex h-[32px] items-center justify-center rounded-full bg-[#2E9E4D] px-4 text-[12px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+                  >
+                    {togglingMode === 'HOT_FOOD_ON_DEMAND' ? 'Enabling…' : 'Enable hot food'}
+                  </button>
+                </div>
+              ) : null}
 
               {open && modeKey === 'HOT_FOOD_ON_DEMAND' ? (
                 <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
