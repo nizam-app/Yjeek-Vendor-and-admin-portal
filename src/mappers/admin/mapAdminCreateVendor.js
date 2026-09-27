@@ -210,11 +210,8 @@ function mapCommission(form = {}, { customFees = [], commissionTiers = [] } = {}
 
   commission.customFees = mapWizardCustomFeesToApi(customFees)
 
-  const platform = num(form.serviceFee)
-  if (platform != null) commission.platformServiceFee = platform
-
-  const vat = num(stripPercent(form.vatOnCommission))
-  if (vat != null) commission.vatOnCommissionPct = vat
+  // OG §08 / D08 Batch 5: do not send platformServiceFee from Commission screen.
+  // VAT is system-held (Bahrain 10%) — omit so ST seed / Prisma default apply.
 
   const gatewayFees = mapGatewayFees(form)
   if (gatewayFees) commission.gatewayFees = gatewayFees

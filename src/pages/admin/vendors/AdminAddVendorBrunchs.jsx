@@ -13,9 +13,10 @@ import {
   mapOpeningHoursToWizardHours,
   mapUiTimeTo24h,
 } from '../../../mappers/admin/mapAdminVendorBranches'
-import { buildBranchModeGate, branchOrderModesAtLeastOneError } from '../../../components/admin/AdminVendorSlaConfigs'
+import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
 import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
+import AdminBranchDeliverySettings from '../../../components/admin/management/AdminBranchDeliverySettings'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -507,6 +508,8 @@ export default function AdminAddVendorBrunchs() {
     toggleableModes: [],
     ready: false,
   })
+  /** Store type display name for Delivery Settings seed banner (OG §02). */
+  const [storeTypeName, setStoreTypeName] = useState('')
   const [freeDeliveryEnabled, setFreeDeliveryEnabled] = useState(true)
   const [applyVendorDeliveryToAll, setApplyVendorDeliveryToAll] = useState(false)
   const [applyCustomerDeliveryToAll, setApplyCustomerDeliveryToAll] = useState(false)
@@ -627,6 +630,9 @@ export default function AdminAddVendorBrunchs() {
         const storeTypeId = detail?.storeTypeId ? String(detail.storeTypeId) : ''
         const storeType =
           storeTypes.find((row) => String(row.id) === storeTypeId) || null
+        setStoreTypeName(
+          String(storeType?.name || storeType?.title || storeType?.label || '').trim(),
+        )
         const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
         const vendorModeLabels = mapAdminServiceModesToLabels(modes)
         setModeGate(buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: false }))
@@ -1090,16 +1096,6 @@ export default function AdminAddVendorBrunchs() {
       return
     }
 
-    const branchModesError = branchOrderModesAtLeastOneError({
-      modeGate,
-      allowPickup,
-      allowDineIn,
-    })
-    if (branchModesError) {
-      setSaveError(branchModesError)
-      return
-    }
-
     setSaveError(null)
 
     if (!useRealBranchApi) {
@@ -1124,8 +1120,8 @@ export default function AdminAddVendorBrunchs() {
           hours: form.hours,
           branchOnline,
           operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
-          allowsPickup: modeGate.showPickup && modeGate.canTogglePickup ? allowPickup : false,
-          allowsDineIn: modeGate.showDineIn && modeGate.canToggleDineIn ? allowDineIn : false,
+          allowsPickup: allowPickup,
+          allowsDineIn: allowDineIn,
           customerRadiusKm: form.customerRadiusKm,
           deliveryContribution: form.deliveryContribution,
           maxDistanceKm: form.maxDistanceKm,
@@ -1157,8 +1153,8 @@ export default function AdminAddVendorBrunchs() {
         ...form,
         branchOnline,
         operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
-        allowsPickup: modeGate.showPickup && modeGate.canTogglePickup ? allowPickup : false,
-        allowsDineIn: modeGate.showDineIn && modeGate.canToggleDineIn ? allowDineIn : false,
+        allowsPickup: allowPickup,
+        allowsDineIn: allowDineIn,
       }
 
       let savedBranchId = !isNewBranch ? String(branchId) : null
@@ -1693,107 +1689,14 @@ export default function AdminAddVendorBrunchs() {
         <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
           <h2 className="mb-3 text-[16px] font-bold text-[#17231c]">Status &amp; controls</h2>
 
-          <div className="space-y-3">
-            <div className="flex items-start gap-6">
-              <div className="min-w-0">
-                <p className="text-[13px] font-bold text-[#17231c]">Branch online</p>
-                <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">Visible &amp; accepting orders</p>
-              </div>
-              <Toggle
-                checked={branchOnline}
-                onChange={() => setBranchOnline((prev) => !prev)}
-                label="Branch online"
-              />
-            </div>
-
-            {modeGate.showPickup ? (
-              <div className="flex items-start gap-6">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-bold text-[#17231c]">Allow pickup</p>
-                  {!modeGate.canTogglePickup ? (
-                    <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-                      Pickup is configured for this store type. Enable it on the vendor SLA to turn it on here.
-                    </p>
-                  ) : null}
-                </div>
-                <Toggle
-                  checked={allowPickup}
-                  disabled={!modeGate.canTogglePickup}
-                  onChange={() => {
-                    setAllowPickup((prev) => {
-                      const next = !prev
-                      const error = branchOrderModesAtLeastOneError({
-                        modeGate,
-                        allowPickup: next,
-                        allowDineIn,
-                      })
-                      if (error) {
-                        setSaveError(error)
-                        return prev
-                      }
-                      setSaveError((current) =>
-                        current === 'At least one branch order mode must stay enabled.'
-                          ? null
-                          : current,
-                      )
-                      return next
-                    })
-                  }}
-                  label="Allow pickup"
-                />
-              </div>
-            ) : null}
-
-            {modeGate.showDineIn ? (
-              <div className="flex items-start gap-6">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-bold text-[#17231c]">Allow Dine-in</p>
-                  {!modeGate.canToggleDineIn ? (
-                    <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-                      Dine-in is configured for this store type. Enable it on the vendor SLA to turn it on here.
-                    </p>
-                  ) : null}
-                </div>
-                <Toggle
-                  checked={allowDineIn}
-                  disabled={!modeGate.canToggleDineIn}
-                  onChange={() => {
-                    setAllowDineIn((prev) => {
-                      const next = !prev
-                      const error = branchOrderModesAtLeastOneError({
-                        modeGate,
-                        allowPickup,
-                        allowDineIn: next,
-                      })
-                      if (error) {
-                        setSaveError(error)
-                        return prev
-                      }
-                      setSaveError((current) =>
-                        current === 'At least one branch order mode must stay enabled.'
-                          ? null
-                          : current,
-                      )
-                      return next
-                    })
-                  }}
-                  label="Allow Dine-in"
-                />
-              </div>
-            ) : null}
-
-            {modeGate.visibleModes?.length ? (
-              <p className="text-[12px] leading-[16px] text-[#7c8780]">
-                Delivery, Scheduled, and Services are managed on the vendor&apos;s Service modes &amp; SLA.
-                At least one branch order mode above must stay enabled.
-              </p>
-            ) : modeGate.ready ? (
-              <p className="text-[12px] leading-[16px] text-[#7c8780]">
-                This store type has no Pickup or Dine-in modes. Delivery, Scheduled, and Services are
-                managed on the vendor&apos;s Service modes &amp; SLA.
-              </p>
-            ) : null}
-          </div>
+          {useRealBranchApi ? (
+            <AdminBranchDeliverySettings
+              vendorId={vendorId}
+              locationId={isNewBranch ? null : branchId}
+              storeTypeName={storeTypeName}
+              disabled={loading}
+            />
+          ) : null}
 
           <div className="mt-3 flex items-center justify-between gap-4 rounded-[10px] bg-[#fff7d8] px-3.5 py-3">
             <div className="min-w-0">

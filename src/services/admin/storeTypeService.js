@@ -427,4 +427,237 @@ export const adminStoreTypeService = {
     })
     return { data: response?.data ?? { deleted: true, id }, meta: response?.meta ?? null }
   },
+
+  /**
+   * Delivery Fees v1 — GET store-type delivery defaults (includes allowedVehicles).
+   * Confirmed: GET /admin/store-types/:storeTypeId/delivery-defaults
+   *
+   * @param {string} storeTypeId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getDeliveryDefaults(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    if (!useRealStoreTypesApi()) {
+      return {
+        data: {
+          storeTypeId: id,
+          allowedVehicles: { bike: true, car: true },
+          hotFoodOnDemand: null,
+          scheduled: null,
+          driverRates: null,
+        },
+        meta: null,
+      }
+    }
+
+    const response = await apiClient.get(endpoints.admin.storeTypes.deliveryDefaults(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Delivery Fees v1 — PUT allowed vehicles only (no cascade to vendors/branches).
+   * Confirmed: PUT /admin/store-types/:storeTypeId/allowed-vehicles
+   *
+   * @param {string} storeTypeId
+   * @param {{ bike: boolean, car: boolean }} vehicles
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async updateAllowedVehicles(storeTypeId, vehicles, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    const body = {
+      bike: Boolean(vehicles?.bike),
+      car: Boolean(vehicles?.car),
+    }
+
+    if (!useRealStoreTypesApi()) {
+      return {
+        data: {
+          storeTypeId: id,
+          allowedVehicles: body,
+        },
+        meta: null,
+      }
+    }
+
+    const response = await apiClient.put(endpoints.admin.storeTypes.allowedVehicles(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? { storeTypeId: id, allowedVehicles: body }, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Delivery Fees v1 — PUT store-type delivery defaults (hot-food + scheduled; no cascade).
+   * Confirmed: PUT /admin/store-types/:storeTypeId/delivery-defaults
+   * Do not send maxContribution or customer.maxDistanceKm as inputs.
+   * Do not send radius / perKm / maxDistance on scheduled.
+   *
+   * @param {string} storeTypeId
+   * @param {{ allowedVehicles?: { bike: boolean, car: boolean }, hotFoodOnDemand?: object | null, scheduled?: object | null, driverRates?: object | null }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async updateDeliveryDefaults(storeTypeId, body, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    const payload = body && typeof body === 'object' ? body : {}
+
+    if (!useRealStoreTypesApi()) {
+      return {
+        data: {
+          storeTypeId: id,
+          allowedVehicles: payload.allowedVehicles ?? { bike: true, car: true },
+          hotFoodOnDemand: payload.hotFoodOnDemand ?? null,
+          scheduled: payload.scheduled !== undefined ? payload.scheduled : null,
+          driverRates: payload.driverRates !== undefined ? payload.driverRates : null,
+        },
+        meta: null,
+      }
+    }
+
+    const response = await apiClient.put(endpoints.admin.storeTypes.deliveryDefaults(id), payload, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Delivery Fees v1 / D05 — convert preview before turning a class off (OG §03).
+   * Confirmed: GET /admin/store-types/:id/item-classes/convert-preview?disable=SPECIAL|NORMAL
+   *
+   * @param {string} storeTypeId
+   * @param {'NORMAL'|'SPECIAL'} disable
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getItemClassConvertPreview(storeTypeId, disable, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    const disableClass = String(disable || '').trim().toUpperCase()
+    if (disableClass !== 'NORMAL' && disableClass !== 'SPECIAL') {
+      throw new Error('disable must be NORMAL or SPECIAL.')
+    }
+
+    if (!useRealStoreTypesApi()) {
+      return {
+        data: {
+          disable: disableClass,
+          remaining: disableClass === 'SPECIAL' ? 'NORMAL' : 'SPECIAL',
+          convertAction: disableClass === 'SPECIAL' ? 'convert_to_normal' : 'convert_to_special',
+          vendorCount: 0,
+          categoryCount: 0,
+          itemCount: 0,
+        },
+        meta: null,
+      }
+    }
+
+    const response = await apiClient.get(
+      endpoints.admin.storeTypes.itemClassConvertPreview(id, disableClass),
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'store-types',
+        forceReal: true,
+      },
+    )
+
+    const raw = response?.data && typeof response.data === 'object' ? response.data : {}
+    return {
+      data: {
+        disable: raw.disable === 'NORMAL' ? 'NORMAL' : 'SPECIAL',
+        remaining: raw.remaining === 'SPECIAL' ? 'SPECIAL' : 'NORMAL',
+        convertAction:
+          raw.convertAction === 'convert_to_special' ? 'convert_to_special' : 'convert_to_normal',
+        vendorCount: Number(raw.vendorCount) || 0,
+        categoryCount: Number(raw.categoryCount) || 0,
+        itemCount: Number(raw.itemCount) || 0,
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async getAttributes(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { axes: [] }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.storeTypes.attributes(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    const raw = response?.data && typeof response.data === 'object' ? response.data : {}
+    const axes = Array.isArray(raw.axes) ? raw.axes : []
+    return {
+      data: {
+        axes: axes.map((axis, ai) => ({
+          id: axis.id ? String(axis.id) : `axis-${ai}`,
+          key: String(axis.key || ''),
+          name: String(axis.name || ''),
+          uiHint: axis.uiHint === 'SWATCH' ? 'SWATCH' : 'PILL',
+          isRequired: axis.isRequired !== false,
+          sortOrder: Number(axis.sortOrder) || ai,
+          values: Array.isArray(axis.values)
+            ? axis.values.map((v, vi) => ({
+                id: v.id ? String(v.id) : `val-${ai}-${vi}`,
+                key: String(v.key || ''),
+                label: String(v.label || ''),
+                colorHex: v.colorHex ? String(v.colorHex) : null,
+                sortOrder: Number(v.sortOrder) || vi,
+                isActive: v.isActive !== false,
+              }))
+            : [],
+        })),
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async putAttributes(storeTypeId, axes, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    const body = {
+      axes: (Array.isArray(axes) ? axes : []).map((axis, ai) => ({
+        key: String(axis.key || '').trim(),
+        name: String(axis.name || '').trim(),
+        uiHint: axis.uiHint === 'SWATCH' ? 'SWATCH' : 'PILL',
+        isRequired: axis.isRequired !== false,
+        sortOrder: Number.isFinite(Number(axis.sortOrder)) ? Number(axis.sortOrder) : ai,
+        values: (Array.isArray(axis.values) ? axis.values : []).map((v, vi) => ({
+          key: String(v.key || '').trim(),
+          label: String(v.label || '').trim(),
+          colorHex: v.colorHex ? String(v.colorHex) : null,
+          sortOrder: Number.isFinite(Number(v.sortOrder)) ? Number(v.sortOrder) : vi,
+          isActive: v.isActive !== false,
+        })),
+      })),
+    }
+    if (!useRealStoreTypesApi()) {
+      return { data: body, meta: null }
+    }
+    const response = await apiClient.put(endpoints.admin.storeTypes.attributes(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? body, meta: response?.meta ?? null }
+  },
 }

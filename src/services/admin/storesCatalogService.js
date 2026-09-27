@@ -14,6 +14,8 @@ function mapProduct(raw) {
   if (!mapped) return null
   return {
     ...mapped,
+    description: raw.description != null ? String(raw.description) : mapped.description,
+    descriptionAr: raw.descriptionAr != null ? String(raw.descriptionAr) : mapped.descriptionAr,
     vendor: raw.vendor
       ? {
           id: raw.vendor.id,
@@ -23,6 +25,10 @@ function mapProduct(raw) {
       : null,
     platformCategory: raw.platformCategory || null,
     catalogCategory: raw.catalogCategory || null,
+    optionGroups: Array.isArray(raw.optionGroups) ? raw.optionGroups : [],
+    addons: Array.isArray(raw.addons) ? raw.addons : [],
+    badges: Array.isArray(raw.badges) ? raw.badges : [],
+    availabilitySlots: Array.isArray(raw.availabilitySlots) ? raw.availabilitySlots : [],
   }
 }
 

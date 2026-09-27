@@ -4,7 +4,10 @@ import {
   mapAdminSlaModelList,
   pickWorkingSlaModel,
 } from '../../mappers/admin/mapAdminSlaModels'
-import { pickHotFoodEffectiveAcceptance } from '../../mappers/admin/mapDispatchAutomation'
+import {
+  pickChampOfferWindowsFromSlaConfig,
+  pickHotFoodEffectiveAcceptance,
+} from '../../mappers/admin/mapDispatchAutomation'
 import { automationRequestOptions } from './dispatchAutomationFeature'
 
 /**
@@ -42,6 +45,47 @@ export const vendorAcceptanceSlaService = {
         model,
         hotFood,
         effectiveVendorAcceptance: effective,
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Champ offer TTLs for Radius Expansion (from Champ SLA acceptanceTimeByMode).
+   * Read-only — edit on SLA Models → Champ. No hardcoded demo TTLs.
+   */
+  async getChampOfferWindows(options = {}) {
+    const response = await apiClient.get(endpoints.admin.slaModels.list, {
+      ...automationRequestOptions(options),
+      params: { active: 'true', limit: 50, page: 1 },
+    })
+
+    const models = mapAdminSlaModelList(response?.data)
+    const model = pickWorkingSlaModel(models)
+    if (!model) {
+      return {
+        data: {
+          model: null,
+          hotFoodOfferSec: null,
+          otherOnDemandOfferSec: null,
+          source: null,
+        },
+        meta: response?.meta ?? null,
+      }
+    }
+
+    const config = model.publishedConfig || model.config || null
+    const windows = pickChampOfferWindowsFromSlaConfig(config)
+
+    return {
+      data: {
+        model: {
+          id: model.id,
+          name: model.name,
+          currentVersion: model.currentVersion,
+          isDefault: model.isDefault,
+        },
+        ...windows,
       },
       meta: response?.meta ?? null,
     }

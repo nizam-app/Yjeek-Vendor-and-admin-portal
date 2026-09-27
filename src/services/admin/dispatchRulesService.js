@@ -11,6 +11,11 @@ import {
 } from '../../mappers/admin/mapDispatchAutomation'
 import { automationRequestOptions } from './dispatchAutomationFeature'
 
+function readNoChampCancelSec(response) {
+  const cancelSec = Number(response?.meta?.noChampCancelSec)
+  return Number.isFinite(cancelSec) && cancelSec > 0 ? Math.floor(cancelSec) : null
+}
+
 /**
  * Admin Dispatch Rule Sets.
  * Feature flag: `automation`
@@ -43,6 +48,7 @@ export const adminDispatchRulesService = {
         rule,
         meta: mapRuleSetMeta(rule),
         draftConfig: getEditableConfig(rule),
+        noChampCancelSec: readNoChampCancelSec(response),
       },
       meta: response?.meta ?? null,
     }
@@ -62,7 +68,13 @@ export const adminDispatchRulesService = {
       const picked = pickWorkingRuleSet(listResult.data)
       if (!picked?.id) {
         return {
-          data: { rule: null, meta: null, draftConfig: null, empty: true },
+          data: {
+            rule: null,
+            meta: null,
+            draftConfig: null,
+            empty: true,
+            noChampCancelSec: readNoChampCancelSec(listResult),
+          },
           meta: listResult.meta,
         }
       }
@@ -125,6 +137,10 @@ export const adminDispatchRulesService = {
       },
       options,
     )
+    const cancelSec = readNoChampCancelSec(template)
+    if (cancelSec != null && created?.data) {
+      created.data.noChampCancelSec = cancelSec
+    }
     return created
   },
 

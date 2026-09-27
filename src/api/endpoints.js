@@ -88,6 +88,13 @@ export const endpoints = {
       flagVendor: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/flag-vendor`,
       cancel: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/cancel`,
       suspendChamp: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/suspend-champ`,
+      podCashApproval: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval`,
+      approvePodCash: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval/approve`,
+      rejectPodCash: (orderId) =>
+        `/admin/orders/${encodeURIComponent(orderId)}/pod-cash-approval/reject`,
+      forcePickup: (orderId) => `/admin/orders/${encodeURIComponent(orderId)}/force-pickup`,
     },
     incidents: {
       /**
@@ -265,6 +272,58 @@ export const endpoints = {
       deliveryZoneBranch: (vendorId, branchId) =>
         `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-zones/branches/${encodeURIComponent(branchId)}`,
       /**
+       * Delivery Fees v1 — branch delivery settings (D02).
+       * Confirmed: GET + PUT /admin/vendors/:vendorId/locations/:locationId/delivery-settings
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliverySettings: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-settings`,
+      /**
+       * Delivery Fees v1 — reset one inherited hot-food field (D02).
+       * Confirmed: POST .../locations/:locationId/delivery-settings/reset-field
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliverySettingsResetField: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-settings/reset-field`,
+      /**
+       * Delivery Fees v1 — admin fee dry-run (D03 Batch 4).
+       * Confirmed: POST .../locations/:locationId/delivery-fee/preview
+       * Body: { distanceKm, itemsNet }
+       * @param {string} vendorId
+       * @param {string} locationId
+       */
+      locationDeliveryFeePreview: (vendorId, locationId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/locations/${encodeURIComponent(locationId)}/delivery-fee/preview`,
+      /**
+       * Delivery Fees v1 — vendor template (D02 Batch 5 / OG §09).
+       * Confirmed: GET + PUT /admin/vendors/:vendorId/delivery-settings
+       * @param {string} vendorId
+       */
+      vendorDeliverySettings: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings`,
+      /**
+       * Confirmed: POST .../delivery-settings/reset-field
+       * @param {string} vendorId
+       */
+      vendorDeliverySettingsResetField: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/reset-field`,
+      /**
+       * Confirmed: POST .../delivery-settings/push-to-branches (body: { confirm: true })
+       * @param {string} vendorId
+       */
+      vendorDeliverySettingsPushToBranches: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/push-to-branches`,
+      /**
+       * Delivery Fees v1 — store-type change preview (D02 Batch 6 / OG §10).
+       * Confirmed: GET .../delivery-settings/store-type-change-preview?toStoreTypeId=
+       * @param {string} vendorId
+       * @param {string} toStoreTypeId
+       */
+      vendorStoreTypeChangePreview: (vendorId, toStoreTypeId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/store-type-change-preview?toStoreTypeId=${encodeURIComponent(toStoreTypeId)}`,
+      /**
        * Confirmed: GET/PATCH /admin/vendors/:vendorId/commission
        * @param {string} vendorId
        */
@@ -288,6 +347,9 @@ export const endpoints = {
        * @param {string} vendorId
        */
       sla: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/sla`,
+      /** Services v1 S05 — GET/PATCH vendor booking settings */
+      bookingSettings: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/booking-settings`,
       /**
        * Menu Import BFF (Gate 1). Feature: `menu-import`.
        * @param {string} vendorId
@@ -407,6 +469,35 @@ export const endpoints = {
        */
       badge: (storeTypeId, badgeId) =>
         `/admin/store-types/${encodeURIComponent(storeTypeId)}/badges/${encodeURIComponent(badgeId)}`,
+      /**
+       * Delivery Fees v1 — store-type defaults (D01).
+       * Confirmed: GET + PUT /admin/store-types/:storeTypeId/delivery-defaults
+       * @param {string} storeTypeId
+       */
+      deliveryDefaults: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/delivery-defaults`,
+      /**
+       * Delivery Fees v1 — allowed vehicles only.
+       * Confirmed: PUT /admin/store-types/:storeTypeId/allowed-vehicles
+       * @param {string} storeTypeId
+       */
+      allowedVehicles: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/allowed-vehicles`,
+      /**
+       * Fashion v1 — attribute axes (Size, Colour, …).
+       * Confirmed: GET + PUT /admin/store-types/:storeTypeId/attributes
+       * @param {string} storeTypeId
+       */
+      attributes: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/attributes`,
+      /**
+       * Delivery Fees v1 / D05 — item-class convert preview (OG §03).
+       * Confirmed: GET /admin/store-types/:storeTypeId/item-classes/convert-preview?disable=SPECIAL|NORMAL
+       * @param {string} storeTypeId
+       * @param {'NORMAL'|'SPECIAL'} disable
+       */
+      itemClassConvertPreview: (storeTypeId, disable) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/item-classes/convert-preview?disable=${encodeURIComponent(disable)}`,
     },
     /**
      * Confirmed SLA models (Postman folder 07).
@@ -464,6 +555,12 @@ export const endpoints = {
       overview: '/admin/dispatch-automation/overview',
       /** Confirmed: GET /admin/dispatch-automation/log */
       log: '/admin/dispatch-automation/log',
+      /** Confirmed: GET /admin/dispatch-automation/scheduled-tiers */
+      scheduledTiers: '/admin/dispatch-automation/scheduled-tiers',
+      /** Confirmed: GET /admin/dispatch-automation/champ-scoring */
+      champScoring: '/admin/dispatch-automation/champ-scoring',
+      /** Confirmed: GET /admin/dispatch-automation/champ-status */
+      champStatus: '/admin/dispatch-automation/champ-status',
     },
     /**
      * Dispatch rule sets (versioned config).
@@ -855,6 +952,8 @@ export const endpoints = {
       security: '/admin/settings/security',
       /** Confirmed: GET + PATCH /admin/settings/integrations */
       integrations: '/admin/settings/integrations',
+      /** Services v1 S05 — GET + PATCH /admin/settings/services */
+      services: '/admin/settings/services',
       /** Confirmed: GET /admin/settings/meta */
       meta: '/admin/settings/meta',
       /** Confirmed: POST /admin/settings/reset */
@@ -965,6 +1064,10 @@ export const endpoints = {
       ordersMeta: '/admin/reports/orders/meta',
       /** Confirmed: GET /admin/reports/orders/export?preset=&limit= → CSV */
       ordersExport: '/admin/reports/orders/export',
+      /** Champ tip totals by driver for a date range / month */
+      driverTips: '/admin/reports/driver-tips',
+      /** Champ tips CSV export */
+      driverTipsExport: '/admin/reports/driver-tips/export',
       /** Vendor settlement recovery obligations from incidents */
       vendorCostRecovery: '/admin/reports/vendor-cost-recovery',
       /** Confirmed: GET /admin/reports/dispatch-evaluations/export */

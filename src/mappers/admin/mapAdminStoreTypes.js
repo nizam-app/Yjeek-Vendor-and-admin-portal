@@ -1,7 +1,10 @@
 import { ApiError } from '../../api/errors'
 
+/** OG §01 / §02 — same label as Branch › Delivery Settings & champ eligibility. */
+const HOT_FOOD_ON_DEMAND_UI = 'Hot food — on demand'
+
 const ORDER_MODE_UI_KEYS = [
-  'On-Demand Delivery',
+  HOT_FOOD_ON_DEMAND_UI,
   'Pickup',
   'Dine-in',
   'Scheduled',
@@ -9,11 +12,16 @@ const ORDER_MODE_UI_KEYS = [
 ]
 
 const ORDER_MODE_API_TO_UI = {
-  onDemandDelivery: 'On-Demand Delivery',
+  onDemandDelivery: HOT_FOOD_ON_DEMAND_UI,
   pickup: 'Pickup',
   dineIn: 'Dine-in',
   scheduled: 'Scheduled',
   services: 'Services',
+}
+
+function isHotFoodOnDemandEnabled(modes) {
+  if (!modes || typeof modes !== 'object') return false
+  return Boolean(modes[HOT_FOOD_ON_DEMAND_UI] ?? modes['On-Demand Delivery'])
 }
 
 function extractStoreTypesRaw(data) {
@@ -167,7 +175,7 @@ export function mapAdminStoreTypesListPage(data, summaryData = null) {
 
 function mapOrderModesToUi(orderModes) {
   const modes = {
-    'On-Demand Delivery': false,
+    [HOT_FOOD_ON_DEMAND_UI]: false,
     Pickup: false,
     'Dine-in': false,
     Scheduled: false,
@@ -184,8 +192,12 @@ function mapOrderModesToUi(orderModes) {
   if (Array.isArray(orderModes)) {
     orderModes.forEach((label) => {
       const normalized = String(label || '').trim().toLowerCase()
-      if (normalized.includes('on-demand') || normalized.includes('on demand')) {
-        modes['On-Demand Delivery'] = true
+      if (
+        normalized.includes('hot food') ||
+        normalized.includes('on-demand') ||
+        normalized.includes('on demand')
+      ) {
+        modes[HOT_FOOD_ON_DEMAND_UI] = true
       } else if (normalized.includes('pickup')) {
         modes.Pickup = true
       } else if (normalized.includes('dine')) {
@@ -391,7 +403,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
     slug,
     sortOrder,
     isActive: form.visibleInApp === true || form.isActive === true,
-    onDemandDelivery: Boolean(modes['On-Demand Delivery']),
+    onDemandDelivery: isHotFoodOnDemandEnabled(modes),
     pickup: Boolean(modes.Pickup),
     dineIn: Boolean(modes['Dine-in']),
     scheduled: Boolean(modes.Scheduled),
@@ -417,6 +429,15 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
   }
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
+  applyItemClassFields(body, form)
+
+  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'HYBRID' || form.catalogMode === 'MODIFIERS') {
+    body.catalogMode = form.catalogMode
+  }
+  if (form.lowStockThreshold != null && form.lowStockThreshold !== '') {
+    const n = Number(form.lowStockThreshold)
+    if (Number.isFinite(n) && n >= 0) body.lowStockThreshold = Math.floor(n)
+  }
 
   return body
 }
@@ -449,7 +470,7 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
   const body = {
     name,
     sortOrder,
-    onDemandDelivery: Boolean(modes['On-Demand Delivery']),
+    onDemandDelivery: isHotFoodOnDemandEnabled(modes),
     pickup: Boolean(modes.Pickup),
     dineIn: Boolean(modes['Dine-in']),
     scheduled: Boolean(modes.Scheduled),
@@ -482,8 +503,38 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
   }
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: true })
+  applyItemClassFields(body, form)
+
+  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'HYBRID' || form.catalogMode === 'MODIFIERS') {
+    body.catalogMode = form.catalogMode
+  }
+  if (form.lowStockThreshold != null && form.lowStockThreshold !== '') {
+    const n = Number(form.lowStockThreshold)
+    if (Number.isFinite(n) && n >= 0) body.lowStockThreshold = Math.floor(n)
+  }
 
   return body
+}
+
+/**
+ * Delivery Fees v1 / D05 — item class flags (+ convert confirm when narrowing).
+ */
+function applyItemClassFields(body, form = {}) {
+  const classes =
+    form.itemClasses && typeof form.itemClasses === 'object' ? form.itemClasses : form
+
+  if (classes.allowsNormalItems !== undefined) {
+    body.allowsNormalItems = Boolean(classes.allowsNormalItems)
+  }
+  if (classes.allowsSpecialItems !== undefined) {
+    body.allowsSpecialItems = Boolean(classes.allowsSpecialItems)
+  }
+  if (form.confirmConvert === true) {
+    body.confirmConvert = true
+  }
+  if (form.convertAction === 'convert_to_normal' || form.convertAction === 'convert_to_special') {
+    body.convertAction = form.convertAction
+  }
 }
 
 /**
@@ -500,6 +551,17 @@ function applyStoreTypeIconFields(body, form = {}, { clearWhenEmpty = false } = 
     } else if (clearWhenEmpty) {
       body.iconUrl = null
     }
+  }
+}
+
+/** Default both on — OG §03 / D05. */
+export function normalizeItemClasses(value) {
+  if (!value || typeof value !== 'object') {
+    return { allowsNormalItems: true, allowsSpecialItems: true }
+  }
+  return {
+    allowsNormalItems: value.allowsNormalItems !== false,
+    allowsSpecialItems: value.allowsSpecialItems !== false,
   }
 }
 
@@ -533,6 +595,7 @@ export function mapAdminStoreTypeDetail(data) {
     orderModeLabels: Array.isArray(data.orderModeLabels)
       ? data.orderModeLabels.map((label) => String(label))
       : [],
+    itemClasses: normalizeItemClasses(data.itemClasses ?? data),
     structure: data.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
     subTypes: Array.isArray(data.subTypes)
       ? data.subTypes
@@ -546,6 +609,12 @@ export function mapAdminStoreTypeDetail(data) {
       : [],
     categories: mapMenuCategories(data.menuCategories),
     badges: mapBadges(data.badges),
+    catalogMode:
+      data.catalogMode === 'VARIANTS' || data.catalogMode === 'HYBRID'
+        ? data.catalogMode
+        : 'MODIFIERS',
+    lowStockThreshold:
+      Number.isFinite(Number(data.lowStockThreshold)) ? Number(data.lowStockThreshold) : 5,
     categoryCount: Number(data.categoryCount) || 0,
     vendorCount: Number(data.vendorCount) || 0,
     createdAt: data.createdAt ?? null,

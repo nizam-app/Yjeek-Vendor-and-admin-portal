@@ -361,8 +361,21 @@ export function parseChampPhone(rawPhone, defaultCountryCode = '+973') {
 function parseDailyCashLimit(value) {
   if (typeof value === 'number' && Number.isFinite(value)) return value
   const digits = String(value || '').replace(/[^\d.]/g, '')
+  if (!digits) return 0
   const numeric = Number(digits)
   return Number.isFinite(numeric) ? numeric : 0
+}
+
+/** Blank / empty → null (optional per-order cash limit). */
+function parseOptionalCashLimit(value) {
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  const digits = raw.replace(/[^\d.]/g, '')
+  if (!digits) return null
+  const numeric = Number(digits)
+  return Number.isFinite(numeric) ? numeric : null
 }
 
 /** Parse DD/MM/YYYY or YYYY-MM-DD → ISO date string (YYYY-MM-DD). */
@@ -525,14 +538,67 @@ function appendChampExtendedFields(body, form = {}, docs = {}) {
       : null
   if (specialItemTypes) body.specialItemTypes = specialItemTypes
 
-  if (form.orderLimit != null || form.perOrderCashLimit != null) {
-    body.perOrderCashLimit = parseDailyCashLimit(form.perOrderCashLimit ?? form.orderLimit)
+  // D07 Batch 4 — OG §07 delivery eligibility (progressive disclosure fields).
+  const eligibilitySource =
+    form.eligibility && typeof form.eligibility === 'object' ? form.eligibility : form
+  if (
+    Array.isArray(eligibilitySource.enabledModes) ||
+    eligibilitySource.scheduledClasses != null ||
+    Array.isArray(eligibilitySource.specialStoreTypeIds)
+  ) {
+    if (Array.isArray(eligibilitySource.enabledModes)) {
+      body.enabledModes = eligibilitySource.enabledModes
+        .map((mode) => String(mode || '').trim().toUpperCase())
+        .filter((mode) => mode === 'HOT_FOOD_ON_DEMAND' || mode === 'SCHEDULED')
+    }
+    if (eligibilitySource.scheduledClasses != null) {
+      const classes = String(eligibilitySource.scheduledClasses || '')
+        .trim()
+        .toUpperCase()
+      if (classes === 'NORMAL_ONLY' || classes === 'SPECIAL_ONLY' || classes === 'BOTH') {
+        body.scheduledClasses = classes
+      }
+    }
+    if (Array.isArray(eligibilitySource.specialStoreTypeIds)) {
+      body.specialStoreTypeIds = [
+        ...new Set(
+          eligibilitySource.specialStoreTypeIds
+            .map((id) => String(id || '').trim())
+            .filter(Boolean),
+        ),
+      ]
+    }
+  }
+
+  const allowCash =
+    form.allowCash != null || form.podEnabled != null
+      ? Boolean(form.allowCash != null ? form.allowCash : form.podEnabled)
+      : null
+  if (allowCash != null) {
+    body.podEnabled = allowCash
+  }
+
+  // Optional per-order: blank → null (no per-order cap).
+  if (
+    form.orderLimit !== undefined ||
+    form.perOrderCashLimit !== undefined ||
+    allowCash === false
+  ) {
+    if (allowCash === false) {
+      body.perOrderCashLimit = null
+    } else {
+      body.perOrderCashLimit = parseOptionalCashLimit(
+        form.perOrderCashLimit ?? form.orderLimit,
+      )
+    }
   }
 
   const cashLimitAction =
-    CASH_LIMIT_ACTION_TO_API[form.onLimit] ||
-    CASH_LIMIT_ACTION_TO_API[form.cashLimitAction] ||
-    null
+    allowCash === false
+      ? 'STOP_CASH_ORDERS'
+      : CASH_LIMIT_ACTION_TO_API[form.onLimit] ||
+        CASH_LIMIT_ACTION_TO_API[form.cashLimitAction] ||
+        null
   if (cashLimitAction) body.cashLimitAction = cashLimitAction
 
   const documents = buildChampDocumentsPayload(docs, form)
@@ -591,6 +657,20 @@ export function mapAdminCreateChampRequest(form = {}) {
   }
 
   appendChampExtendedFields(body, form, docs)
+
+  // Keep POD float aligned with daily cash limit while dual fields coexist.
+  const allowCash = Boolean(form.allowCash ?? form.podEnabled)
+  body.podEnabled = allowCash
+  if (allowCash) {
+    body.podMaxFloat = body.dailyCashLimit
+    if (!Number.isFinite(body.dailyCashLimit) || body.dailyCashLimit <= 0) {
+      throw new ApiError({ message: 'Daily cash limit is required when Allow cash is enabled.' })
+    }
+  } else {
+    body.podMaxFloat = 0
+    body.perOrderCashLimit = null
+    body.cashLimitAction = 'STOP_CASH_ORDERS'
+  }
 
   if (!body.email) delete body.email
   if (!body.cprNumber) delete body.cprNumber
@@ -673,6 +753,26 @@ export function mapAdminUpdateChampRequest(form = {}) {
 
   appendChampExtendedFields(body, form, docs)
 
+  if (form.allowCash != null || form.podEnabled != null || form.dailyCashLimit != null || form.dailyLimit != null) {
+    const allowCash = Boolean(form.allowCash ?? form.podEnabled)
+    body.podEnabled = allowCash
+    if (allowCash) {
+      const daily =
+        body.dailyCashLimit != null
+          ? body.dailyCashLimit
+          : parseDailyCashLimit(form.dailyCashLimit ?? form.dailyLimit)
+      body.dailyCashLimit = daily
+      body.podMaxFloat = daily
+      if (!Number.isFinite(daily) || daily <= 0) {
+        throw new ApiError({ message: 'Daily cash limit is required when Allow cash is enabled.' })
+      }
+    } else {
+      body.podMaxFloat = 0
+      body.perOrderCashLimit = null
+      body.cashLimitAction = 'STOP_CASH_ORDERS'
+    }
+  }
+
   if (!Object.keys(body).length) {
     throw new ApiError({ message: 'No champ fields to update.' })
   }
@@ -725,11 +825,18 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
 
   const orderLimitRaw = profile.perOrderCashLimit
   const orderLimit =
-    typeof orderLimitRaw === 'number'
-      ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
-      : orderLimitRaw != null
+    orderLimitRaw == null || orderLimitRaw === ''
+      ? ''
+      : typeof orderLimitRaw === 'number'
         ? `BHD ${Number(orderLimitRaw).toFixed(3)}`
-        : 'BHD 20.000'
+        : `BHD ${Number(orderLimitRaw).toFixed(3)}`
+
+  const allowCash =
+    profile.pod && typeof profile.pod === 'object' && profile.pod.enabled != null
+      ? Boolean(profile.pod.enabled)
+      : profile.podEnabled != null
+        ? Boolean(profile.podEnabled)
+        : false
 
   const tierRaw = profile.tier || detail.tier || 'BRONZE'
   const tier = mapFleetTierToApi(tierRaw) || String(tierRaw).toUpperCase() || 'BRONZE'
@@ -797,6 +904,43 @@ export function mapAdminChampDetailToForm(detail, documentsPayload) {
     vehicleType,
     specialItems: profile.specialItemsEnabled != null ? Boolean(profile.specialItemsEnabled) : true,
     specialTypes: Array.isArray(profile.specialItemTypes) ? profile.specialItemTypes : [],
+    eligibility: (() => {
+      const rawEligibility =
+        profile.eligibility && typeof profile.eligibility === 'object'
+          ? profile.eligibility
+          : profile
+      const enabledModes = Array.isArray(rawEligibility.enabledModes)
+        ? rawEligibility.enabledModes
+            .map((mode) => String(mode || '').trim().toUpperCase())
+            .filter((mode) => mode === 'HOT_FOOD_ON_DEMAND' || mode === 'SCHEDULED')
+        : []
+      const scheduledClassesRaw = String(rawEligibility.scheduledClasses || '')
+        .trim()
+        .toUpperCase()
+      const scheduledClasses =
+        scheduledClassesRaw === 'SPECIAL_ONLY' ||
+        scheduledClassesRaw === 'BOTH' ||
+        scheduledClassesRaw === 'NORMAL_ONLY'
+          ? scheduledClassesRaw
+          : 'NORMAL_ONLY'
+      const specialStoreTypeIds = Array.isArray(rawEligibility.specialStoreTypeIds)
+        ? [
+            ...new Set(
+              rawEligibility.specialStoreTypeIds
+                .map((id) => String(id || '').trim())
+                .filter(Boolean),
+            ),
+          ]
+        : []
+      return {
+        enabledModes: enabledModes.length
+          ? enabledModes
+          : ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
+        scheduledClasses,
+        specialStoreTypeIds,
+      }
+    })(),
+    allowCash,
     dailyLimit,
     orderLimit,
     onLimit: CASH_LIMIT_ACTION_TO_FORM[profile.cashLimitAction] || 'Stop cash orders',
@@ -1718,6 +1862,7 @@ export function mapAdminChampEarningsResponse(data) {
   const week = summary.week && typeof summary.week === 'object' ? summary.week : {}
   const lifetime =
     summary.lifetime && typeof summary.lifetime === 'object' ? summary.lifetime : {}
+  const periodRaw = summary.period && typeof summary.period === 'object' ? summary.period : null
 
   const breakdown = Array.isArray(data.breakdown)
     ? data.breakdown
@@ -1742,12 +1887,34 @@ export function mapAdminChampEarningsResponse(data) {
 
   return {
     summary: [
-      { label: 'Today', value: formatEarningsMoney(today.earnings) },
-      { label: 'This week', value: formatEarningsMoney(week.earnings) },
-      { label: 'Lifetime', value: formatEarningsMoney(lifetime.earnings) },
+      {
+        label: 'Today',
+        value: formatEarningsMoney(today.earnings),
+        tips: formatEarningsMoney(today.tips),
+      },
+      {
+        label: 'This week',
+        value: formatEarningsMoney(week.earnings),
+        tips: formatEarningsMoney(week.tips),
+      },
+      {
+        label: 'Lifetime',
+        value: formatEarningsMoney(lifetime.earnings),
+        tips: formatEarningsMoney(lifetime.tips),
+      },
     ],
+    period: periodRaw
+      ? {
+          from: periodRaw.from ?? null,
+          to: periodRaw.to ?? null,
+          deliveries: formatCount(periodRaw.deliveries ?? 0),
+          earnings: formatEarningsMoney(periodRaw.earnings),
+          tips: formatEarningsMoney(periodRaw.tips),
+          incentive: formatIncentiveMoney(periodRaw.incentive),
+        }
+      : null,
     // Keep raw buckets for future UI (deliveries / tips) if needed.
-    buckets: { today, week, lifetime },
+    buckets: { today, week, lifetime, period: periodRaw },
     rows,
   }
 }
