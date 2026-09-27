@@ -211,7 +211,7 @@ const DETAIL_TABS = [
   'Promotions',
   'Commission & fees',
   'SLA',
-  'Menu import',
+  'Menu Settings',
 ]
 
 /**
