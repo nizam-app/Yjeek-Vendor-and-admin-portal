@@ -143,3 +143,16 @@ export function buildScheduledFeesPayload(form) {
   }
   return { tiers }
 }
+
+/** Null when every tier with free delivery on has a cart threshold. */
+export function scheduledFreeDeliveryMissingMessage(form) {
+  const payload = buildScheduledFeesPayload(form)
+  for (const tier of SCHEDULED_SPEED_TIERS) {
+    const cell = payload.tiers[tier]
+    if (cell?.freeDeliveryEnabled && (cell.freeDeliveryOver == null || cell.freeDeliveryOver === '')) {
+      const label = SCHEDULED_SPEED_TIER_LABELS[tier] || tier
+      return `${label} has free delivery on. Enter the cart amount, or turn free delivery off.`
+    }
+  }
+  return null
+}
