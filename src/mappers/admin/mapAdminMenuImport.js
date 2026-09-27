@@ -4,7 +4,7 @@ export const POLL_INTERVAL_MS = 3000
 
 export const KNOWN_CREATE_ERRORS = {
   AGGREGATOR_URL_FORBIDDEN:
-    "That URL looks like a third-party aggregator menu. Use the vendor's own website instead.",
+    'That aggregator is not supported. Use a Talabat restaurant menu URL, the vendor’s own website, or upload a file.',
   VENDOR_NOT_FOUND: 'Vendor was not found in Core. Open a live vendor from Vendor Management.',
   VENDOR_INACTIVE: 'This vendor is inactive. Activate the vendor before importing.',
   ACTIVE_IMPORT_EXISTS: 'This vendor already has an active import. Cancel or complete it first.',
@@ -142,6 +142,12 @@ export function mapAdminMenuImportList(raw) {
 
 function mapReviewItem(raw) {
   const src = raw && typeof raw === 'object' ? raw : {}
+  const imageUrls = Array.isArray(src.imageUrls)
+    ? src.imageUrls.map((url) => String(url)).filter(Boolean).slice(0, 4)
+    : []
+  if (src.imageUrl && !imageUrls.includes(String(src.imageUrl))) {
+    imageUrls.unshift(String(src.imageUrl))
+  }
   return {
     id: String(src.id || ''),
     name: String(src.name || ''),
@@ -149,10 +155,23 @@ function mapReviewItem(raw) {
     description: src.description ?? null,
     descriptionAr: src.descriptionAr ? String(src.descriptionAr) : null,
     price: toPrice(src.price),
-    imageUrl: src.imageUrl ?? null,
+    imageUrl: src.imageUrl ?? imageUrls[0] ?? null,
+    imageUrls: imageUrls.slice(0, 4),
     displayOrder: toNumber(src.displayOrder, 0),
     sourcePageNumber: src.sourcePageNumber ?? null,
     backendItemId: src.backendItemId ?? null,
+    subcategory: src.subcategory ? String(src.subcategory) : null,
+    subSubcategory: src.subSubcategory ? String(src.subSubcategory) : null,
+    prepTimeMin: src.prepTimeMin != null ? toNumber(src.prepTimeMin, 0) || null : null,
+    badges: Array.isArray(src.badges) ? src.badges.map(String) : [],
+    availabilitySlots: Array.isArray(src.availabilitySlots)
+      ? src.availabilitySlots.map(String)
+      : [],
+    availableFrom: src.availableFrom ? String(src.availableFrom) : null,
+    availableTo: src.availableTo ? String(src.availableTo) : null,
+    optionGroups: Array.isArray(src.optionGroups) ? src.optionGroups : [],
+    addons: Array.isArray(src.addons) ? src.addons : [],
+    isActive: Boolean(src.isActive),
   }
 }
 

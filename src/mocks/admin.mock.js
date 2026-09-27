@@ -2140,7 +2140,7 @@ const DELIVERY_ZONE_DEFAULTS = {
   freeDeliveryEnabled: true,
   maxDistanceKm: '8',
   extraContributionPerKm: '0.100',
-  maxContribution: '0.800',
+  maxContribution: '0.600',
 }
 
 const DELIVERY_BRANCH_OVERRIDES = [

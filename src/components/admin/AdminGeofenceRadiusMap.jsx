@@ -5,12 +5,14 @@ import { hasGoogleMapsApiKey, isPlottableLatLng, loadGoogleMapsApi } from '../..
 const DEFAULT_CENTER = { lat: 26.2285, lng: 50.586 }
 
 /**
- * Live geofence preview — pin + green circle that tracks lat/lng/radius.
- * Click or drag the pin to override coordinates.
+ * Live geofence preview — pin(s) + green circle(s) that track lat/lng/radius.
+ * Pass `locations` for multi-vendor; single `latitude`/`longitude` still works.
+ * Click or drag the pin to override coordinates when `onCenterChange` is set (single pin only).
  */
 export default function AdminGeofenceRadiusMap({
   latitude,
   longitude,
+  locations,
   radiusMeters = 500,
   label = 'Geofence',
   onCenterChange,
@@ -20,8 +22,8 @@ export default function AdminGeofenceRadiusMap({
 }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
-  const markerRef = useRef(null)
-  const circleRef = useRef(null)
+  const markersRef = useRef([])
+  const circlesRef = useRef([])
   const mapsApiRef = useRef(null)
   const onCenterChangeRef = useRef(onCenterChange)
   const [status, setStatus] = useState('loading')
@@ -31,11 +33,25 @@ export default function AdminGeofenceRadiusMap({
     onCenterChangeRef.current = onCenterChange
   }, [onCenterChange])
 
-  const hasCenter = isPlottableLatLng(latitude, longitude)
-  const center = useMemo(() => {
-    if (!hasCenter) return null
-    return { lat: Number(latitude), lng: Number(longitude) }
-  }, [hasCenter, latitude, longitude])
+  const pins = useMemo(() => {
+    if (Array.isArray(locations) && locations.length > 0) {
+      return locations
+        .filter((loc) => isPlottableLatLng(loc?.latitude, loc?.longitude))
+        .map((loc, index) => ({
+          lat: Number(loc.latitude),
+          lng: Number(loc.longitude),
+          label: String(loc.label || loc.name || `Vendor ${index + 1}`),
+        }))
+    }
+    if (isPlottableLatLng(latitude, longitude)) {
+      return [{ lat: Number(latitude), lng: Number(longitude), label }]
+    }
+    return []
+  }, [locations, latitude, longitude, label])
+
+  const hasCenter = pins.length > 0
+  const center = pins[0] ? { lat: pins[0].lat, lng: pins[0].lng } : null
+  const canDrag = Boolean(onCenterChange) && pins.length === 1
 
   const radius = useMemo(() => {
     const n = Number(radiusMeters)
@@ -49,6 +65,13 @@ export default function AdminGeofenceRadiusMap({
       latitude: String(Number(Number(lat).toFixed(6))),
       longitude: String(Number(Number(lng).toFixed(6))),
     })
+  }, [])
+
+  const clearOverlays = useCallback(() => {
+    markersRef.current.forEach((marker) => marker.setMap(null))
+    circlesRef.current.forEach((circle) => circle.setMap(null))
+    markersRef.current = []
+    circlesRef.current = []
   }, [])
 
   useEffect(() => {
@@ -74,6 +97,8 @@ export default function AdminGeofenceRadiusMap({
           })
           map.addListener('click', (event) => {
             if (!onCenterChangeRef.current || !event?.latLng) return
+            // Multi-vendor preview is read-only; only allow click-to-move for single pin.
+            if (markersRef.current.length > 1) return
             emitCenter(event.latLng.lat(), event.latLng.lng())
           })
           mapInstanceRef.current = map
@@ -98,40 +123,36 @@ export default function AdminGeofenceRadiusMap({
     const maps = mapsApiRef.current
     const map = mapInstanceRef.current
 
-    if (!center) {
-      markerRef.current?.setMap(null)
-      circleRef.current?.setMap(null)
-      markerRef.current = null
-      circleRef.current = null
+    clearOverlays()
+
+    if (!pins.length) {
       map.setCenter(DEFAULT_CENTER)
       map.setZoom(12)
       return undefined
     }
 
-    if (!markerRef.current) {
+    const bounds = new maps.LatLngBounds()
+
+    pins.forEach((pin) => {
+      const position = { lat: pin.lat, lng: pin.lng }
       const marker = new maps.Marker({
         map,
-        position: center,
-        draggable: Boolean(onCenterChangeRef.current),
-        title: label,
+        position,
+        draggable: canDrag,
+        title: pin.label,
       })
-      marker.addListener('dragend', () => {
-        const pos = marker.getPosition()
-        if (!pos) return
-        emitCenter(pos.lat(), pos.lng())
-      })
-      markerRef.current = marker
-    } else {
-      markerRef.current.setPosition(center)
-      markerRef.current.setMap(map)
-      markerRef.current.setDraggable(Boolean(onCenterChangeRef.current))
-      markerRef.current.setTitle(label)
-    }
+      if (canDrag) {
+        marker.addListener('dragend', () => {
+          const pos = marker.getPosition()
+          if (!pos) return
+          emitCenter(pos.lat(), pos.lng())
+        })
+      }
+      markersRef.current.push(marker)
 
-    if (!circleRef.current) {
-      circleRef.current = new maps.Circle({
+      const circle = new maps.Circle({
         map,
-        center,
+        center: position,
         radius,
         strokeColor: '#1aa054',
         strokeOpacity: 1,
@@ -140,28 +161,44 @@ export default function AdminGeofenceRadiusMap({
         fillOpacity: 0.18,
         clickable: false,
       })
-    } else {
-      circleRef.current.setCenter(center)
-      circleRef.current.setRadius(radius)
-      circleRef.current.setMap(map)
-    }
+      circlesRef.current.push(circle)
 
-    const bounds = circleRef.current.getBounds()
+      const circleBounds = circle.getBounds()
+      if (circleBounds) {
+        bounds.union(circleBounds)
+      } else {
+        bounds.extend(position)
+      }
+    })
+
     let listener = null
-    if (bounds) {
-      map.fitBounds(bounds, 40)
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, pins.length > 1 ? 48 : 40)
       listener = maps.event.addListenerOnce(map, 'bounds_changed', () => {
         const zoom = map.getZoom()
-        if (zoom != null && zoom > 16) map.setZoom(16)
+        // Single fence: don't over-zoom. Multi: allow wider view to fit all.
+        const maxZoom = pins.length > 1 ? 15 : 16
+        if (zoom != null && zoom > maxZoom) map.setZoom(maxZoom)
       })
-    } else {
+    } else if (center) {
       map.panTo(center)
     }
 
     return () => {
       if (listener) maps.event.removeListener(listener)
     }
-  }, [status, center, radius, label, emitCenter])
+  }, [status, pins, radius, canDrag, center, emitCenter, clearOverlays])
+
+  const footerText = (() => {
+    if (!hasCenter) return 'Waiting for vendor location'
+    if (pins.length > 1) {
+      return `${pins.length} vendors · ${Math.round(radius)} m radius each`
+    }
+    if (onCenterChange) {
+      return `${Math.round(radius)} m radius · drag pin or click map to move`
+    }
+    return `${Math.round(radius)} m radius around vendor location`
+  })()
 
   if (status === 'missing-key') {
     return (
@@ -202,13 +239,7 @@ export default function AdminGeofenceRadiusMap({
         ) : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#edf0ee] bg-[#fafbfa] px-4 py-2.5">
-        <p className="text-[12px] text-[#7c8780]">
-          {hasCenter
-            ? onCenterChange
-              ? `${Math.round(radius)} m radius · drag pin or click map to move`
-              : `${Math.round(radius)} m radius around vendor location`
-            : 'Waiting for vendor location'}
-        </p>
+        <p className="text-[12px] text-[#7c8780]">{footerText}</p>
         {status === 'loading' ? <p className="text-[12px] text-[#9aa49d]">Loading map…</p> : null}
       </div>
     </div>

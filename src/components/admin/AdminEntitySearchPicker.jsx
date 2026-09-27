@@ -103,6 +103,11 @@ export function AdminEntitySearchPicker({
         id,
         label: String(item.label || id),
         ...(item.meta ? { meta: String(item.meta) } : {}),
+        ...(Array.isArray(item.orderTypes) && item.orderTypes.length
+          ? {
+              orderTypes: item.orderTypes.map((t) => String(t || '').trim().toUpperCase()).filter(Boolean),
+            }
+          : {}),
       },
     ])
     setQuery('')

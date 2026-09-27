@@ -7,6 +7,9 @@ import { mapAdminUploadImageResponse } from '../../mappers/admin/mapAdminUpload'
 /** Backend-aligned client limit for banner / admin image uploads (5 MB). */
 export const ADMIN_IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 
+/** Menu-source uploads (PDF / Excel / ZIP) — aligned with backend UPLOAD_MAX_SIZE_MB (25). */
+export const ADMIN_MENU_SOURCE_MAX_BYTES = 25 * 1024 * 1024
+
 export const ADMIN_IMAGE_UPLOAD_ACCEPT = 'image/jpeg,image/png,image/webp'
 
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/jpg'])
@@ -161,7 +164,7 @@ export const adminUploadService = {
     }
 
     if (!file || !(file instanceof File)) {
-      throw new ApiError({ message: 'Please choose a PDF, image, or spreadsheet file.' })
+      throw new ApiError({ message: 'Please choose a PDF, image, spreadsheet, or ZIP file.' })
     }
 
     const type = String(file.type || '').toLowerCase()
@@ -180,11 +183,21 @@ export const adminUploadService = {
       type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       name.endsWith('.csv') ||
       name.endsWith('.xlsx') ||
-      name.endsWith('.xls')
+      name.endsWith('.xls') ||
+      type === 'application/zip' ||
+      type === 'application/x-zip-compressed' ||
+      name.endsWith('.zip')
 
     if (!allowed) {
       throw new ApiError({
-        message: 'Only JPEG, PNG, WebP, PDF, CSV, and Excel (.xlsx/.xls) files are allowed.',
+        message: 'Only JPEG, PNG, WebP, PDF, CSV, Excel (.xlsx/.xls), and ZIP files are allowed.',
+      })
+    }
+
+    if (file.size > ADMIN_MENU_SOURCE_MAX_BYTES) {
+      const mb = Math.round((ADMIN_MENU_SOURCE_MAX_BYTES / (1024 * 1024)) * 10) / 10
+      throw new ApiError({
+        message: `File too large. Maximum size is ${mb}MB`,
       })
     }
 

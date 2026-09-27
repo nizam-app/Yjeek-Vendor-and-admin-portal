@@ -13,10 +13,51 @@ import {
   mapOpeningHoursToWizardHours,
   mapUiTimeTo24h,
 } from '../../../mappers/admin/mapAdminVendorBranches'
-import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
+import { buildBranchModeGate, branchOrderModesAtLeastOneError } from '../../../components/admin/AdminVendorSlaConfigs'
 import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
+import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
+
+const VENDOR_MAX_CONTRIBUTION_KEYS = new Set([
+  'radiusKm',
+  'deliveryContribution',
+  'maxDistanceKm',
+  'extraContributionPerKm',
+])
+
+const CUSTOMER_MAX_CONTRIBUTION_KEYS = new Set([
+  'customerRadiusKm',
+  'customerDeliveryContribution',
+  'customerMaxDistanceKm',
+  'customerExtraContributionPerKm',
+])
+
+function withVendorMaxContribution(next) {
+  const maxContribution = calcMaxContribution({
+    deliveryContribution: next.deliveryContribution,
+    extraContributionPerKm: next.extraContributionPerKm,
+    maxDistanceKm: next.maxDistanceKm,
+    deliveryRadiusKm: next.radiusKm,
+  })
+  if (maxContribution == null) return next
+  return { ...next, maxContribution }
+}
+
+function withCustomerMaxContribution(next) {
+  const customerMaxContribution = calcMaxContribution({
+    deliveryContribution: next.customerDeliveryContribution,
+    extraContributionPerKm: next.customerExtraContributionPerKm,
+    maxDistanceKm: next.customerMaxDistanceKm,
+    deliveryRadiusKm: next.customerRadiusKm,
+  })
+  if (customerMaxContribution == null) return next
+  return { ...next, customerMaxContribution }
+}
+
+function withScopedMaxContributions(next) {
+  return withCustomerMaxContribution(withVendorMaxContribution(next))
+}
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
@@ -442,9 +483,13 @@ export default function AdminAddVendorBrunchs() {
     freeDeliveryOver: '8.000',
     maxDistanceKm: '8',
     extraContributionPerKm: '0.100',
-    maxContribution: '0.800',
+    maxContribution: '0.600',
     // Vendor-level customer delivery radius (delivery-zones.deliveryRadiusKm)
     customerRadiusKm: '5',
+    customerDeliveryContribution: '0.300',
+    customerMaxDistanceKm: '8',
+    customerExtraContributionPerKm: '0.100',
+    customerMaxContribution: '0.600',
     hours: defaultHours(),
   }))
   const [branchOnline, setBranchOnline] = useState(true)
@@ -458,11 +503,14 @@ export default function AdminAddVendorBrunchs() {
     canToggleDineIn: false,
     vendorSupportsPickup: false,
     vendorSupportsDineIn: false,
+    visibleModes: [],
+    toggleableModes: [],
     ready: false,
   })
   const [freeDeliveryEnabled, setFreeDeliveryEnabled] = useState(true)
   const [applyVendorDeliveryToAll, setApplyVendorDeliveryToAll] = useState(false)
   const [applyCustomerDeliveryToAll, setApplyCustomerDeliveryToAll] = useState(false)
+  const [branchDeliverySettings, setBranchDeliverySettings] = useState({})
   const [forceCloseOpen, setForceCloseOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -525,17 +573,47 @@ export default function AdminAddVendorBrunchs() {
         }
 
         const zones = results[offset]?.data?.defaults || null
+        const branchSettings = results[offset]?.data?.branchDeliverySettings || {}
+        setBranchDeliverySettings(branchSettings)
         if (zones) {
           setFreeDeliveryEnabled(Boolean(zones.freeDeliveryEnabled))
-          setForm((prev) => ({
-            ...prev,
-            deliveryContribution: zones.deliveryContribution || prev.deliveryContribution,
-            freeDeliveryOver: zones.freeDeliveryOver || prev.freeDeliveryOver,
-            maxDistanceKm: zones.maxDistanceKm || prev.maxDistanceKm,
-            extraContributionPerKm: zones.extraContributionPerKm || prev.extraContributionPerKm,
-            maxContribution: zones.maxContribution || prev.maxContribution,
-            customerRadiusKm: zones.radiusKm || prev.customerRadiusKm,
-          }))
+          const branchSlice =
+            !isNewBranch && branchId && branchSettings[String(branchId)]
+              ? branchSettings[String(branchId)]
+              : null
+          setForm((prev) =>
+            withScopedMaxContributions({
+              ...prev,
+              deliveryContribution: branchSlice?.deliveryContribution != null
+                ? String(branchSlice.deliveryContribution)
+                : zones.deliveryContribution || prev.deliveryContribution,
+              freeDeliveryOver: zones.freeDeliveryOver || prev.freeDeliveryOver,
+              maxDistanceKm: branchSlice?.maxDistanceKm != null
+                ? String(branchSlice.maxDistanceKm)
+                : zones.maxDistanceKm || prev.maxDistanceKm,
+              extraContributionPerKm: branchSlice?.extraContributionPerKm != null
+                ? String(branchSlice.extraContributionPerKm)
+                : zones.extraContributionPerKm || prev.extraContributionPerKm,
+              maxContribution: branchSlice?.maxContribution != null
+                ? String(branchSlice.maxContribution)
+                : zones.maxContribution || prev.maxContribution,
+              customerRadiusKm: zones.radiusKm || prev.customerRadiusKm,
+              customerDeliveryContribution:
+                zones.customerDeliveryContribution ||
+                zones.deliveryContribution ||
+                prev.customerDeliveryContribution,
+              customerMaxDistanceKm:
+                zones.customerMaxDistanceKm || zones.maxDistanceKm || prev.customerMaxDistanceKm,
+              customerExtraContributionPerKm:
+                zones.customerExtraContributionPerKm ||
+                zones.extraContributionPerKm ||
+                prev.customerExtraContributionPerKm,
+              customerMaxContribution:
+                zones.customerMaxContribution ||
+                zones.maxContribution ||
+                prev.customerMaxContribution,
+            }),
+          )
         }
 
         const detail = results[offset + 1]?.data || null
@@ -603,27 +681,29 @@ export default function AdminAddVendorBrunchs() {
   useEffect(() => {
     if (isNewBranch || !branch) return
     const hydratedHours = mapOpeningHoursToWizardHours(branch.openingHours, defaultHours())
-    setForm((prev) => ({
-      ...prev,
-      name: branch.name || '',
-      areaCity: branch.areaCity || branch.area || prev.areaCity,
-      address: branch.address ?? prev.address,
-      phone: branch.phone ?? prev.phone,
-      latitude: isPlottableLatLng(branch.latitude, branch.longitude)
-        ? String(branch.latitude)
-        : prev.latitude,
-      longitude: isPlottableLatLng(branch.latitude, branch.longitude)
-        ? String(branch.longitude)
-        : prev.longitude,
-      radiusKm: branch.radiusKm != null ? String(branch.radiusKm) : prev.radiusKm,
-      etaMin: branch.etaMin != null ? String(branch.etaMin) : prev.etaMin,
-      minOrderValue:
-        branch.minOrderAmount != null ? String(branch.minOrderAmount) : prev.minOrderValue,
-      pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
-        ? `${branch.latitude}° N, ${branch.longitude}° E`
-        : prev.pinnedLocation,
-      hours: hydratedHours || prev.hours,
-    }))
+    setForm((prev) =>
+      withVendorMaxContribution({
+        ...prev,
+        name: branch.name || '',
+        areaCity: branch.areaCity || branch.area || prev.areaCity,
+        address: branch.address ?? prev.address,
+        phone: branch.phone ?? prev.phone,
+        latitude: isPlottableLatLng(branch.latitude, branch.longitude)
+          ? String(branch.latitude)
+          : prev.latitude,
+        longitude: isPlottableLatLng(branch.latitude, branch.longitude)
+          ? String(branch.longitude)
+          : prev.longitude,
+        radiusKm: branch.radiusKm != null ? String(branch.radiusKm) : prev.radiusKm,
+        etaMin: branch.etaMin != null ? String(branch.etaMin) : prev.etaMin,
+        minOrderValue:
+          branch.minOrderAmount != null ? String(branch.minOrderAmount) : prev.minOrderValue,
+        pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
+          ? `${branch.latitude}° N, ${branch.longitude}° E`
+          : prev.pinnedLocation,
+        hours: hydratedHours || prev.hours,
+      }),
+    )
     if (branch.operationalStatus) {
       setBranchOnline(String(branch.operationalStatus).toUpperCase() !== 'CLOSED')
     } else if (branch.status) {
@@ -632,6 +712,28 @@ export default function AdminAddVendorBrunchs() {
     if (typeof branch.allowsPickup === 'boolean') setAllowPickup(branch.allowsPickup)
     if (typeof branch.allowsDineIn === 'boolean') setAllowDineIn(branch.allowsDineIn)
   }, [branch, isNewBranch])
+
+  // When branch-specific contribution settings arrive after branch hydrate, apply them.
+  useEffect(() => {
+    if (isNewBranch || !branchId) return
+    const slice = branchDeliverySettings?.[String(branchId)]
+    if (!slice) return
+    setForm((prev) =>
+      withVendorMaxContribution({
+        ...prev,
+        ...(slice.deliveryContribution != null
+          ? { deliveryContribution: String(slice.deliveryContribution) }
+          : {}),
+        ...(slice.maxDistanceKm != null ? { maxDistanceKm: String(slice.maxDistanceKm) } : {}),
+        ...(slice.extraContributionPerKm != null
+          ? { extraContributionPerKm: String(slice.extraContributionPerKm) }
+          : {}),
+        ...(slice.maxContribution != null
+          ? { maxContribution: String(slice.maxContribution) }
+          : {}),
+      }),
+    )
+  }, [branchDeliverySettings, branchId, isNewBranch])
 
   // Hydrate wizard branch edit from navigation state.
   useEffect(() => {
@@ -655,6 +757,26 @@ export default function AdminAddVendorBrunchs() {
     if (until && !Number.isNaN(until.getTime()) && until > new Date()) return true
     return /force-?closed/i.test(String(branch.status || ''))
   }, [branch, isNewBranch])
+
+  const vendorMaxDistanceError = useMemo(
+    () =>
+      maxDistanceBelowRadiusError({
+        maxDistanceKm: form.maxDistanceKm,
+        deliveryRadiusKm: form.radiusKm,
+        scopeLabel: 'Max distance',
+      }),
+    [form.maxDistanceKm, form.radiusKm],
+  )
+
+  const customerMaxDistanceError = useMemo(
+    () =>
+      maxDistanceBelowRadiusError({
+        maxDistanceKm: form.customerMaxDistanceKm,
+        deliveryRadiusKm: form.customerRadiusKm,
+        scopeLabel: 'Max distance',
+      }),
+    [form.customerMaxDistanceKm, form.customerRadiusKm],
+  )
 
   /** Live preview: pin + Vendor delivery details radius (km). */
   const coveragePreview = useMemo(() => {
@@ -749,7 +871,12 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function updateField(field, value) {
-    setForm((c) => ({ ...c, [field]: value }))
+    setForm((current) => {
+      const next = { ...current, [field]: value }
+      if (VENDOR_MAX_CONTRIBUTION_KEYS.has(field)) return withVendorMaxContribution(next)
+      if (CUSTOMER_MAX_CONTRIBUTION_KEYS.has(field)) return withCustomerMaxContribution(next)
+      return next
+    })
   }
 
   function handlePinChange({ latitude, longitude, address, area, city }) {
@@ -942,6 +1069,37 @@ export default function AdminAddVendorBrunchs() {
       setSaveError(`Working hours — ${hoursIssue}`)
       return
     }
+
+    const vendorMaxDistanceError = maxDistanceBelowRadiusError({
+      maxDistanceKm: form.maxDistanceKm,
+      deliveryRadiusKm: form.radiusKm,
+      scopeLabel: 'Vendor max distance',
+    })
+    if (vendorMaxDistanceError) {
+      setSaveError(vendorMaxDistanceError)
+      return
+    }
+
+    const customerMaxDistanceError = maxDistanceBelowRadiusError({
+      maxDistanceKm: form.customerMaxDistanceKm,
+      deliveryRadiusKm: form.customerRadiusKm,
+      scopeLabel: 'Customer max distance',
+    })
+    if (customerMaxDistanceError) {
+      setSaveError(customerMaxDistanceError)
+      return
+    }
+
+    const branchModesError = branchOrderModesAtLeastOneError({
+      modeGate,
+      allowPickup,
+      allowDineIn,
+    })
+    if (branchModesError) {
+      setSaveError(branchModesError)
+      return
+    }
+
     setSaveError(null)
 
     if (!useRealBranchApi) {
@@ -973,6 +1131,10 @@ export default function AdminAddVendorBrunchs() {
           maxDistanceKm: form.maxDistanceKm,
           extraContributionPerKm: form.extraContributionPerKm,
           maxContribution: form.maxContribution,
+          customerDeliveryContribution: form.customerDeliveryContribution,
+          customerMaxDistanceKm: form.customerMaxDistanceKm,
+          customerExtraContributionPerKm: form.customerExtraContributionPerKm,
+          customerMaxContribution: form.customerMaxContribution,
           isPrimary: Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
           detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
         }
@@ -998,23 +1160,45 @@ export default function AdminAddVendorBrunchs() {
         allowsPickup: modeGate.showPickup && modeGate.canTogglePickup ? allowPickup : false,
         allowsDineIn: modeGate.showDineIn && modeGate.canToggleDineIn ? allowDineIn : false,
       }
+
+      let savedBranchId = !isNewBranch ? String(branchId) : null
       if (isNewBranch) {
-        await adminService.createVendorBranch(vendorId, payload)
+        const created = await adminService.createVendorBranch(vendorId, payload)
+        const createdBranches = created?.data?.branches || []
+        const previousIds = new Set((allBranches || []).map((b) => String(b.id)))
+        const createdBranch =
+          createdBranches.find((b) => !previousIds.has(String(b.id))) ||
+          createdBranches.find((b) => String(b.name) === String(form.name).trim()) ||
+          createdBranches[createdBranches.length - 1] ||
+          null
+        savedBranchId = createdBranch?.id != null ? String(createdBranch.id) : null
       } else {
         await adminService.updateVendorBranch(vendorId, branchId, payload)
       }
 
-      // Always persist vendor-level delivery / customer fee settings.
+      // Persist independent vendor-scope (per branch) + customer-scope delivery settings.
       await adminService.updateVendorDeliveryZones(vendorId, {
-        radiusKm: form.customerRadiusKm || form.radiusKm,
+        radiusKm: form.customerRadiusKm,
+        // Keep vendor-level ETA/min/free-delivery aligned with the vendor delivery card.
         etaMin: form.etaMin,
         minOrder: form.minOrderValue,
-        deliveryContribution: form.deliveryContribution,
         freeDeliveryOver: form.freeDeliveryOver,
         freeDeliveryEnabled,
-        maxDistanceKm: form.maxDistanceKm,
-        extraContributionPerKm: form.extraContributionPerKm,
-        maxContribution: form.maxContribution,
+        customerDeliveryContribution: form.customerDeliveryContribution,
+        customerMaxDistanceKm: form.customerMaxDistanceKm,
+        customerExtraContributionPerKm: form.customerExtraContributionPerKm,
+        customerMaxContribution: form.customerMaxContribution,
+        ...(savedBranchId
+          ? {
+              branchId: savedBranchId,
+              branchDeliveryRadiusKm: form.radiusKm,
+              branchDeliveryContribution: form.deliveryContribution,
+              branchMaxDistanceKm: form.maxDistanceKm,
+              branchExtraContributionPerKm: form.extraContributionPerKm,
+              branchMaxContribution: form.maxContribution,
+              applyVendorContributionToAll: applyVendorDeliveryToAll,
+            }
+          : {}),
       })
 
       if (applyVendorDeliveryToAll || applyCustomerDeliveryToAll) {
@@ -1300,10 +1484,21 @@ export default function AdminAddVendorBrunchs() {
 
               <Field label="Max distance (km)">
                 <input
-                  className={inputClass}
+                  className={cn(
+                    inputClass,
+                    vendorMaxDistanceError && 'border-[#d64044] focus:border-[#d64044]',
+                  )}
                   value={form.maxDistanceKm}
                   onChange={(e) => updateField('maxDistanceKm', e.target.value)}
+                  aria-invalid={Boolean(vendorMaxDistanceError)}
                 />
+                {vendorMaxDistanceError ? (
+                  <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">{vendorMaxDistanceError}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] leading-[14px] text-[#9aa49d]">
+                    Must be greater than or equal to delivery radius.
+                  </p>
+                )}
               </Field>
 
               <Field label="Extra contribution per km (BHD)">
@@ -1316,9 +1511,11 @@ export default function AdminAddVendorBrunchs() {
 
               <Field label="Max contribution (BHD)">
                 <input
-                  className={inputClass}
+                  className={cn(inputClass, 'cursor-default bg-[#f7f8f7] text-[#5c665f]')}
                   value={form.maxContribution}
-                  onChange={(e) => updateField('maxContribution', e.target.value)}
+                  readOnly
+                  aria-readonly="true"
+                  title="Calculated automatically from vendor delivery fields"
                 />
               </Field>
             </div>
@@ -1351,32 +1548,45 @@ export default function AdminAddVendorBrunchs() {
               </Field>
               <Field label="Max distance (km)">
                 <input
-                  className={inputClass}
-                  value={form.maxDistanceKm}
-                  onChange={(e) => updateField('maxDistanceKm', e.target.value)}
+                  className={cn(
+                    inputClass,
+                    customerMaxDistanceError && 'border-[#d64044] focus:border-[#d64044]',
+                  )}
+                  value={form.customerMaxDistanceKm}
+                  onChange={(e) => updateField('customerMaxDistanceKm', e.target.value)}
+                  aria-invalid={Boolean(customerMaxDistanceError)}
                 />
+                {customerMaxDistanceError ? (
+                  <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">{customerMaxDistanceError}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] leading-[14px] text-[#9aa49d]">
+                    Must be greater than or equal to delivery radius.
+                  </p>
+                )}
               </Field>
 
               <Field label="Customer contribution (BHD) / per order" className="col-span-2 max-[900px]:col-span-1">
                 <input
                   className={inputClass}
-                  value={form.deliveryContribution}
-                  onChange={(e) => updateField('deliveryContribution', e.target.value)}
+                  value={form.customerDeliveryContribution}
+                  onChange={(e) => updateField('customerDeliveryContribution', e.target.value)}
                 />
               </Field>
 
               <Field label="Extra contribution per km (BHD)">
                 <input
                   className={inputClass}
-                  value={form.extraContributionPerKm}
-                  onChange={(e) => updateField('extraContributionPerKm', e.target.value)}
+                  value={form.customerExtraContributionPerKm}
+                  onChange={(e) => updateField('customerExtraContributionPerKm', e.target.value)}
                 />
               </Field>
               <Field label="Max contribution (BHD)">
                 <input
-                  className={inputClass}
-                  value={form.maxContribution}
-                  onChange={(e) => updateField('maxContribution', e.target.value)}
+                  className={cn(inputClass, 'cursor-default bg-[#f7f8f7] text-[#5c665f]')}
+                  value={form.customerMaxContribution}
+                  readOnly
+                  aria-readonly="true"
+                  title="Calculated automatically from customer delivery fields"
                 />
               </Field>
             </div>
@@ -1509,7 +1719,26 @@ export default function AdminAddVendorBrunchs() {
                 <Toggle
                   checked={allowPickup}
                   disabled={!modeGate.canTogglePickup}
-                  onChange={() => setAllowPickup((prev) => !prev)}
+                  onChange={() => {
+                    setAllowPickup((prev) => {
+                      const next = !prev
+                      const error = branchOrderModesAtLeastOneError({
+                        modeGate,
+                        allowPickup: next,
+                        allowDineIn,
+                      })
+                      if (error) {
+                        setSaveError(error)
+                        return prev
+                      }
+                      setSaveError((current) =>
+                        current === 'At least one branch order mode must stay enabled.'
+                          ? null
+                          : current,
+                      )
+                      return next
+                    })
+                  }}
                   label="Allow pickup"
                 />
               </div>
@@ -1528,10 +1757,41 @@ export default function AdminAddVendorBrunchs() {
                 <Toggle
                   checked={allowDineIn}
                   disabled={!modeGate.canToggleDineIn}
-                  onChange={() => setAllowDineIn((prev) => !prev)}
+                  onChange={() => {
+                    setAllowDineIn((prev) => {
+                      const next = !prev
+                      const error = branchOrderModesAtLeastOneError({
+                        modeGate,
+                        allowPickup,
+                        allowDineIn: next,
+                      })
+                      if (error) {
+                        setSaveError(error)
+                        return prev
+                      }
+                      setSaveError((current) =>
+                        current === 'At least one branch order mode must stay enabled.'
+                          ? null
+                          : current,
+                      )
+                      return next
+                    })
+                  }}
                   label="Allow Dine-in"
                 />
               </div>
+            ) : null}
+
+            {modeGate.visibleModes?.length ? (
+              <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                Delivery, Scheduled, and Services are managed on the vendor&apos;s Service modes &amp; SLA.
+                At least one branch order mode above must stay enabled.
+              </p>
+            ) : modeGate.ready ? (
+              <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                This store type has no Pickup or Dine-in modes. Delivery, Scheduled, and Services are
+                managed on the vendor&apos;s Service modes &amp; SLA.
+              </p>
             ) : null}
           </div>
 

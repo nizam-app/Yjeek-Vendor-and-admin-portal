@@ -285,8 +285,25 @@ function pad2(n) {
   return String(Math.max(0, Math.floor(Number(n) || 0))).padStart(2, '0')
 }
 
-function secondsToDuration(totalSec, operator = '≤') {
-  const sec = Math.max(0, Math.floor(Number(totalSec) || 0))
+/** SLA model stores durations as tier objects `{ target, atRisk, critical }`, not plain seconds. */
+function readDurationTargetSec(value, fallbackSec = 0) {
+  if (value != null && typeof value === 'object' && typeof value.target === 'number') {
+    return Math.max(0, Math.floor(value.target))
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value))
+  }
+  if (value == null || value === '') {
+    return Math.max(0, Math.floor(Number(fallbackSec) || 0))
+  }
+  const parsed = Number(value)
+  return Number.isFinite(parsed)
+    ? Math.max(0, Math.floor(parsed))
+    : Math.max(0, Math.floor(Number(fallbackSec) || 0))
+}
+
+function secondsToDuration(value, operator = '≤', fallbackSec = 0) {
+  const sec = readDurationTargetSec(value, fallbackSec)
   return {
     operator,
     h: pad2(Math.floor(sec / 3600)),
@@ -333,12 +350,12 @@ export function mapSlaModelConfigToWizardModes(modelConfig = {}) {
     const prepHours = Number(tier.preparationTimeHours) || 0
     const prepClock = clockToWizard(`${pad2(Math.floor(prepHours) % 24)}:00:00`)
     tiers[label] = {
-      acceptance: secondsToDuration(tier.acceptanceTimeSec ?? 120, '≤'),
-      champCollection: secondsToDuration(tier.champCollectionTimeSec ?? 900, '≤'),
-      dailyOnline: secondsToDuration(tier.earlyOnlineHoursSec ?? 7200, '≥'),
+      acceptance: secondsToDuration(tier.acceptanceTimeSec, '≤', 120),
+      champCollection: secondsToDuration(tier.champCollectionTimeSec, '≤', 900),
+      dailyOnline: secondsToDuration(tier.earlyOnlineHoursSec, '≥', 7200),
       cutoff: { operator: '=', time: cutoff.time, period: cutoff.period },
       prepareMax: { operator: '≤', time: prepClock.time, period: prepClock.period },
-      markReady: secondsToDuration(1800, '≤'),
+      markReady: secondsToDuration(tier.markReadyWithinWindowSec, '≤', 1800),
     }
   }
 
@@ -346,9 +363,9 @@ export function mapSlaModelConfigToWizardModes(modelConfig = {}) {
     'Hot food · on demand': {
       customized: false,
       fields: {
-        acceptance: secondsToDuration(hot.acceptanceTimeSec ?? 120, '≤'),
-        champCollection: secondsToDuration(hot.champCollectionTimeSec ?? 600, '≤'),
-        dailyOnline: secondsToDuration(hot.earlyOnlineHoursSec ?? 28800, '≥'),
+        acceptance: secondsToDuration(hot.acceptanceTimeSec, '≤', 120),
+        champCollection: secondsToDuration(hot.champCollectionTimeSec, '≤', 600),
+        dailyOnline: secondsToDuration(hot.earlyOnlineHoursSec, '≥', 28800),
       },
       window: {
         label: 'Full delivery window',
@@ -361,21 +378,22 @@ export function mapSlaModelConfigToWizardModes(modelConfig = {}) {
     'Dine-in': {
       customized: false,
       fields: {
-        acceptance: secondsToDuration(dine.acceptanceTimeSec ?? 180, '≤'),
+        acceptance: secondsToDuration(dine.acceptanceTimeSec, '≤', 180),
         tableReady: secondsToDuration(
-          dine.tablePreparationSec ?? dine.customerArrivalWaitSec ?? 900,
+          dine.tablePreparationSec ?? dine.customerArrivalWaitSec,
           '≤',
+          900,
         ),
-        dailyOnline: secondsToDuration(28800, '≥'),
+        dailyOnline: secondsToDuration(null, '≥', 28800),
       },
       window: null,
     },
     Pickup: {
       customized: false,
       fields: {
-        acceptance: secondsToDuration(pickup.acceptanceTimeSec ?? 180, '≤'),
-        customerWait: secondsToDuration(pickup.customerWaitSec ?? 600, '≤'),
-        dailyOnline: secondsToDuration(28800, '≥'),
+        acceptance: secondsToDuration(pickup.acceptanceTimeSec, '≤', 180),
+        customerWait: secondsToDuration(pickup.customerWaitSec, '≤', 600),
+        dailyOnline: secondsToDuration(null, '≥', 28800),
       },
       window: null,
     },
@@ -386,12 +404,13 @@ export function mapSlaModelConfigToWizardModes(modelConfig = {}) {
     Services: {
       customized: false,
       fields: {
-        acceptance: secondsToDuration(services.acceptanceTimeSec ?? 300, '≤'),
+        acceptance: secondsToDuration(services.acceptanceTimeSec, '≤', 300),
         serviceStart: secondsToDuration(
-          services.serviceLevelAgreementSec ?? services.qualityReportWindowSec ?? 1800,
+          services.serviceLevelAgreementSec ?? services.qualityReportWindowSec,
           '≤',
+          1800,
         ),
-        dailyOnline: secondsToDuration(28800, '≥'),
+        dailyOnline: secondsToDuration(null, '≥', 28800),
       },
       window: null,
     },

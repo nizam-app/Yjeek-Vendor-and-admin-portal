@@ -157,6 +157,8 @@ export function AdminVendorMenuImport({ vendorId, storeName }) {
   const [error, setError] = useState(null)
   const [showStart, setShowStart] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  // Open start modal once on first tab entry — not on pagination/filter reloads
+  const didAutoOpenStartRef = useRef(false)
 
   const loadImports = useCallback(async (options = {}) => {
     if (!vendorId || !featureOn) return { items: [], total: 0, page: 1, limit: HISTORY_PAGE_SIZE, totalPages: 1 }
@@ -188,19 +190,39 @@ export function AdminVendorMenuImport({ vendorId, storeName }) {
 
   useEffect(() => {
     if (!featureOn) return
+    const shouldAutoOpenStart = !didAutoOpenStartRef.current
+    if (shouldAutoOpenStart) didAutoOpenStartRef.current = true
+    let cancelled = false
+
     void loadImports({ page: historyPage, status: statusFilter }).then((result) => {
       const rows = result.items
-      if (!rows.length) {
-        setSelected(null)
-        setShowStart(true)
-        return
+      if (!cancelled) {
+        if (!rows.length) {
+          setSelected(null)
+        } else {
+          const active = rows.find((row) =>
+            ['QUEUED', 'PROCESSING', 'REVIEW', 'PUBLISHING'].includes(row.status),
+          )
+          setSelected((current) =>
+            current && rows.find((row) => row.id === current.id) ? current : active ?? rows[0],
+          )
+        }
       }
-      const active = rows.find((row) =>
-        ['QUEUED', 'PROCESSING', 'REVIEW', 'PUBLISHING'].includes(row.status),
-      )
-      setSelected((current) => current && rows.find((row) => row.id === current.id) ? current : active ?? rows[0])
-      setShowStart(!active)
+
+      // First tab visit only — never reopen on pagination / filter changes
+      if (shouldAutoOpenStart) {
+        const active = rows.find((row) =>
+          ['QUEUED', 'PROCESSING', 'REVIEW', 'PUBLISHING'].includes(row.status),
+        )
+        if ((!rows.length && result.total === 0 && !statusFilter) || (rows.length > 0 && !active)) {
+          setShowStart(true)
+        }
+      }
     })
+
+    return () => {
+      cancelled = true
+    }
   }, [featureOn, loadImports, historyPage, statusFilter])
 
   const handleImportUpdate = useCallback((imp) => {
@@ -281,7 +303,8 @@ export function AdminVendorMenuImport({ vendorId, storeName }) {
       const rows = result.items
       if (selected?.id === importId) {
         setSelected(rows[0] ?? null)
-        setShowStart(!rows.length || !rows.find((r) => ['QUEUED', 'PROCESSING', 'REVIEW', 'PUBLISHING'].includes(r.status)))
+        // Only reopen start modal when history is fully empty
+        if (result.total === 0) setShowStart(true)
       }
       setConfirmDelete(null)
     } catch (err) {
@@ -532,30 +555,22 @@ function HistoryTable({
   )
 }
 
-const SPREADSHEET_TEMPLATE_CSV = [
-  'category,category_ar,name,name_ar,description,description_ar,price',
-  'Foods,أطعمة,Margherita Pizza,بيتزا مارغريتا,Classic tomato and mozzarella,طماطم وجبنة موزاريلا كلاسيكية,12.500',
-  'Drinks,مشروبات,Cola,كولا,Chilled soda,مشروب غازي بارد,2.500',
-].join('\n')
+const SPREADSHEET_TEMPLATE_HREF = '/templates/Yjeek-Bulk-Menu-Import-Template.xlsx'
 
-const COLUMN_MAP_FIELDS = [
-  { key: 'name', label: 'Item name (EN)', required: true },
-  { key: 'price', label: 'Price', required: true },
-  { key: 'category', label: 'Category (EN)', required: false },
-  { key: 'categoryAr', label: 'Category (AR)', required: false },
-  { key: 'nameAr', label: 'Item name (AR)', required: false },
-  { key: 'description', label: 'Description (EN)', required: false },
-  { key: 'descriptionAr', label: 'Description (AR)', required: false },
-]
-
-function downloadSpreadsheetTemplate(csvText = SPREADSHEET_TEMPLATE_CSV) {
-  const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
+function downloadSpreadsheetTemplate() {
   const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'yjeek-menu-import-template.csv'
+  anchor.href = SPREADSHEET_TEMPLATE_HREF
+  anchor.download = 'Yjeek-Bulk-Menu-Import-Template.xlsx'
   anchor.click()
-  URL.revokeObjectURL(url)
+}
+
+function isZipFile(file) {
+  const name = String(file.name || '').toLowerCase()
+  return (
+    file.type === 'application/zip' ||
+    file.type === 'application/x-zip-compressed' ||
+    name.endsWith('.zip')
+  )
 }
 
 function StartImportModal({ busy, onClose, children }) {
@@ -594,21 +609,19 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
   const [mode, setMode] = useState('url')
   const [url, setUrl] = useState('')
   const [files, setFiles] = useState([])
+  const [zipFile, setZipFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState(null)
-  const [sheetPreview, setSheetPreview] = useState(null)
-  const [columnMapping, setColumnMapping] = useState({})
-  const [uploadedUrls, setUploadedUrls] = useState([])
   const fileRef = useRef(null)
+  const zipRef = useRef(null)
   const disabled = busy || uploading
   const hasSpreadsheet = files.some(isSpreadsheetFile)
-  const mappingReady = Boolean(columnMapping.name && columnMapping.price)
 
   const addFiles = (incoming) => {
     const accepted = Array.from(incoming || []).filter(isAcceptedMenuFile)
     if (!accepted.length) {
-      setError('Only PDF, image, or spreadsheet files (CSV/Excel) are allowed.')
+      setError('Only PDF, image, or Excel spreadsheet files are allowed here.')
       return
     }
 
@@ -620,31 +633,24 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
     }
 
     if (hasMixedFileKinds(next)) {
-      setError('Use one file type per import (all PDFs, all images, or all spreadsheets).')
+      setError('Use one file type per import (all PDFs, all images, or one Excel workbook).')
       return
     }
 
     setError(null)
-    setSheetPreview(null)
-    setColumnMapping({})
-    setUploadedUrls([])
     setFiles(next)
   }
 
   const removeFile = (index) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
-    setSheetPreview(null)
-    setColumnMapping({})
-    setUploadedUrls([])
     if (fileRef.current) fileRef.current.value = ''
   }
 
   const clearFiles = () => {
     setFiles([])
-    setSheetPreview(null)
-    setColumnMapping({})
-    setUploadedUrls([])
+    setZipFile(null)
     if (fileRef.current) fileRef.current.value = ''
+    if (zipRef.current) zipRef.current.value = ''
   }
 
   const handleSubmit = async () => {
@@ -663,58 +669,28 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
       }
 
       if (!files.length) {
-        setError('Choose at least one PDF, image, or spreadsheet file.')
+        setError('Choose at least one PDF, image, or Excel file.')
         return
       }
 
       setUploading(true)
 
       if (hasSpreadsheet) {
-        let urls = uploadedUrls
-        if (!urls.length) {
-          urls = []
-          for (const file of files) {
-            const result = await adminUploadService.uploadMenuSource(file)
-            urls.push(result.data.url)
-          }
-          setUploadedUrls(urls)
+        if (files.length !== 1 || !isSpreadsheetFile(files[0])) {
+          setError('Upload exactly one Excel workbook (buyer template).')
+          return
         }
-
-        let mapping = columnMapping
-        if (!sheetPreview) {
-          const preview = await adminMenuImportService.previewSpreadsheet(vendorId, {
-            sourceFiles: urls,
-          })
-          const suggested = preview?.suggestedMapping || {}
-          mapping = {
-            name: suggested.name || '',
-            price: suggested.price || '',
-            category: suggested.category || '',
-            categoryAr: suggested.categoryAr || '',
-            nameAr: suggested.nameAr || '',
-            description: suggested.description || '',
-            descriptionAr: suggested.descriptionAr || '',
-          }
-          setSheetPreview(preview)
-          setColumnMapping(mapping)
-          if (!mapping.name || !mapping.price) {
-            setError('Map Item name and Price columns, then click Start import again.')
-            return
-          }
-        }
-
-        if (!mapping.name || !mapping.price) {
-          setError('Map Item name and Price columns before starting.')
+        if (!zipFile) {
+          setError('Upload the images ZIP (VendorName_images.zip) with the Excel file.')
           return
         }
 
-        const mappingPayload = Object.fromEntries(
-          Object.entries(mapping).filter(([, value]) => String(value || '').trim()),
-        )
+        const sheetUpload = await adminUploadService.uploadMenuSource(files[0])
+        const zipUpload = await adminUploadService.uploadMenuSource(zipFile)
         await onStart({
           sourceType: resolveFileSourceType(files),
-          sourceFiles: urls,
-          columnMapping: mappingPayload,
+          sourceFiles: [sheetUpload.data.url],
+          imageArchive: zipUpload.data.url,
         })
         clearFiles()
         return
@@ -748,11 +724,9 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
           <button
             type="button"
             className={outlineBtn}
-            onClick={() =>
-              downloadSpreadsheetTemplate(sheetPreview?.templateCsv || SPREADSHEET_TEMPLATE_CSV)
-            }
+            onClick={() => downloadSpreadsheetTemplate()}
           >
-            Download CSV template
+            Download Excel template
           </button>
           {onClose ? (
             <button
@@ -857,7 +831,7 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
             <span className="mt-1 text-[12px] text-[#7c8780]">
               or{' '}
               <span className="font-semibold text-[#127338]">browse</span>
-              {' '}· PDF, JPG, PNG, WebP, CSV, Excel
+              {' '}· PDF, JPG, PNG, WebP, Excel (+ ZIP for images)
             </span>
           </button>
 
@@ -905,39 +879,46 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
             </ul>
           ) : null}
 
-          {sheetPreview ? (
+          {hasSpreadsheet ? (
             <div className="mt-4 rounded-[10px] border border-[#e7ece8] bg-[#f7faf8] p-3">
-              <p className="text-[12px] font-semibold text-[#17231c]">Column mapping</p>
+              <p className="text-[12px] font-semibold text-[#17231c]">Images ZIP (required)</p>
               <p className="mt-1 text-[11px] leading-[16px] text-[#7c8780]">
-                Match spreadsheet headers to Yjeek fields. Arabic columns are optional — missing
-                Arabic is translated after import.
+                Upload <span className="font-semibold">VendorName_images.zip</span> with an{' '}
+                <span className="font-semibold">images/</span> folder. Filenames must match
+                image_main / image_2… cells (case-sensitive). Do not embed images in Excel.
               </p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {COLUMN_MAP_FIELDS.map((field) => (
-                  <label key={field.key} className="block">
-                    <span className="mb-1 block text-[11px] font-medium text-[#7c8780]">
-                      {field.label}
-                      {field.required ? ' *' : ''}
-                    </span>
-                    <select
-                      value={columnMapping[field.key] || ''}
-                      disabled={disabled}
-                      onChange={(e) => {
-                        setError(null)
-                        setColumnMapping((prev) => ({ ...prev, [field.key]: e.target.value }))
-                      }}
-                      className="box-border h-[34px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-2 text-[12px] text-[#17231c] outline-none focus:border-[#1aa054]"
-                    >
-                      <option value="">{field.required ? 'Select column' : '— Skip —'}</option>
-                      {(sheetPreview.headers || []).map((header) => (
-                        <option key={`${field.key}:${header}`} value={header}>
-                          {header}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
+              <input
+                ref={zipRef}
+                type="file"
+                accept=".zip,application/zip,application/x-zip-compressed"
+                disabled={disabled}
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (!file) return
+                  if (!isZipFile(file)) {
+                    setError('Images archive must be a .zip file.')
+                    return
+                  }
+                  setError(null)
+                  setZipFile(file)
+                }}
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => zipRef.current?.click()}
+                className={cn(outlineBtn, 'mt-3')}
+              >
+                {zipFile ? 'Replace ZIP' : 'Choose images ZIP'}
+              </button>
+              {zipFile ? (
+                <p className="mt-2 truncate text-[12px] text-[#17231c]">
+                  {zipFile.name}
+                  {formatFileSize(zipFile.size) ? ` · ${formatFileSize(zipFile.size)}` : ''}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -952,20 +933,10 @@ function StartPanel({ vendorId, busy, onStart, onClose }) {
       <button
         type="button"
         className={cn(primaryBtn, 'mt-4')}
-        disabled={disabled || (hasSpreadsheet && sheetPreview && !mappingReady)}
+        disabled={disabled || (hasSpreadsheet && !zipFile)}
         onClick={() => void handleSubmit()}
       >
-        {uploading
-          ? sheetPreview
-            ? 'Starting…'
-            : hasSpreadsheet
-              ? 'Reading spreadsheet…'
-              : 'Uploading…'
-          : busy
-            ? 'Starting…'
-            : hasSpreadsheet && !sheetPreview
-              ? 'Detect columns & start'
-              : 'Start import'}
+        {uploading ? 'Uploading…' : busy ? 'Starting…' : 'Start import'}
       </button>
     </div>
   )

@@ -1,6 +1,18 @@
 import { useEffect, useState } from 'react'
 import { cn } from '../cn'
 import AdminDeliveryCoverageMap from '../AdminDeliveryCoverageMap'
+import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
+
+function withAutoMaxContribution(next) {
+  const maxContribution = calcMaxContribution({
+    deliveryContribution: next.deliveryContribution,
+    extraContributionPerKm: next.extraContributionPerKm,
+    maxDistanceKm: next.maxDistanceKm,
+    deliveryRadiusKm: next.radiusKm,
+  })
+  if (maxContribution == null) return next
+  return { ...next, maxContribution }
+}
 
 function ZoneField({ label, aside, children, className = '' }) {
   return (
@@ -14,11 +26,13 @@ function ZoneField({ label, aside, children, className = '' }) {
   )
 }
 
-function ZoneInput({ className = '', ...props }) {
+function ZoneInput({ className = '', readOnly = false, ...props }) {
   return (
     <input
+      readOnly={readOnly}
       className={cn(
         'h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]',
+        readOnly && 'cursor-default bg-[#f7f8f7] text-[#5c665f] focus:border-[rgba(0,0,0,0.1)]',
         className,
       )}
       {...props}
@@ -59,18 +73,20 @@ export function AdminVendorDeliveryZones({ deliveryZones, onApplyToAll }) {
       ? deliveryZones
       : { defaults: {}, overrides: [], coverage: null }
 
-  const [defaults, setDefaults] = useState(() => ({
-    radiusKm: '',
-    etaMin: '',
-    minOrder: '',
-    deliveryContribution: '',
-    freeDeliveryOver: '',
-    freeDeliveryEnabled: false,
-    maxDistanceKm: '',
-    extraContributionPerKm: '',
-    maxContribution: '',
-    ...(safeZones.defaults || {}),
-  }))
+  const [defaults, setDefaults] = useState(() =>
+    withAutoMaxContribution({
+      radiusKm: '',
+      etaMin: '',
+      minOrder: '',
+      deliveryContribution: '',
+      freeDeliveryOver: '',
+      freeDeliveryEnabled: false,
+      maxDistanceKm: '',
+      extraContributionPerKm: '',
+      maxContribution: '',
+      ...(safeZones.defaults || {}),
+    }),
+  )
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState(null)
 
@@ -79,22 +95,36 @@ export function AdminVendorDeliveryZones({ deliveryZones, onApplyToAll }) {
 
   useEffect(() => {
     if (!deliveryZones?.defaults) return
-    setDefaults((prev) => ({
-      ...prev,
-      ...deliveryZones.defaults,
-    }))
+    setDefaults((prev) =>
+      withAutoMaxContribution({
+        ...prev,
+        ...deliveryZones.defaults,
+      }),
+    )
   }, [deliveryZones])
 
   const updateDefault = (key) => (event) => {
-    setDefaults((prev) => ({ ...prev, [key]: event.target.value }))
+    const value = event.target.value
+    setApplyError(null)
+    setDefaults((prev) => withAutoMaxContribution({ ...prev, [key]: value }))
   }
+
+  const maxDistanceError = maxDistanceBelowRadiusError({
+    maxDistanceKm: defaults.maxDistanceKm,
+    deliveryRadiusKm: defaults.radiusKm,
+    scopeLabel: 'Max distance',
+  })
 
   async function handleApplyToAll() {
     if (!onApplyToAll || applying) return
+    if (maxDistanceError) {
+      setApplyError(maxDistanceError)
+      return
+    }
     setApplyError(null)
     setApplying(true)
     try {
-      await onApplyToAll(defaults)
+      await onApplyToAll(withAutoMaxContribution(defaults))
     } catch (err) {
       setApplyError(err?.message || 'Failed to apply delivery zones.')
     } finally {
@@ -143,7 +173,19 @@ export function AdminVendorDeliveryZones({ deliveryZones, onApplyToAll }) {
             />
           </ZoneField>
           <ZoneField label="Max distance (km)">
-            <ZoneInput value={defaults.maxDistanceKm ?? ''} onChange={updateDefault('maxDistanceKm')} />
+            <ZoneInput
+              value={defaults.maxDistanceKm ?? ''}
+              onChange={updateDefault('maxDistanceKm')}
+              className={maxDistanceError ? 'border-[#d64044] focus:border-[#d64044]' : undefined}
+              aria-invalid={Boolean(maxDistanceError)}
+            />
+            {maxDistanceError ? (
+              <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">{maxDistanceError}</p>
+            ) : (
+              <p className="mt-1 text-[11px] leading-[14px] text-[#9aa49d]">
+                Must be greater than or equal to delivery radius.
+              </p>
+            )}
           </ZoneField>
           <ZoneField label="Extra contribution per km (BHD)">
             <ZoneInput
@@ -154,7 +196,9 @@ export function AdminVendorDeliveryZones({ deliveryZones, onApplyToAll }) {
           <ZoneField label="Max contribution (BHD)">
             <ZoneInput
               value={defaults.maxContribution ?? ''}
-              onChange={updateDefault('maxContribution')}
+              readOnly
+              aria-readonly="true"
+              title="Calculated automatically"
             />
           </ZoneField>
         </div>
