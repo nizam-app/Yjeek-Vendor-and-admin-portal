@@ -283,10 +283,16 @@ function mapScheduledTierFromApi(tier, fallback) {
       next.prepMax = clockFromApi(`${pad2(h24)}:00:00`, fallback?.prepMax?.operator || '≤')
     }
   }
+  if (source.customerPaymentWindowSec === null) {
+    // Same Day N/A — keep a zero duration for form widgets; mapToApi forces null.
+    next.paymentWindow = durationFromSec(0, '≤')
+  } else if (source.customerPaymentWindowSec != null) {
+    next.paymentWindow = durationFromSec(source.customerPaymentWindowSec, '≤')
+  }
   return next
 }
 
-function mapScheduledTierToApi(tier) {
+function mapScheduledTierToApi(tier, uiKey) {
   const source = asRecord(tier)
   const payload = {}
   const acceptance = tierToApi(source.acceptance)
@@ -300,6 +306,13 @@ function mapScheduledTierToApi(tier) {
   const prepClock = clockToApi(source.prepMax)
   if (prepClock) {
     payload.preparationTimeHours = Math.max(0, Math.round(clockToSeconds(prepClock) / 3600))
+  }
+  // Same Day: scheduled 5-min payment window feature is N/A — always null.
+  if (uiKey === 'same-day') {
+    payload.customerPaymentWindowSec = null
+  } else {
+    const paymentSec = secFromDuration(source.paymentWindow)
+    if (paymentSec != null) payload.customerPaymentWindowSec = paymentSec
   }
   return payload
 }
@@ -333,6 +346,9 @@ function mapVendorFromConfig(config, defaults) {
   setPercent(hotFood, 'vpiPrep', vpe.prepTimeWeight ?? vpi.prepTime, defaults['hot-food'], '=')
   setPercent(hotFood, 'vpiReliability', vpe.metricTypeWeight ?? vpi.reliability, defaults['hot-food'], '=')
   setDurationTier(hotFood, 'nonDelivery', hot.foodSafetyInvestigationSec, defaults['hot-food'])
+  if (hot.customerPaymentWindowSec != null) {
+    hotFood.paymentWindow = durationFromSec(hot.customerPaymentWindowSec, '≤')
+  }
   if (config.handoverToChampMin != null) {
     setDurationTier(hotFood, 'maxChampWait', Number(config.handoverToChampMin) * 60, defaults['hot-food'])
   }
@@ -348,6 +364,9 @@ function mapVendorFromConfig(config, defaults) {
   setPercent(dineIn, 'reservationHonored', dine.orderAccuracyPct, defaults['dine-in'])
   setDurationTier(dineIn, 'billDispute', dine.issueResponseSec, defaults['dine-in'])
   setDurationTier(dineIn, 'reservationNotice', dine.noShowGraceSec, defaults['dine-in'], '≥')
+  if (dine.customerPaymentWindowSec != null) {
+    dineIn.paymentWindow = durationFromSec(dine.customerPaymentWindowSec, '≤')
+  }
 
   const pickupValues = { ...asRecord(defaults.pickup) }
   setDurationTier(pickupValues, 'acceptance', pickup.acceptanceTimeSec, defaults.pickup, '<')
@@ -355,6 +374,9 @@ function mapVendorFromConfig(config, defaults) {
   setDurationTier(pickupValues, 'maxCustomerWait', pickup.handoverSec, defaults.pickup)
   setDurationTier(pickupValues, 'orderHold', pickup.latePickupGraceSec, defaults.pickup, '≥')
   setPercent(pickupValues, 'onTimePrep', pickup.orderAccuracyPct, defaults.pickup)
+  if (pickup.customerPaymentWindowSec != null) {
+    pickupValues.paymentWindow = durationFromSec(pickup.customerPaymentWindowSec, '≤')
+  }
 
   const scheduledValues = { ...asRecord(defaults.scheduled) }
   Object.entries(SCHEDULED_TIER_MAP).forEach(([uiKey, apiKey]) => {
@@ -545,7 +567,7 @@ function mapVendorToConfig(vendorValues) {
 
   const scheduledPayload = {}
   Object.entries(SCHEDULED_TIER_MAP).forEach(([uiKey, apiKey]) => {
-    scheduledPayload[apiKey] = mapScheduledTierToApi(scheduled[uiKey])
+    scheduledPayload[apiKey] = mapScheduledTierToApi(scheduled[uiKey], uiKey)
   })
   scheduledPayload.general = {
     attendanceDuringDayPct: pctFromPercent(asRecord(scheduled.all).reliability) ?? undefined,
@@ -568,6 +590,7 @@ function mapVendorToConfig(vendorValues) {
         fullDeliveryWindowEnd: clockTimeFromDuration(hotFood.fullWindow?.to) ?? undefined,
         prepTimeLimitSec: prepTier ?? undefined,
         customerIssueResponseSec: tierFromForm(hotFood.vendorIssue) ?? undefined,
+        customerPaymentWindowSec: secFromDuration(hotFood.paymentWindow) ?? undefined,
         orderAccuracyPct: pctFromPercent(hotFood.orderAccuracy) ?? undefined,
         orderRatingPct: pctFromPercent(hotFood.onTimeReady) ?? undefined,
         vpeWeights: {
@@ -582,6 +605,7 @@ function mapVendorToConfig(vendorValues) {
         acceptanceTimeSec: tierToApi(dineIn.acceptance) ?? undefined,
         customerArrivalWaitSec: tierToApi(dineIn.customerWait) ?? undefined,
         tablePreparationSec: tierToApi(dineIn.customerWait) ?? undefined,
+        customerPaymentWindowSec: secFromDuration(dineIn.paymentWindow) ?? undefined,
         orderAccuracyPct: pctFromPercent(dineIn.reservationHonored) ?? undefined,
         issueResponseSec: tierFromForm(dineIn.billDispute) ?? undefined,
         noShowGraceSec: tierFromForm(dineIn.reservationNotice) ?? undefined,
@@ -590,6 +614,7 @@ function mapVendorToConfig(vendorValues) {
         acceptanceTimeSec: tierToApi(pickup.acceptance) ?? undefined,
         customerWaitSec: tierToApi(pickup.customerWait) ?? undefined,
         handoverSec: tierToApi(pickup.maxCustomerWait) ?? undefined,
+        customerPaymentWindowSec: secFromDuration(pickup.paymentWindow) ?? undefined,
         latePickupGraceSec: tierFromForm(pickup.orderHold) ?? undefined,
         orderAccuracyPct: pctFromPercent(pickup.onTimePrep) ?? undefined,
       },

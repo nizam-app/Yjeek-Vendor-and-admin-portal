@@ -14,6 +14,8 @@ export function AdminOpsOrderCard({
   onIncidentClick,
   onContactClick,
   onOrderClick,
+  onPodApprovalClick,
+  onManualDispatchClick,
 }) {
   const contactTypes =
     Array.isArray(order.contactTypes) && order.contactTypes.length > 0
@@ -105,7 +107,7 @@ export function AdminOpsOrderCard({
         {order.vendor || '—'}
       </p>
 
-      {/* Row 3 — order status alone */}
+      {/* Row 3 — order status + dispatch escalation alert */}
       <div className="mb-1.5 flex flex-wrap gap-1">
         <span
           className={cn(
@@ -116,7 +118,8 @@ export function AdminOpsOrderCard({
             stateText.startsWith('On the way') && 'bg-[#e5f5eb] text-[#24834e]',
             (stateText.startsWith('Accepted') ||
               stateText.startsWith('Assigned') ||
-              stateText.startsWith('Pending')) &&
+              stateText.startsWith('Pending') ||
+              stateText.includes('Searching')) &&
               'bg-[#fdf1de] text-[#a97013]',
             stateText.toLowerCase().startsWith('placed') && 'bg-[#eef1ef] text-[#5d6d63]',
             !stateText.startsWith('Preparing') &&
@@ -126,12 +129,26 @@ export function AdminOpsOrderCard({
               !stateText.startsWith('Accepted') &&
               !stateText.startsWith('Assigned') &&
               !stateText.startsWith('Pending') &&
+              !stateText.includes('Searching') &&
               !stateText.toLowerCase().startsWith('placed') &&
               'bg-[#eef1ef] text-[#5d6d63]',
           )}
         >
           {stateText}
         </span>
+        {order.dispatchEscalation === 'broadcast' ? (
+          <span className="rounded bg-[#fde8e8] px-[7px] py-[2.5px] text-[9px] font-bold text-[#b91c1c]">
+            Broadcast alert
+          </span>
+        ) : order.dispatchEscalation === 'urgent' ? (
+          <span className="rounded bg-[#ffedd5] px-[7px] py-[2.5px] text-[9px] font-bold text-[#c2410c]">
+            Expansion · urgent
+          </span>
+        ) : order.dispatchEscalation === 'soft' ? (
+          <span className="rounded bg-[#fef3c7] px-[7px] py-[2.5px] text-[9px] font-bold text-[#92400e]">
+            Expansion
+          </span>
+        ) : null}
       </div>
 
       {/* Row 4–5 — incident chips (sketch order) */}
@@ -214,6 +231,37 @@ export function AdminOpsOrderCard({
           })}
         </div>
       ) : null}
+
+      {/* Ops overrides — POD approval / Stage 2+ manual dispatch during expansion */}
+      {(order.podCashApproval?.status === 'PENDING' || order.manualDispatchEnabled) && (
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
+          {order.podCashApproval?.status === 'PENDING' ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onPodApprovalClick?.(order)
+              }}
+              className="rounded-[8px] bg-[#fef3c7] px-2 py-1 text-[10px] font-bold text-[#92400e]"
+            >
+              POD approval
+            </button>
+          ) : null}
+          {order.manualDispatchEnabled ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onManualDispatchClick?.(order)
+              }}
+              className="rounded-[8px] bg-[#dbeafe] px-2 py-1 text-[10px] font-bold text-[#1e40af]"
+              title="Force-assign a Champ while auto expansion continues"
+            >
+              Manual dispatch
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {/* Row 6 — champ */}
       <p className="flex min-w-0 items-center gap-1 text-[10.5px] font-medium text-[#6b7a71]">

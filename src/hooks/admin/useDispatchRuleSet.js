@@ -13,19 +13,55 @@ import { adminDispatchAutomationService } from '../../services/admin/dispatchAut
 export function useDispatchRuleSet() {
   const enabled = isAutomationRealApi()
   const [creating, setCreating] = useState(false)
+  const [stackingRollout, setStackingRollout] = useState({
+    stackingLiveAllowed: false,
+    googleMapsConfigured: false,
+    stackingLiveEnabled: false,
+  })
+  const [noChampCancelSec, setNoChampCancelSec] = useState(null)
 
   const resource = useApiResource(() => {
     if (!enabled) {
       return Promise.resolve({ data: null, meta: null })
     }
 
-    // Prefer active id from overview when available; never fail the whole page if overview fails.
     return adminDispatchAutomationService
       .getOverview()
-      .then((overviewResult) => overviewResult?.data?.activeRuleSet?.id ?? null)
-      .catch(() => null)
+      .then((overviewResult) => {
+        const active = overviewResult?.data?.activeRuleSet
+        const rollout = overviewResult?.data?.stackingRollout
+        const cancelSec = Number(overviewResult?.data?.noChampCancelSec)
+        setNoChampCancelSec(
+          Number.isFinite(cancelSec) && cancelSec > 0 ? Math.floor(cancelSec) : null,
+        )
+        setStackingRollout({
+          stackingLiveAllowed: Boolean(
+            active?.stackingLiveAllowed ?? rollout?.stackingLiveAllowed,
+          ),
+          googleMapsConfigured: Boolean(
+            active?.googleMapsConfigured ?? rollout?.googleMapsConfigured,
+          ),
+          stackingLiveEnabled: Boolean(active?.stackingLiveEnabled),
+        })
+        return active?.id ?? null
+      })
+      .catch(() => {
+        setNoChampCancelSec(null)
+        setStackingRollout({
+          stackingLiveAllowed: false,
+          googleMapsConfigured: false,
+          stackingLiveEnabled: false,
+        })
+        return null
+      })
       .then((overviewActiveId) =>
-        adminDispatchRulesService.getWorkingOrCreate({ overviewActiveId }),
+        adminDispatchRulesService.getWorkingOrCreate({ overviewActiveId }).then((result) => {
+          const fromRule = Number(result?.data?.noChampCancelSec ?? result?.meta?.noChampCancelSec)
+          if (Number.isFinite(fromRule) && fromRule > 0) {
+            setNoChampCancelSec(Math.floor(fromRule))
+          }
+          return result
+        }),
       )
   }, [enabled])
 
@@ -56,6 +92,8 @@ export function useDispatchRuleSet() {
     (result) => {
       if (result?.data) {
         resource.setData?.(result.data)
+        const live = result.data?.draftConfig?.stacking?.liveEnabled === true
+        setStackingRollout((prev) => ({ ...prev, stackingLiveEnabled: live }))
       }
       return result
     },
@@ -88,6 +126,8 @@ export function useDispatchRuleSet() {
     isLoading: resource.isLoading,
     error: resource.error,
     refetch: resource.refetch,
+    stackingRollout,
+    noChampCancelSec,
     rule: resource.data?.rule ?? null,
     meta: resource.data?.meta ?? null,
     draftConfig: resource.data?.draftConfig ?? null,
@@ -98,9 +138,6 @@ export function useDispatchRuleSet() {
       const result = await patchMutation.mutate(requireId(), fullConfig)
       return applyServerResult(result)
     },
-    /**
-     * Preferred Save Changes path: re-fetch latest draft, apply section edits, PATCH.
-     */
     mergeAndPatch: async (applyEdits, editable) => {
       const result = await mergePatchMutation.mutate(requireId(), applyEdits, editable)
       return applyServerResult(result)

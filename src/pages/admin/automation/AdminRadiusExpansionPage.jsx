@@ -8,24 +8,21 @@ import {
   AutomationSectionCard,
 } from '../../../components/admin/automation/AutomationSectionCard'
 import { RadiusEscalationStageChain } from '../../../components/admin/automation/RadiusEscalationStageChain'
+import { RADIUS_EXPANSION_UI } from '../../../components/admin/automation/radiusExpansionUiCatalog'
 import { ApiState } from '../../../components/admin/ApiState'
 import { Button } from '../../../components/admin/Button'
 import { useDispatchRuleSet } from '../../../hooks/admin/useDispatchRuleSet'
 import {
   applyRadiusEdits,
   mapConfigToRadiusEditable,
+  secondsToDuration,
   validateRadiusStageOrder,
 } from '../../../mappers/admin/mapDispatchAutomation'
-import {
-  cloneRadiusExpansionEditable,
-  createRadiusExpansionEditableDefaults,
-  getRadiusExpansionMock,
-  validateRadiusStageOrder as validateMockRadiusOrder,
-} from '../../../mocks/adminAutomationRadiusExpansion.mock'
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
+import { vendorAcceptanceSlaService } from '../../../services/admin/vendorAcceptanceSlaService'
 import { showError, showInfo, showSuccess } from '../../../utils/toast'
 
-/** Read-only timer keys (SLA offer TTLs + fixed no-Champ cancel display). */
+/** Read-only timer keys (SLA offer TTLs + platform no-Champ cancel). */
 const READONLY_TIMER_KEYS = new Set([
   'hotFoodOffer',
   'otherOnDemandOffer',
@@ -51,156 +48,105 @@ function radiusPersistSnapshot(editable) {
   }
 }
 
-function MockRadiusExpansionPage() {
-  const catalog = useMemo(() => getRadiusExpansionMock(), [])
-  const [baseline, setBaseline] = useState(() =>
-    cloneRadiusExpansionEditable(catalog.editable || createRadiusExpansionEditableDefaults()),
-  )
-  const [draft, setDraft] = useState(() => cloneRadiusExpansionEditable(baseline))
-  const [validationError, setValidationError] = useState(null)
-
-  const stageChain = useMemo(() => {
-    return catalog.stages.map((stage) => {
-      if (stage.displayMode === 'open') {
-        return { ...stage, displayValue: stage.openLabel }
-      }
-      const km = draft[stage.radiusKey]?.value
-      return {
-        ...stage,
-        displayValue: km === '' || km == null ? '— km' : `${km} km`,
-      }
-    })
-  }, [catalog.stages, draft])
-
-  function updateField(key, value) {
-    setDraft((prev) => {
-      const next = { ...prev, [key]: value }
-      if (EXPANSION_DELAY_KEYS.has(key)) {
-        next.stage2To3 = { ...value, operator: '≤' }
-        next.stage3To4 = { ...value, operator: '≤' }
-      }
-      return next
-    })
-    setValidationError(null)
+/**
+ * Automation → Radius Expansion.
+ * Values: DispatchRuleSet (radii + expansionDelay) · Champ SLA (offer windows) ·
+ * backend overview (noChampCancelSec). No mock / demo numbers.
+ */
+export default function AdminRadiusExpansionPage() {
+  if (!isAutomationRealApi()) {
+    return (
+      <div className="rounded-[10px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[13px] text-[#92400e]">
+        Enable the <code className="font-semibold">automation</code> feature flag
+        (<code>VITE_ADMIN_REAL_API_FEATURES</code>) to load Radius Expansion from the live
+        DispatchRuleSet and Champ SLA. Mock data is not used.
+      </div>
+    )
   }
 
-  function tryPersist(message) {
-    const error = validateMockRadiusOrder(draft)
-    if (error) {
-      setValidationError(error)
-      showError(error)
-      return
-    }
-    const next = cloneRadiusExpansionEditable(draft)
-    setBaseline(next)
-    setDraft(cloneRadiusExpansionEditable(next))
-    setValidationError(null)
-    showSuccess(message)
-  }
-
-  return (
-    <div className="pb-20">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-[17px] font-bold text-[#111827]">{catalog.header.title}</h2>
-          <p className="mt-1 text-[12px] text-[#6b7280]">{catalog.header.subtitle}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() =>
-            tryPersist(
-              'Radius Expansion saved locally via Save Changes (frontend mock only). Backend was not updated.',
-            )
-          }
-          className="inline-flex h-[34px] items-center gap-1.5 rounded-[7px] border border-[#1D6A33] bg-[#1D6A33] px-3.5 text-[12px] font-semibold text-white transition hover:bg-[#114225]"
-        >
-          Save Changes
-        </button>
-      </div>
-
-      <RadiusEscalationStageChain stages={stageChain} />
-
-      <AutomationSectionCard title={catalog.radii.title}>
-        {catalog.radii.rows.map((row) => (
-          <AutomationFieldRow key={row.id} label={row.label}>
-            <AutomationOperatorNumberField
-              value={draft[row.fieldKey]}
-              unit={row.unit}
-              operatorLocked
-              operators={['≤']}
-              onChange={(next) => updateField(row.fieldKey, { ...next, operator: '≤' })}
-            />
-          </AutomationFieldRow>
-        ))}
-        {validationError ? (
-          <div className="border-t border-[#f2cccc] bg-[#fff5f5] px-5 py-3 text-[12.5px] text-[#a93e42]">
-            {validationError}
-          </div>
-        ) : null}
-      </AutomationSectionCard>
-
-      <AutomationSectionCard title={catalog.timers.title}>
-        {catalog.timers.rows.map((row) => (
-          <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
-            <AutomationDurationField
-              value={draft[row.fieldKey]}
-              disabled={Boolean(row.readOnly)}
-              operatorLocked
-              operators={[row.operator]}
-              onChange={(next) =>
-                row.readOnly
-                  ? undefined
-                  : updateField(row.fieldKey, { ...next, operator: row.operator })
-              }
-            />
-          </AutomationFieldRow>
-        ))}
-      </AutomationSectionCard>
-
-      <div className="sticky bottom-0 z-10 -mx-5 mt-2 flex items-center justify-end gap-2.5 border-t border-[#e5e7eb] bg-white px-5 py-3 max-[700px]:-mx-3 max-[700px]:px-3">
-        <Button
-          type="button"
-          onClick={() => {
-            setDraft(cloneRadiusExpansionEditable(baseline))
-            setValidationError(null)
-            showInfo('Radius Expansion fields restored to the last saved local mock values.')
-          }}
-          className="rounded-full px-5"
-        >
-          Reset
-        </Button>
-        <Button
-          type="button"
-          primary
-          onClick={() =>
-            tryPersist(
-              'Radius Expansion saved locally via Save Automation (frontend mock only). Backend was not updated.',
-            )
-          }
-          className="rounded-full px-6"
-        >
-          Save Automation
-        </Button>
-      </div>
-    </div>
-  )
+  return <RealRadiusExpansionPage />
 }
 
 function RealRadiusExpansionPage() {
-  const catalog = useMemo(() => getRadiusExpansionMock(), [])
+  const catalog = RADIUS_EXPANSION_UI
   const ruleSet = useDispatchRuleSet()
   const [baseline, setBaseline] = useState(null)
   const [draft, setDraft] = useState(null)
   const [serverConfig, setServerConfig] = useState(null)
   const [validationError, setValidationError] = useState(null)
+  const [offerWindows, setOfferWindows] = useState(null)
+  const [slaSourceLabel, setSlaSourceLabel] = useState(null)
+  const [slaError, setSlaError] = useState(null)
+  const [slaLoading, setSlaLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setSlaLoading(true)
+    vendorAcceptanceSlaService
+      .getChampOfferWindows()
+      .then((result) => {
+        if (cancelled) return
+        const data = result?.data
+        if (
+          data?.hotFoodOfferSec == null ||
+          data?.otherOnDemandOfferSec == null ||
+          !data?.source
+        ) {
+          setOfferWindows(null)
+          setSlaError('Champ SLA offer windows are missing on the active SLA model.')
+          setSlaSourceLabel(null)
+          return
+        }
+        setOfferWindows({
+          hotFoodOfferSec: data.hotFoodOfferSec,
+          otherOnDemandOfferSec: data.otherOnDemandOfferSec,
+        })
+        setSlaError(null)
+        if (data.model?.name) {
+          setSlaSourceLabel(
+            `${data.model.name}${data.model.currentVersion != null ? ` v${data.model.currentVersion}` : ''}`,
+          )
+        }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setOfferWindows(null)
+        setSlaError(error?.message || 'Failed to load Champ SLA offer windows.')
+        setSlaSourceLabel(null)
+      })
+      .finally(() => {
+        if (!cancelled) setSlaLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     if (!ruleSet.draftConfig) return
-    const editable = mapConfigToRadiusEditable(ruleSet.draftConfig)
+    const editable = mapConfigToRadiusEditable(ruleSet.draftConfig, {
+      offerWindows: offerWindows || undefined,
+      noChampCancelSec: ruleSet.noChampCancelSec,
+    })
     setServerConfig(structuredClone(ruleSet.draftConfig))
     setBaseline(cloneEditable(editable))
     setDraft(cloneEditable(editable))
-  }, [ruleSet.draftConfig, ruleSet.meta?.id, ruleSet.meta?.updatedAt])
+  }, [ruleSet.draftConfig, ruleSet.meta?.id, ruleSet.meta?.updatedAt, ruleSet.noChampCancelSec])
+
+  useEffect(() => {
+    if (!offerWindows) return
+    const hot = secondsToDuration(offerWindows.hotFoodOfferSec, '≤')
+    const other = secondsToDuration(offerWindows.otherOnDemandOfferSec, '≤')
+    setBaseline((prev) => (prev ? { ...prev, hotFoodOffer: hot, otherOnDemandOffer: other } : prev))
+    setDraft((prev) => (prev ? { ...prev, hotFoodOffer: hot, otherOnDemandOffer: other } : prev))
+  }, [offerWindows])
+
+  useEffect(() => {
+    if (ruleSet.noChampCancelSec == null) return
+    const cancel = secondsToDuration(ruleSet.noChampCancelSec, '≥')
+    setBaseline((prev) => (prev ? { ...prev, overallAutoCancel: cancel } : prev))
+    setDraft((prev) => (prev ? { ...prev, overallAutoCancel: cancel } : prev))
+  }, [ruleSet.noChampCancelSec])
 
   const dirty = useMemo(() => {
     if (!baseline || !draft) return false
@@ -223,9 +169,6 @@ function RealRadiusExpansionPage() {
   const stageChain = useMemo(() => {
     if (!draft) return catalog.stages
     return catalog.stages.map((stage) => {
-      if (stage.displayMode === 'open') {
-        return { ...stage, displayValue: stage.openLabel }
-      }
       const km = draft[stage.radiusKey]?.value
       return {
         ...stage,
@@ -270,7 +213,10 @@ function RealRadiusExpansionPage() {
       }, draft)
       const nextConfig = result?.data?.draftConfig
       if (!nextConfig) throw new Error('Save succeeded but draft config was missing.')
-      const nextEditable = mapConfigToRadiusEditable(nextConfig)
+      const nextEditable = mapConfigToRadiusEditable(nextConfig, {
+        offerWindows: offerWindows || undefined,
+        noChampCancelSec: ruleSet.noChampCancelSec,
+      })
       setServerConfig(structuredClone(nextConfig))
       setBaseline(cloneEditable(nextEditable))
       setDraft(cloneEditable(nextEditable))
@@ -299,7 +245,10 @@ function RealRadiusExpansionPage() {
       const result = await ruleSet.activate('Activated from Automation → Radius Expansion')
       const nextConfig = result?.data?.draftConfig || result?.data?.rule?.config
       if (nextConfig) {
-        const nextEditable = mapConfigToRadiusEditable(nextConfig)
+        const nextEditable = mapConfigToRadiusEditable(nextConfig, {
+          offerWindows: offerWindows || undefined,
+          noChampCancelSec: ruleSet.noChampCancelSec,
+        })
         setServerConfig(structuredClone(nextConfig))
         setBaseline(cloneEditable(nextEditable))
         setDraft(cloneEditable(nextEditable))
@@ -336,6 +285,10 @@ function RealRadiusExpansionPage() {
               {serverConfig?.radius?.expansionDelaySec != null
                 ? ` · delay ${serverConfig.radius.expansionDelaySec}s`
                 : ''}
+              {slaSourceLabel ? ` · offer windows from ${slaSourceLabel}` : ''}
+              {ruleSet.noChampCancelSec != null
+                ? ` · no-Champ cancel ${ruleSet.noChampCancelSec}s`
+                : ''}
             </p>
           ) : null}
         </div>
@@ -350,6 +303,15 @@ function RealRadiusExpansionPage() {
       </div>
 
       <RadiusEscalationStageChain stages={stageChain} />
+
+      {slaError ? (
+        <div className="mb-4 rounded-[8px] border border-[#fde68a] bg-[#fffbeb] px-4 py-3 text-[12px] text-[#92400e]">
+          {slaError} Publish Champ SLA on SLA Models, then refresh.
+        </div>
+      ) : null}
+      {slaLoading ? (
+        <p className="mb-3 text-[11px] text-[#6b7280]">Loading Champ SLA offer windows…</p>
+      ) : null}
 
       <AutomationSectionCard title={catalog.radii.title}>
         {catalog.radii.rows.map((row) => (
@@ -374,7 +336,7 @@ function RealRadiusExpansionPage() {
         {catalog.timers.rows.map((row) => {
           const readOnly = Boolean(row.readOnly) || READONLY_TIMER_KEYS.has(row.fieldKey)
           return (
-            <AutomationFieldRow key={row.id} label={row.label} help={row.help}>
+            <AutomationFieldRow key={row.id} label={row.label}>
               <AutomationDurationField
                 value={draft[row.fieldKey]}
                 disabled={readOnly}
@@ -415,9 +377,4 @@ function RealRadiusExpansionPage() {
       </div>
     </div>
   )
-}
-
-export default function AdminRadiusExpansionPage() {
-  if (!isAutomationRealApi()) return <MockRadiusExpansionPage />
-  return <RealRadiusExpansionPage />
 }
