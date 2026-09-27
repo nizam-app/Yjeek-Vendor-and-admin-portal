@@ -1,12 +1,9 @@
 /**
- * Hot-food on-demand vendor + customer field grids (OG §02).
+ * Hot-food on-demand vendor + customer field grids.
  *
- * Surface: Branch › Delivery Settings (D02) — NOT Store Management › store type.
- * Store type only mocks Allowed vehicles (OG §01); this component is the reusable
- * fee panel for branch and vendor template after mode toggle enable.
- *
- * Optional inheritance: pass `fieldMeta` + `onResetField` for INHERITED / OVERRIDDEN
- * badges and per-field "Reset to default" (branch live settings / vendor template).
+ * Used on Store Management (store-type defaults) and on branch / vendor delivery
+ * settings. Optional inheritance: pass `fieldMeta` + `onResetField` for
+ * INHERITED / OVERRIDDEN badges and per-field reset.
  */
 import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
 import { cn } from '../cn'
@@ -132,6 +129,59 @@ export function buildHotFoodDefaultsPayload(form) {
       serviceFeeContribution: emptyToNull(customer.serviceFeeContribution),
     },
   }
+}
+
+const HOT_FOOD_VENDOR_LABELS = {
+  radiusKm: 'Vendor delivery radius',
+  etaMin: 'Vendor ETA',
+  minOrderAmount: 'Vendor minimum order',
+  contribution: 'Vendor contribution',
+  maxDistanceKm: 'Vendor max distance',
+  extraPerKm: 'Vendor extra per km',
+}
+
+const HOT_FOOD_CUSTOMER_LABELS = {
+  radiusKm: 'Customer radius',
+  contribution: 'Customer contribution',
+  extraPerKm: 'Customer extra per km',
+}
+
+/** Null when the form can seed a first enable. Otherwise a message listing gaps. */
+export function hotFoodSeedMissingMessage(form) {
+  const payload = buildHotFoodDefaultsPayload(form)
+  const missing = []
+  for (const [key, label] of Object.entries(HOT_FOOD_VENDOR_LABELS)) {
+    const value = payload.vendor[key]
+    if (value == null || value === '' || (typeof value === 'number' && !Number.isFinite(value))) {
+      missing.push(label)
+    }
+  }
+  if (payload.vendor.freeDeliveryEnabled && payload.vendor.freeDeliveryOver == null) {
+    missing.push('Free delivery over')
+  }
+  for (const [key, label] of Object.entries(HOT_FOOD_CUSTOMER_LABELS)) {
+    const value = payload.customer[key]
+    if (value == null || value === '' || (typeof value === 'number' && !Number.isFinite(value))) {
+      missing.push(label)
+    }
+  }
+  const radius = Number(payload.vendor.radiusKm)
+  const maxDistance = Number(payload.vendor.maxDistanceKm)
+  if (
+    payload.vendor.radiusKm != null &&
+    payload.vendor.maxDistanceKm != null &&
+    Number.isFinite(radius) &&
+    Number.isFinite(maxDistance) &&
+    maxDistance < radius
+  ) {
+    return 'Vendor max distance must be greater than or equal to delivery radius.'
+  }
+  if (!missing.length) return null
+  return `Fill hot-food fees before enabling: ${missing.join(', ')}.`
+}
+
+export function isHotFoodDefaultsMissingError(message) {
+  return /delivery defaults are empty/i.test(String(message || ''))
 }
 
 function formatDefaultHint(defaultValue) {

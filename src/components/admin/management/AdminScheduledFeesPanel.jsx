@@ -2,8 +2,8 @@
  * Scheduled delivery fee grids (OG §05 / D06 Batch 3).
  *
  * Flat rates per speed tier × item class. No radius / per-km / max distance.
- * Used on Branch › Delivery Settings (and Vendor template). Store-type seed
- * values stay API-backed (OG §01 — no fee grids on Store Management).
+ * Used on Branch › Delivery Settings, the vendor template, and Store Management
+ * when Scheduled is enabled so a new branch can copy those defaults.
  *
  * Empty cells stay empty (placeholder "—"); never invent zeros.
  */

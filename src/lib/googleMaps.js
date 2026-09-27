@@ -97,11 +97,44 @@ export async function reverseGeocodeLatLng(lat, lng) {
     return hit?.long_name || null
   }
 
+  const country = findType('country')
+  const governorate = findType('administrative_area_level_1')
+  const locality = findType('locality', 'postal_town')
+  const area =
+    findType('sublocality_level_1', 'sublocality', 'neighborhood', 'administrative_area_level_2') ||
+    null
+
   return {
     address: top.formatted_address || null,
-    area:
-      findType('sublocality', 'sublocality_level_1', 'neighborhood', 'administrative_area_level_2')
-      || null,
-    city: findType('locality', 'administrative_area_level_1') || null,
+    area: usablePlaceName(area),
+    city: usablePlaceName(locality) || cityFromFormattedAddress(top.formatted_address, country, governorate),
   }
+}
+
+function usablePlaceName(name) {
+  const value = String(name || '').trim()
+  if (!value || /governorate/i.test(value)) return null
+  return value
+}
+
+/** Last place name in a formatted address, skipping country, governorate, and plus codes. */
+function cityFromFormattedAddress(formatted, country, governorate) {
+  if (!formatted) return null
+  const skip = new Set(
+    [country, governorate]
+      .map((part) => String(part || '').trim().toLowerCase())
+      .filter(Boolean),
+  )
+  const places = String(formatted)
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => {
+      if (!part) return false
+      const lower = part.toLowerCase()
+      if (skip.has(lower)) return false
+      if (/governorate/i.test(part)) return false
+      if (/^[A-Z0-9]{4,}\+[A-Z0-9]+/i.test(part)) return false
+      return true
+    })
+  return places.length ? places[places.length - 1] : null
 }

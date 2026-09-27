@@ -26,6 +26,19 @@ import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 import AdminItemClassConvertModal from '../../../components/admin/management/AdminItemClassConvertModal'
 import AdminStoreTypeCatalogCard from '../../../components/admin/management/AdminStoreTypeCatalogCard'
+import AdminStoreTypeHotFoodDefaults, {
+  EMPTY_HOT_FOOD_DEFAULTS,
+  buildHotFoodDefaultsPayload,
+  hotFoodSeedMissingMessage,
+  normalizeHotFoodDefaults,
+} from '../../../components/admin/management/AdminStoreTypeHotFoodDefaults'
+import AdminScheduledFeesPanel from '../../../components/admin/management/AdminScheduledFeesPanel'
+import {
+  EMPTY_SCHEDULED_FEES,
+  buildScheduledFeesPayload,
+  normalizeScheduledFees,
+  scheduledFreeDeliveryMissingMessage,
+} from '../../../components/admin/management/scheduledFeesForm'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
 
@@ -120,6 +133,8 @@ function serializeStoreTypeState(state) {
     })),
     catalogMode: state.catalogMode || 'MODIFIERS',
     lowStockThreshold: String(state.lowStockThreshold ?? 5),
+    hotFood: state.hotFood || EMPTY_HOT_FOOD_DEFAULTS,
+    scheduledFees: state.scheduledFees || EMPTY_SCHEDULED_FEES,
   })
 }
 
@@ -140,6 +155,8 @@ function mockInitialValues(storeTypeId, isEdit) {
       badges: [],
       catalogMode: 'MODIFIERS',
       lowStockThreshold: 5,
+      hotFood: normalizeHotFoodDefaults(null),
+      scheduledFees: normalizeScheduledFees(null),
     }
   }
 
@@ -169,10 +186,12 @@ function mockInitialValues(storeTypeId, isEdit) {
     badges: DEFAULT_BADGES,
     catalogMode: 'MODIFIERS',
     lowStockThreshold: 5,
+    hotFood: normalizeHotFoodDefaults(null),
+    scheduledFees: normalizeScheduledFees(null),
   }
 }
 
-function initialFromDetail(detail, allowedVehicles = null) {
+function initialFromDetail(detail, deliveryDefaults = null) {
   const slug = detail.internalKey || detail.slug || ''
 
   return {
@@ -183,7 +202,7 @@ function initialFromDetail(detail, allowedVehicles = null) {
     iconUrl: detail.iconUrl || null,
     modes: detail.modes || { ...EMPTY_MODES },
     allowedVehicles: normalizeAllowedVehicles(
-      allowedVehicles ?? detail.allowedVehicles ?? DEFAULT_ALLOWED_VEHICLES,
+      deliveryDefaults?.allowedVehicles ?? detail.allowedVehicles ?? DEFAULT_ALLOWED_VEHICLES,
     ),
     itemClasses: normalizeItemClasses(detail.itemClasses),
     structure: detail.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
@@ -203,6 +222,8 @@ function initialFromDetail(detail, allowedVehicles = null) {
         ? detail.catalogMode
         : 'MODIFIERS',
     lowStockThreshold: detail.lowStockThreshold ?? 5,
+    hotFood: normalizeHotFoodDefaults(deliveryDefaults?.hotFoodOnDemand),
+    scheduledFees: normalizeScheduledFees(deliveryDefaults?.scheduled),
   }
 }
 
@@ -591,6 +612,12 @@ function StoreTypeForm({
   const [badgeDraftLabel, setBadgeDraftLabel] = useState('')
   const [editingBadgeId, setEditingBadgeId] = useState(null)
   const [editingBadgeLabel, setEditingBadgeLabel] = useState('')
+  const [hotFood, setHotFood] = useState(() =>
+    normalizeHotFoodDefaults(initial.hotFood || null),
+  )
+  const [scheduledFees, setScheduledFees] = useState(() =>
+    normalizeScheduledFees(initial.scheduledFees || null),
+  )
 
   const baselineSnapshot = useMemo(() => serializeStoreTypeState(initial), [initial])
   const currentSnapshot = useMemo(
@@ -610,6 +637,8 @@ function StoreTypeForm({
         badges,
         catalogMode,
         lowStockThreshold,
+        hotFood,
+        scheduledFees,
       }),
     [
       displayName,
@@ -626,6 +655,8 @@ function StoreTypeForm({
       badges,
       catalogMode,
       lowStockThreshold,
+      hotFood,
+      scheduledFees,
     ],
   )
   const isDirty = currentSnapshot !== baselineSnapshot
@@ -676,6 +707,20 @@ function StoreTypeForm({
       bike: Boolean(allowedVehicles.bike),
       car: Boolean(allowedVehicles.car),
     })
+  }
+
+  const persistModeFeeDefaults = async (targetStoreTypeId) => {
+    const id = String(targetStoreTypeId || '').trim()
+    if (!id) return
+    const body = {}
+    if (modes['Hot food — on demand']) {
+      body.hotFoodOnDemand = buildHotFoodDefaultsPayload(hotFood)
+    }
+    if (modes.Scheduled) {
+      body.scheduled = buildScheduledFeesPayload(scheduledFees)
+    }
+    if (!Object.keys(body).length) return
+    await adminService.updateAdminStoreTypeDeliveryDefaults(id, body)
   }
 
   const closeConvertModal = () => {
@@ -790,6 +835,22 @@ function StoreTypeForm({
       }
     }
 
+    if (modes['Hot food — on demand']) {
+      const feeError = hotFoodSeedMissingMessage(hotFood)
+      if (feeError) {
+        setSaveError(feeError)
+        return
+      }
+    }
+
+    if (modes.Scheduled) {
+      const scheduledError = scheduledFreeDeliveryMissingMessage(scheduledFees)
+      if (scheduledError) {
+        setSaveError(scheduledError)
+        return
+      }
+    }
+
     if (intent === 'PUBLISHED' && !nextVisible) {
       setSaveError('Turn on "Visible in customer app" to publish this store type.')
       return
@@ -804,6 +865,7 @@ function StoreTypeForm({
           buildFormPayload(publishStatus, nextVisible),
         )
         await persistAllowedVehicles(storeTypeId)
+        await persistModeFeeDefaults(storeTypeId)
       } else {
         const created = await adminService.createAdminStoreType(
           buildFormPayload(publishStatus, nextVisible),
@@ -811,6 +873,7 @@ function StoreTypeForm({
         const createdId = created?.data?.id
         if (createdId) {
           await persistAllowedVehicles(createdId)
+          await persistModeFeeDefaults(createdId)
         }
       }
       allowLeave()
@@ -1339,6 +1402,32 @@ function StoreTypeForm({
           </div>
         </Card>
 
+        {modes['Hot food — on demand'] ? (
+          <Card
+            title="Hot food fees"
+            subtitle="Defaults copied onto a branch the first time Hot food — on demand is turned on. Every field except service fee is required. Zero is allowed."
+          >
+            <AdminStoreTypeHotFoodDefaults
+              value={hotFood}
+              onChange={setHotFood}
+              disabled={saving}
+            />
+          </Card>
+        ) : null}
+
+        {modes.Scheduled ? (
+          <Card
+            title="Scheduled fees"
+            subtitle="Flat rates per speed tier and item class. Copied onto a branch the first time Scheduled is turned on. Empty cells stay empty. No distance fields."
+          >
+            <AdminScheduledFeesPanel
+              value={scheduledFees}
+              onChange={setScheduledFees}
+              disabled={saving}
+            />
+          </Card>
+        ) : null}
+
         <Card
           title="Allowed vehicles"
           subtitle="Which vehicles may carry orders for this store type. A vendor may narrow this further, never widen it."
@@ -1649,7 +1738,7 @@ export default function AdminCreateStoreTypePage() {
     return (
       <StoreTypeForm
         key={detail.id}
-        initial={initialFromDetail(detail, deliveryDefaults?.allowedVehicles)}
+        initial={initialFromDetail(detail, deliveryDefaults)}
         onBack={goBack}
         storeTypeId={detail.id}
         mode="edit"
