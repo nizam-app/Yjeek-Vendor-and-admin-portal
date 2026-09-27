@@ -27,6 +27,12 @@ import AdminDriverRatesPanel, {
   extractDriverRatesFieldMeta,
   normalizeDriverRates,
 } from './AdminDriverRatesPanel'
+import AdminAllowedVehiclesPanel, {
+  buildAllowedVehiclesPayload,
+  extractAllowedVehiclesFieldMeta,
+  normalizeAllowedVehiclesForm,
+  VEHICLE_NONE_UI_MESSAGE,
+} from './AdminAllowedVehiclesPanel'
 
 export const BRANCH_DELIVERY_MODE_ORDER = [
   'HOT_FOOD_ON_DEMAND',
@@ -155,6 +161,8 @@ function applyServerPayload(
   setScheduledFieldMeta,
   setDriverRatesForm,
   setDriverRatesFieldMeta,
+  setAllowedVehiclesForm,
+  setAllowedVehiclesFieldMeta,
 ) {
   setPricingModel(data?.pricingModel || 'legacy_flat')
   setModes(normalizeModesFromApi(data?.modes))
@@ -179,6 +187,8 @@ function applyServerPayload(
     setDriverRatesForm(EMPTY_DRIVER_RATES)
     setDriverRatesFieldMeta(null)
   }
+  setAllowedVehiclesForm(normalizeAllowedVehiclesForm(data?.allowedVehicles))
+  setAllowedVehiclesFieldMeta(extractAllowedVehiclesFieldMeta(data?.allowedVehicles))
 }
 
 /**
@@ -210,12 +220,19 @@ export default function AdminBranchDeliverySettings({
   const [scheduledFieldMeta, setScheduledFieldMeta] = useState(null)
   const [driverRatesForm, setDriverRatesForm] = useState(EMPTY_DRIVER_RATES)
   const [driverRatesFieldMeta, setDriverRatesFieldMeta] = useState(null)
+  const [allowedVehiclesForm, setAllowedVehiclesForm] = useState(() =>
+    normalizeAllowedVehiclesForm(null),
+  )
+  const [allowedVehiclesFieldMeta, setAllowedVehiclesFieldMeta] = useState(null)
+  const [vehiclesError, setVehiclesError] = useState(null)
   const [dirtyHotFood, setDirtyHotFood] = useState(false)
   const [dirtyScheduled, setDirtyScheduled] = useState(false)
   const [dirtyDriverRates, setDirtyDriverRates] = useState(false)
+  const [dirtyAllowedVehicles, setDirtyAllowedVehicles] = useState(false)
 
   const canEdit = Boolean(vendorId && locationId) && !disabled
-  const dirtyFields = dirtyHotFood || dirtyScheduled || dirtyDriverRates
+  const dirtyFields =
+    dirtyHotFood || dirtyScheduled || dirtyDriverRates || dirtyAllowedVehicles
 
   const applyPayload = useCallback((data) => {
     applyServerPayload(
@@ -228,6 +245,8 @@ export default function AdminBranchDeliverySettings({
       setScheduledFieldMeta,
       setDriverRatesForm,
       setDriverRatesFieldMeta,
+      setAllowedVehiclesForm,
+      setAllowedVehiclesFieldMeta,
     )
   }, [])
 
@@ -242,6 +261,8 @@ export default function AdminBranchDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to load delivery settings.'))
     } finally {
@@ -306,6 +327,17 @@ export default function AdminBranchDeliverySettings({
     setSaveOk(false)
   }
 
+  const onAllowedVehiclesChange = (next) => {
+    if (!next.bike && !next.car) {
+      setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
+      return
+    }
+    setVehiclesError(null)
+    setAllowedVehiclesForm(next)
+    setDirtyAllowedVehicles(true)
+    setSaveOk(false)
+  }
+
   const handleModeToggle = async (modeKey, nextEnabled) => {
     if (!canEdit || togglingMode) return
     const current = modes[modeKey]
@@ -333,6 +365,7 @@ export default function AdminBranchDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to update order mode.'))
     } finally {
@@ -351,6 +384,9 @@ export default function AdminBranchDeliverySettings({
     if (dirtyDriverRates) {
       body.driverRates = buildDriverRatesPayload(driverRatesForm)
     }
+    if (dirtyAllowedVehicles) {
+      body.allowedVehicles = buildAllowedVehiclesPayload(allowedVehiclesForm)
+    }
     return body
   }
 
@@ -358,9 +394,21 @@ export default function AdminBranchDeliverySettings({
     if (!canEdit || saving) return
     if (!dirtyFields) return
 
+    if (dirtyAllowedVehicles && !allowedVehiclesForm.bike && !allowedVehiclesForm.car) {
+      setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
+      return
+    }
+
     const body = buildSaveBody()
-    if (!body.hotFoodOnDemand && !body.scheduled && !body.driverRates) {
-      setError('Enable Hot food or Scheduled before saving fee fields, or edit driver rates.')
+    if (
+      !body.hotFoodOnDemand &&
+      !body.scheduled &&
+      !body.driverRates &&
+      !body.allowedVehicles
+    ) {
+      setError(
+        'Enable Hot food or Scheduled before saving fee fields, or edit driver rates / vehicles.',
+      )
       return
     }
 
@@ -373,6 +421,8 @@ export default function AdminBranchDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
       setSaveOk(true)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to save delivery settings.'))
@@ -394,7 +444,12 @@ export default function AdminBranchDeliverySettings({
     try {
       // Persist pending sibling edits first so reset-field does not drop them
       const pending = buildSaveBody()
-      if (pending.hotFoodOnDemand || pending.scheduled || pending.driverRates) {
+      if (
+        pending.hotFoodOnDemand ||
+        pending.scheduled ||
+        pending.driverRates ||
+        pending.allowedVehicles
+      ) {
         await adminService.updateBranchDeliverySettings(vendorId, locationId, pending)
       }
       const res = await adminService.resetBranchDeliverySettingsField(vendorId, locationId, {
@@ -404,6 +459,8 @@ export default function AdminBranchDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to reset field.'))
     } finally {
@@ -546,6 +603,20 @@ export default function AdminBranchDeliverySettings({
             </div>
           )
         })}
+
+        <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
+          <div className="space-y-3 px-3.5 py-3.5">
+            <AdminAllowedVehiclesPanel
+              value={allowedVehiclesForm}
+              onChange={onAllowedVehiclesChange}
+              disabled={!canEdit || loading || saving || Boolean(togglingMode)}
+              fieldMeta={allowedVehiclesFieldMeta}
+              onResetField={handleResetField}
+              resettingPath={resettingPath}
+              error={vehiclesError}
+            />
+          </div>
+        </div>
 
         <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
           <div className="border-b border-[#eceeec] bg-[#f7f8f7] px-3.5 py-3">

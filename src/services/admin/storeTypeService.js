@@ -590,4 +590,74 @@ export const adminStoreTypeService = {
       meta: response?.meta ?? null,
     }
   },
+
+  async getAttributes(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { axes: [] }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.storeTypes.attributes(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    const raw = response?.data && typeof response.data === 'object' ? response.data : {}
+    const axes = Array.isArray(raw.axes) ? raw.axes : []
+    return {
+      data: {
+        axes: axes.map((axis, ai) => ({
+          id: axis.id ? String(axis.id) : `axis-${ai}`,
+          key: String(axis.key || ''),
+          name: String(axis.name || ''),
+          uiHint: axis.uiHint === 'SWATCH' ? 'SWATCH' : 'PILL',
+          isRequired: axis.isRequired !== false,
+          sortOrder: Number(axis.sortOrder) || ai,
+          values: Array.isArray(axis.values)
+            ? axis.values.map((v, vi) => ({
+                id: v.id ? String(v.id) : `val-${ai}-${vi}`,
+                key: String(v.key || ''),
+                label: String(v.label || ''),
+                colorHex: v.colorHex ? String(v.colorHex) : null,
+                sortOrder: Number(v.sortOrder) || vi,
+                isActive: v.isActive !== false,
+              }))
+            : [],
+        })),
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async putAttributes(storeTypeId, axes, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    const body = {
+      axes: (Array.isArray(axes) ? axes : []).map((axis, ai) => ({
+        key: String(axis.key || '').trim(),
+        name: String(axis.name || '').trim(),
+        uiHint: axis.uiHint === 'SWATCH' ? 'SWATCH' : 'PILL',
+        isRequired: axis.isRequired !== false,
+        sortOrder: Number.isFinite(Number(axis.sortOrder)) ? Number(axis.sortOrder) : ai,
+        values: (Array.isArray(axis.values) ? axis.values : []).map((v, vi) => ({
+          key: String(v.key || '').trim(),
+          label: String(v.label || '').trim(),
+          colorHex: v.colorHex ? String(v.colorHex) : null,
+          sortOrder: Number.isFinite(Number(v.sortOrder)) ? Number(v.sortOrder) : vi,
+          isActive: v.isActive !== false,
+        })),
+      })),
+    }
+    if (!useRealStoreTypesApi()) {
+      return { data: body, meta: null }
+    }
+    const response = await apiClient.put(endpoints.admin.storeTypes.attributes(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? body, meta: response?.meta ?? null }
+  },
 }

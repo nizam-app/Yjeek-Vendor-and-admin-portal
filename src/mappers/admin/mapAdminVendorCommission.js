@@ -1,4 +1,4 @@
-import { ApiError } from '../../api/errors'
+import { ApiError } from '../../api/errors.js'
 
 export const COMMISSION_MODEL_TO_UI = {
   PERCENT_OF_ORDER: '% of order',
@@ -126,6 +126,8 @@ export function mapWizardCustomFeesToApi(customFees) {
 /**
  * Map GET/PATCH commission `data` → detail-tab UI object.
  * Confirmed response fields from Postman screenshots.
+ * OG §08 / D08 Batch 5: inheritance + seededFromStoreType for badges/banner;
+ * platformServiceFee may still arrive from API but must not drive the Commission screen.
  */
 export function mapAdminVendorCommissionResponse(data) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -159,6 +161,9 @@ export function mapAdminVendorCommissionResponse(data) {
   const gateway = data.gatewayFees && typeof data.gatewayFees === 'object' ? data.gatewayFees : {}
   const commissionTiers = mapCommissionTiers(data.commissionTiers)
   const customFees = Array.isArray(data.customFees) ? data.customFees : []
+  const vatPct = parseOptionalNumber(data.vatOnCommissionPct)
+  const inheritance =
+    data.inheritance && typeof data.inheritance === 'object' ? data.inheritance : null
 
   return {
     modelCode,
@@ -169,11 +174,12 @@ export function mapAdminVendorCommissionResponse(data) {
       flatFeePerOrder != null && !Number.isNaN(flatFeePerOrder) ? flatFeePerOrder : null,
     commissionTiers,
     customFees,
+    /** Kept for legacy callers; Commission UI must not render this (OG §08). */
     platformServiceFee: formatMoney(data.platformServiceFee, currency),
     platformServiceFeeAmount: parseOptionalNumber(data.platformServiceFee),
-    vatOnCommission: formatPct(data.vatOnCommissionPct),
-    vatOnCommissionPct: parseOptionalNumber(data.vatOnCommissionPct),
-    currency,
+    vatOnCommission: vatPct != null ? `${vatPct}% (auto)` : '10% (auto)',
+    vatOnCommissionPct: vatPct != null ? vatPct : 10,
+    currency: 'BHD',
     gatewayFees: {
       fixedPct: formatGatewayField(gateway.fixedPct),
       debitPct: formatGatewayField(gateway.debitPct),
@@ -183,23 +189,23 @@ export function mapAdminVendorCommissionResponse(data) {
       otherChargesPct: formatGatewayField(gateway.otherChargesPct),
       fixedCharge: formatGatewayField(gateway.fixedCharge),
     },
+    inheritance,
+    seededFromStoreType: Boolean(data.seededFromStoreType ?? inheritance),
     raw: data,
   }
 }
 
 /**
  * Apply mapped commission → Edit vendor wizard step-4 form fields.
+ * OG §08: no platform service fee; VAT + currency are display-only on the screen.
  */
 export function mapAdminCommissionToWizardForm(commission) {
   if (!commission) return {}
   const gateway = commission.gatewayFees || {}
-  const currencyCode = commission.currency || 'BHD'
-  const vat =
+  const vatPct =
     commission.vatOnCommissionPct != null
-      ? `${commission.vatOnCommissionPct}% (auto)`
-      : commission.vatOnCommission && commission.vatOnCommission !== '—'
-        ? `${stripPercent(commission.vatOnCommission)}% (auto)`
-        : '10% (auto)'
+      ? commission.vatOnCommissionPct
+      : parseOptionalNumber(stripPercent(commission.vatOnCommission)) ?? 10
 
   let commissionRate = '15'
   if (commission.modelCode === 'FLAT_PER_ORDER' && commission.flatFeePerOrder != null) {
@@ -213,12 +219,8 @@ export function mapAdminCommissionToWizardForm(commission) {
   return {
     commissionModel: COMMISSION_MODEL_TO_UI[commission.modelCode] || commission.model || '% of order',
     commissionRate,
-    serviceFee:
-      commission.platformServiceFeeAmount != null
-        ? Number(commission.platformServiceFeeAmount).toFixed(3)
-        : stripCurrency(commission.platformServiceFee) || '0.300',
-    vatOnCommission: vat,
-    currency: String(currencyCode).trim().split(/\s+/)[0] || 'BHD',
+    vatOnCommission: `${vatPct}% (auto)`,
+    currency: 'BHD',
     fixedPct: gateway.fixedPct || '1.000',
     debitPct: gateway.debitPct || '0.500',
     creditPct: gateway.creditPct || '2.000',
@@ -229,21 +231,12 @@ export function mapAdminCommissionToWizardForm(commission) {
   }
 }
 
+/**
+ * Shared PATCH fields for gateway only.
+ * Does NOT send platformServiceFee (removed from Commission screen — OG §08).
+ * Does NOT send vatOnCommissionPct / currency (read-only on screen).
+ */
 function appendSharedCommissionFields(body, form = {}) {
-  const platformFee = parseOptionalNumber(
-    stripCurrency(form.platformServiceFee ?? form.serviceFee),
-  )
-  if (platformFee != null) body.platformServiceFee = platformFee
-
-  const vat = parseOptionalNumber(stripPercent(form.vatOnCommission ?? form.vatOnCommissionPct))
-  if (vat != null) body.vatOnCommissionPct = vat
-
-  const currencyRaw = form.currency
-  if (currencyRaw) {
-    const currency = stripCurrency(currencyRaw).replace(/\s+/g, ' ').trim().split(' ')[0]
-    if (currency) body.currency = currency
-  }
-
   const gatewaySource = form.gatewayFees || {
     fixedPct: form.fixedPct,
     debitPct: form.debitPct,
@@ -278,6 +271,7 @@ function appendSharedCommissionFields(body, form = {}) {
  * Map Edit commission modal / detail UI object → PATCH body.
  * Confirmed percent: { model, commissionRate }
  * Confirmed tiered: { model, commissionTiers, customFees }
+ * OG §08: custom fees apply for every model; no platformServiceFee / VAT / currency writes.
  */
 export function mapAdminUpdateVendorCommissionRequest(form = {}) {
   const body = {}
@@ -305,21 +299,22 @@ export function mapAdminUpdateVendorCommissionRequest(form = {}) {
   } else if (model === 'TIERED') {
     const tiers = mapCommissionTiers(form.commissionTiers)
     body.commissionTiers = tiers
-    if (Array.isArray(form.customFees)) {
-      body.customFees = form.customFees[0]?.value != null
-        ? mapWizardCustomFeesToApi(form.customFees)
-        : form.customFees
-            .map((fee) => {
-              if (!fee || typeof fee !== 'object') return null
-              const name = String(fee.name || '').trim()
-              const amount = parseOptionalNumber(fee.amount)
-              if (!name || amount == null) return null
-              const typeRaw = String(fee.type || 'BHD').toUpperCase()
-              const type = typeRaw === '%' || typeRaw === 'PERCENT' ? 'PERCENT' : 'BHD'
-              return { name, amount, type }
-            })
-            .filter(Boolean)
-    }
+  }
+
+  if (Array.isArray(form.customFees)) {
+    body.customFees = form.customFees[0]?.value != null
+      ? mapWizardCustomFeesToApi(form.customFees)
+      : form.customFees
+          .map((fee) => {
+            if (!fee || typeof fee !== 'object') return null
+            const name = String(fee.name || '').trim()
+            const amount = parseOptionalNumber(fee.amount)
+            if (!name || amount == null) return null
+            const typeRaw = String(fee.type || 'BHD').toUpperCase()
+            const type = typeRaw === '%' || typeRaw === 'PERCENT' ? 'PERCENT' : 'BHD'
+            return { name, amount, type }
+          })
+          .filter(Boolean)
   }
 
   return appendSharedCommissionFields(body, form)
@@ -368,7 +363,6 @@ export function mapAdminWizardCommissionRequest(form = {}, options = {}) {
   if (includeSharedFees) {
     appendSharedCommissionFields(body, {
       ...form,
-      platformServiceFee: form.serviceFee,
       gatewayFees: {
         fixedPct: form.fixedPct,
         debitPct: form.debitPct,
@@ -382,4 +376,17 @@ export function mapAdminWizardCommissionRequest(form = {}, options = {}) {
   }
 
   return body
+}
+
+/** Resolve inheritance state for a scalar / gateway field path. */
+export function getCommissionInheritanceState(inheritance, path) {
+  if (!inheritance || typeof inheritance !== 'object') return null
+  const parts = String(path || '').split('.')
+  let cursor = inheritance
+  for (const part of parts) {
+    if (!cursor || typeof cursor !== 'object') return null
+    cursor = cursor[part]
+  }
+  if (!cursor || typeof cursor !== 'object') return null
+  return cursor.state === 'overridden' || cursor.state === 'inherited' ? cursor.state : null
 }

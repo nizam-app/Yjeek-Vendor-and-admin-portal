@@ -98,6 +98,12 @@ export const adminService = {
   getAdminStoreTypeItemClassConvertPreview(storeTypeId, disable, options = {}) {
     return adminStoreTypeService.getItemClassConvertPreview(storeTypeId, disable, options)
   },
+  getAdminStoreTypeAttributes(storeTypeId, options = {}) {
+    return adminStoreTypeService.getAttributes(storeTypeId, options)
+  },
+  putAdminStoreTypeAttributes(storeTypeId, axes, options = {}) {
+    return adminStoreTypeService.putAttributes(storeTypeId, axes, options)
+  },
   getAdminFleetSummary(options = {}) {
     return adminFleetService.getFleetSummary(options)
   },
@@ -337,6 +343,12 @@ export const adminService = {
   },
   updateVendorSla(vendorId, form, options = {}) {
     return adminVendorService.updateSla(vendorId, form, options)
+  },
+  getVendorBookingSettings(vendorId, options = {}) {
+    return adminVendorService.getBookingSettings(vendorId, options)
+  },
+  updateVendorBookingSettings(vendorId, body, options = {}) {
+    return adminVendorService.updateBookingSettings(vendorId, body, options)
   },
   getCustomerDetail(customerId, options = {}) {
     if (isAdminRealApiFeature('customers') || !apiConfig.adminUseMockApi) {

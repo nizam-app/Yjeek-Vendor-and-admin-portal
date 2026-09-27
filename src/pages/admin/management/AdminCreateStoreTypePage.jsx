@@ -25,6 +25,7 @@ import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormMod
 import { ApiState } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 import AdminItemClassConvertModal from '../../../components/admin/management/AdminItemClassConvertModal'
+import AdminStoreTypeCatalogCard from '../../../components/admin/management/AdminStoreTypeCatalogCard'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
 
@@ -33,7 +34,7 @@ const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
 
 const ORDER_MODES = [
-  'On-Demand Delivery',
+  'Hot food — on demand',
   'Pickup',
   'Dine-in',
   'Scheduled',
@@ -76,7 +77,7 @@ const DEFAULT_CATEGORIES = [
 ]
 
 const EMPTY_MODES = {
-  'On-Demand Delivery': false,
+  'Hot food — on demand': false,
   Pickup: false,
   'Dine-in': false,
   Scheduled: false,
@@ -117,6 +118,8 @@ function serializeStoreTypeState(state) {
       bg: badge.bg,
       text: badge.text,
     })),
+    catalogMode: state.catalogMode || 'MODIFIERS',
+    lowStockThreshold: String(state.lowStockThreshold ?? 5),
   })
 }
 
@@ -135,6 +138,8 @@ function mockInitialValues(storeTypeId, isEdit) {
       subTypes: [],
       categories: [],
       badges: [],
+      catalogMode: 'MODIFIERS',
+      lowStockThreshold: 5,
     }
   }
 
@@ -150,7 +155,7 @@ function mockInitialValues(storeTypeId, isEdit) {
     visibleInApp: true,
     iconUrl: null,
     modes: {
-      'On-Demand Delivery': true,
+      'Hot food — on demand': true,
       Pickup: true,
       'Dine-in': true,
       Scheduled: false,
@@ -162,6 +167,8 @@ function mockInitialValues(storeTypeId, isEdit) {
     subTypes: [],
     categories: DEFAULT_CATEGORIES,
     badges: DEFAULT_BADGES,
+    catalogMode: 'MODIFIERS',
+    lowStockThreshold: 5,
   }
 }
 
@@ -191,6 +198,11 @@ function initialFromDetail(detail, allowedVehicles = null) {
       ...badge,
       Icon: badge.Icon || Check,
     })),
+    catalogMode:
+      detail.catalogMode === 'VARIANTS' || detail.catalogMode === 'HYBRID'
+        ? detail.catalogMode
+        : 'MODIFIERS',
+    lowStockThreshold: detail.lowStockThreshold ?? 5,
   }
 }
 
@@ -562,6 +574,10 @@ function StoreTypeForm({
   )
   const [categories, setCategories] = useState(initial.categories)
   const [badges, setBadges] = useState(initial.badges)
+  const [catalogMode, setCatalogMode] = useState(initial.catalogMode || 'MODIFIERS')
+  const [lowStockThreshold, setLowStockThreshold] = useState(
+    String(initial.lowStockThreshold ?? 5),
+  )
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [nestedBusy, setNestedBusy] = useState(false)
@@ -592,6 +608,8 @@ function StoreTypeForm({
         subTypes,
         categories,
         badges,
+        catalogMode,
+        lowStockThreshold,
       }),
     [
       displayName,
@@ -606,6 +624,8 @@ function StoreTypeForm({
       subTypes,
       categories,
       badges,
+      catalogMode,
+      lowStockThreshold,
     ],
   )
   const isDirty = currentSnapshot !== baselineSnapshot
@@ -642,11 +662,16 @@ function StoreTypeForm({
     structure,
     subTypes,
     publishStatus,
+    catalogMode,
+    lowStockThreshold,
   })
 
   const persistAllowedVehicles = async (targetStoreTypeId) => {
     const id = String(targetStoreTypeId || '').trim()
     if (!id) return
+    if (!allowedVehicles.bike && !allowedVehicles.car) {
+      throw new Error('At least one allowed vehicle (Bike or Car) must stay enabled.')
+    }
     await adminService.updateAdminStoreTypeAllowedVehicles(id, {
       bike: Boolean(allowedVehicles.bike),
       car: Boolean(allowedVehicles.car),
@@ -807,10 +832,18 @@ function StoreTypeForm({
   }
 
   const toggleAllowedVehicle = (key) => {
-    setAllowedVehicles((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
+    setAllowedVehicles((prev) => {
+      const currentlyOn = Boolean(prev[key])
+      if (currentlyOn) {
+        const other = key === 'bike' ? 'car' : 'bike'
+        if (!prev[other]) {
+          setSaveError('At least one allowed vehicle (Bike or Car) must stay enabled.')
+          return prev
+        }
+      }
+      setSaveError('')
+      return { ...prev, [key]: !currentlyOn }
+    })
   }
 
   const insertCategoryInTree = (nodes, parentId, child) => {
@@ -1193,6 +1226,15 @@ function StoreTypeForm({
             </div>
           </div>
         </Card>
+
+        <AdminStoreTypeCatalogCard
+          storeTypeId={isEditMode ? storeTypeId : null}
+          catalogMode={catalogMode}
+          lowStockThreshold={lowStockThreshold}
+          onCatalogModeChange={setCatalogMode}
+          onLowStockChange={setLowStockThreshold}
+          canPersistAttributes={Boolean(isEditMode && storeTypeId && canSaveRemote)}
+        />
 
         <Card
           title="Catalog structure"

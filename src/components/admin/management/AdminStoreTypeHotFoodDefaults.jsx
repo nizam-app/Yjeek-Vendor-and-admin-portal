@@ -294,7 +294,7 @@ export default function AdminStoreTypeHotFoodDefaults({
     return (
       <>
         {baseHint}
-        {isOverridden && def != null ? (
+        {isOverridden && typeof onResetField === 'function' ? (
           <>
             {' '}
             Default: {def}

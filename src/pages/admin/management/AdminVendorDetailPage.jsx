@@ -17,6 +17,7 @@ import { AdminVendorUsers } from '../../../components/admin/management/AdminVend
 import { AdminVendorPromotions } from '../../../components/admin/management/AdminVendorPromotions'
 import { AdminVendorCommission } from '../../../components/admin/management/AdminVendorCommission'
 import { AdminVendorSla } from '../../../components/admin/management/AdminVendorSla'
+import { AdminVendorBookingSettings } from '../../../components/admin/management/AdminVendorBookingSettings'
 import { AdminVendorMenuSettings } from '../../../components/admin/management/AdminVendorMenuSettings'
 import { cn } from '../../../components/admin/cn'
 import {
@@ -70,6 +71,11 @@ export default function AdminVendorDetailPage() {
   const [sla, setSla] = useState(null)
   const [slaLoading, setSlaLoading] = useState(false)
   const [slaError, setSlaError] = useState(null)
+  const [bookingSettings, setBookingSettings] = useState(null)
+  const [bookingSettingsLoading, setBookingSettingsLoading] = useState(false)
+  const [bookingSettingsError, setBookingSettingsError] = useState(null)
+  const [bookingSettingsSaving, setBookingSettingsSaving] = useState(false)
+  const [bookingSettingsSaveError, setBookingSettingsSaveError] = useState(null)
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getVendorDetail(vendorId),
     [vendorId],
@@ -322,6 +328,35 @@ export default function AdminVendorDetailPage() {
     }
   }, [vendorId, location.key, setData])
 
+  useEffect(() => {
+    if (!vendorId || !isAdminRealApiFeature('vendors') || tab !== 'Booking') {
+      return undefined
+    }
+
+    let cancelled = false
+    setBookingSettingsLoading(true)
+    setBookingSettingsError(null)
+
+    adminService
+      .getVendorBookingSettings(vendorId)
+      .then((response) => {
+        if (cancelled) return
+        setBookingSettings(response?.data || null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setBookingSettings(null)
+        setBookingSettingsError(err?.message || 'Failed to load booking settings.')
+      })
+      .finally(() => {
+        if (!cancelled) setBookingSettingsLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId, location.key, tab])
+
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
   const online = storeOnline ?? data.isOnline ?? data.storeOnline
@@ -444,6 +479,22 @@ export default function AdminVendorDetailPage() {
       throw err
     } finally {
       setCommissionSaving(false)
+    }
+  }
+
+  const handleSaveBookingSettings = async (payload) => {
+    setBookingSettingsSaving(true)
+    setBookingSettingsSaveError(null)
+    try {
+      const response = await adminService.updateVendorBookingSettings(vendorId, payload)
+      const next = response?.data || null
+      setBookingSettings(next)
+      return next
+    } catch (err) {
+      setBookingSettingsSaveError(err?.message || 'Failed to save booking settings.')
+      throw err
+    } finally {
+      setBookingSettingsSaving(false)
     }
   }
 
@@ -1119,6 +1170,7 @@ export default function AdminVendorDetailPage() {
           ) : commissionForTab ? (
             <AdminVendorCommission
               commission={commissionForTab}
+              storeTypeName={data.storeType || ''}
               onSaveCommission={handleSaveCommission}
               isSaving={commissionSaving}
               saveError={commissionSaveError}
@@ -1149,6 +1201,29 @@ export default function AdminVendorDetailPage() {
             <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
               <p className="text-[15px] font-bold text-[#17231c]">SLA</p>
               <p className="mt-1 text-[12px] text-[#7c8780]">No SLA data for this vendor.</p>
+            </div>
+          )}
+        </div>
+      ) : tab === 'Booking' ? (
+        <div className="space-y-3">
+          {bookingSettingsError ? (
+            <p className="text-[12px] text-[#d64044]">{bookingSettingsError}</p>
+          ) : null}
+          {bookingSettingsLoading && !bookingSettings ? (
+            <p className="text-[12px] text-[#7c8780]">Loading booking settings…</p>
+          ) : bookingSettings ? (
+            <AdminVendorBookingSettings
+              data={bookingSettings}
+              onSave={handleSaveBookingSettings}
+              saving={bookingSettingsSaving}
+              error={bookingSettingsSaveError}
+            />
+          ) : (
+            <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+              <p className="text-[15px] font-bold text-[#17231c]">Booking</p>
+              <p className="mt-1 text-[12px] text-[#7c8780]">
+                No booking settings for this vendor.
+              </p>
             </div>
           )}
         </div>

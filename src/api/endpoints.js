@@ -340,6 +340,9 @@ export const endpoints = {
        * @param {string} vendorId
        */
       sla: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}/sla`,
+      /** Services v1 S05 — GET/PATCH vendor booking settings */
+      bookingSettings: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/booking-settings`,
       /**
        * Menu Import BFF (Gate 1). Feature: `menu-import`.
        * @param {string} vendorId
@@ -473,6 +476,13 @@ export const endpoints = {
        */
       allowedVehicles: (storeTypeId) =>
         `/admin/store-types/${encodeURIComponent(storeTypeId)}/allowed-vehicles`,
+      /**
+       * Fashion v1 — attribute axes (Size, Colour, …).
+       * Confirmed: GET + PUT /admin/store-types/:storeTypeId/attributes
+       * @param {string} storeTypeId
+       */
+      attributes: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/attributes`,
       /**
        * Delivery Fees v1 / D05 — item-class convert preview (OG §03).
        * Confirmed: GET /admin/store-types/:storeTypeId/item-classes/convert-preview?disable=SPECIAL|NORMAL
@@ -871,6 +881,8 @@ export const endpoints = {
       security: '/admin/settings/security',
       /** Confirmed: GET + PATCH /admin/settings/integrations */
       integrations: '/admin/settings/integrations',
+      /** Services v1 S05 — GET + PATCH /admin/settings/services */
+      services: '/admin/settings/services',
       /** Confirmed: GET /admin/settings/meta */
       meta: '/admin/settings/meta',
       /** Confirmed: POST /admin/settings/reset */

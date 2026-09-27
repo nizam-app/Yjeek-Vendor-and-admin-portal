@@ -25,6 +25,7 @@ import {
 import {
   mapAdminCommissionToWizardForm,
   mapAdminCustomFeesToWizard,
+  getCommissionInheritanceState,
 } from '../../../mappers/admin/mapAdminVendorCommission'
 import {
   mapAdminServiceModesToLabels,
@@ -111,7 +112,6 @@ const WIZARD_FORM_DIRTY_KEYS = [
   'vatNumber',
   'commissionModel',
   'commissionRate',
-  'serviceFee',
   'vatOnCommission',
   'currency',
   'fixedPct',
@@ -334,11 +334,32 @@ const INITIAL_USERS = [
   { id: 'u3', name: 'Noora Faisal', role: 'Staff', branch: 'Riffa — East', status: 'Active' },
 ]
 
-function VendorField({ label, children, className = '' }) {
+function InheritanceBadge({ state }) {
+  if (!state) return null
+  const overridden = state === 'overridden'
+  return (
+    <span
+      className={cn(
+        'ml-1.5 inline-flex items-center rounded-[4px] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.04em]',
+        overridden ? 'bg-[#fde8e8] text-[#b42318]' : 'bg-[#e8f7ed] text-[#147940]',
+      )}
+    >
+      {overridden ? 'Overridden' : 'Inherited'}
+    </span>
+  )
+}
+
+function VendorField({ label, badge, hint, children, className = '' }) {
   return (
     <label className={cn('block', className)}>
-      <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">{label}</span>
+      <span className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">
+        {label}
+        {badge}
+      </span>
       {children}
+      {hint ? (
+        <span className="mt-1 block text-[11px] leading-[14px] text-[#8a948e]">{hint}</span>
+      ) : null}
     </label>
   )
 }
@@ -616,8 +637,7 @@ export default function AdminAddVendorPage({ onBack }) {
     // Prefer neutral defaults when real API is on — edit load / create APIs overwrite these.
     commissionModel: isAdminRealApiFeature('vendors') ? '% of order' : 'Tiered',
     commissionRate: '15',
-    serviceFee: '0.300',
-    vatOnCommission: '10',
+    vatOnCommission: '10% (auto)',
     currency: 'BHD',
     fixedPct: '1.000',
     debitPct: '0.500',
@@ -674,6 +694,8 @@ export default function AdminAddVendorPage({ onBack }) {
     ],
   )
   const [commissionTiers, setCommissionTiers] = useState([])
+  const [commissionInheritance, setCommissionInheritance] = useState(null)
+  const [commissionSeededFromStoreType, setCommissionSeededFromStoreType] = useState(false)
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [commissionSaving, setCommissionSaving] = useState(false)
   const [commissionError, setCommissionError] = useState(null)
@@ -1262,6 +1284,8 @@ export default function AdminAddVendorPage({ onBack }) {
         if (!commission) {
           setCustomFees([])
           setCommissionTiers([])
+          setCommissionInheritance(null)
+          setCommissionSeededFromStoreType(false)
           return
         }
         setForm((prev) => ({
@@ -1270,6 +1294,8 @@ export default function AdminAddVendorPage({ onBack }) {
         }))
         setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
         setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
+        setCommissionInheritance(commission.inheritance || null)
+        setCommissionSeededFromStoreType(Boolean(commission.seededFromStoreType))
       })
       .catch((err) => {
         if (cancelled) return
@@ -1564,6 +1590,8 @@ export default function AdminAddVendorPage({ onBack }) {
         }))
         setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
         setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
+        setCommissionInheritance(commission.inheritance || null)
+        setCommissionSeededFromStoreType(Boolean(commission.seededFromStoreType))
       }
       return true
     } catch (err) {
@@ -2477,8 +2505,19 @@ export default function AdminAddVendorPage({ onBack }) {
             </VendorCard>
 
             <VendorCard title="Commission & fees">
-              <p className="mb-2 text-[12px] font-medium text-[#7c8780]">Commission model</p>
-              <div className="mb-4 flex flex-wrap w-fit items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
+              {commissionSeededFromStoreType && selectedStoreType?.name ? (
+                <div className="mb-4 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
+                  ✓ Pre-filled from the <strong>{selectedStoreType.name}</strong> commission
+                  defaults. Edit any field to override it for this vendor.
+                </div>
+              ) : null}
+              <p className="mb-2 text-[12px] font-medium text-[#7c8780]">
+                Commission model
+                <InheritanceBadge
+                  state={getCommissionInheritanceState(commissionInheritance, 'model')}
+                />
+              </p>
+              <div className="mb-4 flex w-fit flex-wrap items-center rounded-[10px] bg-[#e9ebe9] p-[3px]">
                 {['% of order', 'Flat per order', 'Tiered'].map((model) => (
                   <button
                     key={model}
@@ -2496,39 +2535,82 @@ export default function AdminAddVendorPage({ onBack }) {
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-4 max-[700px]:grid-cols-1">
-                <VendorField label="Commission rate (%)">
+                <VendorField
+                  label={
+                    form.commissionModel === 'Flat per order'
+                      ? 'Flat fee per order (BHD)'
+                      : 'Commission rate (%)'
+                  }
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        form.commissionModel === 'Flat per order'
+                          ? 'flatFeePerOrder'
+                          : 'commissionRate',
+                      )}
+                    />
+                  }
+                  hint={
+                    form.commissionModel === 'Flat per order'
+                      ? 'Flat amount taken per order.'
+                      : 'Taken per order on the items value only — delivery and service fees excluded.'
+                  }
+                >
                   <VendorInput value={form.commissionRate} onChange={update('commissionRate')} />
                 </VendorField>
-                <VendorField label="Platform service fee (BHD)">
-                  <VendorInput value={form.serviceFee} onChange={update('serviceFee')} />
+                <VendorField
+                  label="VAT on commission"
+                  hint="Bahrain standard rate — not editable"
+                >
+                  <VendorInput
+                    value={form.vatOnCommission || '10% (auto)'}
+                    readOnly
+                    className="cursor-default bg-[#f7f8f7] text-[#5c665f] focus:border-[rgba(0,0,0,0.1)]"
+                  />
                 </VendorField>
-                <VendorField label="VAT on commission">
-                  <VendorInput value={form.vatOnCommission} onChange={update('vatOnCommission')} />
-                </VendorField>
-                <VendorField label="Currency">
-                  <VendorSelect value={form.currency || 'BHD'} onChange={update('currency')}>
-                    <option value="BHD">BHD</option>
-                  </VendorSelect>
+                <VendorField
+                  label="Currency"
+                  hint="Governs every amount on this vendor — fees, contributions and payouts."
+                >
+                  <VendorInput
+                    value="BHD"
+                    readOnly
+                    className="cursor-default bg-[#f7f8f7] text-[#5c665f] focus:border-[rgba(0,0,0,0.1)]"
+                  />
                 </VendorField>
               </div>
               {form.commissionModel === 'Tiered' ? (
                 <div className="mt-4 rounded-[10px] border border-[#e8ebe9] bg-[#fafbfa] px-3 py-3">
-                  <p className="text-[12px] font-medium text-[#455249]">Commission tiers</p>
+                  <p className="text-[12px] font-medium text-[#455249]">
+                    Commission tiers
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'commissionTiers',
+                      )}
+                    />
+                  </p>
                   <p className="mt-1 text-[11px] text-[#8a948e]">
-                    Add rate bands by order volume (from amount → %).
+                    Rate bands by items value (from amount → %). Delivery and service fees are
+                    excluded from the base.
                   </p>
                   <div className="mt-3 flex flex-wrap items-end gap-2.5">
                     <VendorField label="From amount" className="w-[140px]">
                       <VendorInput
                         value={tierDraft.fromAmount}
-                        onChange={(e) => setTierDraft((prev) => ({ ...prev, fromAmount: e.target.value }))}
+                        onChange={(e) =>
+                          setTierDraft((prev) => ({ ...prev, fromAmount: e.target.value }))
+                        }
                         placeholder="0"
                       />
                     </VendorField>
                     <VendorField label="Rate %" className="w-[120px]">
                       <VendorInput
                         value={tierDraft.ratePct}
-                        onChange={(e) => setTierDraft((prev) => ({ ...prev, ratePct: e.target.value }))}
+                        onChange={(e) =>
+                          setTierDraft((prev) => ({ ...prev, ratePct: e.target.value }))
+                        }
                         placeholder="15"
                       />
                     </VendorField>
@@ -2541,7 +2623,9 @@ export default function AdminAddVendorPage({ onBack }) {
                     </button>
                   </div>
                   {commissionTiers.length === 0 ? (
-                    <p className="mt-3 text-[11px] text-[#8a948e]">No tiers yet — add at least one before activating Tiered.</p>
+                    <p className="mt-3 text-[11px] text-[#8a948e]">
+                      No tiers yet — add at least one before activating Tiered.
+                    </p>
                   ) : (
                     <ul className="mt-3 space-y-1.5">
                       {commissionTiers.map((tier, index) => (
@@ -2549,10 +2633,14 @@ export default function AdminAddVendorPage({ onBack }) {
                           key={`${tier.fromAmount}-${tier.ratePct}-${index}`}
                           className="flex h-[36px] items-center gap-3 rounded-[8px] border border-[#dceee3] bg-white px-3 text-[12px] text-[#17231c]"
                         >
-                          <span className="min-w-0 flex-1">From {tier.fromAmount} → {tier.ratePct}%</span>
+                          <span className="min-w-0 flex-1">
+                            From {tier.fromAmount} → {tier.ratePct}%
+                          </span>
                           <button
                             type="button"
-                            onClick={() => setCommissionTiers((prev) => prev.filter((_, i) => i !== index))}
+                            onClick={() =>
+                              setCommissionTiers((prev) => prev.filter((_, i) => i !== index))
+                            }
                             className="grid h-6 w-6 place-items-center rounded-full text-[16px] text-[#9aa49d] hover:bg-[#f3f5f3]"
                             aria-label={`Remove tier ${index + 1}`}
                           >
@@ -2567,29 +2655,138 @@ export default function AdminAddVendorPage({ onBack }) {
             </VendorCard>
 
             <VendorCard title="Online gateway fees">
+              <p className="mb-3 text-[12px] leading-[16px] text-[#7c8780]">
+                Charged by the payment gateway. The rate applied depends on the method the customer
+                paid with. Cash orders incur zero gateway fees.
+              </p>
               <div className="grid grid-cols-3 gap-x-4 gap-y-4 max-[800px]:grid-cols-2 max-[520px]:grid-cols-1">
-                <VendorField label="Fixed %"><VendorInput value={form.fixedPct} onChange={update('fixedPct')} /></VendorField>
-                <VendorField label="Debit %"><VendorInput value={form.debitPct} onChange={update('debitPct')} /></VendorField>
-                <VendorField label="Credit %"><VendorInput value={form.creditPct} onChange={update('creditPct')} /></VendorField>
-                <VendorField label="Apple Pay %"><VendorInput value={form.applePayPct} onChange={update('applePayPct')} /></VendorField>
-                <VendorField label="Google Wallet %"><VendorInput value={form.googleWalletPct} onChange={update('googleWalletPct')} /></VendorField>
-                <VendorField label="Other charges %"><VendorInput value={form.otherChargesPct} onChange={update('otherChargesPct')} /></VendorField>
-                <VendorField label="Fixed charge / transaction (BHD)" className="col-span-3 max-[800px]:col-span-2 max-[520px]:col-span-1">
+                <VendorField
+                  label="Fixed %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.fixedPct',
+                      )}
+                    />
+                  }
+                  hint="Applied on every online order, on top of the method rate below."
+                >
+                  <VendorInput value={form.fixedPct} onChange={update('fixedPct')} />
+                </VendorField>
+                <VendorField
+                  label="Debit %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.debitPct',
+                      )}
+                    />
+                  }
+                  hint="Used only when the customer pays by debit card."
+                >
+                  <VendorInput value={form.debitPct} onChange={update('debitPct')} />
+                </VendorField>
+                <VendorField
+                  label="Credit %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.creditPct',
+                      )}
+                    />
+                  }
+                  hint="Used only when the customer pays by credit card."
+                >
+                  <VendorInput value={form.creditPct} onChange={update('creditPct')} />
+                </VendorField>
+                <VendorField
+                  label="Apple Pay %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.applePayPct',
+                      )}
+                    />
+                  }
+                  hint="Used only when the customer pays with Apple Pay."
+                >
+                  <VendorInput value={form.applePayPct} onChange={update('applePayPct')} />
+                </VendorField>
+                <VendorField
+                  label="Google Wallet %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.googleWalletPct',
+                      )}
+                    />
+                  }
+                  hint="Used only when the customer pays with Google Wallet."
+                >
+                  <VendorInput value={form.googleWalletPct} onChange={update('googleWalletPct')} />
+                </VendorField>
+                <VendorField
+                  label="Other charges %"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.otherChargesPct',
+                      )}
+                    />
+                  }
+                  hint="Any additional gateway charge not covered by the methods above."
+                >
+                  <VendorInput value={form.otherChargesPct} onChange={update('otherChargesPct')} />
+                </VendorField>
+                <VendorField
+                  label="Fixed charge / transaction (BHD)"
+                  className="col-span-3 max-[800px]:col-span-2 max-[520px]:col-span-1"
+                  badge={
+                    <InheritanceBadge
+                      state={getCommissionInheritanceState(
+                        commissionInheritance,
+                        'gatewayFees.fixedCharge',
+                      )}
+                    />
+                  }
+                  hint="Flat amount added once per online transaction, whatever the order value."
+                >
                   <VendorInput value={form.fixedCharge} onChange={update('fixedCharge')} />
                 </VendorField>
               </div>
             </VendorCard>
 
             <VendorCard title="Custom fees">
+              <p className="mb-3 text-[12px] leading-[16px] text-[#7c8780]">
+                Optional extra fees, added per vendor. Each is either a flat amount or a percentage
+                of the items value. Never shown to the customer.
+                <InheritanceBadge
+                  state={getCommissionInheritanceState(commissionInheritance, 'customFees')}
+                />
+              </p>
               <div className="flex flex-wrap items-end gap-2.5">
-                <VendorField label="Fee name" className="min-w-[180px] flex-1">
+                <VendorField
+                  label="Fee name"
+                  className="min-w-[180px] flex-1"
+                  hint="Internal label. Never shown to the customer."
+                >
                   <VendorInput
                     value={feeDraft.name}
                     onChange={(e) => setFeeDraft((prev) => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g. Packaging fee"
                   />
                 </VendorField>
-                <VendorField label="Amount / value" className="w-[120px]">
+                <VendorField
+                  label="Amount / value"
+                  className="w-[120px]"
+                  hint="A flat amount, or a percentage of the items value."
+                >
                   <VendorInput
                     value={feeDraft.amount || '0.000'}
                     onChange={(e) => setFeeDraft((prev) => ({ ...prev, amount: e.target.value }))}
@@ -2625,7 +2822,9 @@ export default function AdminAddVendorPage({ onBack }) {
                 </button>
               </div>
 
-              <p className="mb-2 mt-4 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8a948e]">Added fees</p>
+              <p className="mb-2 mt-4 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8a948e]">
+                Added fees
+              </p>
               <div className="space-y-2">
                 {customFees.length === 0 ? (
                   <p className="text-[12px] text-[#8a948e]">No custom fees</p>
@@ -2635,11 +2834,15 @@ export default function AdminAddVendorPage({ onBack }) {
                     key={fee.id}
                     className="flex h-[40px] items-center gap-3 rounded-[8px] border border-[#dceee3] bg-[#f3faf5] px-3.5"
                   >
-                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#17231c]">{fee.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-[#17231c]">
+                      {fee.name}
+                    </span>
                     <span className="shrink-0 text-[13px] font-bold text-[#1aa054]">{fee.value}</span>
                     <button
                       type="button"
-                      onClick={() => setCustomFees((prev) => prev.filter((item) => item.id !== fee.id))}
+                      onClick={() =>
+                        setCustomFees((prev) => prev.filter((item) => item.id !== fee.id))
+                      }
                       className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[16px] text-[#9aa49d] hover:bg-[#e4f3ea] hover:text-[#69756d]"
                       aria-label={`Remove ${fee.name}`}
                     >
@@ -2648,7 +2851,7 @@ export default function AdminAddVendorPage({ onBack }) {
                   </div>
                 ))}
               </div>
-              {useRealStoreApi && form.commissionModel !== 'Tiered' ? (
+              {useRealStoreApi ? (
                 <p className="mt-3 text-[11px] text-[#8a948e]">
                   Custom fees are saved with this step for every commission model.
                 </p>

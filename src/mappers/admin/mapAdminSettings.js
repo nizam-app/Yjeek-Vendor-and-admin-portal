@@ -8,6 +8,7 @@
  *   /admin/settings/notifications
  *   /admin/settings/security
  *   /admin/settings/integrations
+ *   /admin/settings/services
  */
 
 const INTEGRATION_KEYS = [
@@ -383,6 +384,34 @@ export function mapAdminSettingsSecurity(data) {
 }
 
 /**
+ * Map GET /admin/settings/services into Services tab form.
+ */
+export function mapAdminSettingsServices(data) {
+  const src = asObject(data)
+  if (!src) return null
+
+  const nested = asObject(src.services) || src
+  const mapped = {}
+
+  const windowDays = asNumber(nested.defaultBookingWindowDays ?? nested.bookingWindowDays)
+  if (windowDays != null) mapped.defaultBookingWindowDays = String(windowDays)
+
+  const cancelHours = asNumber(nested.cancelWindowHours)
+  if (cancelHours != null) mapped.cancelWindowHours = String(cancelHours)
+
+  const cancelFee = asNumber(nested.cancelFeePercent)
+  if (cancelFee != null) mapped.cancelFeePercent = String(cancelFee)
+
+  const rescheduleHours = asNumber(nested.rescheduleWindowHours)
+  if (rescheduleHours != null) mapped.rescheduleWindowHours = String(rescheduleHours)
+
+  const rescheduleFee = asNumber(nested.rescheduleFeePercent)
+  if (rescheduleFee != null) mapped.rescheduleFeePercent = String(rescheduleFee)
+
+  return Object.keys(mapped).length ? mapped : null
+}
+
+/**
  * Map GET /admin/settings root payload.
  */
 export function mapAdminSettingsAll(data) {
@@ -416,6 +445,7 @@ export function mapAdminSettingsAll(data) {
     notifications: mapAdminSettingsNotifications(src.notifications),
     security: mapAdminSettingsSecurity(src.security),
     integrations: mapAdminSettingsIntegrations(src.integrations),
+    services: mapAdminSettingsServices(src.services),
   }
 }
 
@@ -491,6 +521,7 @@ export function mapAdminSettingsPageState(
   securityData,
   defaults = {},
   integrationsData = null,
+  servicesData = null,
 ) {
   const all = mapAdminSettingsAll(allData)
   const general = {
@@ -527,6 +558,11 @@ export function mapAdminSettingsPageState(
       ...(mapAdminSettingsSecurity(securityData) || {}),
     },
     integrations,
+    services: {
+      ...(defaults.services || {}),
+      ...(all?.services || {}),
+      ...(mapAdminSettingsServices(servicesData) || {}),
+    },
     tabs: all?.tabs?.length ? all.tabs : null,
   }
 }
@@ -606,4 +642,21 @@ export function mapAdminPatchSecurityRequest(form) {
     ipAllowlist: ipUi === 'enabled' ? 'enabled' : 'disabled',
     loginAlerts: asBool(src.loginAlerts, false),
   }
+}
+
+/** PATCH /admin/settings/services body */
+export function mapAdminPatchServicesRequest(form) {
+  const src = asObject(form) || {}
+  const body = {}
+  const windowDays = asNumber(src.defaultBookingWindowDays)
+  if (windowDays != null) body.defaultBookingWindowDays = Math.trunc(windowDays)
+  const cancelHours = asNumber(src.cancelWindowHours)
+  if (cancelHours != null) body.cancelWindowHours = Math.trunc(cancelHours)
+  const cancelFee = asNumber(src.cancelFeePercent)
+  if (cancelFee != null) body.cancelFeePercent = Math.trunc(cancelFee)
+  const rescheduleHours = asNumber(src.rescheduleWindowHours)
+  if (rescheduleHours != null) body.rescheduleWindowHours = Math.trunc(rescheduleHours)
+  const rescheduleFee = asNumber(src.rescheduleFeePercent)
+  if (rescheduleFee != null) body.rescheduleFeePercent = Math.trunc(rescheduleFee)
+  return body
 }

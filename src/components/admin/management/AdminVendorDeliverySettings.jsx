@@ -27,6 +27,12 @@ import AdminDriverRatesPanel, {
   extractDriverRatesFieldMeta,
   normalizeDriverRates,
 } from './AdminDriverRatesPanel'
+import AdminAllowedVehiclesPanel, {
+  buildAllowedVehiclesPayload,
+  extractAllowedVehiclesFieldMeta,
+  normalizeAllowedVehiclesForm,
+  VEHICLE_NONE_UI_MESSAGE,
+} from './AdminAllowedVehiclesPanel'
 
 function applyServerPayload(data, setters) {
   const {
@@ -38,6 +44,8 @@ function applyServerPayload(data, setters) {
     setScheduledFieldMeta,
     setDriverRatesForm,
     setDriverRatesFieldMeta,
+    setAllowedVehiclesForm,
+    setAllowedVehiclesFieldMeta,
     setCheckoutSource,
   } = setters
   setStoreTypeName(data?.storeTypeName || null)
@@ -64,6 +72,8 @@ function applyServerPayload(data, setters) {
     setDriverRatesForm(EMPTY_DRIVER_RATES)
     setDriverRatesFieldMeta(null)
   }
+  setAllowedVehiclesForm(normalizeAllowedVehiclesForm(data?.allowedVehicles))
+  setAllowedVehiclesFieldMeta(extractAllowedVehiclesFieldMeta(data?.allowedVehicles))
 }
 
 function PushConfirmModal({
@@ -157,15 +167,22 @@ export default function AdminVendorDeliverySettings({
   const [scheduledFieldMeta, setScheduledFieldMeta] = useState(null)
   const [driverRatesForm, setDriverRatesForm] = useState(EMPTY_DRIVER_RATES)
   const [driverRatesFieldMeta, setDriverRatesFieldMeta] = useState(null)
+  const [allowedVehiclesForm, setAllowedVehiclesForm] = useState(() =>
+    normalizeAllowedVehiclesForm(null),
+  )
+  const [allowedVehiclesFieldMeta, setAllowedVehiclesFieldMeta] = useState(null)
+  const [vehiclesError, setVehiclesError] = useState(null)
   const [dirtyHotFood, setDirtyHotFood] = useState(false)
   const [dirtyScheduled, setDirtyScheduled] = useState(false)
   const [dirtyDriverRates, setDirtyDriverRates] = useState(false)
+  const [dirtyAllowedVehicles, setDirtyAllowedVehicles] = useState(false)
   const [resettingPath, setResettingPath] = useState(null)
   const [pushModalOpen, setPushModalOpen] = useState(false)
   const [pushModalError, setPushModalError] = useState(null)
   const [applyToggle, setApplyToggle] = useState(false)
 
-  const dirtyFields = dirtyHotFood || dirtyScheduled || dirtyDriverRates
+  const dirtyFields =
+    dirtyHotFood || dirtyScheduled || dirtyDriverRates || dirtyAllowedVehicles
 
   const setters = useMemo(
     () => ({
@@ -177,6 +194,8 @@ export default function AdminVendorDeliverySettings({
       setScheduledFieldMeta,
       setDriverRatesForm,
       setDriverRatesFieldMeta,
+      setAllowedVehiclesForm,
+      setAllowedVehiclesFieldMeta,
       setCheckoutSource,
     }),
     [],
@@ -192,6 +211,8 @@ export default function AdminVendorDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to load vendor delivery settings.'))
     } finally {
@@ -237,17 +258,34 @@ export default function AdminVendorDeliverySettings({
     setPushOk(null)
   }
 
+  const onAllowedVehiclesChange = (next) => {
+    if (!next.bike && !next.car) {
+      setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
+      return
+    }
+    setVehiclesError(null)
+    setAllowedVehiclesForm(next)
+    setDirtyAllowedVehicles(true)
+    setSaveOk(false)
+    setPushOk(null)
+  }
+
   const buildSaveBody = () => {
     return {
       modes: { HOT_FOOD_ON_DEMAND: { enabled: true } },
       hotFoodOnDemand: buildHotFoodDefaultsPayload(hotFoodForm),
       scheduled: buildScheduledFeesPayload(scheduledForm),
       driverRates: buildDriverRatesPayload(driverRatesForm),
+      allowedVehicles: buildAllowedVehiclesPayload(allowedVehiclesForm),
     }
   }
 
   const handleSave = async () => {
     if (!canEdit || saving) return
+    if (!allowedVehiclesForm.bike && !allowedVehiclesForm.car) {
+      setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
+      return
+    }
     setSaving(true)
     setError(null)
     setSaveOk(false)
@@ -257,6 +295,8 @@ export default function AdminVendorDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
       setSaveOk(true)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to save vendor delivery settings.'))
@@ -279,6 +319,8 @@ export default function AdminVendorDeliverySettings({
       setDirtyHotFood(false)
       setDirtyScheduled(false)
       setDirtyDriverRates(false)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to reset field.'))
     } finally {
@@ -402,6 +444,18 @@ export default function AdminVendorDeliverySettings({
           fieldMeta={scheduledFieldMeta}
           onResetField={hasStoredTemplate ? handleResetField : undefined}
           resettingPath={resettingPath}
+        />
+      </div>
+
+      <div className="mt-5 border-t border-[#f0f2f0] pt-4">
+        <AdminAllowedVehiclesPanel
+          value={allowedVehiclesForm}
+          onChange={onAllowedVehiclesChange}
+          disabled={!canEdit || loading || saving || pushing}
+          fieldMeta={allowedVehiclesFieldMeta}
+          onResetField={hasStoredTemplate ? handleResetField : undefined}
+          resettingPath={resettingPath}
+          error={vehiclesError}
         />
       </div>
 

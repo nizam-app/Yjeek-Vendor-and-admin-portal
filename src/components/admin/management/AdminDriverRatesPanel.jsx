@@ -163,7 +163,7 @@ export default function AdminDriverRatesPanel({
     return (
       <>
         {baseHint}
-        {isOverridden && def != null ? (
+        {isOverridden && typeof onResetField === 'function' ? (
           <>
             {' '}
             Default: {def}

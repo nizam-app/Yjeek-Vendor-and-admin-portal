@@ -17,6 +17,7 @@ const TABS = [
   { id: 'notifications', label: 'Notifications', title: 'Notifications', topbar: 'Settings · Notifications' },
   { id: 'security', label: 'Security', title: 'Security', topbar: 'Settings · Security' },
   { id: 'integrations', label: 'Integrations', title: 'Integrations', topbar: 'Settings · Integrations' },
+  { id: 'services', label: 'Services', title: 'Services booking', topbar: 'Settings · Services' },
 ]
 
 const COUNTRIES = ['Bahrain', 'Saudi Arabia', 'UAE', 'Kuwait', 'Qatar', 'Oman']
@@ -76,6 +77,13 @@ const DEFAULT_STATE = {
     { id: 'webhooks', title: 'Webhooks', subtitle: 'Custom endpoints', status: 'Not connected' },
     { id: 'erp', title: 'ERP', subtitle: 'Odoo / Oracle NetSuite', status: 'Not connected' },
   ],
+  services: {
+    defaultBookingWindowDays: '30',
+    cancelWindowHours: '2',
+    cancelFeePercent: '50',
+    rescheduleWindowHours: '2',
+    rescheduleFeePercent: '0',
+  },
 }
 
 function Toggle({ checked, onChange, label }) {
@@ -487,6 +495,89 @@ function IntegrationsTab({ services, onToggleStatus }) {
   )
 }
 
+function ServicesTab({ form, setField }) {
+  return (
+    <div className="space-y-3.5">
+      <SectionCard title="Booking window">
+        <p className="mb-3 text-[12.5px] text-[#7c8780]">
+          Default how far ahead customers can book (vendors inherit unless overridden).
+        </p>
+        <label className="block max-w-[280px]">
+          <span className={labelClass}>Default booking window (days)</span>
+          <input
+            type="number"
+            min={1}
+            max={365}
+            className={inputClass}
+            value={form.defaultBookingWindowDays}
+            onChange={(e) => setField('defaultBookingWindowDays', e.target.value)}
+          />
+        </label>
+      </SectionCard>
+
+      <SectionCard title="Cancel rules">
+        <p className="mb-3 text-[12.5px] text-[#7c8780]">
+          Applied on SERVICE order cancel quotes. Free cancel until N hours before the appointment.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>Free cancel window (hours before)</span>
+            <input
+              type="number"
+              min={0}
+              max={168}
+              className={inputClass}
+              value={form.cancelWindowHours}
+              onChange={(e) => setField('cancelWindowHours', e.target.value)}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={labelClass}>Fee after free window (%)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className={inputClass}
+              value={form.cancelFeePercent}
+              onChange={(e) => setField('cancelFeePercent', e.target.value)}
+            />
+          </label>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Reschedule (deferred)">
+        <p className="mb-3 text-[12.5px] text-[#7c8780]">
+          Stored for admin config. Customer reschedule API is not shipped yet — fields are not enforced.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block min-w-0">
+            <span className={labelClass}>Reschedule window (hours before)</span>
+            <input
+              type="number"
+              min={0}
+              max={168}
+              className={inputClass}
+              value={form.rescheduleWindowHours}
+              onChange={(e) => setField('rescheduleWindowHours', e.target.value)}
+            />
+          </label>
+          <label className="block min-w-0">
+            <span className={labelClass}>Reschedule fee (%)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className={inputClass}
+              value={form.rescheduleFeePercent}
+              onChange={(e) => setField('rescheduleFeePercent', e.target.value)}
+            />
+          </label>
+        </div>
+      </SectionCard>
+    </div>
+  )
+}
+
 export default function AdminSettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const tabId = searchParams.get('tab') || 'general'
@@ -512,6 +603,7 @@ export default function AdminSettingsPage() {
         : prev.notifications,
       security: pageData.security ? { ...prev.security, ...pageData.security } : prev.security,
       integrations: Array.isArray(pageData.integrations) ? pageData.integrations : prev.integrations,
+      services: pageData.services ? { ...prev.services, ...pageData.services } : prev.services,
     }))
   }, [pageData])
 
@@ -609,6 +701,14 @@ export default function AdminSettingsPage() {
         <SecurityTab
           form={state.security}
           setField={(key, value) => setTabField('security', key, value)}
+        />
+      )
+    }
+    if (activeTab.id === 'services') {
+      return (
+        <ServicesTab
+          form={state.services}
+          setField={(key, value) => setTabField('services', key, value)}
         />
       )
     }

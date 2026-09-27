@@ -1343,4 +1343,42 @@ export const adminVendorService = {
 
     return this.getSla(id, options)
   },
+
+  /**
+   * Services v1 S05 — GET /admin/vendors/:vendorId/booking-settings
+   */
+  async getBookingSettings(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) throw new Error('Vendor id is required.')
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load booking settings.')
+    }
+    const response = await apiClient.get(endpoints.admin.vendors.bookingSettings(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * Services v1 S05 — PATCH /admin/vendors/:vendorId/booking-settings
+   */
+  async updateBookingSettings(vendorId, body, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) throw new Error('Vendor id is required.')
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to update booking settings.')
+    }
+    const response = await apiClient.patch(
+      endpoints.admin.vendors.bookingSettings(id),
+      body && typeof body === 'object' ? body : {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'vendors',
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
 }

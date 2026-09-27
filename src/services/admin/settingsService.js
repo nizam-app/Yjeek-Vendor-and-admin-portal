@@ -7,6 +7,7 @@ import {
   mapAdminPatchLocalizationRequest,
   mapAdminPatchNotificationsRequest,
   mapAdminPatchSecurityRequest,
+  mapAdminPatchServicesRequest,
   mapAdminSettingsAll,
   mapAdminSettingsGeneral,
   mapAdminSettingsIntegrations,
@@ -14,6 +15,7 @@ import {
   mapAdminSettingsNotifications,
   mapAdminSettingsPageState,
   mapAdminSettingsSecurity,
+  mapAdminSettingsServices,
 } from '../../mappers/admin/mapAdminSettings'
 
 function useRealSettingsApi() {
@@ -39,6 +41,7 @@ function settingsRequestOptions(options = {}) {
  *   GET/PATCH /admin/settings/notifications
  *   GET/PATCH /admin/settings/security
  *   GET/PATCH /admin/settings/integrations
+ *   GET/PATCH /admin/settings/services
  *
  * Feature flag: `settings` (also on when VITE_ADMIN_USE_MOCK_API=false)
  */
@@ -82,6 +85,7 @@ export const adminSettingsService = {
       notificationsResponse,
       securityResponse,
       integrationsResponse,
+      servicesResponse,
     ] = await Promise.all([
       apiClient.get(endpoints.admin.settings.root, requestOpts),
       apiClient.get(endpoints.admin.settings.general, requestOpts),
@@ -89,6 +93,7 @@ export const adminSettingsService = {
       apiClient.get(endpoints.admin.settings.notifications, requestOpts),
       apiClient.get(endpoints.admin.settings.security, requestOpts),
       apiClient.get(endpoints.admin.settings.integrations, requestOpts),
+      apiClient.get(endpoints.admin.settings.services, requestOpts),
     ])
 
     return {
@@ -100,6 +105,7 @@ export const adminSettingsService = {
         securityResponse?.data,
         options.defaults,
         integrationsResponse?.data,
+        servicesResponse?.data,
       ),
       meta: allResponse?.meta ?? null,
     }
@@ -215,9 +221,42 @@ export const adminSettingsService = {
     }
   },
 
+  async getServices(options = {}) {
+    if (!useRealSettingsApi()) return { data: null, meta: null }
+
+    const response = await apiClient.get(
+      endpoints.admin.settings.services,
+      settingsRequestOptions(options),
+    )
+    return {
+      data: mapAdminSettingsServices(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async patchServices(form, options = {}) {
+    if (!useRealSettingsApi()) {
+      throw new Error('Settings API is not enabled.')
+    }
+
+    const body = mapAdminPatchServicesRequest(form)
+    const response = await apiClient.patch(
+      endpoints.admin.settings.services,
+      body,
+      settingsRequestOptions(options),
+    )
+
+    return {
+      data: mapAdminSettingsServices(response?.data) || mapAdminSettingsServices(body),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
   /**
    * Save the active settings tab.
-   * @param {'general'|'localization'|'notifications'|'security'|'integrations'} tabId
+   * @param {'general'|'localization'|'notifications'|'security'|'integrations'|'services'} tabId
    * @param {object} form
    */
   async saveTab(tabId, form, options = {}) {
@@ -227,6 +266,7 @@ export const adminSettingsService = {
     if (tab === 'notifications') return this.patchNotifications(form, options)
     if (tab === 'security') return this.patchSecurity(form, options)
     if (tab === 'integrations') return this.patchIntegrations(form, options)
+    if (tab === 'services') return this.patchServices(form, options)
     throw new Error('This settings tab cannot be saved yet.')
   },
 }

@@ -211,6 +211,7 @@ const DETAIL_TABS = [
   'Promotions',
   'Commission & fees',
   'SLA',
+  'Booking',
   'Menu Settings',
 ]
 
