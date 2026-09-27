@@ -28,3 +28,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local archives (GitHub max file size 100MB)
+*.zip
+Yjeek-Vendor-and-admin-portal.zip

@@ -5,6 +5,8 @@ import motoBike from '../../assets/moto_bike.png'
 import { useAdminScheduledBoard } from '../../hooks/admin/useAdminScheduledBoard'
 import { ApiState } from '../../components/admin/ApiState'
 import { AdminFilterDropdown } from '../../components/admin/operations/AdminFilterDropdown'
+import AdminForcePickupModal from '../../components/admin/AdminForcePickupModal'
+import { isAutomationRealApi } from '../../services/admin/dispatchAutomationFeature'
 import {
   SCHEDULED_TYPE_OPTIONS,
   orderDispatchType,
@@ -80,7 +82,7 @@ function statusBadge(order) {
   return { label: 'Awaiting', tone: 'bg-[#fff3d6] text-[#9a6d12]' }
 }
 
-function ColumnOrderCard({ order, onAssign, onOrderClick }) {
+function ColumnOrderCard({ order, onAssign, onOrderClick, onForcePickup }) {
   const status = statusBadge(order)
   const typeTag = order.tags?.find((tag) => !tag.includes('Special') && tag !== 'Normal' && tag !== 'Incident' && tag !== 'Champ')
     || order.deliverySpeedLabel
@@ -207,7 +209,10 @@ function ColumnOrderCard({ order, onAssign, onOrderClick }) {
       {showForcePickup ? (
         <button
           type="button"
-          onClick={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            onForcePickup?.(order)
+          }}
           className="mt-2 h-[30px] w-full rounded-[8px] bg-[#ff940f] text-[11px] font-medium text-white"
         >
           {order.footer}
@@ -345,11 +350,13 @@ export function AdminScheduledColumn() {
   const [types, setTypes] = useState([])
   const [champIds, setChampIds] = useState([])
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [forcePickupOrder, setForcePickupOrder] = useState(null)
+  const automationOn = isAutomationRealApi()
+  const meta = columnMeta[columnKey]
   const { data, error, isLoading, refetch } = useAdminScheduledBoard({
     sort: 'time_left',
     limit: 50,
   })
-  const meta = columnMeta[columnKey]
 
   const columnOrders = useMemo(() => {
     if (!data?.orders) return []
@@ -393,7 +400,9 @@ export function AdminScheduledColumn() {
     )
   }
 
-  const ActionIcon = meta.action.icon === 'zap' ? Zap : meta.action.icon === 'bell' ? Bell : null
+  const ActionIcon = meta.action?.icon === 'zap' ? Zap : meta.action?.icon === 'bell' ? Bell : null
+  const showColumnAutoAssign =
+    Boolean(meta.action) && !(automationOn && meta.action?.icon === 'zap')
   const filtersActive = Boolean(
     q.trim()
     || quick !== 'all'
@@ -454,6 +463,7 @@ export function AdminScheduledColumn() {
             selectedIds={[quick]}
             onChange={(ids) => setQuick(ids[0] || 'all')}
           />
+          {showColumnAutoAssign ? (
           <button
             type="button"
             className={cn(
@@ -466,6 +476,7 @@ export function AdminScheduledColumn() {
             {ActionIcon ? <ActionIcon size={13} /> : null}
             {meta.action.label}
           </button>
+          ) : null}
         </div>
       </div>
 
@@ -542,6 +553,7 @@ export function AdminScheduledColumn() {
               order={order}
               onAssign={openAssignChamp}
               onOrderClick={setSelectedOrder}
+              onForcePickup={setForcePickupOrder}
             />
           ))}
         </div>
@@ -552,6 +564,16 @@ export function AdminScheduledColumn() {
           order={selectedOrder}
           preference="scheduled"
           onClose={() => setSelectedOrder(null)}
+        />
+      ) : null}
+
+      {forcePickupOrder ? (
+        <AdminForcePickupModal
+          open
+          orderId={forcePickupOrder.orderId || String(forcePickupOrder.id || '').replace(/^#/, '')}
+          orderNumber={forcePickupOrder.id}
+          onClose={() => setForcePickupOrder(null)}
+          onDone={() => refetch()}
         />
       ) : null}
     </div>

@@ -143,6 +143,7 @@ export function mapAdminOrdersReportResponse(data) {
       { key: 'cancelled', label: 'Cancelled', value: formatCount(kpis.cancelled ?? 0), tone: 'red' },
       { key: 'gmv', label: 'GMV', value: formatCompactMoney(kpis.gmv ?? 0), tone: 'green' },
       { key: 'aov', label: 'AOV', value: formatMoneyBhd(kpis.aov ?? 0), tone: 'ink' },
+      { key: 'tips', label: 'Tips', value: formatCompactMoney(kpis.tips ?? 0), tone: 'green' },
       { key: 'onTimePct', label: 'On-time', value: formatPct(kpis.onTimePct), tone: 'green' },
       { key: 'avgDeliveryMin', label: 'Avg delivery', value: formatMinutes(kpis.avgDeliveryMin), tone: 'ink' },
       { key: 'refunds', label: 'Refunds', value: formatCompactMoney(kpis.refunds ?? 0), tone: 'orange' },
@@ -186,6 +187,7 @@ export function mapAdminOrdersReportRow(order) {
     totalKm: formatKm(order.totalKm),
     items: order.itemsCount == null || order.itemsCount === '' ? DASH : Number(order.itemsCount),
     value: formatMoneyBhd(order.value),
+    tip: formatMoneyBhd(order.tipAmount ?? order.tip ?? 0),
     payMethod: formatReportsPayMethod(order.payMethod),
     payStatus: formatReportsPayStatus(order.payStatus),
     placed: formatClock(timestamps.placed),
@@ -260,7 +262,8 @@ export function mapReportsPeriodToPreset(periodLabel) {
     .toLowerCase()
   if (label.includes('7')) return '7d'
   if (label.includes('90')) return '90d'
-  if (label.includes('year') || label.includes('mtd')) return 'mtd'
+  if (label.includes('month') || label === 'mtd') return 'mtd'
+  if (label.includes('year') || label === 'ytd') return 'ytd'
   return '30d'
 }
 

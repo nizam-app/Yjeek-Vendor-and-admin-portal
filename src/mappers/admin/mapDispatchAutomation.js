@@ -59,22 +59,27 @@ export function createOperatorNumber(operator, value) {
 }
 
 /**
- * Force stacking.liveEnabled = false (P2 absolute rule).
- * Preserves all other stacking / config keys.
+ * Strip FE-forbidden stacking fields. Bike stacking stays locked off.
+ * liveEnabled is owned by server rollout policy (DISPATCH_STACKING_LIVE_ALLOWED)
+ * — FE may send true when Admin unlocks; server still forces false if env locked.
  */
-export function forceLiveEnabledFalse(config) {
+export function forceBikeStackingOff(config) {
   const next = deepCloneConfig(config)
   const stacking = asRecord(next.stacking)
-  next.stacking = { ...stacking, liveEnabled: false }
+  next.stacking = { ...stacking, bikeStackingEnabled: false }
   return next
+}
+
+/** @deprecated Prefer forceBikeStackingOff — name kept for older call sites. */
+export function forceLiveEnabledFalse(config) {
+  return forceBikeStackingOff(config)
 }
 
 /**
  * Strip fields that must never be mutated from Automation UI.
- * Always forces stacking.liveEnabled false.
  */
 export function stripForbiddenMutations(config) {
-  return forceLiveEnabledFalse(config)
+  return forceBikeStackingOff(config)
 }
 
 // ---------------------------------------------------------------------------
@@ -156,7 +161,7 @@ export function buildVendorAcceptanceTimelineFromEffective(effective) {
       id: 'breach',
       time: `${on}s`,
       title: 'At Risk Breach',
-      body: 'On-time threshold crossed. Order may flip to At Risk. Vendor can still accept until the final deadline.',
+      body: 'On-time threshold crossed. Live Dashboard flips to At Risk. alertedAt recorded. Vendor can still accept until the final deadline.',
       badge: '⚠ At Risk',
       tone: 'yellow',
     },
@@ -164,7 +169,7 @@ export function buildVendorAcceptanceTimelineFromEffective(effective) {
       id: 'window',
       time: lateLabel,
       title: 'At Risk Window',
-      body: 'Accept still allowed until the final acceptance deadline. No dispatcher intervention in normal flow.',
+      body: 'Accept still allowed until the critical deadline. No dispatcher intervention.',
       badge: '⚠ At Risk',
       tone: 'orange',
     },
@@ -172,7 +177,7 @@ export function buildVendorAcceptanceTimelineFromEffective(effective) {
       id: 'critical',
       time: `${dead}s`,
       title: 'Critical — Auto-Cancel',
-      body: 'Unresolved acceptance at the final deadline → system timeout path. Customer notified via existing lifecycle.',
+      body: 'System auto-cancels (VENDOR_NO_RESPONSE). Customer notified. Authorized payment voided. Champ/offers released if any. Feeds VPI.',
       badge: '✗ Critical → Cancelled',
       tone: 'red',
     },
@@ -224,10 +229,11 @@ export function mapConfigToStackingEditable(config) {
   const reevaluateStage = Number(t2.reevaluateFromRadiusStage)
   const maxCar = Number(stacking.maxCarOrders)
   const requiredFailed = Number(t3.requiredFailedOffers)
+  // Engine: distanceKm > longDistanceKm → use '>' in UI (not ≥).
   return {
     dropZoneRadiusKm: createOperatorNumber('≤', t1.maxPairwiseDropKm ?? 2),
     companionDropKm: createOperatorNumber('≤', t2.companionDropKm ?? 2),
-    longDistanceThresholdKm: createOperatorNumber('≥', t2.longDistanceKm ?? 10),
+    longDistanceThresholdKm: createOperatorNumber('>', t2.longDistanceKm ?? 10),
     holdWindow: secondsToDuration(t2.holdWindowSec ?? 90, '≤'),
     reevaluateAtStage3: Number.isFinite(reevaluateStage) ? reevaluateStage <= 2 : true,
     interVendorPickupRadiusKm: createOperatorNumber('≤', t3.maxPairwisePickupKm ?? 4),
@@ -242,12 +248,13 @@ export function mapConfigToStackingEditable(config) {
     trigger1Enabled: t1.enabled !== false,
     trigger2Enabled: t2.enabled !== false,
     trigger3Enabled: t3.enabled !== false,
+    liveEnabled: stacking.liveEnabled === true,
   }
 }
 
 /**
  * Capacity matrix derived from DispatchRuleSet stacking + eligibility config.
- * Bike stacking stays off at launch; cargo remains Phase 2 display.
+ * Bike stacking follows stacking.bikeStackingEnabled; cargo remains Phase 2.
  */
 export function mapConfigToStackingCapacityRows(config) {
   const stacking = asRecord(config?.stacking)
@@ -259,13 +266,16 @@ export function mapConfigToStackingCapacityRows(config) {
   const bikeCap = Number(byVehicle.BIKE)
   const bikeText = Number.isFinite(bikeCap) ? String(Math.floor(bikeCap)) : '2'
   const carYes = { kind: 'yes', text: `✓ up to ${carCap}` }
+  const bikeStackingOn = stacking.bikeStackingEnabled === true
 
   return [
     {
       id: 'bike',
       vehicle: 'Bike',
       maxActiveOrders: { kind: 'value', text: bikeText },
-      trigger1: { kind: 'pill', text: 'Off at launch', tone: 'off' },
+      trigger1: bikeStackingOn
+        ? { kind: 'yes', text: `✓ up to ${bikeText}` }
+        : { kind: 'pill', text: 'Off at launch', tone: 'off' },
       trigger2: { kind: 'no', text: '✗' },
       trigger3: { kind: 'no', text: '✗' },
     },
@@ -296,6 +306,7 @@ export function applyStackingEdits(fullServerConfig, editable) {
   next.stacking.trigger2 = { ...asRecord(next.stacking.trigger2) }
   next.stacking.trigger3 = { ...asRecord(next.stacking.trigger3) }
 
+  // Trigger inputs → engine fields (always write when the form value parses).
   const dropKm = parsePositiveNumber(editable?.dropZoneRadiusKm?.value, null)
   if (dropKm != null) next.stacking.trigger1.maxPairwiseDropKm = dropKm
 
@@ -336,8 +347,10 @@ export function applyStackingEdits(fullServerConfig, editable) {
     next.stacking.trigger3.enabled = editable.trigger3Enabled
   }
 
-  // ABSOLUTE: never enable live stacking from Automation UI
-  next.stacking.liveEnabled = false
+  // liveEnabled: Admin may request true; server applyStackingLiveRolloutPolicy is authoritative.
+  if (typeof editable?.liveEnabled === 'boolean') {
+    next.stacking.liveEnabled = editable.liveEnabled
+  }
   next.stacking.bikeStackingEnabled = false
 
   return stripForbiddenMutations(next)
@@ -409,39 +422,110 @@ export function mapOverviewToStackingActivity(overview) {
 
 // ---------------------------------------------------------------------------
 // Radius UI ↔ config
-// Editable DispatchRuleSet fields: stagesKm[0..2], expansionDelaySec, broadcastRadiusKm
-// Read-only (not DispatchRuleSet): Champ/SLA offer TTLs, fixed no-Champ cancel display
+// Editable DispatchRuleSet: stagesKm[0..2], expansionDelaySec, broadcastRadiusKm
+// Read-only Champ SLA: offer TTLs · Read-only platform: noChampCancelSec (from overview)
 // ---------------------------------------------------------------------------
 
-/** SLA / Champ offer TTL display defaults (not persisted from this screen). */
-const DISPLAY_HOT_FOOD_OFFER_SEC = 45
-const DISPLAY_OTHER_ON_DEMAND_OFFER_SEC = 90
-/** Fixed no-Champ cancel policy display (not a DispatchRuleSet radius field). */
-const DISPLAY_NO_CHAMP_CANCEL_SEC = 900
+/** Empty duration placeholder — never invent demo seconds when source data is missing. */
+function emptyDuration(operator = '≤') {
+  return { operator, h: '', m: '', s: '' }
+}
 
-export function mapConfigToRadiusEditable(config) {
+/** Extract Champ offer TTL target seconds from an SLA duration tier or scalar. */
+export function champOfferTierTargetSec(value) {
+  if (value == null) return null
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return Math.floor(value)
+  }
+  if (typeof value === 'object') {
+    const target = Number(value.target)
+    if (Number.isFinite(target) && target >= 0) return Math.floor(target)
+  }
+  return null
+}
+
+/**
+ * Read Champ SLA offer windows for Radius Expansion display.
+ * Returns null targets when SLA modes are missing — no hardcoded demo TTLs.
+ */
+export function pickChampOfferWindowsFromSlaConfig(config) {
+  const champ = asRecord(config?.champ)
+  const byMode = asRecord(champ.acceptanceTimeByMode)
+  const hotFoodOfferSec =
+    champOfferTierTargetSec(byMode.hotFood) ?? champOfferTierTargetSec(byMode.food)
+  const otherOnDemandOfferSec =
+    champOfferTierTargetSec(byMode.groceryPharmacy) ??
+    champOfferTierTargetSec(byMode.flowers) ??
+    champOfferTierTargetSec(byMode.electronics)
+  return {
+    hotFoodOfferSec: hotFoodOfferSec ?? null,
+    otherOnDemandOfferSec: otherOnDemandOfferSec ?? null,
+    source:
+      hotFoodOfferSec != null && otherOnDemandOfferSec != null
+        ? 'champ.acceptanceTimeByMode'
+        : null,
+  }
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} config
+ * @param {{
+ *   offerWindows?: { hotFoodOfferSec?: number|null, otherOnDemandOfferSec?: number|null },
+ *   noChampCancelSec?: number|null,
+ * }=} options
+ */
+export function mapConfigToRadiusEditable(config, options = {}) {
   const radius = asRecord(config?.radius)
-  const stages = Array.isArray(radius.stagesKm) ? radius.stagesKm : [5, 8, 12]
+  const stages = Array.isArray(radius.stagesKm) ? radius.stagesKm : null
   const delaySec = Number(radius.expansionDelaySec)
   const expansionDelaySec =
-    Number.isFinite(delaySec) && delaySec >= 1 ? Math.floor(delaySec) : 90
+    Number.isFinite(delaySec) && delaySec >= 1 ? Math.floor(delaySec) : null
   const broadcast = Number(radius.broadcastRadiusKm)
   const broadcastRadiusKm =
-    Number.isFinite(broadcast) && broadcast > 0 ? broadcast : 25
+    Number.isFinite(broadcast) && broadcast > 0 ? broadcast : null
+
+  const windows = options.offerWindows || {}
+  const hotSec = Number(windows.hotFoodOfferSec)
+  const otherSec = Number(windows.otherOnDemandOfferSec)
+  const cancelSec = Number(options.noChampCancelSec)
 
   return {
-    stage1RadiusKm: createOperatorNumber('≤', stages[0] ?? 5),
-    stage2RadiusKm: createOperatorNumber('≤', stages[1] ?? 8),
-    stage3RadiusKm: createOperatorNumber('≤', stages[2] ?? 12),
-    stage4BroadcastKm: createOperatorNumber('≤', broadcastRadiusKm),
-    // Backend has one expansionDelaySec — both stage timers reflect that value.
-    stage2To3: secondsToDuration(expansionDelaySec, '≤'),
-    stage3To4: secondsToDuration(expansionDelaySec, '≤'),
-    // SLA / Champ offer windows — display only
-    hotFoodOffer: secondsToDuration(DISPLAY_HOT_FOOD_OFFER_SEC, '≤'),
-    otherOnDemandOffer: secondsToDuration(DISPLAY_OTHER_ON_DEMAND_OFFER_SEC, '≤'),
-    // Fixed policy display — not written to DispatchRuleSet
-    overallAutoCancel: secondsToDuration(DISPLAY_NO_CHAMP_CANCEL_SEC, '≥'),
+    stage1RadiusKm: createOperatorNumber(
+      '≤',
+      stages && Number.isFinite(Number(stages[0])) ? Number(stages[0]) : '',
+    ),
+    stage2RadiusKm: createOperatorNumber(
+      '≤',
+      stages && Number.isFinite(Number(stages[1])) ? Number(stages[1]) : '',
+    ),
+    stage3RadiusKm: createOperatorNumber(
+      '≤',
+      stages && Number.isFinite(Number(stages[2])) ? Number(stages[2]) : '',
+    ),
+    stage4BroadcastKm: createOperatorNumber(
+      '≤',
+      broadcastRadiusKm != null ? broadcastRadiusKm : '',
+    ),
+    stage2To3:
+      expansionDelaySec != null
+        ? secondsToDuration(expansionDelaySec, '≤')
+        : emptyDuration('≤'),
+    stage3To4:
+      expansionDelaySec != null
+        ? secondsToDuration(expansionDelaySec, '≤')
+        : emptyDuration('≤'),
+    hotFoodOffer:
+      Number.isFinite(hotSec) && hotSec >= 0
+        ? secondsToDuration(hotSec, '≤')
+        : emptyDuration('≤'),
+    otherOnDemandOffer:
+      Number.isFinite(otherSec) && otherSec >= 0
+        ? secondsToDuration(otherSec, '≤')
+        : emptyDuration('≤'),
+    overallAutoCancel:
+      Number.isFinite(cancelSec) && cancelSec > 0
+        ? secondsToDuration(cancelSec, '≥')
+        : emptyDuration('≥'),
   }
 }
 
@@ -518,25 +602,58 @@ export function validateRadiusStageOrder(editable) {
 }
 
 // ---------------------------------------------------------------------------
-// Scoring (read-only weights — no mutation helpers that change weights)
+// Scoring (editable weights — must sum to 100)
 // ---------------------------------------------------------------------------
 
 export function mapConfigToScoringDisplay(config) {
   const scoring = asRecord(config?.scoring)
   return {
-    etaWeight: scoring.etaWeight ?? 40,
-    cpiWeight: scoring.cpiWeight ?? 30,
-    activeLoadWeight: scoring.activeLoadWeight ?? 20,
-    categoryFitWeight: scoring.categoryFitWeight ?? 10,
+    etaWeight: Number(scoring.etaWeight ?? 40),
+    cpiWeight: Number(scoring.cpiWeight ?? 30),
+    activeLoadWeight: Number(scoring.activeLoadWeight ?? 20),
+    categoryFitWeight: Number(scoring.categoryFitWeight ?? 10),
   }
 }
 
+export function scoringWeightsSum(weights) {
+  if (!weights) return 0
+  return (
+    Number(weights.etaWeight || 0) +
+    Number(weights.cpiWeight || 0) +
+    Number(weights.activeLoadWeight || 0) +
+    Number(weights.categoryFitWeight || 0)
+  )
+}
+
+export function validateScoringWeights(weights) {
+  const sum = scoringWeightsSum(weights)
+  if (sum !== 100) return `Scoring weights must sum to 100% (currently ${sum}%).`
+  for (const key of ['etaWeight', 'cpiWeight', 'activeLoadWeight', 'categoryFitWeight']) {
+    const n = Number(weights?.[key])
+    if (!Number.isInteger(n) || n < 0 || n > 100) {
+      return 'Each scoring weight must be an integer between 0 and 100.'
+    }
+  }
+  return null
+}
+
 /**
- * Scoring tab Save Changes: no weight / POD mutations.
- * Returns full config with liveEnabled forced false only.
+ * Scoring tab Save Changes: apply weight edits; POD bonus remains unwired.
  */
-export function applyScoringEdits(fullServerConfig) {
-  return stripForbiddenMutations(deepCloneConfig(fullServerConfig))
+export function applyScoringEdits(fullServerConfig, weights) {
+  const next = stripForbiddenMutations(deepCloneConfig(fullServerConfig))
+  if (weights) {
+    const error = validateScoringWeights(weights)
+    if (error) throw new Error(error)
+    next.scoring = {
+      ...asRecord(next.scoring),
+      etaWeight: Number(weights.etaWeight),
+      cpiWeight: Number(weights.cpiWeight),
+      activeLoadWeight: Number(weights.activeLoadWeight),
+      categoryFitWeight: Number(weights.categoryFitWeight),
+    }
+  }
+  return next
 }
 
 // ---------------------------------------------------------------------------

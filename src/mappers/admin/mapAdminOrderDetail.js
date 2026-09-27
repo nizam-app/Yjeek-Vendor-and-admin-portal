@@ -384,6 +384,7 @@ export function mapAdminOrderDetailResponse(data) {
   const liveTotalsRows = [
     ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
     ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
+    ['Tip Amount', formatAdminMoney(totals.tipAmount ?? 0, currency)],
     ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
     ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
   ]
@@ -391,6 +392,7 @@ export function mapAdminOrderDetailResponse(data) {
   const scheduledTotalsRows = [
     ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
     ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
+    ['Tip Amount', formatAdminMoney(totals.tipAmount ?? 0, currency)],
     ['VAT', formatAdminMoney(totals.vatAmount, currency)],
     ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
     ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],

@@ -6,7 +6,9 @@ import {
 import { AutomationStatusPill } from './AutomationStatusPill'
 import { VehicleStackingCapacityTable } from './VehicleStackingCapacityTable'
 import { AutomationSectionCard } from './AutomationSectionCard'
+import { STACKING_UI } from './stackingUiCatalog'
 import { ToggleSwitch } from '../ui-editor/ExclusiveOfferRow'
+import { durationToSeconds } from '../../../mappers/admin/mapDispatchAutomation'
 
 function ToggleWithLabel({ checked, onChange, label, disabled = false }) {
   return (
@@ -18,33 +20,37 @@ function ToggleWithLabel({ checked, onChange, label, disabled = false }) {
 }
 
 /**
- * Shared stacking draft fields (mock + real API). Always keeps live stacking off.
+ * Buyer-matching Stacking layout. Visible fields match Admin mock UI;
+ * values bind to DispatchRuleSet (companion / failed-offers / T1–T2 enabled
+ * stay in draft for engine round-trip even when not shown).
  */
 export function StackingEditorSections({
-  catalog,
+  catalog = STACKING_UI,
   draft,
   updateField,
   capacityRows,
-  trigger1Status,
-  trigger2Status,
+  stage3RadiusKm = 12,
 }) {
   const capacity = catalog.vehicleCapacity
   const t1 = catalog.trigger1
   const t2 = catalog.trigger2
   const t3 = catalog.trigger3
 
+  const holdSec = durationToSeconds(draft?.holdWindow) ?? 90
+  const t2Subtitle =
+    typeof t2.subtitle === 'function' ? t2.subtitle(holdSec) : t2.subtitle
+  const reevaluateLabel =
+    typeof t2.reevaluateToggleLabel === 'function'
+      ? t2.reevaluateToggleLabel(stage3RadiusKm)
+      : t2.reevaluateToggleLabel
+
+  const t1On = draft.trigger1Enabled !== false
+  const t2On = draft.trigger2Enabled !== false
+  const t3On = draft.trigger3Enabled !== false
+
   return (
     <>
       <AutomationSectionCard title={capacity.title}>
-        <AutomationFieldRow label={capacity.maxCarOrdersLabel}>
-          <AutomationOperatorNumberField
-            value={draft.maxCarOrders}
-            unit={capacity.maxCarOrdersUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('maxCarOrders', { ...next, operator: '≤' })}
-          />
-        </AutomationFieldRow>
         <VehicleStackingCapacityTable columns={capacity.columns} rows={capacityRows} />
       </AutomationSectionCard>
 
@@ -52,18 +58,11 @@ export function StackingEditorSections({
         title={t1.title}
         subtitle={t1.subtitle}
         actions={
-          <AutomationStatusPill tone={trigger1Status?.tone || t1.statusTone} showDot>
-            {trigger1Status?.label || t1.status}
+          <AutomationStatusPill tone={t1On ? 'on' : 'off'} showDot>
+            {t1On ? t1.status : 'Disabled'}
           </AutomationStatusPill>
         }
       >
-        <AutomationFieldRow label={t1.enabledLabel}>
-          <ToggleWithLabel
-            checked={draft.trigger1Enabled}
-            label={t1.enabledToggleLabel}
-            onChange={(next) => updateField('trigger1Enabled', next)}
-          />
-        </AutomationFieldRow>
         <AutomationFieldRow label={t1.dropZoneLabel}>
           <AutomationOperatorNumberField
             value={draft.dropZoneRadiusKm}
@@ -88,38 +87,22 @@ export function StackingEditorSections({
 
       <AutomationSectionCard
         title={t2.title}
-        subtitle={t2.subtitle}
+        subtitle={t2Subtitle}
         actions={
-          <AutomationStatusPill tone={trigger2Status?.tone || t2.statusTone} showDot>
-            {trigger2Status?.label || t2.status}
+          <AutomationStatusPill tone={t2On ? 'on' : 'off'} showDot>
+            {t2On ? t2.status : 'Disabled'}
           </AutomationStatusPill>
         }
       >
-        <AutomationFieldRow label={t2.enabledLabel}>
-          <ToggleWithLabel
-            checked={draft.trigger2Enabled}
-            label={t2.enabledToggleLabel}
-            onChange={(next) => updateField('trigger2Enabled', next)}
-          />
-        </AutomationFieldRow>
         <AutomationFieldRow label={t2.longDistanceLabel}>
           <AutomationOperatorNumberField
             value={draft.longDistanceThresholdKm}
             unit={t2.longDistanceUnit}
             operatorLocked
-            operators={['≥']}
+            operators={['>']}
             onChange={(next) =>
-              updateField('longDistanceThresholdKm', { ...next, operator: '≥' })
+              updateField('longDistanceThresholdKm', { ...next, operator: '>' })
             }
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={t2.companionDropLabel}>
-          <AutomationOperatorNumberField
-            value={draft.companionDropKm}
-            unit={t2.companionDropUnit}
-            operatorLocked
-            operators={['≤']}
-            onChange={(next) => updateField('companionDropKm', { ...next, operator: '≤' })}
           />
         </AutomationFieldRow>
         <AutomationFieldRow label={t2.holdWindowLabel}>
@@ -133,7 +116,7 @@ export function StackingEditorSections({
         <AutomationFieldRow label={t2.reevaluateLabel}>
           <ToggleWithLabel
             checked={draft.reevaluateAtStage3}
-            label={t2.reevaluateToggleLabel}
+            label={reevaluateLabel}
             onChange={(next) => updateField('reevaluateAtStage3', next)}
           />
         </AutomationFieldRow>
@@ -143,8 +126,8 @@ export function StackingEditorSections({
         title={t3.title}
         subtitle={t3.subtitle}
         actions={
-          <AutomationStatusPill tone={t3.statusTone} showDot>
-            {t3.status}
+          <AutomationStatusPill tone={t3On ? t3.statusTone : 'off'} showDot>
+            {t3On ? t3.status : 'Disabled'}
           </AutomationStatusPill>
         }
       >
@@ -156,17 +139,6 @@ export function StackingEditorSections({
             operators={['≤']}
             onChange={(next) =>
               updateField('interVendorPickupRadiusKm', { ...next, operator: '≤' })
-            }
-          />
-        </AutomationFieldRow>
-        <AutomationFieldRow label={t3.requiredFailedOffersLabel}>
-          <AutomationOperatorNumberField
-            value={draft.requiredFailedOffers}
-            unit={t3.requiredFailedOffersUnit}
-            operatorLocked
-            operators={['≥']}
-            onChange={(next) =>
-              updateField('requiredFailedOffers', { ...next, operator: '≥' })
             }
           />
         </AutomationFieldRow>

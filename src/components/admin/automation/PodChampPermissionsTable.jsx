@@ -3,20 +3,21 @@ import { AutomationStatusPill } from './AutomationStatusPill'
 import {
   formatBhdDisplay,
   isChampNearLimit,
-} from '../../../mocks/adminAutomationPayOnDelivery.mock'
+} from '../../../mappers/admin/mapAdminPodAutomation'
 
-/** Champ POD permissions table. */
+/** Champ POD permissions table — live Fleet rows only. */
 export function PodChampPermissionsTable({
   columns,
   champs,
   warningThresholdPercent,
+  busyChampId = null,
   onEdit,
   onEnable,
   onDisable,
-  onNearLimit,
   onReconcile,
-  realMode = false,
 }) {
+  const busy = Boolean(busyChampId)
+
   return (
     <div className="w-full max-w-full overflow-x-auto overscroll-x-contain">
       <table className="w-full min-w-[760px] border-collapse text-left">
@@ -36,16 +37,17 @@ export function PodChampPermissionsTable({
           {champs.map((champ) => {
             const nearLimit = isChampNearLimit(champ, warningThresholdPercent)
             const floatBlocked = champ.floatBlocked === true
+            const rowBusy = busyChampId === champ.id
             return (
               <tr key={champ.id} className="hover:bg-[#f9fafb]">
                 <td className="border-b border-[#e5e7eb] px-3.5 py-2.5 text-[12.5px]">
                   <strong className="text-[#111827]">{champ.name}</strong>
-                  {realMode && floatBlocked ? (
+                  {floatBlocked ? (
                     <div className="mt-0.5 text-[10.5px] font-medium text-[#b45309]">
                       Float blocked (CASH only) — account not suspended
                     </div>
                   ) : null}
-                  {realMode && champ.accountStatus && champ.accountStatus !== 'ACTIVE' ? (
+                  {champ.accountStatus && champ.accountStatus !== 'ACTIVE' ? (
                     <div className="mt-0.5 text-[10.5px] text-[#6b7280]">
                       Account: {champ.accountStatus}
                     </div>
@@ -57,7 +59,7 @@ export function PodChampPermissionsTable({
                   ) : (
                     <AutomationStatusPill tone="off">✗ No</AutomationStatusPill>
                   )}
-                  {realMode && champ.podEnabled && champ.effectivePodEligible === false ? (
+                  {champ.podEnabled && champ.effectivePodEligible === false ? (
                     <div className="mt-1 text-[10.5px] text-[#6b7280]">Effective: blocked</div>
                   ) : null}
                 </td>
@@ -78,7 +80,7 @@ export function PodChampPermissionsTable({
                       {formatBhdDisplay(champ.currentCashBhd, { forceCents: true })}
                       {nearLimit && !floatBlocked ? ' ⚠' : ''}
                       {floatBlocked ? ' ⛔' : ''}
-                      {realMode && champ.utilizationPercent != null ? (
+                      {champ.utilizationPercent != null ? (
                         <span className="ml-1 font-normal text-[#6b7280]">
                           ({champ.utilizationPercent}%)
                         </span>
@@ -103,37 +105,37 @@ export function PodChampPermissionsTable({
                     {!champ.podEnabled ? (
                       <button
                         type="button"
+                        disabled={busy}
                         onClick={() => onEnable?.(champ)}
-                        className="inline-flex items-center rounded-[7px] border border-[#1D6A33] bg-[#1D6A33] px-2.5 py-1 text-[11px] font-semibold text-white"
+                        className="inline-flex items-center rounded-[7px] border border-[#1D6A33] bg-[#1D6A33] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
                       >
-                        Enable
+                        {rowBusy ? '…' : 'Enable'}
                       </button>
                     ) : (
                       <>
-                        {realMode ? (
-                          <button
-                            type="button"
-                            onClick={() => onDisable?.(champ)}
-                            className="inline-flex items-center rounded-[7px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111827]"
-                          >
-                            Disable
-                          </button>
-                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => onDisable?.(champ)}
+                          className="inline-flex items-center rounded-[7px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111827] disabled:opacity-50"
+                        >
+                          Disable
+                        </button>
                         {nearLimit || floatBlocked ? (
                           <button
                             type="button"
-                            onClick={() =>
-                              realMode ? onReconcile?.(champ) : onNearLimit?.(champ)
-                            }
-                            className="inline-flex items-center rounded-[7px] border border-[#dc2626] bg-white px-2.5 py-1 text-[11px] font-medium text-[#dc2626]"
+                            disabled={busy}
+                            onClick={() => onReconcile?.(champ)}
+                            className="inline-flex items-center rounded-[7px] border border-[#dc2626] bg-white px-2.5 py-1 text-[11px] font-medium text-[#dc2626] disabled:opacity-50"
                           >
-                            {realMode ? 'Full reconcile' : 'Near limit'}
+                            {rowBusy ? '…' : 'Full reconcile'}
                           </button>
                         ) : (
                           <button
                             type="button"
+                            disabled={busy}
                             onClick={() => onEdit?.(champ)}
-                            className="inline-flex items-center rounded-[7px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111827]"
+                            className="inline-flex items-center rounded-[7px] border border-[#d1d5db] bg-white px-2.5 py-1 text-[11px] font-medium text-[#111827] disabled:opacity-50"
                           >
                             Edit
                           </button>

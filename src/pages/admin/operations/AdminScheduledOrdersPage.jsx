@@ -25,8 +25,10 @@ import {
   scheduledBoardQueryIsActive,
   writeScheduledBoardQuery,
 } from '../../../lib/adminScheduledBoardQuery'
+import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
 
 const useAdminMocks = () => apiConfig.adminUseMockApi
+const hideScheduledAutoAssign = () => isAutomationRealApi()
 
 function normalizeScheduledView(value) {
   if (!value) return null
@@ -223,14 +225,18 @@ function AdminOperationsBoard({ mode }) {
                 onChange={patchBoardQuery}
                 onClear={clearBoardQuery}
                 orders={data.orders}
-                trailing={(
-                  <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
-                )}
+                trailing={
+                  hideScheduledAutoAssign() ? null : (
+                    <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
+                  )
+                }
               />
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button className="h-[31px]">Zone: All ▾</Button>
-                <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
+                {hideScheduledAutoAssign() ? null : (
+                  <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
+                )}
               </div>
             )}
           </div>
@@ -943,9 +949,11 @@ function ScheduledDispatchBoard({
             onClear={onQueryClear}
             orders={data?.orders}
             align="left"
-            trailing={(
-              <Button primary className="h-[31px] shrink-0 rounded-full px-4"><Zap size={11} /> Auto-assign</Button>
-            )}
+            trailing={
+              hideScheduledAutoAssign() ? null : (
+                <Button primary className="h-[31px] shrink-0 rounded-full px-4"><Zap size={11} /> Auto-assign</Button>
+              )
+            }
           />
         </div>
         <section className="overflow-hidden rounded-[10px] border border-[#dfe4e0] bg-white">
@@ -1036,7 +1044,9 @@ function ScheduledDispatchBoard({
         </DispatchSummary>
         <DispatchSummary title="Champ capacity">
           <SummaryRow label="Available tonight" value={champAvailable} success={champAvailable !== '0' && champAvailable !== '—'} />
-          <Button primary className="mt-2 h-8 w-full rounded-[8px]"><Zap size={11} /> Auto-assign all</Button>
+          {hideScheduledAutoAssign() ? null : (
+            <Button primary className="mt-2 h-8 w-full rounded-[8px]"><Zap size={11} /> Auto-assign all</Button>
+          )}
         </DispatchSummary>
       </aside>
     </div>

@@ -1,6 +1,17 @@
-import { createDuration } from './adminAutomationDispatchRules.mock'
+function createDuration(operator, h, m, s) {
+  return {
+    operator,
+    h: String(h).padStart(2, '0'),
+    m: String(m).padStart(2, '0'),
+    s: String(s).padStart(2, '0'),
+  }
+}
 
-/** Frontend mock / reference source for Automation → Champ Status. */
+/**
+ * Champ Status UI catalog (Automation).
+ * Live caps / load factors / controls come from GET /admin/dispatch-automation/champ-status.
+ * Developer comment callouts are omitted — every product field/input remains.
+ */
 
 export function createChampStatusEditableDefaults() {
   return {
@@ -13,16 +24,12 @@ export function createChampStatusEditableDefaults() {
   }
 }
 
-export function getChampStatusMock() {
+export function getChampStatusCatalog() {
   return {
     header: {
       title: 'Champ Status Reference',
       subtitle:
         'Reference · Buyer labels AVAILABLE / ON_ORDER / OFFLINE · Stored runtime ONLINE / BUSY / OFFLINE · Not configurable here',
-    },
-    rootCallout: {
-      label: 'Developer note — status is the root of all dispatch logic',
-      body: 'Every automation decision starts by reading champ.status. Status is the single field the dispatch engine reads first — at Gate 1, before any scoring. Get this wrong and dispatch is broken. Status transitions must be atomic — no partial states. Each status has exactly one set of triggers (what causes it) and one set of automation consequences (what the system does when it reads it). Statuses set by the system are never manually overridable by the Champ app. Statuses set by Admin or Dispatcher are logged with who set them, when, and why.',
     },
     terminology: {
       label: 'Runtime ↔ buyer terminology (Phase A6)',
@@ -160,10 +167,6 @@ export function getChampStatusMock() {
         stackedAccent: true,
         badge: '● Active · Multi-order',
         badgeClassName: 'bg-[#dbeafe] text-[#1d4ed8]',
-        architectureCallout: {
-          label: 'Architecture rule — derived label, not a stored enum',
-          body: "Runtime champ.status stays 'BUSY' (buyer ON_ORDER) throughout. The stacked label is computed at read time by the API layer: if active_orders > 1, format the display as ON_ORDER · STACKED (N) where N = active_orders. Never store ON_ORDER_STACKED_2 as an enum value — you would need a new migration every time the cap changes and a status write on every delivery confirmation. One integer field does the job.",
-        },
         maintenanceTitle: 'How active_orders is maintained',
         maintenanceRows: [
           {
@@ -519,11 +522,6 @@ export function getChampStatusMock() {
         dotColor: '#7c3aed',
         badge: 'Phase 2 — Yjeek Fleet',
         badgeTone: 'phase2',
-        callout: {
-          tone: 'blue',
-          label: 'Reserve this enum value now — do not skip it',
-          body: 'FLEET_OCCUPIED must exist in the champ.status enum from day one even though the Fleet product does not launch at Phase 1. Adding an enum value to an existing column after launch requires a migration across all active records. Reserve it now at zero cost.',
-        },
         rows: [
           {
             id: 'set-by',
@@ -932,6 +930,69 @@ export function getChampStatusMock() {
 
 export function cloneChampStatusEditable(editable) {
   return JSON.parse(JSON.stringify(editable || createChampStatusEditableDefaults()))
+}
+
+/**
+ * Merge live GET /champ-status payload into the static catalog.
+ * Caps, stacked display rows, scoring weights, and control clocks come from the API.
+ */
+export function applyLiveChampStatus(catalog, live) {
+  const out = structuredClone(catalog)
+  if (!live || typeof live !== 'object') {
+    return {
+      catalog: out,
+      editable: cloneChampStatusEditable(out.editable),
+    }
+  }
+
+  if (live.header) {
+    out.header = { ...out.header, ...live.header }
+  }
+
+  const car = Number(live.vehicleCaps?.CAR) || 3
+  const bike = Number(live.vehicleCaps?.BIKE) || 2
+  const stacked = out.statuses?.stacked
+  if (stacked) {
+    const capRow = stacked.maintenanceRows?.find((row) => row.id === 'cap')
+    if (capRow) {
+      capRow.help = `Vehicle cap (car = ${car}, bike = ${bike}) is checked in Gate 1 before any offer is sent. If active_orders ≥ vehicle_cap, Champ fails Gate 1 and receives no more offers regardless of stacking triggers.`
+    }
+    if (Array.isArray(live.stackedExamples) && live.stackedExamples.length) {
+      stacked.displayRows = live.stackedExamples.map((row) => {
+        const atCap = String(row.label || '').includes('AT CAP')
+        return {
+          status: row.status || 'ON_ORDER',
+          orders: String(row.orders),
+          label: `● ${row.label}`,
+          labelClass: atCap ? 'bg-[#ffedd5] text-[#9a3412]' : 'bg-[#dbeafe] text-[#1d4ed8]',
+          load: row.load || 'N/A',
+          loadClass: row.eligible === false ? 'text-[#dc2626]' : 'text-[#d97706]',
+          eligible: row.eligible !== false,
+          eligibleText: row.eligibleText || (row.eligible === false ? '✗ No' : '✓ Yes'),
+        }
+      })
+    }
+    const loadWeight = Number(live.scoringWeights?.activeLoad)
+    if (Number.isFinite(loadWeight) && Array.isArray(stacked.scoringRows)) {
+      for (const row of stacked.scoringRows) {
+        if (row.hint) row.hint = `on the ${loadWeight}% load component`
+      }
+    }
+  }
+
+  const dispatchHelp = out.statuses?.available?.rows?.find((row) => row.id === 'dispatch')
+  if (dispatchHelp && live.scoringWeights) {
+    const w = live.scoringWeights
+    dispatchHelp.help = `Passes Gate 1. Enters scoring pool. Ranked by ETA (${w.eta}%) + CPI tier (${w.cpi}%) + active load (${w.activeLoad}%) + category fit (${w.categoryFit}%). Can receive offer. Free = AVAILABLE + active_orders=0.`
+  }
+
+  const editable = {
+    ...createChampStatusEditableDefaults(),
+    ...(live.controls && typeof live.controls === 'object' ? live.controls : {}),
+  }
+
+  out.editable = editable
+  return { catalog: out, editable: cloneChampStatusEditable(editable) }
 }
 
 function durationTotalSeconds(duration) {
