@@ -347,4 +347,27 @@ export const adminSlaModelsService = {
       meta: published.meta,
     }
   },
+
+  async getCommercialDefaults(options = {}) {
+    const response = await apiClient.get(endpoints.admin.slaModels.commercialDefaults, {
+      ...requestOptions(options),
+      forceReal: true,
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  async updateCommercialDefaults(body, options = {}) {
+    const response = await apiClient.put(
+      endpoints.admin.slaModels.commercialDefaults,
+      body && typeof body === 'object' ? body : {},
+      requestOptions(options),
+    )
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
 }

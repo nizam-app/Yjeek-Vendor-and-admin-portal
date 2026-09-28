@@ -416,8 +416,9 @@ export default function AdminVendorDeliverySettings({
 
       {showSeedBanner && storeTypeName ? (
         <div className="mb-3 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
-          ✓ Pre-filled from the <strong>{storeTypeName}</strong> delivery settings. Edit any field
-          to override it for this vendor.
+          ✓ Pre-filled from <strong>{storeTypeName}</strong> store-type delivery defaults (which
+          inherit <strong>SLA → Delivery &amp; fees</strong> unless that store type overrides).
+          Edit any field to override for this vendor.
         </div>
       ) : null}
 

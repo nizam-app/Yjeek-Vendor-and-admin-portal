@@ -462,6 +462,96 @@ export const adminStoreTypeService = {
   },
 
   /**
+   * GET store-type commission defaults (inherits SLA platform commercial defaults).
+   * @param {string} storeTypeId
+   */
+  async getCommissionDefaults(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { storeTypeId: id, commission: null }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.storeTypes.commissionDefaults(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * PUT store-type commission defaults (marks section overridden).
+   * @param {string} storeTypeId
+   * @param {{ commission?: object | null }} body
+   */
+  async updateCommissionDefaults(storeTypeId, body, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { storeTypeId: id, commission: body?.commission ?? null }, meta: null }
+    }
+    const response = await apiClient.put(
+      endpoints.admin.storeTypes.commissionDefaults(id),
+      body && typeof body === 'object' ? body : {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'store-types',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
+   * POST reset store-type commission to SLA platform defaults.
+   * @param {string} storeTypeId
+   */
+  /**
+   * POST reset a delivery commercial section to SLA platform defaults.
+   * @param {string} storeTypeId
+   * @param {'allowedVehicles'|'hotFoodOnDemand'|'scheduled'|'driverRates'} section
+   */
+  async resetCommercialSection(storeTypeId, section, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { storeTypeId: id, section }, meta: null }
+    }
+    const response = await apiClient.post(
+      endpoints.admin.storeTypes.commercialResetSection(id),
+      { section },
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'store-types',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async resetCommissionDefaults(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+    if (!useRealStoreTypesApi()) {
+      return { data: { storeTypeId: id, commission: null }, meta: null }
+    }
+    const response = await apiClient.post(
+      endpoints.admin.storeTypes.commissionDefaultsReset(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'store-types',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  /**
    * Delivery Fees v1 — PUT allowed vehicles only (no cascade to vendors/branches).
    * Confirmed: PUT /admin/store-types/:storeTypeId/allowed-vehicles
    *

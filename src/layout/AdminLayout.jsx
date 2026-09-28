@@ -82,6 +82,7 @@ const pageTitles = {
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
+  '/admin/sla-models/commercial': 'SLA Models · Delivery & fees',
   '/admin/automation': 'Automation · Dispatch Rules',
   '/admin/automation/dispatch-rules': 'Automation · Dispatch Rules',
   '/admin/automation/champ-scoring': 'Automation · Champ Scoring',
