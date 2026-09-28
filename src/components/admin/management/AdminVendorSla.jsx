@@ -2,7 +2,7 @@ import { Check } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '../Badge'
 
-export function AdminVendorSla({ sla, vendorId, storeName }) {
+export function AdminVendorSla({ sla, vendorId, storeName, onNavigateTab }) {
   const navigate = useNavigate()
 
   if (!sla) return null
@@ -28,6 +28,43 @@ export function AdminVendorSla({ sla, vendorId, storeName }) {
 
   return (
     <div className="space-y-4">
+      <section className="rounded-[14px] border border-[#d4e8dc] bg-[#f0faf4] px-5 py-4 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
+        <h3 className="text-[14px] font-bold text-[#17231c]">Delivery &amp; commercial fees</h3>
+        <p className="mt-1.5 text-[12px] leading-[18px] text-[#2d5a40]">
+          This tab is <strong>timing and performance SLA</strong> only. Hot food and scheduled
+          delivery fees, plus commission, follow{' '}
+          <strong>SLA platform → store type → vendor</strong> (copy-on-create; no auto cascade to
+          live vendors).
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {typeof onNavigateTab === 'function' ? (
+            <>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Delivery zones')}
+                className="inline-flex h-[32px] items-center rounded-full border border-[#1aa054] bg-white px-3.5 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
+              >
+                Delivery zones &amp; fees
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Commission & fees')}
+                className="inline-flex h-[32px] items-center rounded-full border border-[#1aa054] bg-white px-3.5 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
+              >
+                Commission &amp; fees
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => navigate('/admin/sla-models/commercial')}
+            className="inline-flex h-[32px] items-center rounded-full border border-[#c5d9cc] bg-white px-3.5 text-[12px] font-medium text-[#455249] hover:bg-[#f6f8f6]"
+          >
+            SLA platform defaults
+          </button>
+        </div>
+      </section>
+
       <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">

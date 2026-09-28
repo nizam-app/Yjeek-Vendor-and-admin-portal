@@ -13,6 +13,7 @@ import {
 import { ApiErrorBanner } from '../../../components/admin/ApiState'
 import { cn } from '../../../components/admin/cn'
 import { useAdminSlaModels } from '../../../hooks/admin/useAdminSlaModels'
+import AdminSlaCommercialDefaultsTab from '../../../components/admin/management/AdminSlaCommercialDefaultsTab'
 import { mapSlaConfigToForm } from '../../../mappers/admin/mapAdminSlaModels'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
@@ -22,9 +23,11 @@ const TABS = [
   { id: 'vendor', label: 'Vendor SLA', path: '/admin/sla-models' },
   { id: 'champ', label: 'Champ SLA', path: '/admin/sla-models/champ' },
   { id: 'dispatcher', label: 'Dispatcher SLA', path: '/admin/sla-models/dispatcher' },
+  { id: 'commercial', label: 'Delivery & fees', path: '/admin/sla-models/commercial' },
 ]
 
 function tabFromPath(pathname) {
+  if (pathname.includes('/commercial')) return 'commercial'
   if (pathname.includes('/champ')) return 'champ'
   if (pathname.includes('/dispatcher')) return 'dispatcher'
   return 'vendor'
@@ -42,6 +45,11 @@ const TAB_COPY = {
   dispatcher: {
     title: 'Dispatcher SLA',
     subtitle: 'Assignment and incident-handling thresholds.',
+  },
+  commercial: {
+    title: 'Delivery & commission defaults',
+    subtitle:
+      'Platform-wide delivery fees and commission — store types inherit these until overridden.',
   },
 }
 
@@ -99,6 +107,7 @@ export default function AdminSlaModelsPage() {
   const { user } = useAuth()
   const tab = tabFromPath(pathname)
   const copy = TAB_COPY[tab]
+  const isCommercialTab = tab === 'commercial'
   const canViewSlaChangelog = useMemo(() => {
     const actions = user?.permissions?.SLA_MODELS
     if (Array.isArray(actions) && actions.includes('APPROVE')) return true
@@ -508,7 +517,7 @@ export default function AdminSlaModelsPage() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {model?.currentVersion ? (
+          {!isCommercialTab && model?.currentVersion ? (
             <div className="relative" ref={versionMenuRef}>
               <button
                 type="button"
@@ -625,6 +634,7 @@ export default function AdminSlaModelsPage() {
               ) : null}
             </div>
           ) : null}
+          {!isCommercialTab ? (
           <button
             type="button"
             onClick={handleReset}
@@ -633,7 +643,8 @@ export default function AdminSlaModelsPage() {
           >
             {isResetting ? 'Resetting…' : 'Reset'}
           </button>
-          {canApplyPreview ? (
+          ) : null}
+          {!isCommercialTab && canApplyPreview ? (
             <button
               type="button"
               onClick={() => void handleApplyPreviewVersion()}
@@ -642,7 +653,7 @@ export default function AdminSlaModelsPage() {
             >
               {isApplying ? 'Applying…' : `Apply v${preview.version}`}
             </button>
-          ) : (
+          ) : !isCommercialTab ? (
             <button
               type="button"
               onClick={handleSave}
@@ -651,11 +662,11 @@ export default function AdminSlaModelsPage() {
             >
               {isSaving ? 'Saving…' : 'Save SLA'}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
-      {isPreviewing ? (
+      {!isCommercialTab && isPreviewing ? (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#d6e4ff] bg-[#f3f7ff] px-3 py-2.5 text-[12.5px] text-[#1e3a6e]">
           <p>
             Previewing <strong>v{preview.version}</strong>
@@ -689,7 +700,7 @@ export default function AdminSlaModelsPage() {
             </button>
           </div>
         </div>
-      ) : versionUsage?.version > 0 && versionUsage?.message ? (
+      ) : !isCommercialTab && versionUsage?.version > 0 && versionUsage?.message ? (
         <div className="mb-3 flex items-start gap-2 rounded-[10px] border border-[#d8efdf] bg-[#f3fbf6] px-3 py-2.5 text-[12.5px] leading-snug text-[#1f5c38]">
           <span aria-hidden="true" className="mt-0.5 shrink-0">
             ⚠
@@ -699,13 +710,13 @@ export default function AdminSlaModelsPage() {
             incidents keep their v{versionUsage.version} snapshot.
           </p>
         </div>
-      ) : (
+      ) : !isCommercialTab ? (
         <p className="mb-3 text-[12px] text-[#8a948d]">
           Saving creates a new version. Earlier incidents keep their original SLA snapshot.
         </p>
-      )}
+      ) : null}
 
-      <ApiErrorBanner error={error} onRetry={refetch} />
+      {!isCommercialTab ? <ApiErrorBanner error={error} onRetry={refetch} /> : null}
       {saveErrorMessage ? (
         <div className="mb-3 rounded-[10px] border border-[#f2cccc] bg-[#fff5f5] px-3 py-2 text-[12.5px] text-[#a93e42]">
           {saveErrorMessage}
@@ -766,6 +777,10 @@ export default function AdminSlaModelsPage() {
         </div>
       ) : null}
 
+      {tab === 'commercial' ? <AdminSlaCommercialDefaultsTab /> : null}
+
+      {!isCommercialTab ? (
+      <>
       <section className="mt-5 mb-4 rounded-[14px] border border-[#e4e8e4] bg-white p-4 shadow-[0_1px_2px_rgba(20,40,28,.04)]">
         <div className="mb-2 flex items-baseline justify-between gap-2">
           <h3 className="text-[14px] font-bold text-[#17231c]">Previous versions</h3>
@@ -931,9 +946,14 @@ export default function AdminSlaModelsPage() {
         </p>
       </section>
       ) : null}
+      </>
+      ) : null}
 
-      <SlaTierPageFooter footnote={SLA_TIER_FOOTNOTES[tab]} />
+      {!isCommercialTab ? (
+        <SlaTierPageFooter footnote={SLA_TIER_FOOTNOTES[tab]} />
+      ) : null}
 
+      {!isCommercialTab ? (
       <div className="fixed bottom-0 left-[250px] right-0 z-20 border-t border-[#eceeec] bg-white/95 px-5 py-3 backdrop-blur max-[900px]:left-0">
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
@@ -965,6 +985,7 @@ export default function AdminSlaModelsPage() {
           )}
         </div>
       </div>
+      ) : null}
     </div>
   )
 }

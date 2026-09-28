@@ -5,6 +5,10 @@ import {
 } from './mapAdminVendorCommission'
 import { mapWizardHoursToOpeningHours } from './mapAdminVendorBranches'
 import { mapAdminStaffPermissionsToApi } from './mapAdminVendorStaff'
+import {
+  mapWizardBranchDeliverySettings,
+  pickVendorDeliveryTemplateFromBranches,
+} from '../../utils/mapWizardBranchDeliverySettings'
 
 export { requiresServiceSubTypeSelection } from './taxonomyHelpers'
 
@@ -101,6 +105,9 @@ function mapCreateBranches(branches = []) {
 
       if (typeof branch.allowsPickup === 'boolean') item.allowsPickup = branch.allowsPickup
       if (typeof branch.allowsDineIn === 'boolean') item.allowsDineIn = branch.allowsDineIn
+
+      const deliverySettings = mapWizardBranchDeliverySettings(branch)
+      if (deliverySettings) item.deliverySettings = deliverySettings
 
       return item
     })
@@ -381,6 +388,11 @@ export function mapAdminCreateVendorRequest(input = {}) {
     submitForApproval: Boolean(submitForApproval) && !activate,
     ...(typeof isCustomerVisible === 'boolean' ? { isCustomerVisible } : {}),
     ...(typeof isOnline === 'boolean' ? { isOnline } : {}),
+  }
+
+  const vendorDeliveryTemplate = pickVendorDeliveryTemplateFromBranches(branches)
+  if (vendorDeliveryTemplate) {
+    body.vendorDeliveryTemplate = vendorDeliveryTemplate
   }
 
   // Drop undefined keys at top level
