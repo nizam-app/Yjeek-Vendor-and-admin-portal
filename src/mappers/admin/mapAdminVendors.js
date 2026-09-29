@@ -277,6 +277,9 @@ export function mapAdminVendorDetailResponse(data) {
     cuisineTags: Array.isArray(data.cuisineTags) ? data.cuisineTags.filter(Boolean).map(String) : [],
     storeTypeId: data.storeTypeId ?? null,
     storeSubTypeId: data.storeSubTypeId ?? null,
+    storeSubTypeIds: Array.isArray(data.storeSubTypeIds)
+      ? data.storeSubTypeIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : (data.storeSubTypeId ? [String(data.storeSubTypeId)] : []),
     serviceSubTypeId: data.serviceSubTypeId ?? null,
     catalogIds: Array.isArray(data.catalogIds)
       ? data.catalogIds.map((id) => String(id || '').trim()).filter(Boolean)
@@ -364,7 +367,13 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
   const storeTypeId = String(form.storeTypeId || '').trim()
   if (storeTypeId) body.storeTypeId = storeTypeId
 
-  if (form.storeSubTypeId !== undefined) {
+  if (form.multiSubTypes && Array.isArray(form.storeSubTypeIds)) {
+    const storeSubTypeIds = [...new Set(
+      form.storeSubTypeIds.map((id) => String(id || '').trim()).filter(Boolean),
+    )]
+    body.storeSubTypeIds = storeSubTypeIds
+    body.storeSubTypeId = storeSubTypeIds[0] || null
+  } else if (form.storeSubTypeId !== undefined) {
     const storeSubTypeId = String(form.storeSubTypeId || '').trim()
     body.storeSubTypeId = storeSubTypeId || null
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
   Check,
@@ -20,6 +20,8 @@ import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
+import { mapPlatformCommercialDefaultsToForm } from '../../../mappers/admin/mapPlatformCommercialDefaults'
 import AdminIconImageUpload from '../../../components/admin/AdminIconImageUpload'
 import { AdminLeaveFormModal } from '../../../components/admin/AdminLeaveFormModal'
 import { ApiState } from '../../../components/admin/ApiState'
@@ -41,6 +43,8 @@ import {
 } from '../../../components/admin/management/scheduledFeesForm'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
+import { mapStoreTypeCommissionDefaultsResponse } from '../../../mappers/admin/mapStoreTypeCommissionDefaults'
+import AdminStoreTypeCommissionSection from '../../../components/admin/management/AdminStoreTypeCommissionSection'
 
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
@@ -191,7 +195,7 @@ function mockInitialValues(storeTypeId, isEdit) {
   }
 }
 
-function initialFromDetail(detail, deliveryDefaults = null) {
+function initialFromDetail(detail, deliveryDefaults = null, commissionDefaults = null) {
   const slug = detail.internalKey || detail.slug || ''
 
   return {
@@ -219,11 +223,14 @@ function initialFromDetail(detail, deliveryDefaults = null) {
     })),
     catalogMode:
       detail.catalogMode === 'VARIANTS' || detail.catalogMode === 'HYBRID'
-        ? detail.catalogMode
+        ? 'VARIANTS'
         : 'MODIFIERS',
     lowStockThreshold: detail.lowStockThreshold ?? 5,
     hotFood: normalizeHotFoodDefaults(deliveryDefaults?.hotFoodOnDemand),
     scheduledFees: normalizeScheduledFees(deliveryDefaults?.scheduled),
+    commercialInheritance: deliveryDefaults?.inheritance ?? null,
+    commission: commissionDefaults?.commission ?? null,
+    commissionSectionInheritance: commissionDefaults?.sectionInheritance ?? 'empty',
   }
 }
 
@@ -567,6 +574,13 @@ function StoreTypeForm({
   storeTypeId = null,
   mode = 'create',
   canSaveRemote = false,
+  liveCommercialInheritance = null,
+  liveCommission = null,
+  liveCommissionSectionInheritance = null,
+  onDeliveryDefaultsRefetch = null,
+  onCommissionDefaultsRefetch = null,
+  liveHotFoodOnDemand = null,
+  liveScheduledFees = null,
 }) {
   const [displayName, setDisplayName] = useState(initial.displayName)
   const [internalKey, setInternalKey] = useState(initial.internalKey)
@@ -618,6 +632,53 @@ function StoreTypeForm({
   const [scheduledFees, setScheduledFees] = useState(() =>
     normalizeScheduledFees(initial.scheduledFees || null),
   )
+  const [resettingCommercialSection, setResettingCommercialSection] = useState(null)
+
+  const commercialInheritance = liveCommercialInheritance ?? initial.commercialInheritance
+
+  useEffect(() => {
+    if (liveHotFoodOnDemand) {
+      setHotFood(normalizeHotFoodDefaults(liveHotFoodOnDemand))
+    }
+  }, [liveHotFoodOnDemand])
+
+  useEffect(() => {
+    if (liveScheduledFees) {
+      setScheduledFees(normalizeScheduledFees(liveScheduledFees))
+    }
+  }, [liveScheduledFees])
+
+  const applyDeliveryDefaultsApi = (data) => {
+    if (!data || typeof data !== 'object') return
+    if (data.hotFoodOnDemand) {
+      setHotFood(normalizeHotFoodDefaults(data.hotFoodOnDemand))
+    }
+    if (data.scheduled) {
+      setScheduledFees(normalizeScheduledFees(data.scheduled))
+    }
+    if (data.allowedVehicles) {
+      setAllowedVehicles(normalizeAllowedVehicles(data.allowedVehicles))
+    }
+  }
+
+  const handleResetCommercialSection = async (section) => {
+    if (!storeTypeId || !canSaveRemote || resettingCommercialSection) return
+    setResettingCommercialSection(section)
+    setSaveError('')
+    try {
+      const result = await adminService.resetAdminStoreTypeCommercialSection(storeTypeId, section)
+      applyDeliveryDefaultsApi(result?.data)
+      if (typeof onDeliveryDefaultsRefetch === 'function') {
+        await onDeliveryDefaultsRefetch()
+      }
+    } catch (err) {
+      setSaveError(
+        formatApiErrorMessage(err, 'Failed to reset section to SLA platform defaults.'),
+      )
+    } finally {
+      setResettingCommercialSection(null)
+    }
+  }
 
   const baselineSnapshot = useMemo(() => serializeStoreTypeState(initial), [initial])
   const currentSnapshot = useMemo(
@@ -1402,6 +1463,15 @@ function StoreTypeForm({
           </div>
         </Card>
 
+        {commercialInheritance?.hotFoodOnDemand === 'inherited' ||
+        commercialInheritance?.scheduled === 'inherited' ? (
+          <div className="rounded-[12px] border border-[#d4e8dc] bg-[#f0faf4] px-4 py-3 text-[12.5px] text-[#2d5a40]">
+            Some delivery fee fields are inherited from{' '}
+            <strong>SLA platform defaults</strong>. Saving this store type after edits will override
+            those values for new vendors.
+          </div>
+        ) : null}
+
         {modes['Hot food — on demand'] ? (
           <Card
             title="Hot food fees"
@@ -1410,8 +1480,20 @@ function StoreTypeForm({
             <AdminStoreTypeHotFoodDefaults
               value={hotFood}
               onChange={setHotFood}
-              disabled={saving}
+              disabled={saving || Boolean(resettingCommercialSection)}
             />
+            {isEditMode && canSaveRemote && commercialInheritance?.hotFoodOnDemand === 'overridden' ? (
+              <button
+                type="button"
+                disabled={saving || resettingCommercialSection === 'hotFoodOnDemand'}
+                onClick={() => void handleResetCommercialSection('hotFoodOnDemand')}
+                className="mt-3 inline-flex h-[34px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12px] font-bold text-[#455249] hover:bg-[#f8faf8] disabled:opacity-60"
+              >
+                {resettingCommercialSection === 'hotFoodOnDemand'
+                  ? 'Resetting…'
+                  : 'Reset hot food fees to SLA platform defaults'}
+              </button>
+            ) : null}
           </Card>
         ) : null}
 
@@ -1423,8 +1505,20 @@ function StoreTypeForm({
             <AdminScheduledFeesPanel
               value={scheduledFees}
               onChange={setScheduledFees}
-              disabled={saving}
+              disabled={saving || Boolean(resettingCommercialSection)}
             />
+            {isEditMode && canSaveRemote && commercialInheritance?.scheduled === 'overridden' ? (
+              <button
+                type="button"
+                disabled={saving || resettingCommercialSection === 'scheduled'}
+                onClick={() => void handleResetCommercialSection('scheduled')}
+                className="mt-3 inline-flex h-[34px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12px] font-bold text-[#455249] hover:bg-[#f8faf8] disabled:opacity-60"
+              >
+                {resettingCommercialSection === 'scheduled'
+                  ? 'Resetting…'
+                  : 'Reset scheduled fees to SLA platform defaults'}
+              </button>
+            ) : null}
           </Card>
         ) : null}
 
@@ -1454,6 +1548,27 @@ function StoreTypeForm({
             exceeds the bike capacity threshold.
           </div>
         </Card>
+
+        {isEditMode && canSaveRemote && storeTypeId ? (
+          <Card
+            title="Commission & fees"
+            subtitle="Inherited from SLA platform defaults unless overridden. Vendors inherit from this store type."
+          >
+            <AdminStoreTypeCommissionSection
+              storeTypeId={storeTypeId}
+              commission={liveCommission ?? initial.commission}
+              sectionInheritance={
+                liveCommissionSectionInheritance ?? initial.commissionSectionInheritance
+              }
+              onInheritanceChange={() => {
+                if (typeof onCommissionDefaultsRefetch === 'function') {
+                  void onCommissionDefaultsRefetch()
+                }
+              }}
+              disabled={saving}
+            />
+          </Card>
+        ) : null}
 
         <Card
           title="Item classes"
@@ -1719,17 +1834,85 @@ export default function AdminCreateStoreTypePage() {
     [storeTypeId, isEdit, useReal],
   )
 
+  const {
+    data: commissionDefaults,
+    error: commissionDefaultsError,
+    isLoading: commissionDefaultsLoading,
+    refetch: refetchCommissionDefaults,
+  } = useApiResource(
+    () => {
+      if (!isEdit || !useReal) {
+        return Promise.resolve({ data: null, meta: null })
+      }
+      return adminService.getAdminStoreTypeCommissionDefaults(storeTypeId)
+    },
+    [storeTypeId, isEdit, useReal],
+  )
+
+  const commissionMapped = useMemo(() => {
+    if (!commissionDefaults) return { commission: null, sectionInheritance: 'empty' }
+    return mapStoreTypeCommissionDefaultsResponse(commissionDefaults)
+  }, [commissionDefaults])
+
+  const { data: platformCommercial, isLoading: platformCommercialLoading } = useApiResource(
+    () => {
+      if (isEdit || !useReal) {
+        return Promise.resolve({ data: null, meta: null })
+      }
+      return adminSlaModelsService.getCommercialDefaults()
+    },
+    [isEdit, useReal],
+  )
+
+  const createInitial = useMemo(() => {
+    const base = mockInitialValues(storeTypeId, false)
+    if (!platformCommercial) return base
+    const mapped = mapPlatformCommercialDefaultsToForm(platformCommercial)
+    return {
+      ...base,
+      allowedVehicles: mapped.allowedVehicles,
+      hotFood: mapped.hotFood,
+      scheduledFees: mapped.scheduledFees,
+    }
+  }, [platformCommercial, storeTypeId])
+
+  const newOrMockInitial = useMemo(() => {
+    if (isEdit) return mockInitialValues(storeTypeId, true)
+    if (useReal) return createInitial
+    return mockInitialValues(storeTypeId, false)
+  }, [isEdit, useReal, storeTypeId, createInitial])
+
   const goBack = () => navigate('/admin/stores')
 
+  const defaultsLoadError = deliveryDefaultsError || commissionDefaultsError
+
   if (isEdit && useReal) {
-    if (!detail || (isLoading || (deliveryDefaultsLoading && !deliveryDefaults && !deliveryDefaultsError))) {
+    const defaultsStillLoading =
+      (deliveryDefaultsLoading && !deliveryDefaults && !deliveryDefaultsError) ||
+      (commissionDefaultsLoading && !commissionDefaults && !commissionDefaultsError)
+
+    if (!detail || isLoading || defaultsStillLoading) {
       return (
         <ApiState
-          isLoading={isLoading || deliveryDefaultsLoading}
-          error={error}
+          isLoading={isLoading || deliveryDefaultsLoading || commissionDefaultsLoading}
+          error={error || defaultsLoadError}
           onRetry={() => {
             refetch()
             refetchDeliveryDefaults()
+            refetchCommissionDefaults()
+          }}
+        />
+      )
+    }
+
+    if (defaultsLoadError) {
+      return (
+        <ApiState
+          isLoading={false}
+          error={defaultsLoadError}
+          onRetry={() => {
+            refetchDeliveryDefaults()
+            refetchCommissionDefaults()
           }}
         />
       )
@@ -1738,7 +1921,14 @@ export default function AdminCreateStoreTypePage() {
     return (
       <StoreTypeForm
         key={detail.id}
-        initial={initialFromDetail(detail, deliveryDefaults)}
+        initial={initialFromDetail(detail, deliveryDefaults, commissionMapped)}
+        liveCommercialInheritance={deliveryDefaults?.inheritance ?? null}
+        liveHotFoodOnDemand={deliveryDefaults?.hotFoodOnDemand ?? null}
+        liveScheduledFees={deliveryDefaults?.scheduled ?? null}
+        liveCommission={commissionMapped.commission}
+        liveCommissionSectionInheritance={commissionMapped.sectionInheritance}
+        onDeliveryDefaultsRefetch={refetchDeliveryDefaults}
+        onCommissionDefaultsRefetch={refetchCommissionDefaults}
         onBack={goBack}
         storeTypeId={detail.id}
         mode="edit"
@@ -1747,10 +1937,14 @@ export default function AdminCreateStoreTypePage() {
     )
   }
 
+  if (!isEdit && useReal && platformCommercialLoading && !platformCommercial) {
+    return <ApiState isLoading={true} error={null} onRetry={() => undefined} />
+  }
+
   return (
     <StoreTypeForm
       key={isEdit ? `mock-${storeTypeId}` : 'new'}
-      initial={mockInitialValues(storeTypeId, isEdit)}
+      initial={newOrMockInitial}
       onBack={goBack}
       storeTypeId={isEdit ? storeTypeId : null}
       mode={isEdit ? 'edit' : 'create'}

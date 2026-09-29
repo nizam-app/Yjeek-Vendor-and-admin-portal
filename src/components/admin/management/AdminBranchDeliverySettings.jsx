@@ -369,17 +369,14 @@ export default function AdminBranchDeliverySettings({
     return !hasAnyDriverRatesOverride(driverRatesFieldMeta)
   }, [driverRatesFieldMeta, dirtyDriverRates])
 
-  const hotFoodSeedBannerLabel = storeTypeName
-    ? `Loaded from ${storeTypeName} › Hot food delivery settings`
-    : 'Loaded from store type › Hot food delivery settings'
+  const hotFoodSeedBannerLabel =
+    'Seeded from this vendor’s Delivery zones template (or store type / SLA defaults). Edit to override for this branch.'
 
-  const scheduledSeedBannerLabel = storeTypeName
-    ? `Loaded from ${storeTypeName} › Scheduled delivery settings`
-    : 'Loaded from store type › Scheduled delivery settings'
+  const scheduledSeedBannerLabel =
+    'Seeded from vendor Delivery zones or store type defaults. Edit to override for this branch.'
 
-  const driverRatesSeedBannerLabel = storeTypeName
-    ? `Loaded from ${storeTypeName} › Driver rates`
-    : 'Loaded from store type › Driver rates'
+  const driverRatesSeedBannerLabel =
+    'Seeded from vendor Delivery zones or store type defaults. Edit to override for this branch.'
 
   const onHotFoodChange = (next) => {
     setHotFoodForm(next)
@@ -687,8 +684,21 @@ export default function AdminBranchDeliverySettings({
                     {showPreviewFees ? (
                       <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
                         <p className="text-[12px] leading-[16px] text-[#7c8780]">
-                          These fees are saved with the branch. Fill them before saving if this store type has no hot-food defaults.
+                          Pre-filled from vendor Delivery zones (or{' '}
+                          {storeTypeName ? (
+                            <strong>{storeTypeName}</strong>
+                          ) : (
+                            'store type'
+                          )}{' '}
+                          / SLA defaults). Edit any field for this branch before saving.
                         </p>
+                        {draftHotFood &&
+                        (draftHotFood.vendor?.radiusKm ||
+                          draftHotFood.vendor?.contribution) ? (
+                          <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
+                            ✓ Defaults loaded — saved when you save this branch.
+                          </div>
+                        ) : null}
                         <AdminStoreTypeHotFoodDefaults
                           value={draftHotFood || EMPTY_HOT_FOOD_DEFAULTS}
                           onChange={(next) => onDraftHotFoodChange?.(next)}

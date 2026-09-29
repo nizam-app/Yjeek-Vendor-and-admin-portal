@@ -85,6 +85,7 @@ export function mapAdminStoreTypesResponse(data, options = {}) {
       visible: item.visible === true,
       isActive: item.isActive === true,
       structure: item.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+      catalogMode: item.catalogMode === 'VARIANTS' ? 'VARIANTS' : 'MODIFIERS',
       supportedOrderModes: Array.isArray(item.supportedOrderModes)
         ? item.supportedOrderModes.map((code) => String(code))
         : [],
@@ -431,7 +432,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
   applyItemClassFields(body, form)
 
-  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'HYBRID' || form.catalogMode === 'MODIFIERS') {
+  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'MODIFIERS') {
     body.catalogMode = form.catalogMode
   }
   if (form.lowStockThreshold != null && form.lowStockThreshold !== '') {
@@ -505,7 +506,7 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: true })
   applyItemClassFields(body, form)
 
-  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'HYBRID' || form.catalogMode === 'MODIFIERS') {
+  if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'MODIFIERS') {
     body.catalogMode = form.catalogMode
   }
   if (form.lowStockThreshold != null && form.lowStockThreshold !== '') {
@@ -610,9 +611,7 @@ export function mapAdminStoreTypeDetail(data) {
     categories: mapMenuCategories(data.menuCategories),
     badges: mapBadges(data.badges),
     catalogMode:
-      data.catalogMode === 'VARIANTS' || data.catalogMode === 'HYBRID'
-        ? data.catalogMode
-        : 'MODIFIERS',
+      data.catalogMode === 'VARIANTS' || data.catalogMode === 'HYBRID' ? 'VARIANTS' : 'MODIFIERS',
     lowStockThreshold:
       Number.isFinite(Number(data.lowStockThreshold)) ? Number(data.lowStockThreshold) : 5,
     categoryCount: Number(data.categoryCount) || 0,

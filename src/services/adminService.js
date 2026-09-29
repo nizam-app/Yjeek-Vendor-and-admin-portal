@@ -95,6 +95,18 @@ export const adminService = {
   updateAdminStoreTypeDeliveryDefaults(storeTypeId, body, options = {}) {
     return adminStoreTypeService.updateDeliveryDefaults(storeTypeId, body, options)
   },
+  getAdminStoreTypeCommissionDefaults(storeTypeId, options = {}) {
+    return adminStoreTypeService.getCommissionDefaults(storeTypeId, options)
+  },
+  updateAdminStoreTypeCommissionDefaults(storeTypeId, body, options = {}) {
+    return adminStoreTypeService.updateCommissionDefaults(storeTypeId, body, options)
+  },
+  resetAdminStoreTypeCommissionDefaults(storeTypeId, options = {}) {
+    return adminStoreTypeService.resetCommissionDefaults(storeTypeId, options)
+  },
+  resetAdminStoreTypeCommercialSection(storeTypeId, section, options = {}) {
+    return adminStoreTypeService.resetCommercialSection(storeTypeId, section, options)
+  },
   getAdminStoreTypeItemClassConvertPreview(storeTypeId, disable, options = {}) {
     return adminStoreTypeService.getItemClassConvertPreview(storeTypeId, disable, options)
   },

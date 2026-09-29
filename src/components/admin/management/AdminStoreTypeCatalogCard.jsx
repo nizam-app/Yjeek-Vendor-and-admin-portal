@@ -106,12 +106,11 @@ export default function AdminStoreTypeCatalogCard({
           <span className={labelClass}>Mode</span>
           <select
             className={inputClass}
-            value={catalogMode || 'MODIFIERS'}
+            value={catalogMode === 'HYBRID' ? 'VARIANTS' : catalogMode || 'MODIFIERS'}
             onChange={(e) => onCatalogModeChange?.(e.target.value)}
           >
             <option value="MODIFIERS">MODIFIERS (Food — option groups)</option>
             <option value="VARIANTS">VARIANTS (Fashion / retail SKUs)</option>
-            <option value="HYBRID">HYBRID (reserved)</option>
           </select>
         </label>
         <label className="block min-w-0">
@@ -126,7 +125,7 @@ export default function AdminStoreTypeCatalogCard({
         </label>
       </div>
 
-      {(catalogMode === 'VARIANTS' || catalogMode === 'HYBRID') && (
+      {catalogMode === 'VARIANTS' && (
         <div className="mt-4 border-t border-[#eef2ef] pt-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>

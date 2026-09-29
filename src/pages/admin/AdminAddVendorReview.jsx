@@ -37,6 +37,8 @@ export default function AdminAddVendorReview({
   users,
   vendorVisible = true,
   vendorActive = true,
+  storeTypePublished = true,
+  storeTypeName = '',
   onVendorVisibleChange,
   onVendorActiveChange,
 }) {
@@ -60,12 +62,19 @@ export default function AdminAddVendorReview({
 
   let statusTitle = 'Hidden from customer app'
   let statusBody = 'Vendor will not appear in search or category listings until Visible is ON.'
-  if (vendorVisible && vendorActive) {
+  let statusTone = 'hidden'
+  if (!storeTypePublished) {
+    statusTitle = 'Not visible in the customer app'
+    statusBody = `${storeTypeName || 'This store type'} is not published, so this vendor will not appear in the customer app. Publish the store type and every vendor of that type becomes visible.`
+    statusTone = 'unpublished'
+  } else if (vendorVisible && vendorActive) {
     statusTitle = 'Visible and accepting orders'
     statusBody = 'Store appears in the customer app and customers can place orders.'
+    statusTone = 'live'
   } else if (vendorVisible && !vendorActive) {
     statusTitle = 'Visible but unavailable for ordering'
     statusBody = 'Store appears in the customer app, but customers cannot place orders.'
+    statusTone = 'browse'
   }
 
   return (
@@ -88,17 +97,40 @@ export default function AdminAddVendorReview({
       <section className="rounded-[14px] border border-[#eceeec] bg-white p-5 shadow-[0_1px_3px_rgba(20,40,28,.04)]">
         <h3 className="mb-4 text-[15px] font-bold text-[#17231c]">Customer app status</h3>
 
-        <div className="rounded-[10px] border border-[#cfe9d8] bg-[#e8f7ed] px-3.5 py-3">
-          <p className="text-[13px] font-bold text-[#147940]">{statusTitle}</p>
-          <p className="mt-1 text-[12px] leading-[16px] text-[#2f7a4d]">{statusBody}</p>
+        <div
+          className={cn(
+            'rounded-[10px] border px-3.5 py-3',
+            statusTone === 'unpublished'
+              ? 'border-[#f3ddb0] bg-[#fff8eb]'
+              : 'border-[#cfe9d8] bg-[#e8f7ed]',
+          )}
+        >
+          <p
+            className={cn(
+              'text-[13px] font-bold',
+              statusTone === 'unpublished' ? 'text-[#8a5a12]' : 'text-[#147940]',
+            )}
+          >
+            {statusTitle}
+          </p>
+          <p
+            className={cn(
+              'mt-1 text-[12px] leading-[16px]',
+              statusTone === 'unpublished' ? 'text-[#8a5a12]' : 'text-[#2f7a4d]',
+            )}
+          >
+            {statusBody}
+          </p>
         </div>
 
         <StatusToggle
           label="Visible"
           hint={
-            vendorVisible
-              ? 'Shown in customer search and category listings.'
-              : 'Hidden from the customer app.'
+            !storeTypePublished
+              ? 'Saved on the vendor, but the customer app still hides it until the store type is published.'
+              : vendorVisible
+                ? 'Shown in customer search and category listings.'
+                : 'Hidden from the customer app.'
           }
           checked={vendorVisible}
           onChange={onVendorVisibleChange}

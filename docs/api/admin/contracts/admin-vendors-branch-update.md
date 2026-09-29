@@ -14,7 +14,7 @@ Confirmed from Postman **"PATCH Update branch"**.
 ### Load
 
 - `GET /admin/vendors/:vendorId/branches` — find branch by id for form
-- `GET /admin/vendors/:vendorId/delivery-zones` — vendor delivery contribution defaults
+- `GET /admin/vendors/:vendorId/locations/:locationId/delivery-settings` — branch delivery settings (modes, fees, vehicles, driver rates)
 
 ### Body (confirmed sample)
 
@@ -26,13 +26,6 @@ Partial update. FE also sends editable branch fields when present:
 
 `name`, `area`, `address`, `phone`, `latitude`, `longitude`, `radiusKm`, `minOrder`, `etaMin`
 
-### Apply to all (toggle on Branch setup)
-
-When **Apply these delivery settings to all branches** is on:
-
-1. `PATCH /admin/vendors/:vendorId/delivery-zones` — save vendor defaults from form
-2. `POST /admin/vendors/:vendorId/delivery-zones/apply-all`
-
 ### Success
 
 Same list envelope as list/create: `{ count, branches[] }`.
@@ -40,6 +33,6 @@ Same list envelope as list/create: `{ count, branches[] }`.
 ## UI gaps (not in branch PATCH)
 
 - **Working hours** day cards — API only has string `hours` (e.g. `"08:00–23:00"`)
-- **Customer delivery details** section — no confirmed API on this page
+- **Delivery fees / modes** — `GET` + `PUT` `/admin/vendors/:vendorId/locations/:locationId/delivery-settings` (saved from **Status & controls › Delivery Settings**, not branch PATCH)
 - **Force close / Reopen** on Branch setup — uses `POST .../force-close` and `POST .../reopen` with `scope: "single_branch"` + `branchId`
 - **Phone** — accepted by API but not on this form

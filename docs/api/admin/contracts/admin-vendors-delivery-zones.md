@@ -15,22 +15,17 @@ Coverage map uses `coverage.circles` on Google Maps (`VITE_GOOGLE_MAPS_API_KEY`)
 
 ### Success `data` (confirmed)
 
-- `general` → Delivery defaults form  
-  `deliveryRadiusKm`, `deliveryEtaMin`, `minOrderAmount`, `deliveryContribution`, `freeDeliveryOver`, `freeDeliveryEnabled`, `maxDistanceKm`, `extraContributionPerKm`, `maxContribution`
+- `general` → still returned by API; fee defaults are edited on **Vendor delivery details** (`/delivery-settings`) and each branch’s **Delivery Settings**, not on this tab
 - `branches[]` → Per-branch overrides table  
   `id`, `name`, `radiusKm`, `etaMin`, `minOrder`, `deliveryFee`
 - `coverage` → Coverage map summary  
   `center`, `circles[]` (`branchId`, `name`, `latitude`, `longitude`, `radiusKm`)
 
-## Apply to all branches (UI button)
+## Apply to all branches
 
-Flow matching Delivery zones → **Apply to all branches**:
+Use **Vendor delivery details** → push to branches (`POST /admin/vendors/:vendorId/delivery-settings/push-to-branches`), not the legacy delivery-zones apply-all button (removed from Delivery zones tab UI).
 
-1. `PATCH /admin/vendors/:vendorId/delivery-zones` — save form defaults (`general`)
-2. `POST /admin/vendors/:vendorId/delivery-zones/apply-all` — no body; overwrite every branch
-3. Response is the same shape as GET (`general` + `branches` + `coverage`); FE refreshes the tab from it
-
-### PATCH body (from form)
+### PATCH body (legacy `general` defaults)
 
 Sends general fields when set, e.g.:
 

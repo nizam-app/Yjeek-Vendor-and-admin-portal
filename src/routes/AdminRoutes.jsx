@@ -119,6 +119,7 @@ export const adminRoutes = (
     <Route path="marketing" element={<AdminMarketingPage />} />
     <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
     <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />
+    <Route path="sla-models/commercial" element={<AdminSlaModelsPage />} />
     <Route path="sla-models" element={<AdminSlaModelsPage />} />
 
     <Route path="automation" element={<AdminAutomationLayout />}>

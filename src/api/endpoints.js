@@ -476,6 +476,12 @@ export const endpoints = {
        */
       deliveryDefaults: (storeTypeId) =>
         `/admin/store-types/${encodeURIComponent(storeTypeId)}/delivery-defaults`,
+      commercialResetSection: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/commercial-defaults/reset-section`,
+      commissionDefaults: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/commission-defaults`,
+      commissionDefaultsReset: (storeTypeId) =>
+        `/admin/store-types/${encodeURIComponent(storeTypeId)}/commission-defaults/reset`,
       /**
        * Delivery Fees v1 — allowed vehicles only.
        * Confirmed: PUT /admin/store-types/:storeTypeId/allowed-vehicles
@@ -506,6 +512,8 @@ export const endpoints = {
     slaModels: {
       list: '/admin/sla-models',
       template: '/admin/sla-models/template',
+      /** Phase 1 — platform delivery & commission defaults (global SLA tier). */
+      commercialDefaults: '/admin/sla-models/commercial-defaults',
       /**
        * @param {string} slaModelId
        */

@@ -437,27 +437,6 @@ export default function AdminVendorDetailPage() {
     }
   })()
 
-  const refreshDeliveryZones = async () => {
-    const response = await adminService.getVendorDeliveryZones(vendorId)
-    setDeliveryZones(response?.data || null)
-    setData((prev) => (prev ? { ...prev, deliveryZones: response?.data || prev.deliveryZones } : prev))
-    return response?.data
-  }
-
-  const handleApplyDeliveryZonesToAll = async (formDefaults = {}) => {
-    // 1) PATCH current Delivery form → general defaults
-    await adminService.updateVendorDeliveryZones(vendorId, formDefaults)
-
-    // 2) POST apply-all → overwrite every branch from general
-    const response = await adminService.applyVendorDeliveryZonesToAll(vendorId)
-    if (response?.data) {
-      setDeliveryZones(response.data)
-      setData((prev) => (prev ? { ...prev, deliveryZones: response.data } : prev))
-      return response.data
-    }
-    return refreshDeliveryZones()
-  }
-
   const commissionForTab = commission || data.commission || null
 
   const handleSaveCommission = async (updated) => {
@@ -1136,12 +1115,7 @@ export default function AdminVendorDetailPage() {
           {deliveryZonesLoading && !deliveryZones ? (
             <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading delivery zones…</p>
           ) : (
-            <AdminVendorDeliveryZones
-              deliveryZones={deliveryZonesForTab}
-              onApplyToAll={
-                isAdminRealApiFeature('vendors') ? handleApplyDeliveryZonesToAll : undefined
-              }
-            />
+            <AdminVendorDeliveryZones deliveryZones={deliveryZonesForTab} />
           )}
         </div>
       ) : tab === 'Promotions' ? (
@@ -1196,6 +1170,7 @@ export default function AdminVendorDetailPage() {
               sla={sla || data.sla}
               vendorId={data.backendId || vendorId}
               storeName={data.name}
+              onNavigateTab={setTab}
             />
           ) : (
             <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-12 text-center shadow-[0_1px_2px_rgba(20,40,28,.03)]">

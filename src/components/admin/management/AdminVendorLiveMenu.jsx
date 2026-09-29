@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
 import { ApiError } from '../../../api/errors'
 import AdminModifierImageThumb, { moveListItem } from '../AdminModifierImageThumb'
@@ -18,6 +18,42 @@ const primaryBtn =
 const inputClass =
   'h-[36px] w-full rounded-[10px] border border-[#e3e7e4] bg-white px-3 text-[13px] text-[#17231c] outline-none focus:border-[#1aa054]'
 const labelClass = 'mb-1 block text-[11px] font-semibold uppercase tracking-[0.04em] text-[#7c8780]'
+
+function openNativeTimePicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    /* unsupported */
+  }
+}
+
+function toTimeInputValue(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return ''
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
+function pageScroller() {
+  if (typeof document === 'undefined') return null
+  return document.querySelector('.admin-shell > main')
+}
+
+function readPageScroll() {
+  const node = pageScroller()
+  return node ? node.scrollTop : window.scrollY
+}
+
+function writePageScroll(top) {
+  const node = pageScroller()
+  if (node) node.scrollTop = top
+  else window.scrollTo(0, top)
+}
+
+/** Put the page back only when a class toggle threw it to the top. */
+function restorePageScrollIfJumped(pinned) {
+  if (pinned == null || pinned <= 80) return
+  if (readPageScroll() < 40) writePageScroll(pinned)
+}
 
 function hasBothItemClasses(itemClasses) {
   return (
@@ -257,9 +293,11 @@ function ProductFormModal({
               <div>
                 <label className={labelClass}>Available from</label>
                 <input
-                  className={inputClass}
-                  placeholder="09:00"
-                  value={form.availableFrom}
+                  type="time"
+                  step={300}
+                  className={`${inputClass} cursor-pointer [color-scheme:light]`}
+                  value={toTimeInputValue(form.availableFrom)}
+                  onClick={openNativeTimePicker}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, availableFrom: e.target.value }))
                   }
@@ -269,9 +307,11 @@ function ProductFormModal({
               <div>
                 <label className={labelClass}>Available to</label>
                 <input
-                  className={inputClass}
-                  placeholder="22:00"
-                  value={form.availableTo}
+                  type="time"
+                  step={300}
+                  className={`${inputClass} cursor-pointer [color-scheme:light]`}
+                  value={toTimeInputValue(form.availableTo)}
+                  onClick={openNativeTimePicker}
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, availableTo: e.target.value }))
                   }
@@ -569,21 +609,42 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
   const [classBusyKey, setClassBusyKey] = useState('')
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
+  const scrollPinRef = useRef(null)
 
-  const load = useCallback(async () => {
+  useLayoutEffect(() => {
+    restorePageScrollIfJumped(scrollPinRef.current)
+  })
+
+  const holdPageScroll = () => {
+    scrollPinRef.current = readPageScroll()
+    return () => {
+      restorePageScrollIfJumped(scrollPinRef.current)
+      requestAnimationFrame(() => {
+        restorePageScrollIfJumped(scrollPinRef.current)
+        requestAnimationFrame(() => {
+          scrollPinRef.current = null
+        })
+      })
+    }
+  }
+
+  const load = useCallback(async ({ silent = false } = {}) => {
     if (!vendorId) return
-    setLoading(true)
-    setError('')
+    if (!silent) {
+      setLoading(true)
+      setError('')
+    }
     try {
       const data = await adminStoresCatalogService.getVendorCatalog(vendorId)
       setCatalog(data)
+      if (silent) setError('')
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : err?.message || 'Failed to load menu.'
       setError(message)
-      setCatalog(null)
+      if (!silent) setCatalog(null)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [vendorId])
 
@@ -866,6 +927,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       allowsSpecialItems: vendorItemClasses.allowsSpecialItems !== false,
       [key]: !currentlyOn,
     }
+    const releaseScroll = holdPageScroll()
     setClassBusyKey('vendor')
     try {
       await adminVendorService.updateVendor(vendorId, {
@@ -873,7 +935,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         allowsSpecialItems: next.allowsSpecialItems,
       })
       showSuccess('Vendor item classes updated.')
-      await load()
+      await load({ silent: true })
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -882,6 +944,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       showError(message)
     } finally {
       setClassBusyKey('')
+      releaseScroll()
     }
   }
 
@@ -891,12 +954,13 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       return
     }
     if (category.itemClass === nextClass) return
+    const releaseScroll = holdPageScroll()
     setClassBusyKey(`cat:${category.id}`)
     try {
       await adminStoresCatalogService.updateCatalogCategory(vendorId, category.id, {
         itemClass: nextClass,
       })
-      await load()
+      await load({ silent: true })
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -905,22 +969,25 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       showError(message)
     } finally {
       setClassBusyKey('')
+      releaseScroll()
     }
   }
 
   const handleProductItemClass = async (product, nextClass) => {
     if (!product?.editable || !product?.id) return
     if ((product.itemClass || product.effectiveItemClass) === nextClass) return
+    const releaseScroll = holdPageScroll()
     setClassBusyKey(`prod:${product.id}`)
     try {
       await adminStoresCatalogService.updateProduct(product.id, { itemClass: nextClass })
-      await load()
+      await load({ silent: true })
     } catch (err) {
       const message =
         err instanceof ApiError ? err.message : err?.message || 'Failed to update item class.'
       showError(message)
     } finally {
       setClassBusyKey('')
+      releaseScroll()
     }
   }
 
@@ -1030,7 +1097,11 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
                   type="button"
                   role="switch"
                   aria-checked={vendorItemClasses[key] !== false}
-                  disabled={!vendorClassEditable || vendorClassBusy}
+                  aria-disabled={!vendorClassEditable || vendorClassBusy}
+                  disabled={!vendorClassEditable}
+                  onMouseDown={(event) => {
+                    if (event.button === 0) event.preventDefault()
+                  }}
                   onClick={() => handleVendorClassToggle(key)}
                   className={`relative h-[28px] w-[48px] shrink-0 rounded-full transition ${
                     vendorItemClasses[key] !== false ? 'bg-[#2E9E4D]' : 'bg-[#d5dbd7]'
