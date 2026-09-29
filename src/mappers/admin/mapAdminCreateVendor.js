@@ -364,6 +364,10 @@ export function mapAdminCreateVendorRequest(input = {}) {
     catalogIds: catalogIds.length ? catalogIds : undefined,
     subcategoryId: subcategoryId || undefined,
     storeSubTypeId: trim(form.storeSubTypeId) || undefined,
+    storeSubTypeIds:
+      form.multiSubTypes && Array.isArray(form.storeSubTypeIds)
+        ? [...new Set(form.storeSubTypeIds.map((id) => trim(id)).filter(Boolean))]
+        : undefined,
     serviceSubTypeId: trim(form.serviceSubTypeId) || undefined,
     categoryLabel,
     description: trim(form.description) || undefined,

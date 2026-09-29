@@ -22,6 +22,20 @@ const outlineBtn =
   'inline-flex h-[34px] items-center justify-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-3 text-[12px] font-medium text-[#127338] hover:bg-[#f6f8f6] disabled:opacity-50'
 const primaryBtn =
   'inline-flex h-[34px] items-center justify-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white hover:bg-[#158a47] disabled:opacity-50'
+function openNativeTimePicker(event) {
+  try {
+    event.currentTarget.showPicker?.()
+  } catch {
+    /* unsupported */
+  }
+}
+
+function toTimeInputValue(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/)
+  if (!match) return ''
+  return `${match[1].padStart(2, '0')}:${match[2]}`
+}
+
 const ghostBtn =
   'inline-flex size-8 items-center justify-center rounded-full text-[#637068] hover:bg-[#f3f5f3] disabled:opacity-50'
 
@@ -532,22 +546,26 @@ export default function AdminEditImportItemModal({
                 ))}
               </div>
               <div className="flex flex-wrap gap-3">
-                <label className="block w-[120px]">
+                <label className="block w-[160px]">
                   <span className={`mb-1.5 block ${labelClass}`}>AVAILABLE FROM</span>
                   <input
-                    className={inputClass}
-                    value={form.availableFrom}
+                    type="time"
+                    step={300}
+                    className={`${inputClass} cursor-pointer [color-scheme:light]`}
+                    value={toTimeInputValue(form.availableFrom)}
+                    onClick={openNativeTimePicker}
                     onChange={(e) => updateField('availableFrom', e.target.value)}
-                    placeholder="11:00"
                   />
                 </label>
-                <label className="block w-[120px]">
+                <label className="block w-[160px]">
                   <span className={`mb-1.5 block ${labelClass}`}>AVAILABLE TO</span>
                   <input
-                    className={inputClass}
-                    value={form.availableTo}
+                    type="time"
+                    step={300}
+                    className={`${inputClass} cursor-pointer [color-scheme:light]`}
+                    value={toTimeInputValue(form.availableTo)}
+                    onClick={openNativeTimePicker}
                     onChange={(e) => updateField('availableTo', e.target.value)}
-                    placeholder="23:00"
                   />
                 </label>
               </div>

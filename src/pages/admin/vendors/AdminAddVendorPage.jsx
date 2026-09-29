@@ -349,6 +349,15 @@ function InheritanceBadge({ state }) {
   )
 }
 
+function UnpublishedStoreTypeNotice({ name }) {
+  return (
+    <div className="mt-2 rounded-[10px] border border-[#f3ddb0] bg-[#fff8eb] px-3 py-2 text-[12px] leading-[16px] text-[#8a5a12]">
+      <strong>{name}</strong> is not published. This vendor will not be visible in the customer
+      app until you publish that store type. Publishing it makes all vendors of this type visible.
+    </div>
+  )
+}
+
 function VendorField({ label, badge, hint, children, className = '' }) {
   return (
     <label className={cn('block', className)}>
@@ -617,6 +626,9 @@ export default function AdminAddVendorPage({ onBack }) {
     storeTypeId: '',
     catalogIds: [],
     storeSubTypeId: '',
+    storeSubTypeIds: [],
+    catalogMode: '',
+    multiSubTypes: false,
     serviceSubTypeId: '',
     categoryLabel: 'Food & Beverage',
     subCategory: 'None',
@@ -1202,7 +1214,13 @@ export default function AdminAddVendorPage({ onBack }) {
           catalogIds: loadedCatalogIds,
           subCategory: vendor.subCategory || 'None',
           subcategoryId: vendor.subcategoryId || '',
-          storeSubTypeId: vendor.storeSubTypeId || '',
+          storeSubTypeId: (Array.isArray(vendor.storeSubTypeIds) && vendor.storeSubTypeIds[0])
+            || vendor.storeSubTypeId
+            || '',
+          storeSubTypeIds: Array.isArray(vendor.storeSubTypeIds) && vendor.storeSubTypeIds.length
+            ? vendor.storeSubTypeIds.map(String)
+            : (vendor.storeSubTypeId ? [String(vendor.storeSubTypeId)] : []),
+          catalogMode: types.find((t) => String(t.id) === String(matchedTypeId))?.catalogMode || '',
           serviceSubTypeId: vendor.serviceSubTypeId || '',
           description: vendor.description || '',
           logoUrl: vendor.logoUrl || '',
@@ -1315,6 +1333,18 @@ export default function AdminAddVendorPage({ onBack }) {
   const storeSubTypes = Array.isArray(selectedStoreType?.subTypes) ? selectedStoreType.subTypes : []
   const requiresStoreSubType =
     selectedStoreType?.structure === 'TWO_LEVEL' && storeSubTypes.length > 0
+  const allowsMultipleSubTypes =
+    requiresStoreSubType &&
+    (selectedStoreType?.catalogMode === 'VARIANTS' ||
+      String(selectedStoreType?.slug || '').toLowerCase() === 'fashion')
+
+  useEffect(() => {
+    setForm((prev) => (
+      prev.multiSubTypes === allowsMultipleSubTypes
+        ? prev
+        : { ...prev, multiSubTypes: allowsMultipleSubTypes }
+    ))
+  }, [allowsMultipleSubTypes])
   const servicesStoreType = storeTypes.find(
     (t) => String(t.slug) === 'services' || (t.structure === 'TWO_LEVEL' && String(t.slug).includes('service')),
   ) || storeTypes.find((t) => t.structure === 'TWO_LEVEL' && t.id !== selectedStoreType?.id)
@@ -1533,9 +1563,14 @@ export default function AdminAddVendorPage({ onBack }) {
           storeType: vendor.categoryLabel || prev.storeType,
           storeTypeId: vendor.storeTypeId || prev.storeTypeId,
           storeSubTypeId:
-            vendor.storeSubTypeId !== undefined && vendor.storeSubTypeId !== null
-              ? vendor.storeSubTypeId
-              : prev.storeSubTypeId,
+            Array.isArray(vendor.storeSubTypeIds) && vendor.storeSubTypeIds.length
+              ? String(vendor.storeSubTypeIds[0])
+              : vendor.storeSubTypeId !== undefined && vendor.storeSubTypeId !== null
+                ? vendor.storeSubTypeId
+                : prev.storeSubTypeId,
+          storeSubTypeIds: Array.isArray(vendor.storeSubTypeIds)
+            ? vendor.storeSubTypeIds.map(String)
+            : prev.storeSubTypeIds,
           serviceSubTypeId:
             vendor.serviceSubTypeId !== undefined && vendor.serviceSubTypeId !== null
               ? vendor.serviceSubTypeId
@@ -1718,8 +1753,13 @@ export default function AdminAddVendorPage({ onBack }) {
       return false
     }
 
-    if (requiresStoreSubType && !String(form.storeSubTypeId || '').trim()) {
-      const message = 'Select a sub-type for this two-level store type.'
+    const selectedSubTypeIds = allowsMultipleSubTypes
+      ? (form.storeSubTypeIds || []).map((id) => String(id || '').trim()).filter(Boolean)
+      : (String(form.storeSubTypeId || '').trim() ? [String(form.storeSubTypeId).trim()] : [])
+    if (requiresStoreSubType && selectedSubTypeIds.length === 0) {
+      const message = allowsMultipleSubTypes
+        ? 'Select at least one sub-type. This store can appear under more than one.'
+        : 'Select a sub-type for this two-level store type.'
       setCreateError(message)
       showError(message)
       return false
@@ -2141,6 +2181,7 @@ export default function AdminAddVendorPage({ onBack }) {
                 {storeTypesLoading ? (
                   <p className="text-[13px] text-[#7c8780]">Loading store types…</p>
                 ) : storeTypes.length ? (
+                  <>
                   <VendorSelect
                     value={form.storeTypeId || ''}
                     onChange={(e) => {
@@ -2157,6 +2198,8 @@ export default function AdminAddVendorPage({ onBack }) {
                           categoryLabel: primary?.name || '',
                           subcategoryId: '',
                           storeSubTypeId: '',
+                          storeSubTypeIds: [],
+                          catalogMode: primary?.catalogMode || '',
                           serviceSubTypeId: '',
                           subCategory: 'None',
                         }))
@@ -2225,10 +2268,14 @@ export default function AdminAddVendorPage({ onBack }) {
                     <option value="">Select store type</option>
                     {storeTypes.map((type) => (
                       <option key={type.id} value={type.id}>
-                        {type.name}
+                        {type.visible ? type.name : `${type.name} (not published)`}
                       </option>
                     ))}
                   </VendorSelect>
+                  {selectedStoreType && selectedStoreType.visible !== true ? (
+                    <UnpublishedStoreTypeNotice name={selectedStoreType.name} />
+                  ) : null}
+                  </>
                 ) : (
                   <div className="rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
                     {storeTypesError ||
@@ -2238,7 +2285,49 @@ export default function AdminAddVendorPage({ onBack }) {
                   </div>
                 )}
               </VendorField>
-              {requiresStoreSubType ? (
+              {requiresStoreSubType && allowsMultipleSubTypes ? (
+                <VendorField label="Sub-types">
+                  <div className="space-y-2 rounded-[10px] border border-[#dfe4e0] bg-white p-3">
+                    <p className="text-[12px] leading-[1.45] text-[#5c675f]">
+                      Select every sub-type this store should appear under in the customer app.
+                    </p>
+                    {storeSubTypes.map((item) => {
+                      const checked = (form.storeSubTypeIds || []).map(String).includes(String(item.id))
+                      return (
+                        <label key={item.id} className="flex items-center gap-2 text-[13px] text-[#17231c]">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setCreateError(null)
+                              setForm((prev) => {
+                                const current = new Set((prev.storeSubTypeIds || []).map(String))
+                                if (current.has(String(item.id))) current.delete(String(item.id))
+                                else current.add(String(item.id))
+                                const ordered = storeSubTypes
+                                  .map((sub) => String(sub.id))
+                                  .filter((id) => current.has(id))
+                                const names = storeSubTypes
+                                  .filter((sub) => ordered.includes(String(sub.id)))
+                                  .map((sub) => sub.name)
+                                return {
+                                  ...prev,
+                                  storeSubTypeIds: ordered,
+                                  storeSubTypeId: ordered[0] || '',
+                                  catalogMode: 'VARIANTS',
+                                  multiSubTypes: true,
+                                  subCategory: names.length ? names.join(', ') : 'None',
+                                }
+                              })
+                            }}
+                          />
+                          {item.name}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </VendorField>
+              ) : requiresStoreSubType ? (
                 <VendorField label="Sub-type">
                   <VendorSelect
                     value={form.storeSubTypeId || ''}
@@ -2249,6 +2338,7 @@ export default function AdminAddVendorPage({ onBack }) {
                       setForm((prev) => ({
                         ...prev,
                         storeSubTypeId: value,
+                        storeSubTypeIds: value ? [value] : [],
                         subCategory: matched?.name || 'None',
                       }))
                     }}
@@ -2977,15 +3067,22 @@ export default function AdminAddVendorPage({ onBack }) {
         ) : null}
 
         {step === 6 ? (
-          <AdminAddVendorReview
-            form={form}
-            branches={branches}
-            users={users}
-            vendorVisible={vendorVisible}
-            vendorActive={vendorActive}
-            onVendorVisibleChange={setVendorVisible}
-            onVendorActiveChange={setVendorActive}
-          />
+          <>
+            {selectedStoreType && selectedStoreType.visible !== true ? (
+              <UnpublishedStoreTypeNotice name={selectedStoreType.name} />
+            ) : null}
+            <AdminAddVendorReview
+              form={form}
+              branches={branches}
+              users={users}
+              vendorVisible={vendorVisible}
+              vendorActive={vendorActive}
+              storeTypePublished={selectedStoreType ? selectedStoreType.visible === true : true}
+              storeTypeName={selectedStoreType?.name || form.storeType}
+              onVendorVisibleChange={setVendorVisible}
+              onVendorActiveChange={setVendorActive}
+            />
+          </>
         ) : null}
       </div>
 
@@ -3076,6 +3173,8 @@ export default function AdminAddVendorPage({ onBack }) {
             categoryLabel: primary?.name || storeTypeChangeModal.toName || '',
             subcategoryId: '',
             storeSubTypeId: '',
+            storeSubTypeIds: [],
+            catalogMode: primary?.catalogMode || '',
             serviceSubTypeId: '',
             subCategory: 'None',
           }))

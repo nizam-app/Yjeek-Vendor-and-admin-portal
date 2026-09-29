@@ -85,6 +85,7 @@ export function mapAdminStoreTypesResponse(data, options = {}) {
       visible: item.visible === true,
       isActive: item.isActive === true,
       structure: item.structure === 'TWO_LEVEL' ? 'TWO_LEVEL' : 'SINGLE',
+      catalogMode: item.catalogMode === 'VARIANTS' ? 'VARIANTS' : 'MODIFIERS',
       supportedOrderModes: Array.isArray(item.supportedOrderModes)
         ? item.supportedOrderModes.map((code) => String(code))
         : [],

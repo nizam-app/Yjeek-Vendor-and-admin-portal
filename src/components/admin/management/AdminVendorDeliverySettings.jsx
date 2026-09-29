@@ -3,7 +3,7 @@
  * (OG §09 / D02 Batch 5 + D06 Batch 3 + D07 Batch 3).
  *
  * Template only: live checkout reads each branch after push (never this vendor row).
- * Hot-food + scheduled fee grids + driver rates (on-demand + separate bike/car scheduled).
+ * Hot-food fields, vehicles, and driver rates. Scheduled order fees are edited on the branch.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatApiErrorMessage } from '../../../api/errors'
@@ -15,12 +15,6 @@ import AdminStoreTypeHotFoodDefaults, {
   extractHotFoodFieldMeta,
   normalizeHotFoodDefaults,
 } from './AdminStoreTypeHotFoodDefaults'
-import AdminScheduledFeesPanel, {
-  EMPTY_SCHEDULED_FEES,
-  buildScheduledFeesPayload,
-  extractScheduledFieldMeta,
-  normalizeScheduledFees,
-} from './AdminScheduledFeesPanel'
 import AdminDriverRatesPanel, {
   EMPTY_DRIVER_RATES,
   buildDriverRatesPayload,
@@ -40,30 +34,23 @@ function applyServerPayload(data, setters) {
     setHasStoredTemplate,
     setHotFoodForm,
     setHotFoodFieldMeta,
-    setScheduledForm,
-    setScheduledFieldMeta,
     setDriverRatesForm,
     setDriverRatesFieldMeta,
     setAllowedVehiclesForm,
     setAllowedVehiclesFieldMeta,
     setCheckoutSource,
+    setModes,
   } = setters
   setStoreTypeName(data?.storeTypeName || null)
   setHasStoredTemplate(Boolean(data?.hasStoredTemplate))
   setCheckoutSource(data?.checkoutSource || 'branch')
+  setModes(data?.modes || null)
   if (data?.hotFoodOnDemand) {
     setHotFoodForm(normalizeHotFoodDefaults(data.hotFoodOnDemand))
     setHotFoodFieldMeta(extractHotFoodFieldMeta(data.hotFoodOnDemand))
   } else {
     setHotFoodForm(EMPTY_HOT_FOOD_DEFAULTS)
     setHotFoodFieldMeta(null)
-  }
-  if (data?.scheduled) {
-    setScheduledForm(normalizeScheduledFees(data.scheduled))
-    setScheduledFieldMeta(extractScheduledFieldMeta(data.scheduled))
-  } else {
-    setScheduledForm(EMPTY_SCHEDULED_FEES)
-    setScheduledFieldMeta(null)
   }
   if (data?.driverRates) {
     setDriverRatesForm(normalizeDriverRates(data.driverRates))
@@ -100,9 +87,10 @@ function PushConfirmModal({
         </div>
         <div className="space-y-3 px-5 py-4 text-[13px] leading-[18px] text-[#5c665f]">
           <p>
-            This overwrites <strong className="font-semibold text-[#17231c]">every</strong> delivery
-            and fee field on all <strong className="font-semibold text-[#17231c]">{branchCount}</strong>{' '}
-            active branch{branchCount === 1 ? '' : 'es'} with this vendor template.
+            This overwrites the delivery fields on this page for all{' '}
+            <strong className="font-semibold text-[#17231c]">{branchCount}</strong> active branch
+            {branchCount === 1 ? '' : 'es'} with this vendor template. Scheduled order fees stay on
+            each branch.
           </p>
           <p>
             Branch overrides are replaced. Legacy branches are migrated to v1 pricing. Live checkout
@@ -163,8 +151,6 @@ export default function AdminVendorDeliverySettings({
   const [checkoutSource, setCheckoutSource] = useState('branch')
   const [hotFoodForm, setHotFoodForm] = useState(EMPTY_HOT_FOOD_DEFAULTS)
   const [hotFoodFieldMeta, setHotFoodFieldMeta] = useState(null)
-  const [scheduledForm, setScheduledForm] = useState(EMPTY_SCHEDULED_FEES)
-  const [scheduledFieldMeta, setScheduledFieldMeta] = useState(null)
   const [driverRatesForm, setDriverRatesForm] = useState(EMPTY_DRIVER_RATES)
   const [driverRatesFieldMeta, setDriverRatesFieldMeta] = useState(null)
   const [allowedVehiclesForm, setAllowedVehiclesForm] = useState(() =>
@@ -173,16 +159,17 @@ export default function AdminVendorDeliverySettings({
   const [allowedVehiclesFieldMeta, setAllowedVehiclesFieldMeta] = useState(null)
   const [vehiclesError, setVehiclesError] = useState(null)
   const [dirtyHotFood, setDirtyHotFood] = useState(false)
-  const [dirtyScheduled, setDirtyScheduled] = useState(false)
   const [dirtyDriverRates, setDirtyDriverRates] = useState(false)
   const [dirtyAllowedVehicles, setDirtyAllowedVehicles] = useState(false)
   const [resettingPath, setResettingPath] = useState(null)
   const [pushModalOpen, setPushModalOpen] = useState(false)
   const [pushModalError, setPushModalError] = useState(null)
   const [applyToggle, setApplyToggle] = useState(false)
+  const [modes, setModes] = useState(null)
 
-  const dirtyFields =
-    dirtyHotFood || dirtyScheduled || dirtyDriverRates || dirtyAllowedVehicles
+  const scheduledSupported = Boolean(modes?.SCHEDULED?.supportedByStoreType)
+
+  const dirtyFields = dirtyHotFood || dirtyDriverRates || dirtyAllowedVehicles
 
   const setters = useMemo(
     () => ({
@@ -190,13 +177,12 @@ export default function AdminVendorDeliverySettings({
       setHasStoredTemplate,
       setHotFoodForm,
       setHotFoodFieldMeta,
-      setScheduledForm,
-      setScheduledFieldMeta,
       setDriverRatesForm,
       setDriverRatesFieldMeta,
       setAllowedVehiclesForm,
       setAllowedVehiclesFieldMeta,
       setCheckoutSource,
+      setModes,
     }),
     [],
   )
@@ -209,7 +195,6 @@ export default function AdminVendorDeliverySettings({
       const res = await adminService.getVendorDeliverySettings(vendorId)
       applyServerPayload(res?.data, setters)
       setDirtyHotFood(false)
-      setDirtyScheduled(false)
       setDirtyDriverRates(false)
       setDirtyAllowedVehicles(false)
       setVehiclesError(null)
@@ -244,13 +229,6 @@ export default function AdminVendorDeliverySettings({
     setPushOk(null)
   }
 
-  const onScheduledChange = (next) => {
-    setScheduledForm(next)
-    setDirtyScheduled(true)
-    setSaveOk(false)
-    setPushOk(null)
-  }
-
   const onDriverRatesChange = (next) => {
     setDriverRatesForm(next)
     setDirtyDriverRates(true)
@@ -271,13 +249,13 @@ export default function AdminVendorDeliverySettings({
   }
 
   const buildSaveBody = () => {
-    return {
+    const body = {
       modes: { HOT_FOOD_ON_DEMAND: { enabled: true } },
       hotFoodOnDemand: buildHotFoodDefaultsPayload(hotFoodForm),
-      scheduled: buildScheduledFeesPayload(scheduledForm),
       driverRates: buildDriverRatesPayload(driverRatesForm),
       allowedVehicles: buildAllowedVehiclesPayload(allowedVehiclesForm),
     }
+    return body
   }
 
   const handleSave = async () => {
@@ -293,7 +271,6 @@ export default function AdminVendorDeliverySettings({
       const res = await adminService.updateVendorDeliverySettings(vendorId, buildSaveBody())
       applyServerPayload(res?.data, setters)
       setDirtyHotFood(false)
-      setDirtyScheduled(false)
       setDirtyDriverRates(false)
       setDirtyAllowedVehicles(false)
       setVehiclesError(null)
@@ -317,7 +294,6 @@ export default function AdminVendorDeliverySettings({
       const res = await adminService.resetVendorDeliverySettingsField(vendorId, { path })
       applyServerPayload(res?.data, setters)
       setDirtyHotFood(false)
-      setDirtyScheduled(false)
       setDirtyDriverRates(false)
       setDirtyAllowedVehicles(false)
       setVehiclesError(null)
@@ -432,23 +408,6 @@ export default function AdminVendorDeliverySettings({
       />
 
       <div className="mt-5 border-t border-[#f0f2f0] pt-4">
-        <div className="mb-3">
-          <h4 className="text-[14px] font-bold text-[#17231c]">Scheduled fees</h4>
-          <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-            Flat rates per speed tier and item class. No distance fields.
-          </p>
-        </div>
-        <AdminScheduledFeesPanel
-          value={scheduledForm}
-          onChange={onScheduledChange}
-          disabled={!canEdit || loading || saving || pushing}
-          fieldMeta={scheduledFieldMeta}
-          onResetField={hasStoredTemplate ? handleResetField : undefined}
-          resettingPath={resettingPath}
-        />
-      </div>
-
-      <div className="mt-5 border-t border-[#f0f2f0] pt-4">
         <AdminAllowedVehiclesPanel
           value={allowedVehiclesForm}
           onChange={onAllowedVehiclesChange}
@@ -464,8 +423,9 @@ export default function AdminVendorDeliverySettings({
         <div className="mb-3">
           <h4 className="text-[14px] font-bold text-[#17231c]">Driver rates</h4>
           <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-            What Yjeek pays for the delivery leg. On-demand adds distance; scheduled is flat per
-            vehicle.
+            {scheduledSupported
+              ? 'What Yjeek pays for the delivery leg. On-demand adds distance; scheduled is flat per vehicle.'
+              : 'What Yjeek pays for the delivery leg. On-demand adds distance.'}
           </p>
         </div>
         <AdminDriverRatesPanel
@@ -475,6 +435,7 @@ export default function AdminVendorDeliverySettings({
           fieldMeta={driverRatesFieldMeta}
           onResetField={hasStoredTemplate ? handleResetField : undefined}
           resettingPath={resettingPath}
+          includeScheduled={scheduledSupported}
         />
       </div>
 
@@ -484,8 +445,8 @@ export default function AdminVendorDeliverySettings({
             Apply these delivery settings to all branches
           </p>
           <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-            Pushes every delivery and fee field above to all branches of this vendor. Confirmation
-            required — does not change that checkout reads the branch.
+            Pushes the delivery fields on this page to all branches of this vendor. Scheduled
+            order fees stay on each branch. Confirmation required — checkout still reads the branch.
           </p>
         </div>
         <button

@@ -114,6 +114,7 @@ const DRIVER_SCHEDULED_FIELDS = [
  *   } | null,
  *   onResetField?: (path: string) => void,
  *   resettingPath?: string | null,
+ *   includeScheduled?: boolean,
  * }} props
  */
 export default function AdminDriverRatesPanel({
@@ -123,6 +124,7 @@ export default function AdminDriverRatesPanel({
   fieldMeta = null,
   onResetField = null,
   resettingPath = null,
+  includeScheduled = true,
 }) {
   const form = value || EMPTY_DRIVER_RATES
   const onDemand = form.onDemand || EMPTY_DRIVER_RATES.onDemand
@@ -279,17 +281,21 @@ export default function AdminDriverRatesPanel({
         </div>
       </div>
 
-      {renderScheduledGrid(
-        'scheduledBike',
-        'Scheduled — Bike',
-        null,
-      )}
+      {includeScheduled
+        ? renderScheduledGrid(
+            'scheduledBike',
+            'Scheduled — Bike',
+            null,
+          )
+        : null}
 
-      {renderScheduledGrid(
-        'scheduledCar',
-        'Scheduled — Car',
-        'Scheduled driver pay is vehicle-specific. Bike and car are never priced together. Values are placeholders until rates are set — empty is not zero.',
-      )}
+      {includeScheduled
+        ? renderScheduledGrid(
+            'scheduledCar',
+            'Scheduled — Car',
+            'Scheduled driver pay is vehicle-specific. Bike and car are never priced together. Values are placeholders until rates are set — empty is not zero.',
+          )
+        : null}
     </div>
   )
 }

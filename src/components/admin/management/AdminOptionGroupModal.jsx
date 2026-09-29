@@ -162,7 +162,7 @@ export default function AdminOptionGroupModal({ open, group, onClose, onSave }) 
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
       <div className="flex max-h-[90vh] w-full max-w-[480px] flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_12px_40px_rgba(20,40,28,.18)]">
         <div className="flex items-center justify-between border-b border-[#edf0ee] px-5 py-4">
           <h3 className="text-[15px] font-bold text-[#17231c]">

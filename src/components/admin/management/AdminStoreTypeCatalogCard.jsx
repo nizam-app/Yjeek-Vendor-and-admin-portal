@@ -106,7 +106,7 @@ export default function AdminStoreTypeCatalogCard({
           <span className={labelClass}>Mode</span>
           <select
             className={inputClass}
-            value={catalogMode || 'MODIFIERS'}
+            value={catalogMode === 'HYBRID' ? 'VARIANTS' : catalogMode || 'MODIFIERS'}
             onChange={(e) => onCatalogModeChange?.(e.target.value)}
           >
             <option value="MODIFIERS">MODIFIERS (Food — option groups)</option>

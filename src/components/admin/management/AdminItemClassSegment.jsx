@@ -35,6 +35,8 @@ export function AdminItemClassSegment({
     onChange(next)
   }
 
+  const blocked = locked || disabled
+
   return (
     <div className={cn('inline-flex flex-wrap items-center gap-2', className)}>
       <div
@@ -51,13 +53,19 @@ export function AdminItemClassSegment({
             <button
               key={cls}
               type="button"
-              disabled={locked || disabled}
+              disabled={locked}
+              aria-disabled={blocked}
               aria-pressed={on}
+              onMouseDown={(event) => {
+                // A click focuses this control. Disabling or unmounting that
+                // focused button inside the page scroller jumps scroll to the top.
+                if (event.button === 0) event.preventDefault()
+              }}
               onClick={() => pick(cls)}
               className={cn(
                 'px-3 py-1 text-[11.5px] font-semibold transition',
                 on ? 'bg-[#1aa054] text-white' : 'bg-white text-[#7c8780]',
-                (locked || disabled) && 'cursor-not-allowed',
+                blocked && 'cursor-not-allowed',
               )}
             >
               {cls === 'NORMAL' ? 'Normal' : 'Special'}
