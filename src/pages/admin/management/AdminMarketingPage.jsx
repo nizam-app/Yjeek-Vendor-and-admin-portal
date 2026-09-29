@@ -9,6 +9,7 @@ import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 import AdminPromoCategoriesPanel from '../../../components/admin/AdminPromoCategoriesPanel'
 import { MarketingViewTabs } from '../../../components/admin/MarketingViewTabs'
+import AdminPushTriggerSettings from '../../../components/admin/AdminPushTriggerSettings'
 
 const statTone = {
   ink: 'text-[#17231c]',
@@ -25,8 +26,8 @@ const codeToneClass = {
 const DEFAULT_CHANNELS = [
   {
     id: 'customers',
-    title: 'Customer notifications',
-    description: 'Send announcements, offers & order updates to customers.',
+    title: 'Customer push',
+    description: 'Compose an Arabic and English push for a segment, one phone, or all customers.',
   },
   {
     id: 'vendors',
@@ -309,6 +310,8 @@ export default function AdminMarketingPage() {
               </Card>
             ))}
           </div>
+
+          {useReal ? <AdminPushTriggerSettings /> : null}
 
           <Card title="Recent notifications">
             <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">

@@ -3,8 +3,8 @@ import { ApiError } from '../../api/errors'
 const NOTIFICATION_CHANNELS = [
   {
     id: 'customers',
-    title: 'Customer notifications',
-    description: 'Send announcements, offers & order updates to customers.',
+    title: 'Customer push',
+    description: 'Compose an Arabic and English push for a segment, one phone, or all customers.',
   },
   {
     id: 'vendors',
@@ -217,7 +217,8 @@ export function mapAdminMarketingNotificationDetail(data) {
 export function mapCustomerNotificationAudienceToApi(audience) {
   const raw = String(audience || '').trim().toLowerCase()
   if (raw === 'all customers' || raw === 'all') return 'all'
-  if (raw === 'by segment' || raw === 'by_segment') return 'by_segment'
+  if (raw === 'by segment' || raw === 'by_segment' || raw === 'saved segment') return 'by_segment'
+  if (raw === 'one phone' || raw === 'by_phone' || raw === 'phone') return 'by_phone'
   if (raw === 'by city' || raw === 'by_city') return 'by_city'
   if (raw === 'selected') return 'selected'
   return raw.replace(/\s+/g, '_')
@@ -229,23 +230,69 @@ export function mapCustomerNotificationAudienceToApi(audience) {
  *   { target, audience, segmentIds?, type, title, body, push, email, sms, schedule }
  */
 export function mapAdminSendCustomerNotificationRequest(form = {}) {
-  const title = String(form.title || '').trim()
-  if (!title) {
-    throw new ApiError({ message: 'Notification title is required.' })
+  const titleEn = String(form.titleEn || form.title || '').trim()
+  const bodyEn = String(form.bodyEn || form.body || '').trim()
+  const titleAr = String(form.titleAr || '').trim()
+  const bodyAr = String(form.bodyAr || '').trim()
+  if (!titleEn) {
+    throw new ApiError({ message: 'English title is required.' })
+  }
+  if (!bodyEn) {
+    throw new ApiError({ message: 'English body is required.' })
+  }
+  if (!titleAr) {
+    throw new ApiError({ message: 'Arabic title is required.' })
+  }
+  if (!bodyAr) {
+    throw new ApiError({ message: 'Arabic body is required.' })
   }
 
-  const bodyText = String(form.body || '').trim()
-  if (!bodyText) {
-    throw new ApiError({ message: 'Notification body is required.' })
+  const imageUrl = String(form.imageUrl || '').trim()
+  const deepLinkKind = String(form.deepLinkKind || '').trim()
+  const deepLinkTarget = String(form.deepLinkTarget || '').trim()
+  const composer = {
+    target: 'customer',
+    type: String(form.type || form.messageType || 'Promo').trim() || 'Promo',
+    title: titleEn,
+    body: bodyEn,
+    titleEn,
+    titleAr,
+    bodyEn,
+    bodyAr,
+  }
+  if (imageUrl) composer.imageUrl = imageUrl
+  if (deepLinkKind && deepLinkKind !== 'none') {
+    composer.deepLink = {
+      kind: deepLinkKind,
+      ...(deepLinkKind === 'rewards' ? {} : { target: deepLinkTarget }),
+    }
+  }
+
+  if (form.sendTest === true) {
+    return {
+      ...composer,
+      audience: 'test',
+      sendTest: true,
+      push: true,
+      email: false,
+      sms: false,
+      schedule: 'now',
+    }
   }
 
   const audience = mapCustomerNotificationAudienceToApi(form.audience)
   const segmentIds = Array.isArray(form.segmentIds)
     ? form.segmentIds.map((id) => String(id || '').trim()).filter(Boolean)
     : []
+  const segmentId = String(form.segmentId || segmentIds[0] || '').trim()
 
-  if (audience === 'by_segment' && !segmentIds.length) {
-    throw new ApiError({ message: 'Add at least one segment id for By segment.' })
+  if (audience === 'by_segment' && !segmentId && !segmentIds.length) {
+    throw new ApiError({ message: 'Choose a saved segment. An empty segment is not everyone.' })
+  }
+
+  const phone = String(form.phone || '').trim()
+  if (audience === 'by_phone' && phone.length < 6) {
+    throw new ApiError({ message: 'Enter one customer phone number.' })
   }
 
   const customerIds = Array.isArray(form.customerIds)
@@ -260,45 +307,55 @@ export function mapAdminSendCustomerNotificationRequest(form = {}) {
 
   const scheduleUi = String(form.schedule || 'Send now').trim().toLowerCase()
   let schedule = 'now'
-  let scheduledAt
+  let scheduleDate
+  let scheduleTime
   if (scheduleUi === 'send now' || scheduleUi === 'now') {
     schedule = 'now'
   } else if (scheduleUi === 'schedule later' || scheduleUi === 'later') {
-    const when = String(form.scheduledAt || '').trim()
-    if (!when) {
+    scheduleDate = String(form.scheduleDate || '').trim()
+    scheduleTime = String(form.scheduleTime || '').trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(scheduleDate) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(scheduleTime)) {
       throw new ApiError({
-        message: 'Pick a date & time for Schedule later, or choose Send now.',
+        message: 'Pick a Bahrain date and time, or choose Send now.',
       })
     }
-    const parsed = new Date(when)
-    if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= Date.now()) {
-      throw new ApiError({ message: 'Scheduled time must be in the future.' })
-    }
     schedule = 'later'
-    scheduledAt = parsed.toISOString()
   } else if (scheduleUi) {
     schedule = scheduleUi
   }
 
+  const recurrenceRaw = String(form.recurrenceDays ?? '').trim()
+  const recurrenceDays = recurrenceRaw ? Number(recurrenceRaw) : null
+
   const payload = {
-    target: 'customer',
+    ...composer,
     audience,
-    type: String(form.type || form.messageType || 'Promo').trim() || 'Promo',
-    title,
-    body: bodyText,
     push: form.push !== false && form.push !== 'false',
     email: form.email === true || form.email === 'true',
     sms: form.sms === true || form.sms === 'true',
     schedule,
   }
-  if (scheduledAt) payload.scheduledAt = scheduledAt
-
+  if (scheduleDate && scheduleTime) {
+    payload.scheduleDate = scheduleDate
+    payload.scheduleTime = scheduleTime
+  }
+  if (imageUrl) payload.imageUrl = imageUrl
+  if (deepLinkKind && deepLinkKind !== 'none') {
+    payload.deepLink = {
+      kind: deepLinkKind,
+      ...(deepLinkKind === 'rewards' ? {} : { target: deepLinkTarget }),
+    }
+  }
+  if (Number.isInteger(recurrenceDays) && recurrenceDays >= 1) {
+    payload.recurrenceDays = recurrenceDays
+  }
+  if (audience === 'all') payload.allCustomers = true
   if (audience === 'by_segment') {
-    payload.segmentIds = segmentIds
+    payload.segmentId = segmentId || segmentIds[0]
+    payload.segmentIds = segmentIds.length ? segmentIds : [payload.segmentId]
   }
-  if (audience === 'selected') {
-    payload.customerIds = customerIds
-  }
+  if (audience === 'by_phone') payload.phone = phone
+  if (audience === 'selected') payload.customerIds = customerIds
 
   return payload
 }

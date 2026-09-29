@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ChevronDown,
   CreditCard,
@@ -34,6 +34,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '../../../components/admin/cn'
+import { MarketingViewTabs } from '../../../components/admin/MarketingViewTabs'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
 import AdminNewBannerModal, {
   BANNER_PLACEMENTS,
@@ -73,6 +74,10 @@ const TABS = [
   { id: 'categories', label: 'Categories' },
   { id: 'exclusive-offers', label: 'Exclusive offers' },
 ]
+
+/** Old UI Editor home was the Banners tab. That URL now opens Marketing › Banners. */
+const MARKETING_BANNERS_PATH = '/admin/marketing/banners'
+const UI_EDITOR_KEEP_TABS = new Set(['screen-map', 'categories', 'exclusive-offers'])
 
 const SLOT_TYPE_STYLE = {
   Scroll: 'bg-[#e3f2fd] text-[#1565c0]',
@@ -3207,9 +3212,14 @@ function CategoriesTab({ onMessage }) {
   )
 }
 
-export default function AdminUiEditorPage() {
+export default function AdminUiEditorPage({ surface = 'editor' }) {
+  const marketingBanners = surface === 'marketing'
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab')
+  const editorTab = UI_EDITOR_KEEP_TABS.has(requestedTab) ? requestedTab : null
+  const tab = marketingBanners ? 'banners' : editorTab
   const [platform, setPlatform] = useState('customer')
-  const [tab, setTab] = useState('banners')
   const [bannerModal, setBannerModal] = useState({
     open: false,
     mode: 'create',
@@ -3249,10 +3259,11 @@ export default function AdminUiEditorPage() {
   )
 
   useEffect(() => {
-    if (platform === 'champ' && (tab === 'categories' || tab === 'exclusive-offers')) {
-      setTab('banners')
+    if (marketingBanners || !editorTab) return
+    if (platform === 'champ' && (editorTab === 'categories' || editorTab === 'exclusive-offers')) {
+      setSearchParams({ tab: 'screen-map' }, { replace: true })
     }
-  }, [platform, tab])
+  }, [marketingBanners, editorTab, platform, setSearchParams])
   const {
     screens: apiScreens,
     apps: screenMapApps,
@@ -3593,8 +3604,13 @@ export default function AdminUiEditorPage() {
         ? 'home'
         : screens[0]?.id || 'home'
 
+  if (!marketingBanners && !editorTab) {
+    return <Navigate to={MARKETING_BANNERS_PATH} replace />
+  }
+
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
+      {marketingBanners ? <MarketingViewTabs active="banners" /> : null}
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           {tab === 'categories' || tab === 'exclusive-offers' ? (
@@ -3627,15 +3643,21 @@ export default function AdminUiEditorPage() {
             </div>
           )}
           <div>
-            <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">UI Editor</h2>
+            <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
+              {marketingBanners ? 'Banners' : 'UI Editor'}
+            </h2>
             <p className="mt-0.5 text-[12.5px] text-[#7c8780]">
-              {tab === 'categories'
-                ? 'Customer home category grid — shared across the customer app'
-                : tab === 'exclusive-offers'
-                  ? 'Curated product carousel on customer home — prices & visibility'
-                  : platform === 'champ'
-                    ? 'Banners & screens for the Champ driver app'
-                    : 'Banners, ads, categories & screens for the customer app'}
+              {marketingBanners
+                ? platform === 'champ'
+                  ? 'Banners and ads for the Champ driver app'
+                  : 'Upload, placement, on/off, and deep links for app banners'
+                : tab === 'categories'
+                  ? 'Customer home category grid — shared across the customer app'
+                  : tab === 'exclusive-offers'
+                    ? 'Curated product carousel on customer home — prices & visibility'
+                    : platform === 'champ'
+                      ? 'Banners & screens for the Champ driver app'
+                      : 'Banners, ads, categories & screens for the customer app'}
             </p>
           </div>
         </div>
@@ -3686,12 +3708,19 @@ export default function AdminUiEditorPage() {
       ) : null}
       {actionMessage ? <p className="mb-3 text-[13px] text-[#147940]">{actionMessage}</p> : null}
 
+      {marketingBanners ? null : (
       <div className="mb-3 flex items-center gap-1 rounded-[10px] bg-[#e8f0ea] p-[3px]">
         {visibleTabs.map((item) => (
           <button
             key={item.id}
             type="button"
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              if (item.id === 'banners') {
+                navigate(MARKETING_BANNERS_PATH)
+                return
+              }
+              setSearchParams({ tab: item.id }, { replace: true })
+            }}
             className={cn(
               'h-[34px] flex-1 rounded-[8px] px-3.5 text-[12.5px] font-bold transition',
               tab === item.id
@@ -3703,6 +3732,7 @@ export default function AdminUiEditorPage() {
           </button>
         ))}
       </div>
+      )}
 
       {tab === 'screen-map' ? (
         <>

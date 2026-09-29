@@ -100,6 +100,79 @@ export const adminMarketingService = {
   },
 
   /**
+   * Push delivery report: sent, delivered, opened, ordered within 24h, opt-outs.
+   *
+   * @param {string} notificationId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getNotificationReport(notificationId, options = {}) {
+    const id = String(notificationId || '').trim()
+    if (!id) {
+      throw new Error('Notification id is required.')
+    }
+
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.marketing.notifications.report(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * Automated trigger on/off and weekly cap.
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async listPushTriggers(options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.pushTriggers.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
+   * @param {string} trigger
+   * @param {{ enabled?: boolean, maxPerWeek?: number | null }} body
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async updatePushTrigger(trigger, body, options = {}) {
+    const id = String(trigger || '').trim()
+    if (!id) throw new Error('Trigger is required.')
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.pushTriggers.update(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /**
    * Resend an existing notification (same audience / channels / message).
    * Confirmed: POST /admin/marketing/notifications/:notificationId/resend
    * Creates a new campaign row and returns it.
@@ -1122,6 +1195,83 @@ export const adminMarketingService = {
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
 
+  async listVendorPromotions(params = {}, options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.vendorPromotions.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getVendorPromotionReport(options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.vendorPromotions.report, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getVendorPromotionSettings(options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.vendorPromotions.settings, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateVendorPromotionSettings(body, options = {}) {
+    const response = await apiClient.patch(
+      endpoints.admin.marketing.vendorPromotions.settings,
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async approveVendorPromotion(promotionId, options = {}) {
+    const id = String(promotionId || '').trim()
+    if (!id) throw new Error('Promotion id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.vendorPromotions.approve(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async rejectVendorPromotion(promotionId, body, options = {}) {
+    const id = String(promotionId || '').trim()
+    if (!id) throw new Error('Promotion id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.vendorPromotions.reject(id),
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
   async runDistributionRule(ruleId, body = {}, options = {}) {
     const id = String(ruleId || '').trim()
     if (!id) throw new Error('Rule id is required.')
@@ -1135,6 +1285,228 @@ export const adminMarketingService = {
         forceReal: true,
       },
     )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listCampaigns(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: { campaigns: [], total: 0, page: 1, limit: 50 }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.campaigns.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getCampaignOptions(options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.campaigns.options, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.get(endpoints.admin.marketing.campaigns.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async previewCampaignCost(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.previewCost, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createCampaign(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateCampaign(campaignId, body, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.patch(endpoints.admin.marketing.campaigns.update(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async deleteCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.delete(endpoints.admin.marketing.campaigns.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async activateCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.activate(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async endCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.end(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async submitCampaignApproval(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(
+      endpoints.admin.marketing.campaigns.submitApproval(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async revertCampaignDraft(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.revertDraft(id), {}, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createCampaignFromSeason(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.campaigns.fromSeason, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listSpinWheels(options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.spinWheels.list, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getSpinWheel(wheelId, options = {}) {
+    const id = String(wheelId || '').trim()
+    if (!id) throw new Error('Spin wheel id is required.')
+    const response = await apiClient.get(endpoints.admin.marketing.spinWheels.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createSpinWheel(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.spinWheels.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateSpinWheel(wheelId, body, options = {}) {
+    const id = String(wheelId || '').trim()
+    if (!id) throw new Error('Spin wheel id is required.')
+    const response = await apiClient.patch(endpoints.admin.marketing.spinWheels.update(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateSpinWheelAllowance(wheelId, body, options = {}) {
+    const id = String(wheelId || '').trim()
+    if (!id) throw new Error('Spin wheel id is required.')
+    const response = await apiClient.patch(endpoints.admin.marketing.spinWheels.allowance(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async replaceSpinWheelSegments(wheelId, body, options = {}) {
+    const id = String(wheelId || '').trim()
+    if (!id) throw new Error('Spin wheel id is required.')
+    const response = await apiClient.put(endpoints.admin.marketing.spinWheels.segments(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async deleteSpinWheel(wheelId, options = {}) {
+    const id = String(wheelId || '').trim()
+    if (!id) throw new Error('Spin wheel id is required.')
+    const response = await apiClient.delete(endpoints.admin.marketing.spinWheels.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
 }

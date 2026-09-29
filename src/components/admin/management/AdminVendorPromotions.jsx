@@ -3,9 +3,26 @@ import { Eye, MoreVertical, Plus } from 'lucide-react'
 import { Badge } from '../Badge'
 import AdminPromotionEditModal from '../AdminPromotionEditModal'
 
+const WORKFLOW_LABELS = {
+  PENDING_REVIEW: 'Pending review',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected',
+  LIVE: 'Live',
+  ENDED: 'Ended',
+  CANCELLED: 'Cancelled',
+}
+
+function workflowBadgeLabel(promo) {
+  const raw = promo?.workflowStatus
+  if (!raw) return promo?.status || '—'
+  if (promo.isPaused && (raw === 'LIVE' || raw === 'APPROVED')) return 'Paused'
+  return WORKFLOW_LABELS[raw] || raw
+}
+
 const statusTone = (status) => {
-  if (status === 'Active') return 'green'
-  if (status === 'Scheduled') return 'yellow'
+  if (status === 'Active' || status === 'Live' || status === 'Approved') return 'green'
+  if (status === 'Scheduled' || status === 'Pending review') return 'yellow'
+  if (status === 'Rejected') return 'red'
   return 'gray'
 }
 
@@ -42,6 +59,8 @@ function getPromotionDetails(promo) {
     ['Eligibility', promo.eligibility || '—'],
     ['Used', promo.usedLabel || (promo.used != null ? String(promo.used) : '—')],
     ['Status', promo.status || '—'],
+    ['Review', workflowBadgeLabel(promo)],
+    ...(promo.rejectionReason ? [['Rejection reason', promo.rejectionReason]] : []),
   ]
 }
 
@@ -69,7 +88,9 @@ function PromotionViewModal({ promo, onClose, onEdit, loading = false, error = n
           <h2 id="promotion-view-title" className="min-w-0 text-[16px] font-bold text-[#17231c]">
             {promo?.name || 'Promotion'}
           </h2>
-          {promo?.status ? <Badge tone={statusTone(promo.status)}>{promo.status}</Badge> : null}
+          {promo ? (
+            <Badge tone={statusTone(workflowBadgeLabel(promo))}>{workflowBadgeLabel(promo)}</Badge>
+          ) : null}
         </div>
 
         <div className="px-5 py-1">
@@ -195,7 +216,8 @@ export function AdminVendorPromotions({
         <div>
           <h3 className="text-[15px] font-bold text-[#17231c]">Promotions</h3>
           <p className="mt-1 max-w-[520px] text-[12px] leading-[18px] text-[#7c8780]">
-            See &amp; manage store-wide and branch-specific promotions.
+            See &amp; manage store-wide and branch-specific promotions. Approve or reject
+            pending promotions under Marketing › Vendor Promotions.
           </p>
         </div>
         <button
@@ -273,7 +295,9 @@ export function AdminVendorPromotions({
                       {promo.used}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5">
-                      <Badge tone={statusTone(promo.status)}>{promo.status}</Badge>
+                      <Badge tone={statusTone(workflowBadgeLabel(promo))}>
+                        {workflowBadgeLabel(promo)}
+                      </Badge>
                     </td>
                     <td className="relative whitespace-nowrap px-4 py-3.5 text-right">
                       <div className="inline-block" ref={menuOpen ? menuRef : null}>

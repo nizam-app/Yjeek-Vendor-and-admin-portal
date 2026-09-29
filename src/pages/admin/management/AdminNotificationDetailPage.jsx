@@ -66,6 +66,14 @@ export default function AdminNotificationDetailPage() {
     [notificationId, useReal],
   )
 
+  const { data: report } = useApiResource(
+    () => {
+      if (!useReal || !notificationId) return Promise.resolve({ data: null })
+      return adminService.getAdminMarketingNotificationReport(notificationId)
+    },
+    [notificationId, useReal],
+  )
+
   async function handleResend() {
     if (!useReal || !notificationId || actionBusy) return
     setActionError('')
@@ -257,6 +265,31 @@ export default function AdminNotificationDetailPage() {
           </dl>
         </Card>
       </div>
+
+      {report ? (
+        <Card title="Push report" className="mb-4">
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {[
+              ['Sent', report.sent],
+              ['Delivered', report.delivered],
+              ['Opened', report.opened],
+              ['Ordered within 24h', report.orderedWithin24h],
+              ['Opt-outs', report.optOuts],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-[12px] border border-[#edf0ee] px-3 py-3">
+                <dt className="text-[11px] text-[#7c8780]">{label}</dt>
+                <dd className="mt-1 text-[18px] font-bold text-[#17231c]">{value ?? 0}</dd>
+              </div>
+            ))}
+          </dl>
+          {report.openedNote ? (
+            <p className="mt-3 text-[12px] leading-[18px] text-[#7c8780]">{report.openedNote}</p>
+          ) : null}
+          {report.attributionNote ? (
+            <p className="mt-1 text-[12px] leading-[18px] text-[#7c8780]">{report.attributionNote}</p>
+          ) : null}
+        </Card>
+      ) : null}
 
       <Card title="Delivery by channel">
         <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">

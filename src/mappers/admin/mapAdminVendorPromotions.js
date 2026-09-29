@@ -132,6 +132,11 @@ export function mapAdminVendorPromotionItem(item) {
     branchIds: Array.isArray(item.branchIds) ? item.branchIds : [],
     active: Boolean(item.active),
     isPaused: Boolean(item.isPaused),
+    workflowStatus: item.workflowStatus ? String(item.workflowStatus) : null,
+    rejectionReason:
+      item.rejectionReason != null && String(item.rejectionReason).trim()
+        ? String(item.rejectionReason).trim()
+        : null,
     raw: item,
   }
 }

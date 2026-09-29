@@ -846,11 +846,23 @@ export const endpoints = {
         resend: (notificationId) =>
           `/admin/marketing/notifications/${encodeURIComponent(notificationId)}/resend`,
         /**
+         * M08 Batch 4: GET /admin/marketing/notifications/:notificationId/report
+         * @param {string} notificationId
+         */
+        report: (notificationId) =>
+          `/admin/marketing/notifications/${encodeURIComponent(notificationId)}/report`,
+        /**
          * Confirmed: DELETE /admin/marketing/notifications/:notificationId
          * @param {string} notificationId
          */
         remove: (notificationId) =>
           `/admin/marketing/notifications/${encodeURIComponent(notificationId)}`,
+      },
+      /** M08 Batch 5: on/off and weekly cap for automated triggers */
+      pushTriggers: {
+        list: '/admin/marketing/push-triggers',
+        update: (trigger) =>
+          `/admin/marketing/push-triggers/${encodeURIComponent(trigger)}`,
       },
       promoCodes: {
         /** Confirmed: GET /admin/marketing/promo-codes?status=&limit= (includes summary) */
@@ -927,6 +939,42 @@ export const endpoints = {
           `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/remove`,
         resend: (requestId) =>
           `/admin/marketing/voucher-vendor-requests/${encodeURIComponent(requestId)}/resend`,
+      },
+      /** OG §04 Admin › Marketing › Vendor Promotions (M04 B4) */
+      vendorPromotions: {
+        list: '/admin/marketing/vendor-promotions',
+        report: '/admin/marketing/vendor-promotions/report',
+        settings: '/admin/marketing/vendor-promotions/settings',
+        approve: (id) =>
+          `/admin/marketing/vendor-promotions/${encodeURIComponent(id)}/approve`,
+        reject: (id) =>
+          `/admin/marketing/vendor-promotions/${encodeURIComponent(id)}/reject`,
+      },
+      /** OG §05 Admin › Marketing › Campaigns (M05 drafts + cost projection) */
+      campaigns: {
+        list: '/admin/marketing/campaigns',
+        options: '/admin/marketing/campaigns/options',
+        previewCost: '/admin/marketing/campaigns/preview-cost',
+        create: '/admin/marketing/campaigns',
+        detail: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}`,
+        remove: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}`,
+        submitApproval: (id) =>
+          `/admin/marketing/campaigns/${encodeURIComponent(id)}/submit-approval`,
+        revertDraft: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}/revert-draft`,
+        activate: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}/activate`,
+        end: (id) => `/admin/marketing/campaigns/${encodeURIComponent(id)}/end`,
+        fromSeason: '/admin/marketing/campaigns/from-season',
+      },
+      /** OG §07 Admin › Marketing › Spin Wheel (shell + segments) */
+      spinWheels: {
+        list: '/admin/marketing/spin-wheels',
+        create: '/admin/marketing/spin-wheels',
+        detail: (id) => `/admin/marketing/spin-wheels/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/marketing/spin-wheels/${encodeURIComponent(id)}`,
+        allowance: (id) => `/admin/marketing/spin-wheels/${encodeURIComponent(id)}/allowance`,
+        segments: (id) => `/admin/marketing/spin-wheels/${encodeURIComponent(id)}/segments`,
+        remove: (id) => `/admin/marketing/spin-wheels/${encodeURIComponent(id)}`,
       },
       distributionRules: {
         list: '/admin/marketing/distribution-rules',

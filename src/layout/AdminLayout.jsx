@@ -43,7 +43,7 @@ const navItems = [
   ['Marketing', '/admin/marketing', Megaphone],
   ['SLA Models', '/admin/sla-models', Clock3],
   ['Automation', '/admin/automation', Workflow],
-  ['UI Editor', '/admin/ui-editor', PanelTop],
+  ['UI Editor', '/admin/ui-editor?tab=screen-map', PanelTop],
   ['Users', '/admin/users', ShieldCheck],
   ['Reports', '/admin/reports', BarChart3],
   ['Settings', '/admin/settings', Settings],
@@ -67,8 +67,8 @@ const pageTitles = {
   '/admin/fleet/suppliers': 'Fleet Management · Suppliers',
   '/admin/fleet/suppliers/new': 'Fleet Management · Suppliers',
   '/admin/customers': 'Customer Management',
-  '/admin/marketing': 'Marketing · Notifications',
-  '/admin/marketing/notifications/customers': 'Customer Management',
+  '/admin/marketing': 'Marketing · Push',
+  '/admin/marketing/notifications/customers': 'Marketing · Push',
   '/admin/marketing/notifications/vendors': 'Vendor Management',
   '/admin/marketing/promo-codes': 'Marketing · Promo codes',
   '/admin/marketing/promo-codes/new': 'Marketing · Create promo code',
@@ -79,6 +79,10 @@ const pageTitles = {
   '/admin/marketing/cashback': 'Marketing · Cashback',
   '/admin/marketing/referral': 'Marketing · Referral',
   '/admin/marketing/vouchers': 'Marketing · Vouchers',
+  '/admin/marketing/campaigns': 'Marketing · Campaigns',
+  '/admin/marketing/banners': 'Marketing · Banners',
+  '/admin/marketing/spin-wheel': 'Marketing · Spin Wheel',
+  '/admin/marketing/vendor-promotions': 'Marketing · Vendor promotions',
   '/admin/sla-models': 'SLA Models · Vendor SLA',
   '/admin/sla-models/champ': 'SLA Models · Champ SLA',
   '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
@@ -116,7 +120,8 @@ function guardedNavClick(event, { to, pathname, navigate, attemptNavigation, end
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
     return
   }
-  const isActive = end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`)
+  const targetPath = String(to).split('?')[0]
+  const isActive = end ? pathname === targetPath : pathname === targetPath || pathname.startsWith(`${targetPath}/`)
   if (isActive) return
   event.preventDefault()
   attemptNavigation(to, () => navigate(to))

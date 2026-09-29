@@ -12,7 +12,15 @@ import { Badge } from '../../../components/admin/Badge'
 import { cn } from '../../../components/admin/cn'
 import { formatMarketingNotifySendSuccess } from '../../../mappers/admin/mapAdminMarketingNotifications'
 
-const AUDIENCE_OPTIONS = ['All customers', 'By segment', 'By city', 'Selected']
+const AUDIENCE_OPTIONS = ['All customers', 'By segment', 'One phone', 'By city', 'Selected']
+const DEEP_LINK_OPTIONS = [
+  { value: 'none', label: 'No deep link' },
+  { value: 'vendor', label: 'Vendor' },
+  { value: 'category', label: 'Category' },
+  { value: 'voucher', label: 'Voucher' },
+  { value: 'rewards', label: 'My Rewards' },
+  { value: 'url', label: 'External URL' },
+]
 const MESSAGE_TYPES = ['Promo', 'Info', 'Order', 'Wallet']
 const SCHEDULE_OPTIONS = ['Send now', 'Schedule later']
 
@@ -98,27 +106,12 @@ function historyTone(status) {
   return 'gray'
 }
 
-function buildScheduledAt(dateValue, timeValue) {
-  const dateRaw = String(dateValue || '').trim()
-  const timeRaw = String(timeValue || '').trim()
-  if (!dateRaw || !timeRaw) return ''
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw)) {
-    const iso = new Date(`${dateRaw}T${timeRaw}:00`)
-    if (!Number.isNaN(iso.getTime())) return iso.toISOString()
-  }
-
-  const parsed = new Date(`${dateRaw} ${timeRaw}`)
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString()
-  return ''
-}
-
 function defaultScheduleFields() {
-  const d = new Date(Date.now() + 60 * 60 * 1000)
+  const shifted = new Date(Date.now() + 60 * 60 * 1000 + 3 * 60 * 60 * 1000)
   const pad = (n) => String(n).padStart(2, '0')
   return {
-    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    date: `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}`,
+    time: `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`,
   }
 }
 
@@ -140,8 +133,15 @@ export default function AdminSendCustomerNotificationPage() {
   const [segmentInput, setSegmentInput] = useState('')
   const [selectedCustomers, setSelectedCustomers] = useState([])
   const [messageType, setMessageType] = useState('Promo')
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  const [titleEn, setTitleEn] = useState('')
+  const [titleAr, setTitleAr] = useState('')
+  const [bodyEn, setBodyEn] = useState('')
+  const [bodyAr, setBodyAr] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [deepLinkKind, setDeepLinkKind] = useState('none')
+  const [deepLinkTarget, setDeepLinkTarget] = useState('')
+  const [phone, setPhone] = useState('')
+  const [recurrenceDays, setRecurrenceDays] = useState('')
   const [push, setPush] = useState(true)
   const [email, setEmail] = useState(true)
   const [sms, setSms] = useState(false)
@@ -210,7 +210,7 @@ export default function AdminSendCustomerNotificationPage() {
     setSegmentInput('')
   }
 
-  async function handleSend() {
+  async function handleSend(sendTest = false) {
     setActionError('')
     setActionSuccess('')
     setSubmitting(true)
@@ -218,33 +218,41 @@ export default function AdminSendCustomerNotificationPage() {
       const response = await adminService.sendAdminCustomerNotification({
         audience,
         segmentIds: audience === 'By segment' ? segmentIds : [],
+        phone: audience === 'One phone' ? phone : '',
         customerIds: audience === 'Selected' ? selectedCustomers.map((item) => item.id) : [],
         type: messageType,
-        title,
-        body,
+        titleEn,
+        titleAr,
+        bodyEn,
+        bodyAr,
+        imageUrl,
+        deepLinkKind,
+        deepLinkTarget,
+        recurrenceDays,
+        sendTest,
         push,
         email,
         sms,
         schedule,
-        scheduledAt:
-          schedule === 'Schedule later'
-            ? buildScheduledAt(scheduleDate, scheduleTime)
-            : '',
+        scheduleDate: schedule === 'Schedule later' ? scheduleDate : '',
+        scheduleTime: schedule === 'Schedule later' ? scheduleTime : '',
       })
-      const createdTitle = response?.data?.title || title
+      const createdTitle = response?.data?.title || titleEn
       const isScheduled = String(response?.data?.statusKey || '').toLowerCase() === 'scheduled'
       setActionSuccess(
-        formatMarketingNotifySendSuccess(createdTitle, {
-          scheduled: isScheduled,
-          scheduledAt: response?.data?.scheduledAt,
-          sentTo: response?.data?.sentTo,
-          target: 'customer',
-          push,
-          email,
-          emailDelivery: response?.data?.emailDelivery,
-          sms,
-          smsDelivery: response?.data?.smsDelivery,
-        }),
+        sendTest
+          ? `Test sent only to your account. “${createdTitle}” is not in the launch report.`
+          : formatMarketingNotifySendSuccess(createdTitle, {
+              scheduled: isScheduled,
+              scheduledAt: response?.data?.scheduledAt,
+              sentTo: response?.data?.sentTo,
+              target: 'customer',
+              push,
+              email,
+              emailDelivery: response?.data?.emailDelivery,
+              sms,
+              smsDelivery: response?.data?.smsDelivery,
+            }),
       )
       await refetchHistory()
     } catch (err) {
@@ -266,7 +274,7 @@ export default function AdminSendCustomerNotificationPage() {
           Back
         </button>
         <h2 className="text-[20px] font-bold tracking-[-0.02em] text-[#17231c]">
-          Send notification
+          Push
         </h2>
       </div>
 
@@ -290,7 +298,11 @@ export default function AdminSendCustomerNotificationPage() {
               value={audience}
               onChange={setAudience}
               disabled={submitting}
+              className="flex-wrap"
             />
+            <p className="mt-2 text-[11.5px] text-[#8a948e]">
+              All customers is an explicit send. A missing or empty segment does not send to everyone.
+            </p>
 
             {audience === 'Selected' ? (
               <AdminEntitySearchPicker
@@ -302,6 +314,19 @@ export default function AdminSendCustomerNotificationPage() {
                 searchFn={searchCustomers}
                 disabled={submitting}
               />
+            ) : null}
+
+            {audience === 'One phone' ? (
+              <label className="mt-4 block">
+                <span className={labelClass}>Customer phone</span>
+                <input
+                  className={inputClass}
+                  value={phone}
+                  disabled={submitting}
+                  placeholder="e.g. 33123456 or +97333123456"
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              </label>
             ) : null}
 
             {audience === 'By segment' ? (
@@ -351,7 +376,7 @@ export default function AdminSendCustomerNotificationPage() {
                   </button>
                 </div>
                 <p className="text-[11.5px] text-[#8a948e]">
-                  API expects real ids in <code>segmentIds</code>.
+                  Paste a saved segment id. If that segment does not exist, nothing is sent.
                 </p>
               </div>
             ) : null}
@@ -376,25 +401,102 @@ export default function AdminSendCustomerNotificationPage() {
               disabled={submitting}
             />
 
-            <label className="mt-4 block">
-              <span className={labelClass}>Title</span>
-              <input
-                className={inputClass}
-                value={title}
+            <div className="mt-4 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
+              <label className="block">
+                <span className={labelClass}>Title (English)</span>
+                <input
+                  className={inputClass}
+                  value={titleEn}
+                  disabled={submitting}
+                  placeholder="Ramadan cashback"
+                  onChange={(event) => setTitleEn(event.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className={labelClass}>Title (Arabic)</span>
+                <input
+                  className={inputClass}
+                  dir="rtl"
+                  value={titleAr}
+                  disabled={submitting}
+                  placeholder="استرداد نقدي"
+                  onChange={(event) => setTitleAr(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="mt-3 block">
+              <span className={labelClass}>Body (English)</span>
+              <textarea
+                className="box-border min-h-[80px] w-full resize-y rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
+                value={bodyEn}
                 disabled={submitting}
-                placeholder="e.g. Ramadan cashback — 10% back!"
-                onChange={(event) => setTitle(event.target.value)}
+                onChange={(event) => setBodyEn(event.target.value)}
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className={labelClass}>Body (Arabic)</span>
+              <textarea
+                dir="rtl"
+                className="box-border min-h-[80px] w-full resize-y rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
+                value={bodyAr}
+                disabled={submitting}
+                onChange={(event) => setBodyAr(event.target.value)}
               />
             </label>
 
             <label className="mt-3 block">
-              <span className={labelClass}>Body</span>
-              <textarea
-                className="box-border min-h-[96px] w-full resize-y rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 py-2.5 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]"
-                value={body}
+              <span className={labelClass}>Image URL (optional)</span>
+              <input
+                className={inputClass}
+                value={imageUrl}
                 disabled={submitting}
-                placeholder="Order this Ramadan and get 10% wallet cashback on every order."
-                onChange={(event) => setBody(event.target.value)}
+                placeholder="https://"
+                onChange={(event) => setImageUrl(event.target.value)}
+              />
+            </label>
+
+            <label className="mt-3 block">
+              <span className={labelClass}>Deep link</span>
+              <select
+                className={inputClass}
+                value={deepLinkKind}
+                disabled={submitting}
+                onChange={(event) => setDeepLinkKind(event.target.value)}
+              >
+                {DEEP_LINK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {deepLinkKind !== 'none' && deepLinkKind !== 'rewards' ? (
+              <label className="mt-3 block">
+                <span className={labelClass}>
+                  {deepLinkKind === 'url' ? 'External URL' : 'Target id'}
+                </span>
+                <input
+                  className={inputClass}
+                  value={deepLinkTarget}
+                  disabled={submitting}
+                  placeholder={deepLinkKind === 'url' ? 'https://' : 'Id'}
+                  onChange={(event) => setDeepLinkTarget(event.target.value)}
+                />
+              </label>
+            ) : null}
+
+            <label className="mt-3 block">
+              <span className={labelClass}>Repeat every N days (optional)</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                className={inputClass}
+                value={recurrenceDays}
+                disabled={submitting}
+                placeholder="Leave empty to send once"
+                onChange={(event) => setRecurrenceDays(event.target.value)}
               />
             </label>
 
@@ -412,13 +514,16 @@ export default function AdminSendCustomerNotificationPage() {
                 onChange={setSchedule}
                 disabled={submitting}
               />
+              <p className="mt-2 text-[11.5px] text-[#8a948e]">
+                Schedule later uses Asia/Bahrain (GMT+3), not this browser’s clock.
+              </p>
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
               {schedule === 'Schedule later' ? (
                 <>
                   <div className="min-w-0">
-                    <span className={labelClass}>Date</span>
+                    <span className={labelClass}>Date (Bahrain)</span>
                     <AdminDatePicker
                       className="mt-1.5"
                       value={scheduleDate}
@@ -428,7 +533,7 @@ export default function AdminSendCustomerNotificationPage() {
                     />
                   </div>
                   <label className="block min-w-0">
-                    <span className={labelClass}>Time</span>
+                    <span className={labelClass}>Time (Bahrain)</span>
                     <input
                       type="time"
                       className={cn(inputClass, 'mt-1.5 cursor-pointer')}
@@ -455,18 +560,41 @@ export default function AdminSendCustomerNotificationPage() {
                 <p className="text-[12px] font-bold text-[#1C211F]">Yjeek</p>
               </div>
             </div>
+            <p className="mt-2 text-[11px] font-medium uppercase tracking-[0.04em] text-[#8a948e]">
+              English
+            </p>
             <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#17231c]">
-              {title || 'Notification title'}
+              {titleEn || 'English title'}
             </p>
             <p className="mt-1 text-[12px] leading-snug text-[#455249]">
-              {body || 'Notification body'}
+              {bodyEn || 'English body'}
             </p>
+            <p className="mt-3 text-[11px] font-medium uppercase tracking-[0.04em] text-[#8a948e]">
+              Arabic
+            </p>
+            <p className="mt-0.5 text-[13px] font-bold leading-snug text-[#17231c]" dir="rtl">
+              {titleAr || 'العنوان'}
+            </p>
+            <p className="mt-1 text-[12px] leading-snug text-[#455249]" dir="rtl">
+              {bodyAr || 'النص'}
+            </p>
+            {imageUrl ? (
+              <p className="mt-2 truncate text-[11px] text-[#8a948e]">{imageUrl}</p>
+            ) : null}
           </div>
 
           <button
             type="button"
             disabled={submitting}
-            onClick={handleSend}
+            onClick={() => handleSend(true)}
+            className="mt-4 inline-flex h-[40px] w-full items-center justify-center rounded-full border border-[#1aa054] bg-white px-4 text-[13px] font-bold text-[#1aa054] hover:bg-[#e8f7ed] disabled:opacity-60"
+          >
+            {submitting ? 'Please wait…' : 'Send test to me'}
+          </button>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => handleSend(false)}
             className="mt-4 inline-flex h-[40px] w-full items-center justify-center rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
           >
             {submitting

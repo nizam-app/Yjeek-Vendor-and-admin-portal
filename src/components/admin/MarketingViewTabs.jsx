@@ -3,17 +3,21 @@ import { cn } from './cn'
 
 /** Shared Marketing hub tabs — keep IA aligned with OG Admin › Marketing. */
 export const MARKETING_VIEW_TABS = [
-  { id: 'notifications', label: 'Notifications', path: '/admin/marketing' },
+  { id: 'notifications', label: 'Push', path: '/admin/marketing' },
   { id: 'promo-codes', label: 'Promo codes', path: '/admin/marketing/promo-codes' },
   { id: 'promo-categories', label: 'Promo categories', path: '/admin/marketing/promo-categories' },
   { id: 'geofence', label: 'Geofence offers', path: '/admin/marketing/geofence' },
   { id: 'cashback', label: 'Cashback', path: '/admin/marketing/cashback' },
   { id: 'referral', label: 'Referral', path: '/admin/marketing/referral' },
   { id: 'vouchers', label: 'Vouchers', path: '/admin/marketing/vouchers' },
+  { id: 'campaigns', label: 'Campaigns', path: '/admin/marketing/campaigns' },
+  { id: 'banners', label: 'Banners', path: '/admin/marketing/banners' },
+  { id: 'spin-wheel', label: 'Spin Wheel', path: '/admin/marketing/spin-wheel' },
+  { id: 'vendor-promotions', label: 'Vendor promotions', path: '/admin/marketing/vendor-promotions' },
 ]
 
 /**
- * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' | 'vouchers' }} props
+ * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' | 'vouchers' | 'campaigns' | 'banners' | 'spin-wheel' | 'vendor-promotions' }} props
  */
 export function MarketingViewTabs({ active }) {
   const navigate = useNavigate()

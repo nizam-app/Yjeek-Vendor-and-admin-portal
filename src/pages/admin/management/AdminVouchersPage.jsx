@@ -41,8 +41,8 @@ const DISTRIBUTION_TRIGGERS = [
   { value: 'FIRST_ORDER', label: 'First order completed', wired: false },
   { value: 'NO_ORDER_N_DAYS', label: 'No order N days', wired: false },
   { value: 'BIRTHDAY', label: 'Birthday', wired: false },
-  { value: 'ORDER_LATE', label: 'Order late', wired: false },
-  { value: 'RATING_LE_2', label: 'Rating ≤ 2', wired: false },
+  { value: 'ORDER_LATE', label: 'Order late', wired: true },
+  { value: 'RATING_LE_2', label: 'Rating ≤ 2', wired: true },
   { value: 'MANUAL', label: 'Manual', wired: true },
 ]
 
@@ -1808,14 +1808,15 @@ export default function AdminVouchersPage() {
               {deferredTriggers.length > 0 ? (
                 <p className="mt-3 text-[11.5px] text-[#9aa49d]">
                   Deferred auto-issue (CRUD only): {deferredTriggers.join(', ')}. Wired now:
-                  REGISTRATION (on OTP register) · MANUAL (Run now).
+                  REGISTRATION (on OTP register) · MANUAL (Run now) · Order late (template
+                  named On-time promise, on a late delivery) · Rating ≤ 2 (order rating 1 or 2).
                 </p>
               ) : null}
             </Card>
 
             <Card
               title="Rules"
-              subtitle={`${rulesTotal} rule${rulesTotal === 1 ? '' : 's'}. Registration fires on new customer OTP; Manual uses Run now.`}
+              subtitle={`${rulesTotal} rule${rulesTotal === 1 ? '' : 's'}. Registration fires on new customer OTP. Manual uses Run now. A late delivery issues the On-time promise template. Rating ≤ 2 fires when the order rating is 1 or 2.`}
               actions={
                 <div className="flex flex-wrap items-center gap-2">
                   <Field label="Run phone (optional)" className="w-[160px]">

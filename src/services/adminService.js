@@ -383,6 +383,15 @@ export const adminService = {
   getAdminMarketingNotification(notificationId, options = {}) {
     return adminMarketingService.getNotification(notificationId, options)
   },
+  getAdminMarketingNotificationReport(notificationId, options = {}) {
+    return adminMarketingService.getNotificationReport(notificationId, options)
+  },
+  listAdminMarketingPushTriggers(options = {}) {
+    return adminMarketingService.listPushTriggers(options)
+  },
+  updateAdminMarketingPushTrigger(trigger, body, options = {}) {
+    return adminMarketingService.updatePushTrigger(trigger, body, options)
+  },
   resendAdminMarketingNotification(notificationId, options = {}) {
     return adminMarketingService.resendNotification(notificationId, options)
   },
@@ -553,6 +562,81 @@ export const adminService = {
   },
   runAdminDistributionRule(ruleId, body, options = {}) {
     return adminMarketingService.runDistributionRule(ruleId, body, options)
+  },
+  listAdminCampaigns(params, options = {}) {
+    return adminMarketingService.listCampaigns(params, options)
+  },
+  getAdminCampaignOptions(options = {}) {
+    return adminMarketingService.getCampaignOptions(options)
+  },
+  getAdminCampaign(campaignId, options = {}) {
+    return adminMarketingService.getCampaign(campaignId, options)
+  },
+  previewAdminCampaignCost(body, options = {}) {
+    return adminMarketingService.previewCampaignCost(body, options)
+  },
+  createAdminCampaign(body, options = {}) {
+    return adminMarketingService.createCampaign(body, options)
+  },
+  updateAdminCampaign(campaignId, body, options = {}) {
+    return adminMarketingService.updateCampaign(campaignId, body, options)
+  },
+  deleteAdminCampaign(campaignId, options = {}) {
+    return adminMarketingService.deleteCampaign(campaignId, options)
+  },
+  activateAdminCampaign(campaignId, options = {}) {
+    return adminMarketingService.activateCampaign(campaignId, options)
+  },
+  endAdminCampaign(campaignId, options = {}) {
+    return adminMarketingService.endCampaign(campaignId, options)
+  },
+  submitAdminCampaignApproval(campaignId, options = {}) {
+    return adminMarketingService.submitCampaignApproval(campaignId, options)
+  },
+  revertAdminCampaignDraft(campaignId, options = {}) {
+    return adminMarketingService.revertCampaignDraft(campaignId, options)
+  },
+  createAdminCampaignFromSeason(body, options = {}) {
+    return adminMarketingService.createCampaignFromSeason(body, options)
+  },
+  listAdminVendorPromotions(params, options = {}) {
+    return adminMarketingService.listVendorPromotions(params, options)
+  },
+  getAdminVendorPromotionReport(options = {}) {
+    return adminMarketingService.getVendorPromotionReport(options)
+  },
+  getAdminVendorPromotionSettings(options = {}) {
+    return adminMarketingService.getVendorPromotionSettings(options)
+  },
+  updateAdminVendorPromotionSettings(body, options = {}) {
+    return adminMarketingService.updateVendorPromotionSettings(body, options)
+  },
+  approveAdminVendorPromotion(promotionId, options = {}) {
+    return adminMarketingService.approveVendorPromotion(promotionId, options)
+  },
+  rejectAdminVendorPromotion(promotionId, body, options = {}) {
+    return adminMarketingService.rejectVendorPromotion(promotionId, body, options)
+  },
+  listAdminSpinWheels(options = {}) {
+    return adminMarketingService.listSpinWheels(options)
+  },
+  getAdminSpinWheel(wheelId, options = {}) {
+    return adminMarketingService.getSpinWheel(wheelId, options)
+  },
+  createAdminSpinWheel(body, options = {}) {
+    return adminMarketingService.createSpinWheel(body, options)
+  },
+  updateAdminSpinWheel(wheelId, body, options = {}) {
+    return adminMarketingService.updateSpinWheel(wheelId, body, options)
+  },
+  updateAdminSpinWheelAllowance(wheelId, body, options = {}) {
+    return adminMarketingService.updateSpinWheelAllowance(wheelId, body, options)
+  },
+  replaceAdminSpinWheelSegments(wheelId, body, options = {}) {
+    return adminMarketingService.replaceSpinWheelSegments(wheelId, body, options)
+  },
+  deleteAdminSpinWheel(wheelId, options = {}) {
+    return adminMarketingService.deleteSpinWheel(wheelId, options)
   },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)
