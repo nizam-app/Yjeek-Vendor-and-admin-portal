@@ -124,7 +124,7 @@ export default function AdminDriverRatesPanel({
   fieldMeta = null,
   onResetField = null,
   resettingPath = null,
-  includeScheduled = true,
+  includeScheduled = false,
 }) {
   const form = value || EMPTY_DRIVER_RATES
   const onDemand = form.onDemand || EMPTY_DRIVER_RATES.onDemand

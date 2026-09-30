@@ -166,8 +166,10 @@ export default function AdminVendorDeliverySettings({
   const [pushModalError, setPushModalError] = useState(null)
   const [applyToggle, setApplyToggle] = useState(false)
   const [modes, setModes] = useState(null)
+  const [vendorAllowsScheduled, setVendorAllowsScheduled] = useState(false)
 
-  const scheduledSupported = Boolean(modes?.SCHEDULED?.supportedByStoreType)
+  const scheduledEnabled = Boolean(modes?.SCHEDULED?.enabled)
+  const showScheduledDriverRates = scheduledEnabled && vendorAllowsScheduled
 
   const dirtyFields = dirtyHotFood || dirtyDriverRates || dirtyAllowedVehicles
 
@@ -192,7 +194,18 @@ export default function AdminVendorDeliverySettings({
     setLoading(true)
     setError(null)
     try {
-      const res = await adminService.getVendorDeliverySettings(vendorId)
+      const [res, slaRes] = await Promise.all([
+        adminService.getVendorDeliverySettings(vendorId),
+        adminService.getVendorSla(vendorId).catch(() => ({ data: null })),
+      ])
+      const slaModes = slaRes?.data?.serviceModes
+      setVendorAllowsScheduled(
+        Boolean(
+          slaModes &&
+            typeof slaModes === 'object' &&
+            slaModes.scheduledDelivery,
+        ),
+      )
       applyServerPayload(res?.data, setters)
       setDirtyHotFood(false)
       setDirtyDriverRates(false)
@@ -423,7 +436,7 @@ export default function AdminVendorDeliverySettings({
         <div className="mb-3">
           <h4 className="text-[14px] font-bold text-[#17231c]">Driver rates</h4>
           <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-            {scheduledSupported
+            {showScheduledDriverRates
               ? 'What Yjeek pays for the delivery leg. On-demand adds distance; scheduled is flat per vehicle.'
               : 'What Yjeek pays for the delivery leg. On-demand adds distance.'}
           </p>
@@ -435,7 +448,7 @@ export default function AdminVendorDeliverySettings({
           fieldMeta={driverRatesFieldMeta}
           onResetField={hasStoredTemplate ? handleResetField : undefined}
           resettingPath={resettingPath}
-          includeScheduled={scheduledSupported}
+          includeScheduled={showScheduledDriverRates}
         />
       </div>
 

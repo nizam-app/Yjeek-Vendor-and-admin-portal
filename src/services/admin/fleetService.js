@@ -34,6 +34,38 @@ function useFleetRealApi() {
   return isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
 }
 
+const MOCK_CHAMP_NATIONALITIES_KEY = 'yjeek.admin.champNationalities'
+const DEFAULT_CHAMP_NATIONALITIES = ['Bahraini', 'Indian', 'Pakistani', 'Filipino', 'Other']
+
+function readMockChampNationalities() {
+  try {
+    const raw = localStorage.getItem(MOCK_CHAMP_NATIONALITIES_KEY)
+    if (!raw) return [...DEFAULT_CHAMP_NATIONALITIES]
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return [...DEFAULT_CHAMP_NATIONALITIES]
+    const unique = []
+    const seen = new Set()
+    for (const item of [...DEFAULT_CHAMP_NATIONALITIES, ...parsed]) {
+      const label = String(item || '').trim()
+      if (label.length < 2) continue
+      const key = label.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(label)
+    }
+    return unique
+  } catch {
+    return [...DEFAULT_CHAMP_NATIONALITIES]
+  }
+}
+
+function writeMockChampNationalities(list) {
+  const custom = list.filter(
+    (item) => !DEFAULT_CHAMP_NATIONALITIES.some((d) => d.toLowerCase() === item.toLowerCase()),
+  )
+  localStorage.setItem(MOCK_CHAMP_NATIONALITIES_KEY, JSON.stringify(custom))
+}
+
 /**
  * Admin Fleet Management — champs / suppliers.
  *
@@ -684,6 +716,59 @@ export const adminFleetService = {
 
     return {
       data: mapAdminFleetNotifyHistoryResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /** GET /admin/fleet/champ-nationalities */
+  async listChampNationalities(options = {}) {
+    if (!useFleetRealApi()) {
+      return { data: { nationalities: readMockChampNationalities() }, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.fleet.champNationalities, {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    })
+    return {
+      data: {
+        nationalities: Array.isArray(response?.data?.nationalities)
+          ? response.data.nationalities
+          : [],
+      },
+      meta: response?.meta ?? null,
+    }
+  },
+
+  /** POST /admin/fleet/champ-nationalities */
+  async addChampNationality(label, options = {}) {
+    const trimmed = String(label || '').trim()
+    if (!useFleetRealApi()) {
+      const list = readMockChampNationalities()
+      const key = trimmed.toLowerCase()
+      if (!list.some((item) => item.toLowerCase() === key)) {
+        list.push(trimmed)
+        writeMockChampNationalities(list)
+      }
+      return { data: { nationalities: readMockChampNationalities() }, meta: null }
+    }
+    const response = await apiClient.post(
+      endpoints.admin.fleet.champNationalities,
+      { label: trimmed },
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'fleet',
+        forceReal: !apiConfig.adminUseMockApi,
+      },
+    )
+    return {
+      data: {
+        nationalities: Array.isArray(response?.data?.nationalities)
+          ? response.data.nationalities
+          : [],
+      },
       meta: response?.meta ?? null,
     }
   },

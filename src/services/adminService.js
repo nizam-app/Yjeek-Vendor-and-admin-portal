@@ -122,6 +122,12 @@ export const adminService = {
   listAdminFleetChamps(filters, options = {}) {
     return adminFleetService.listChamps(filters, options)
   },
+  listAdminChampNationalities(options = {}) {
+    return adminFleetService.listChampNationalities(options)
+  },
+  addAdminChampNationality(label, options = {}) {
+    return adminFleetService.addChampNationality(label, options)
+  },
   listAdminFleetSuppliers(options = {}) {
     return adminFleetService.listSuppliers(options)
   },

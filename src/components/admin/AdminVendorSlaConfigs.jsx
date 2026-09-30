@@ -450,6 +450,50 @@ const ORDER_MODE_CODE_TO_LABEL = {
   services: 'Services',
 }
 
+const DELIVERY_MODE_KEY_TO_LABEL = {
+  HOT_FOOD_ON_DEMAND: 'Hot food · on demand',
+  PICKUP: 'Pickup',
+  DINE_IN: 'Dine-in',
+  SCHEDULED: 'Scheduled delivery',
+  SERVICES: 'Services',
+}
+
+export function branchHasDeliveryModesData(branch) {
+  const modes = branch?.deliveryModes
+  return Boolean(modes && typeof modes === 'object' && Object.keys(modes).length > 0)
+}
+
+/** Union of order-mode labels enabled on any branch (deliverySettings modes or legacy flags). */
+export function aggregateEnabledServiceModeLabelsFromBranches(branches = []) {
+  const enabled = new Set()
+  for (const branch of branches || []) {
+    if (branchHasDeliveryModesData(branch)) {
+      const modes = branch.deliveryModes
+      for (const [key, label] of Object.entries(DELIVERY_MODE_KEY_TO_LABEL)) {
+        if (modes[key]?.enabled === true) enabled.add(label)
+      }
+      continue
+    }
+    if (branch?.allowsPickup === true) enabled.add('Pickup')
+    if (branch?.allowsDineIn === true) enabled.add('Dine-in')
+  }
+  return [...enabled]
+}
+
+/**
+ * SLA wizard / vendor SLA UI: store-type modes ∩ modes enabled on at least one branch.
+ * With no branches yet, falls back to store-type list.
+ */
+export function slaVisibleServiceModesFromBranches(storeTypeLabels = [], branches = []) {
+  const storeLabels = Array.isArray(storeTypeLabels) ? storeTypeLabels : []
+  const branchList = Array.isArray(branches) ? branches : []
+  if (!branchList.length) return storeLabels
+  const aggregated = aggregateEnabledServiceModeLabelsFromBranches(branchList)
+  if (!aggregated.length) return []
+  const enabledOnBranch = new Set(aggregated)
+  return storeLabels.filter((label) => enabledOnBranch.has(label))
+}
+
 export function labelsForSupportedOrderModes(codes = []) {
   return (Array.isArray(codes) ? codes : [])
     .map((code) => ORDER_MODE_CODE_TO_LABEL[String(code).trim().toLowerCase().replace(/-/g, '_')])
@@ -465,6 +509,40 @@ export function buildAllowedModesFromStoreType(storeType) {
     ? storeType.supportedOrderModes
     : []
   return labelsForSupportedOrderModes(codes)
+}
+
+const SERVICE_MODE_LABEL_TO_ORDER_CODE = {
+  'Hot food · on demand': 'delivery',
+  Pickup: 'pickup',
+  'Dine-in': 'dine_in',
+  'Scheduled delivery': 'scheduled',
+  Services: 'services',
+}
+
+/**
+ * Store-type order mode codes ∩ vendor SLA enabled modes.
+ * Modes the vendor does not support are omitted (hidden on branch delivery UI).
+ */
+export function effectiveBranchOrderModeCodes(
+  storeTypeCodes = [],
+  vendorModeLabels = [],
+  { allowAllStoreWhenVendorUnknown = false } = {},
+) {
+  const storeNorm = (Array.isArray(storeTypeCodes) ? storeTypeCodes : []).map((code) =>
+    String(code).trim().toLowerCase().replace(/-/g, '_'),
+  )
+  if (allowAllStoreWhenVendorUnknown && (!vendorModeLabels || vendorModeLabels.length === 0)) {
+    return storeNorm
+  }
+  if (!vendorModeLabels || vendorModeLabels.length === 0) {
+    return []
+  }
+  const vendorCodes = new Set(
+    vendorModeLabels
+      .map((label) => SERVICE_MODE_LABEL_TO_ORDER_CODE[String(label).trim()])
+      .filter(Boolean),
+  )
+  return storeNorm.filter((code) => vendorCodes.has(code))
 }
 
 /**
@@ -540,9 +618,8 @@ export function mergeBranchModesIntoServiceModes(
 ) {
   const allowed = new Set(Array.isArray(allowedModes) ? allowedModes : [])
   const merged = new Set(Array.isArray(selectedModes) ? selectedModes : [])
-  for (const branch of branches || []) {
-    if (branch?.allowsPickup && allowed.has('Pickup')) merged.add('Pickup')
-    if (branch?.allowsDineIn && allowed.has('Dine-in')) merged.add('Dine-in')
+  for (const label of aggregateEnabledServiceModeLabelsFromBranches(branches)) {
+    if (allowed.has(label)) merged.add(label)
   }
   return [...merged]
 }

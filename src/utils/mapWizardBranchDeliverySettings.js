@@ -1,30 +1,56 @@
 import { buildHotFoodDefaultsPayload } from '../components/admin/management/AdminStoreTypeHotFoodDefaults'
+import { buildAllowedVehiclesPayload } from '../components/admin/management/AdminAllowedVehiclesPanel'
 import { buildBranchDeliveryModesPayload } from '../components/admin/management/AdminBranchDeliverySettings'
+import { buildDriverRatesPayload } from '../components/admin/management/driverRatesForm'
+import { buildScheduledFeesPayload } from '../components/admin/management/scheduledFeesForm'
+
+function modeEnabled(modes, key) {
+  const mode = modes?.[key]
+  return Boolean(mode?.supportedByStoreType && !mode?.locked && mode?.enabled)
+}
 
 /**
- * Wizard branch draft → PUT delivery-settings body (vendor template or branch).
- * @param {{ deliveryModes?: object, draftHotFood?: object } | null | undefined} branch
+ * Wizard / branch-save draft → PUT delivery-settings body (vendor template or branch).
+ * @param {{
+ *   deliveryModes?: object,
+ *   draftHotFood?: object,
+ *   draftScheduled?: object,
+ *   draftDriverRates?: object,
+ *   draftAllowedVehicles?: object,
+ *   allowedVehiclesEdited?: boolean,
+ * } | null | undefined} branch
  */
 export function mapWizardBranchDeliverySettings(branch) {
   if (!branch || typeof branch !== 'object') return null
 
   const modes = branch.deliveryModes
-  const hotFoodForm = branch.draftHotFood
-  const modePayload = buildBranchDeliveryModesPayload(modes)
-  const modesOut = {}
-  for (const [key, value] of Object.entries(modePayload)) {
-    modesOut[key] = value
-  }
+  const modesOut = buildBranchDeliveryModesPayload(modes)
 
   const body = {}
   if (Object.keys(modesOut).length) body.modes = modesOut
 
-  const hotFoodEnabled = Boolean(modesOut.HOT_FOOD_ON_DEMAND)
-  if (hotFoodEnabled && hotFoodForm) {
-    body.hotFoodOnDemand = buildHotFoodDefaultsPayload(hotFoodForm)
+  if (modeEnabled(modes, 'HOT_FOOD_ON_DEMAND') && branch.draftHotFood) {
+    body.hotFoodOnDemand = buildHotFoodDefaultsPayload(branch.draftHotFood)
+  }
+  if (modeEnabled(modes, 'SCHEDULED') && branch.draftScheduled) {
+    body.scheduled = buildScheduledFeesPayload(branch.draftScheduled)
+  }
+  if (branch.draftDriverRates) {
+    body.driverRates = buildDriverRatesPayload(branch.draftDriverRates)
+  }
+  if (branch.allowedVehiclesEdited && branch.draftAllowedVehicles) {
+    body.allowedVehicles = buildAllowedVehiclesPayload(branch.draftAllowedVehicles)
   }
 
-  if (!body.modes && !body.hotFoodOnDemand) return null
+  if (
+    !body.modes &&
+    !body.hotFoodOnDemand &&
+    !body.scheduled &&
+    !body.driverRates &&
+    !body.allowedVehicles
+  ) {
+    return null
+  }
   return body
 }
 

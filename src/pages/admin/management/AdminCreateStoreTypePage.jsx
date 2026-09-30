@@ -119,6 +119,7 @@ function useRealStoreTypes() {
 function serializeStoreTypeState(state) {
   return JSON.stringify({
     displayName: String(state.displayName || '').trim(),
+    displayNameAr: String(state.displayNameAr || '').trim(),
     internalKey: String(state.internalKey || '').trim(),
     homeOrder: String(state.homeOrder || '').trim(),
     visibleInApp: Boolean(state.visibleInApp),
@@ -146,6 +147,7 @@ function mockInitialValues(storeTypeId, isEdit) {
   if (!isEdit) {
     return {
       displayName: '',
+      displayNameAr: '',
       internalKey: '',
       homeOrder: '',
       visibleInApp: true,
@@ -171,6 +173,7 @@ function mockInitialValues(storeTypeId, isEdit) {
 
   return {
     displayName,
+    displayNameAr: '',
     internalKey: String(storeTypeId || '').replace(/-/g, '_'),
     homeOrder: '5',
     visibleInApp: true,
@@ -200,6 +203,7 @@ function initialFromDetail(detail, deliveryDefaults = null, commissionDefaults =
 
   return {
     displayName: detail.displayName || '',
+    displayNameAr: detail.displayNameAr || '',
     internalKey: slug,
     homeOrder: detail.homeOrder || '',
     visibleInApp: Boolean(detail.visibleInApp),
@@ -261,6 +265,37 @@ function ActionIconButton({ label, onClick, danger = false, children }) {
 
 function EditIcon() {
   return <span className="text-[14px]">✎</span>
+}
+
+function DisplayNameLanguageToggle({ value, onChange, disabled = false }) {
+  return (
+    <div
+      className={cn(
+        'inline-flex shrink-0 rounded-full border border-[#e4e8e4] bg-white p-0.5',
+        disabled && 'pointer-events-none opacity-60',
+      )}
+    >
+      {[
+        { key: 'en', label: 'English' },
+        { key: 'ar', label: 'العربية' },
+      ].map((opt) => (
+        <button
+          key={opt.key}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(opt.key)}
+          className={cn(
+            'h-[28px] rounded-full px-3 text-[11px] font-semibold transition',
+            value === opt.key
+              ? 'bg-[#e8f7ed] text-[#147940]'
+              : 'text-[#7c8780] hover:bg-[#f6f8f6]',
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 function Toggle({ checked, onChange, label }) {
@@ -583,6 +618,8 @@ function StoreTypeForm({
   liveScheduledFees = null,
 }) {
   const [displayName, setDisplayName] = useState(initial.displayName)
+  const [displayNameAr, setDisplayNameAr] = useState(initial.displayNameAr || '')
+  const [displayNameLang, setDisplayNameLang] = useState('en')
   const [internalKey, setInternalKey] = useState(initial.internalKey)
   const [homeOrder, setHomeOrder] = useState(initial.homeOrder)
   const [visibleInApp, setVisibleInApp] = useState(initial.visibleInApp)
@@ -685,6 +722,7 @@ function StoreTypeForm({
     () =>
       serializeStoreTypeState({
         displayName,
+        displayNameAr,
         internalKey,
         homeOrder,
         visibleInApp,
@@ -703,6 +741,7 @@ function StoreTypeForm({
       }),
     [
       displayName,
+      displayNameAr,
       internalKey,
       homeOrder,
       visibleInApp,
@@ -732,12 +771,13 @@ function StoreTypeForm({
 
   const handleBack = () => requestLeave(onBack)
 
-  const titleName = displayName.trim() || 'New'
+  const titleName = displayName.trim() || displayNameAr.trim() || 'New'
   const isEditMode = mode === 'edit'
   const canManageNested = Boolean(storeTypeId && isEditMode && canSaveRemote)
 
   const buildFormPayload = (publishStatus = 'DRAFT', visible = visibleInApp) => ({
     displayName,
+    displayNameAr,
     internalKey,
     homeOrder,
     visibleInApp: visible,
@@ -1313,13 +1353,39 @@ function StoreTypeForm({
             </div>
 
             <label className="block min-w-0">
-              <span className={labelClass}>Display name</span>
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <span className={labelClass}>Display name</span>
+                <DisplayNameLanguageToggle
+                  value={displayNameLang}
+                  onChange={setDisplayNameLang}
+                  disabled={saving}
+                />
+              </div>
               <input
                 className={inputClass}
-                value={displayName}
-                placeholder={isEditMode ? undefined : 'e.g. Food'}
-                onChange={(e) => setDisplayName(e.target.value)}
+                dir={displayNameLang === 'ar' ? 'rtl' : 'ltr'}
+                lang={displayNameLang === 'ar' ? 'ar' : 'en'}
+                value={displayNameLang === 'ar' ? displayNameAr : displayName}
+                placeholder={
+                  displayNameLang === 'ar'
+                    ? isEditMode
+                      ? undefined
+                      : 'مثال: أطعمة'
+                    : isEditMode
+                      ? undefined
+                      : 'e.g. Food'
+                }
+                onChange={(e) =>
+                  displayNameLang === 'ar'
+                    ? setDisplayNameAr(e.target.value)
+                    : setDisplayName(e.target.value)
+                }
               />
+              <p className="mt-1.5 text-[11px] leading-[14px] text-[#9aa49d]">
+                {displayNameLang === 'ar'
+                  ? 'Arabic customer label — saved as nameAr. Keep Internal key in English (e.g. food).'
+                  : 'English label — required. Use العربية for the Arabic name; do not put Arabic here.'}
+              </p>
             </label>
 
             <label className="block min-w-0">

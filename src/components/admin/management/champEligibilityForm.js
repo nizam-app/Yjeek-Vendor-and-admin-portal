@@ -4,12 +4,14 @@
  * Progressive disclosure:
  * - Hot food only → no further questions
  * - Scheduled on → item class block (Normal only / Special only / Both)
- * - Special included → store type multi-select (live from Store Management)
+ * - Normal included → store type multi-select (allowedCategories / hot-food dispatch)
+ * - Special included → special item types multi-select (maps to specialStoreTypeIds on save)
  *
  * Rules:
  * - ≥1 order mode required
- * - Turning Scheduled off hides class + store-type blocks but keeps values
- * - Narrowing Both/Special → Normal only clears store type selection
+ * - Turning Scheduled off hides class blocks but keeps values
+ * - Narrowing Both/Special → Normal only clears special-side values
+ * - Narrowing Both/Normal → Special only clears normal store-type selection
  * - Store type list is never hardcoded
  */
 
@@ -34,14 +36,37 @@ export const CHAMP_SCHEDULED_CLASS_OPTIONS = [
   { key: 'BOTH', label: 'Both' },
 ]
 
+/** Handling / restriction labels for scheduled Special item class (not store types). */
+export const CHAMP_SPECIAL_ITEM_TYPE_OPTIONS = [
+  'Age-restricted 18+',
+  'Pharmacy / Rx',
+  'Fragile',
+  'Vape & Tobacco',
+  'Jewelry',
+  'Electronics',
+  'High-value',
+  'Frozen / Chilled',
+]
+
+const GLOBAL_SPECIAL_HANDLING_KEYS = new Set([
+  'age-restricted 18+',
+  'fragile',
+  'high-value',
+  'frozen / chilled',
+])
+
 export const CHAMP_MODE_REQUIRED_MESSAGE = 'At least one order mode must stay on'
+export const CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE =
+  'At least one special item type is required when Special is included'
+/** @deprecated Use CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE — kept for tests/migrations */
 export const CHAMP_SPECIAL_STORE_TYPES_REQUIRED_MESSAGE =
-  'At least one special store type is required when Special is included'
+  CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE
 
 /** Default eligibility for new champs (matches backend Batch 1/2 defaults). */
 export const EMPTY_CHAMP_ELIGIBILITY = {
   enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
   scheduledClasses: 'NORMAL_ONLY',
+  normalStoreTypeIds: [],
   specialStoreTypeIds: [],
 }
 
@@ -78,7 +103,7 @@ export function normalizeScheduledClasses(value) {
  * @param {unknown} value
  * @returns {string[]}
  */
-export function normalizeSpecialStoreTypeIds(value) {
+export function normalizeStoreTypeIds(value) {
   if (!Array.isArray(value)) return []
   const unique = []
   for (const item of value) {
@@ -87,6 +112,9 @@ export function normalizeSpecialStoreTypeIds(value) {
   }
   return unique
 }
+
+/** @deprecated alias */
+export const normalizeSpecialStoreTypeIds = normalizeStoreTypeIds
 
 /**
  * Normalize API `profile.eligibility` (or form slice) → form shape.
@@ -104,6 +132,11 @@ export function normalizeChampEligibility(input) {
 
   const hasExplicitModes = Array.isArray(src.enabledModes)
   const enabledModes = normalizeEnabledModes(src.enabledModes)
+  const normalStoreTypeIds = normalizeStoreTypeIds(
+    src.normalStoreTypeIds !== undefined ? src.normalStoreTypeIds : [],
+  )
+  const specialStoreTypeIds = normalizeStoreTypeIds(src.specialStoreTypeIds)
+
   return {
     enabledModes:
       hasExplicitModes && src.enabledModes.length === 0
@@ -112,7 +145,8 @@ export function normalizeChampEligibility(input) {
           ? enabledModes
           : [...EMPTY_CHAMP_ELIGIBILITY.enabledModes],
     scheduledClasses: normalizeScheduledClasses(src.scheduledClasses),
-    specialStoreTypeIds: normalizeSpecialStoreTypeIds(src.specialStoreTypeIds),
+    normalStoreTypeIds,
+    specialStoreTypeIds,
   }
 }
 
@@ -126,20 +160,32 @@ export function isScheduledModeOn(eligibility) {
 /**
  * @param {{ scheduledClasses?: string }} eligibility
  */
+export function isNormalIncluded(eligibility) {
+  const classes = normalizeScheduledClasses(eligibility?.scheduledClasses)
+  return classes === 'NORMAL_ONLY' || classes === 'BOTH'
+}
+
+/**
+ * @param {{ scheduledClasses?: string }} eligibility
+ */
 export function isSpecialIncluded(eligibility) {
   const classes = normalizeScheduledClasses(eligibility?.scheduledClasses)
   return classes === 'SPECIAL_ONLY' || classes === 'BOTH'
 }
 
 /**
- * Progressive disclosure visibility (OG §07).
+ * Progressive disclosure visibility (OG §07 + product split).
  * Hidden blocks retain values — callers must not clear on hide.
  */
 export function getChampEligibilityVisibility(eligibility) {
   const scheduledOn = isScheduledModeOn(eligibility)
+  const normalIncluded = isNormalIncluded(eligibility)
   const specialIncluded = isSpecialIncluded(eligibility)
   return {
     showScheduledClasses: scheduledOn,
+    showNormalStoreTypes: scheduledOn && normalIncluded,
+    showSpecialItemTypes: scheduledOn && specialIncluded,
+    /** @deprecated */
     showSpecialStoreTypes: scheduledOn && specialIncluded,
   }
 }
@@ -176,7 +222,7 @@ export function applyChampModeToggle(current, mode, nextOn) {
 }
 
 /**
- * Set scheduled classes. Both/Special → Normal only clears store type selection (OG §07 rule 2).
+ * Set scheduled classes. Clears selections that no longer apply (OG §07 rule 2 + normal/special split).
  *
  * @param {ReturnType<typeof normalizeChampEligibility>} current
  * @param {'NORMAL_ONLY'|'SPECIAL_ONLY'|'BOTH'} nextClasses
@@ -186,7 +232,9 @@ export function applyChampScheduledClasses(current, nextClasses) {
   const next = normalizeScheduledClasses(nextClasses)
   const prev = eligibility.scheduledClasses
 
+  let normalStoreTypeIds = eligibility.normalStoreTypeIds
   let specialStoreTypeIds = eligibility.specialStoreTypeIds
+
   if (
     (prev === 'BOTH' || prev === 'SPECIAL_ONLY') &&
     next === 'NORMAL_ONLY'
@@ -194,50 +242,196 @@ export function applyChampScheduledClasses(current, nextClasses) {
     specialStoreTypeIds = []
   }
 
+  if (
+    (prev === 'BOTH' || prev === 'NORMAL_ONLY') &&
+    next === 'SPECIAL_ONLY'
+  ) {
+    normalStoreTypeIds = []
+  }
+
   return {
     ...eligibility,
     scheduledClasses: next,
+    normalStoreTypeIds,
     specialStoreTypeIds,
   }
 }
 
 /**
- * Toggle a store-type id in the Special multi-select.
+ * Toggle a store-type id in the Normal multi-select.
  *
  * @param {ReturnType<typeof normalizeChampEligibility>} current
  * @param {string} storeTypeId
  */
-export function toggleChampSpecialStoreType(current, storeTypeId) {
+export function toggleChampNormalStoreType(current, storeTypeId) {
   const eligibility = normalizeChampEligibility(current)
   const id = String(storeTypeId || '').trim()
   if (!id) return eligibility
 
-  const has = eligibility.specialStoreTypeIds.includes(id)
+  const has = eligibility.normalStoreTypeIds.includes(id)
   return {
     ...eligibility,
-    specialStoreTypeIds: has
-      ? eligibility.specialStoreTypeIds.filter((item) => item !== id)
-      : [...eligibility.specialStoreTypeIds, id],
+    normalStoreTypeIds: has
+      ? eligibility.normalStoreTypeIds.filter((item) => item !== id)
+      : [...eligibility.normalStoreTypeIds, id],
   }
+}
+
+/** @deprecated use toggleChampNormalStoreType */
+export const toggleChampSpecialStoreType = toggleChampNormalStoreType
+
+/**
+ * Select every published store type in the Normal multi-select.
+ *
+ * @param {unknown} current
+ * @param {Array<{ id?: string }>} storeTypeOptions
+ */
+export function selectAllChampNormalStoreTypes(current, storeTypeOptions) {
+  const eligibility = normalizeChampEligibility(current)
+  const ids = []
+  for (const item of storeTypeOptions || []) {
+    const id = String(item?.id || '').trim()
+    if (id && !ids.includes(id)) ids.push(id)
+  }
+  return {
+    ...eligibility,
+    normalStoreTypeIds: ids,
+  }
+}
+
+/**
+ * Clear every normal store type in the multi-select.
+ *
+ * @param {unknown} current
+ */
+export function clearAllChampNormalStoreTypes(current) {
+  const eligibility = normalizeChampEligibility(current)
+  return {
+    ...eligibility,
+    normalStoreTypeIds: [],
+  }
+}
+
+/** @deprecated use selectAllChampNormalStoreTypes */
+export const selectAllChampSpecialStoreTypes = selectAllChampNormalStoreTypes
+
+function normalizeSpecialItemLabel(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Map admin special item type labels → store-type Category ids for OG §07 `specialStoreTypeIds`.
+ * Store-name labels match published store types; global handling labels apply to all store types.
+ *
+ * @param {string[]} labels
+ * @param {Array<{ id?: string, name?: string, slug?: string }>} storeTypeOptions
+ */
+export function mapSpecialItemTypesToStoreTypeIds(labels, storeTypeOptions) {
+  const selected = (labels || []).map((item) => String(item || '').trim()).filter(Boolean)
+  if (!selected.length) return []
+
+  const ids = new Set()
+  let anyGlobal = false
+
+  for (const label of selected) {
+    const key = normalizeSpecialItemLabel(label)
+    if (GLOBAL_SPECIAL_HANDLING_KEYS.has(key)) {
+      anyGlobal = true
+      continue
+    }
+
+    for (const storeType of storeTypeOptions || []) {
+      const id = String(storeType?.id || '').trim()
+      if (!id) continue
+      const name = normalizeSpecialItemLabel(storeType.name)
+      const slug = normalizeSpecialItemLabel(storeType.slug).replace(/-/g, ' ')
+      const labelCompact = key.replace(/\//g, ' ').replace(/&/g, 'and')
+
+      if (
+        name === labelCompact ||
+        slug === labelCompact ||
+        name.includes(labelCompact) ||
+        labelCompact.includes(name) ||
+        slug.includes(labelCompact.replace(/\s+/g, ''))
+      ) {
+        ids.add(id)
+      }
+    }
+  }
+
+  if (anyGlobal || ids.size === 0) {
+    for (const storeType of storeTypeOptions || []) {
+      const id = String(storeType?.id || '').trim()
+      if (id) ids.add(id)
+    }
+  }
+
+  return [...ids]
+}
+
+/**
+ * Map normal store-type ids → allowedCategories slugs when the Normal block is visible.
+ * Returns `null` when normal store types are not driven by eligibility (legacy slugs only).
+ *
+ * @param {unknown} eligibility
+ * @param {Array<{ id?: string, slug?: string }>} storeTypeOptions
+ * @returns {string[] | null}
+ */
+export function champAllowedCategorySlugsFromEligibility(eligibility, storeTypeOptions) {
+  const normalized = normalizeChampEligibility(eligibility)
+  const { showNormalStoreTypes } = getChampEligibilityVisibility(normalized)
+  if (!showNormalStoreTypes) return null
+
+  const slugById = new Map()
+  for (const item of storeTypeOptions || []) {
+    const id = String(item?.id || '').trim()
+    const slug = String(item?.slug || '').trim()
+    if (id && slug) slugById.set(id, slug)
+  }
+
+  const slugs = []
+  for (const id of normalized.normalStoreTypeIds) {
+    const slug = slugById.get(id)
+    if (slug && !slugs.includes(slug)) slugs.push(slug)
+  }
+  return slugs
 }
 
 /**
  * Client-side progressive validation (mirrors backend resolveChampEligibility).
  * @param {unknown} input
- * @returns {{ ok: true, eligibility: ReturnType<typeof normalizeChampEligibility> } | { ok: false, message: string, eligibility: ReturnType<typeof normalizeChampEligibility> }}
+ * @param {{ specialItemTypes?: string[], storeTypeOptions?: Array<{ id?: string, name?: string, slug?: string }> }} [context]
  */
-export function validateChampEligibility(input) {
+export function validateChampEligibility(input, context = {}) {
   const eligibility = normalizeChampEligibility(input)
   if (eligibility.enabledModes.length === 0) {
     return { ok: false, message: CHAMP_MODE_REQUIRED_MESSAGE, eligibility }
   }
 
-  const { showSpecialStoreTypes } = getChampEligibilityVisibility(eligibility)
-  if (showSpecialStoreTypes && eligibility.specialStoreTypeIds.length === 0) {
+  const { showSpecialItemTypes } = getChampEligibilityVisibility(eligibility)
+  const specialItemTypes = Array.isArray(context.specialItemTypes)
+    ? context.specialItemTypes
+    : []
+  if (showSpecialItemTypes && specialItemTypes.length === 0) {
     return {
       ok: false,
-      message: CHAMP_SPECIAL_STORE_TYPES_REQUIRED_MESSAGE,
+      message: CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE,
       eligibility,
+    }
+  }
+
+  if (showSpecialItemTypes && specialItemTypes.length > 0) {
+    const storeTypeOptions = context.storeTypeOptions || []
+    const mapped = mapSpecialItemTypesToStoreTypeIds(specialItemTypes, storeTypeOptions)
+    if (!mapped.length) {
+      return {
+        ok: false,
+        message: 'Could not map special item types to store types. Refresh store types and try again.',
+        eligibility,
+      }
     }
   }
 
@@ -249,17 +443,30 @@ export function validateChampEligibility(input) {
  * Always emits all three keys so edit/create stay consistent.
  *
  * @param {unknown} input
+ * @param {{ specialItemTypes?: string[], storeTypeOptions?: Array<{ id?: string, name?: string, slug?: string }> }} [context]
  */
-export function buildChampEligibilityPayload(input) {
-  const { ok, message, eligibility } = validateChampEligibility(input)
+export function buildChampEligibilityPayload(input, context = {}) {
+  const { ok, message, eligibility } = validateChampEligibility(input, context)
   if (!ok) {
     const err = new Error(message)
     err.code = 'CHAMP_ELIGIBILITY_INVALID'
     throw err
   }
+
+  const specialIncluded = isSpecialIncluded(eligibility)
+  const specialItemTypes = Array.isArray(context.specialItemTypes)
+    ? context.specialItemTypes
+    : []
+  const specialStoreTypeIds = specialIncluded
+    ? mapSpecialItemTypesToStoreTypeIds(
+        specialItemTypes,
+        context.storeTypeOptions || [],
+      )
+    : []
+
   return {
     enabledModes: [...eligibility.enabledModes],
     scheduledClasses: eligibility.scheduledClasses,
-    specialStoreTypeIds: [...eligibility.specialStoreTypeIds],
+    specialStoreTypeIds,
   }
 }
