@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { formatApiErrorMessage } from '../../../api/errors'
+import { useAuth } from '../../../context/AuthContext'
 import { adminService } from '../../../services/adminService'
 import { MarketingViewTabs } from '../../../components/admin/MarketingViewTabs'
 import { cn } from '../../../components/admin/cn'
@@ -220,6 +221,10 @@ function buildPayload(form) {
 }
 
 export default function AdminCampaignsPage() {
+  const { user } = useAuth()
+  const roleNorm = (user?.backendRole || user?.roleBadge || user?.role || '').trim().toUpperCase().replace(/\s+/g, '_')
+  const canFounderApprove = roleNorm === 'FOUNDER' || roleNorm === 'SUPER_ADMIN' || roleNorm === 'SUPERADMIN'
+
   const [campaigns, setCampaigns] = useState([])
   const [options, setOptions] = useState({
     templates: [],
@@ -412,10 +417,50 @@ export default function AdminCampaignsPage() {
     setNotice('')
     try {
       const res = await adminService.activateAdminCampaign(editingId)
-      applySaved(res?.data, 'Campaign is live.')
+      const st = res?.data?.status
+      applySaved(
+        res?.data,
+        st === 'PENDING_APPROVAL'
+          ? 'Campaign projected cost exceeds threshold and has been submitted for Founder approval.'
+          : 'Campaign is live.',
+      )
       await load()
     } catch (err) {
       setError(formatApiErrorMessage(err) || 'Could not activate the campaign.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onApprove() {
+    if (!editingId) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await adminService.approveAdminCampaign(editingId)
+      applySaved(res?.data, 'Campaign approved and is now LIVE.')
+      await load()
+    } catch (err) {
+      setError(formatApiErrorMessage(err) || 'Could not approve the campaign.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function onReject() {
+    if (!editingId) return
+    const reason = window.prompt('Enter rejection reason (optional):')
+    if (reason === null) return
+    setSaving(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await adminService.rejectAdminCampaign(editingId, { reason: reason.trim() || undefined })
+      applySaved(res?.data, 'Campaign rejected and returned to draft.')
+      await load()
+    } catch (err) {
+      setError(formatApiErrorMessage(err) || 'Could not reject the campaign.')
     } finally {
       setSaving(false)
     }
@@ -1037,14 +1082,36 @@ export default function AdminCampaignsPage() {
               </button>
             ) : null}
             {editingStatus === 'PENDING_APPROVAL' ? (
-              <button
-                type="button"
-                onClick={onRevertDraft}
-                disabled={saving}
-                className="h-[38px] rounded-full px-4 text-[13px] font-bold text-[#455249] ring-1 ring-[#d7ddd8] disabled:opacity-60"
-              >
-                Back to draft
-              </button>
+              <>
+                {canFounderApprove ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onApprove}
+                      disabled={saving}
+                      className="h-[38px] rounded-full bg-[#1aa054] px-4 text-[13px] font-bold text-white hover:bg-[#147940] disabled:opacity-60"
+                    >
+                      Approve & Activate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onReject}
+                      disabled={saving}
+                      className="h-[38px] rounded-full px-4 text-[13px] font-bold text-[#9b2c2c] ring-1 ring-[#f3d0d0] hover:bg-[#fff6f6] disabled:opacity-60"
+                    >
+                      Reject to draft
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={onRevertDraft}
+                  disabled={saving}
+                  className="h-[38px] rounded-full px-4 text-[13px] font-bold text-[#455249] ring-1 ring-[#d7ddd8] disabled:opacity-60"
+                >
+                  Back to draft
+                </button>
+              </>
             ) : null}
             {editingStatus === 'LIVE' ? (
               <button

@@ -12,6 +12,14 @@ export const COMMISSION_UI_TO_MODEL = {
   Tiered: 'TIERED',
 }
 
+export const COMMISSION_ORDER_METHODS = [
+  { id: 'delivery', label: 'Delivery' },
+  { id: 'dineIn', label: 'Dine In' },
+  { id: 'pickup', label: 'Pickup' },
+  { id: 'services', label: 'Services' },
+  { id: 'scheduled', label: 'Scheduled' },
+]
+
 function stripPercent(value) {
   if (value == null || value === '') return ''
   return String(value).replace(/%/g, '').replace(/\(auto\)/gi, '').trim()
@@ -129,7 +137,16 @@ export function mapWizardCustomFeesToApi(customFees) {
  * OG §08 / D08 Batch 5: inheritance + seededFromStoreType for badges/banner;
  * platformServiceFee may still arrive from API but must not drive the Commission screen.
  */
-export function mapAdminVendorCommissionResponse(data) {
+function mapCommissionBlock(block, parent = {}) {
+  const data = {
+    ...parent,
+    ...block,
+    inheritance: block?.inheritance ?? parent?.inheritance ?? null,
+    seededFromStoreType: parent?.seededFromStoreType ?? block?.seededFromStoreType,
+    currency: block?.currency || parent?.currency || 'BHD',
+    platformServiceFee: block?.platformServiceFee ?? parent?.platformServiceFee,
+    vatOnCommissionPct: block?.vatOnCommissionPct ?? parent?.vatOnCommissionPct,
+  }
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new ApiError({
       message: 'Invalid vendor commission response from the server.',
@@ -191,7 +208,27 @@ export function mapAdminVendorCommissionResponse(data) {
     },
     inheritance,
     seededFromStoreType: Boolean(data.seededFromStoreType ?? inheritance),
-    raw: data,
+    raw: block,
+  }
+}
+
+export function mapAdminVendorCommissionResponse(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new ApiError({
+      message: 'Invalid vendor commission response from the server.',
+    })
+  }
+  const sourceMethods =
+    data.methods && typeof data.methods === 'object' && !Array.isArray(data.methods)
+      ? data.methods
+      : null
+  const methods = {}
+  for (const method of COMMISSION_ORDER_METHODS) {
+    methods[method.id] = mapCommissionBlock(sourceMethods?.[method.id] || data, data)
+  }
+  return {
+    ...methods.delivery,
+    methods,
   }
 }
 
@@ -274,6 +311,19 @@ function appendSharedCommissionFields(body, form = {}) {
  * OG §08: custom fees apply for every model; no platformServiceFee / VAT / currency writes.
  */
 export function mapAdminUpdateVendorCommissionRequest(form = {}) {
+  if (form.methods && typeof form.methods === 'object' && !Array.isArray(form.methods)) {
+    const methods = {}
+    for (const method of COMMISSION_ORDER_METHODS) {
+      const slice = form.methods[method.id]
+      if (!slice || typeof slice !== 'object') continue
+      methods[method.id] = mapAdminUpdateVendorCommissionRequest({
+        ...slice,
+        methods: undefined,
+      })
+    }
+    if (Object.keys(methods).length) return { methods }
+  }
+
   const body = {}
 
   const model =
@@ -376,6 +426,52 @@ export function mapAdminWizardCommissionRequest(form = {}, options = {}) {
   }
 
   return body
+}
+
+const WIZARD_COMMISSION_FIELD_KEYS = [
+  'commissionModel',
+  'commissionRate',
+  'vatOnCommission',
+  'currency',
+  'fixedPct',
+  'debitPct',
+  'creditPct',
+  'applePayPct',
+  'googleWalletPct',
+  'otherChargesPct',
+  'fixedCharge',
+]
+
+export function snapshotWizardCommissionSlice(
+  form = {},
+  customFees = [],
+  commissionTiers = [],
+  inheritance = null,
+) {
+  const slice = {}
+  for (const key of WIZARD_COMMISSION_FIELD_KEYS) slice[key] = form?.[key]
+  return {
+    ...slice,
+    customFees: Array.isArray(customFees) ? customFees.map((fee) => ({ ...fee })) : [],
+    commissionTiers: Array.isArray(commissionTiers)
+      ? commissionTiers.map((tier) => ({ ...tier }))
+      : [],
+    inheritance: inheritance || null,
+  }
+}
+
+export function wizardCommissionDraftsFromMapped(mapped) {
+  const drafts = {}
+  for (const method of COMMISSION_ORDER_METHODS) {
+    const block = mapped?.methods?.[method.id] || mapped
+    drafts[method.id] = {
+      ...mapAdminCommissionToWizardForm(block),
+      customFees: mapAdminCustomFeesToWizard(block?.customFees),
+      commissionTiers: Array.isArray(block?.commissionTiers) ? block.commissionTiers : [],
+      inheritance: block?.inheritance || mapped?.inheritance || null,
+    }
+  }
+  return drafts
 }
 
 /** Resolve inheritance state for a scalar / gateway field path. */

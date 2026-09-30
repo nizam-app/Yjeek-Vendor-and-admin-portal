@@ -14,10 +14,13 @@ export const MARKETING_VIEW_TABS = [
   { id: 'banners', label: 'Banners', path: '/admin/marketing/banners' },
   { id: 'spin-wheel', label: 'Spin Wheel', path: '/admin/marketing/spin-wheel' },
   { id: 'vendor-promotions', label: 'Vendor promotions', path: '/admin/marketing/vendor-promotions' },
+  { id: 'segments', label: 'Segments', path: '/admin/marketing/segments' },
+  { id: 'fraud', label: 'Fraud & Limits', path: '/admin/marketing/fraud' },
+  { id: 'budget', label: 'Budget & Approval', path: '/admin/marketing/budget' },
 ]
 
 /**
- * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' | 'vouchers' | 'campaigns' | 'banners' | 'spin-wheel' | 'vendor-promotions' }} props
+ * @param {{ active: 'notifications' | 'promo-codes' | 'promo-categories' | 'geofence' | 'cashback' | 'referral' | 'vouchers' | 'campaigns' | 'banners' | 'spin-wheel' | 'vendor-promotions' | 'segments' | 'fraud' | 'budget' }} props
  */
 export function MarketingViewTabs({ active }) {
   const navigate = useNavigate()

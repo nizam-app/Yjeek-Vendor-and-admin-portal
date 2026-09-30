@@ -261,6 +261,23 @@ export const adminStoreTypeService = {
    * Move store type to draft (list Hidden / Hide).
    * POST /admin/store-types/:storeTypeId/draft
    */
+  async deleteStoreType(storeTypeId, options = {}) {
+    const id = String(storeTypeId || '').trim()
+    if (!id) throw new Error('Store type id is required.')
+
+    if (!useRealStoreTypesApi()) {
+      return { data: { id, deleted: true, hardDelete: true }, meta: null }
+    }
+
+    const response = await apiClient.delete(endpoints.admin.storeTypes.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'store-types',
+      forceReal: true,
+    })
+    return { data: response?.data ?? { id, deleted: true }, meta: response?.meta ?? null }
+  },
+
   async draftStoreType(storeTypeId, options = {}) {
     const id = String(storeTypeId || '').trim()
     if (!id) throw new Error('Store type id is required.')

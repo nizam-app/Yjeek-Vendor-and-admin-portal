@@ -26,7 +26,9 @@ import AdminSupplierDetailPage from '../pages/admin/management/AdminSupplierDeta
 import AdminSupplierChampsPage from '../pages/admin/management/AdminSupplierChampsPage'
 import AdminCustomersPage from '../pages/admin/management/AdminCustomersPage'
 import AdminCustomerDetailPage from '../pages/admin/management/AdminCustomerDetailPage'
-import AdminCreateSegmentPage from '../pages/admin/management/AdminCreateSegmentPage'
+import AdminSegmentsPage from '../pages/admin/management/AdminSegmentsPage'
+import AdminFraudReviewPage from '../pages/admin/management/AdminFraudReviewPage'
+import AdminBudgetPage from '../pages/admin/management/AdminBudgetPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
 import AdminCashbackPage from '../pages/admin/management/AdminCashbackPage'
 import AdminReferralPage from '../pages/admin/management/AdminReferralPage'
@@ -96,7 +98,8 @@ export const adminRoutes = (
     <Route path="fleet/suppliers" element={<AdminFleetSuppliersPage />} />
     <Route path="fleet/:champId" element={<AdminChampDetailPage />} />
     <Route path="fleet" element={<AdminFleetPage />} />
-    <Route path="customers/new" element={<AdminCreateSegmentPage />} />
+    <Route path="customers/new" element={<AdminSegmentsPage />} />
+    <Route path="customers/segments" element={<AdminSegmentsPage />} />
     <Route path="customers/:customerId" element={<AdminCustomerDetailPage />} />
     <Route path="customers" element={<AdminCustomersPage />} />
     <Route path="marketing/notifications/customers" element={<AdminSendCustomerNotificationPage />} />
@@ -116,6 +119,9 @@ export const adminRoutes = (
     <Route path="marketing/banners" element={<AdminUiEditorPage surface="marketing" />} />
     <Route path="marketing/spin-wheel" element={<AdminSpinWheelPage />} />
     <Route path="marketing/vendor-promotions" element={<AdminVendorPromotionsPage />} />
+    <Route path="marketing/segments" element={<AdminSegmentsPage />} />
+    <Route path="marketing/fraud" element={<AdminFraudReviewPage />} />
+    <Route path="marketing/budget" element={<AdminBudgetPage />} />
     <Route path="marketing" element={<AdminMarketingPage />} />
     <Route path="sla-models/champ" element={<AdminSlaModelsPage />} />
     <Route path="sla-models/dispatcher" element={<AdminSlaModelsPage />} />

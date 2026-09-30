@@ -289,6 +289,26 @@ export const adminUserService = {
     }
   },
 
+  /**
+   * Super Admin delete. Cannot delete yourself or the last Super Admin.
+   * DELETE /admin/users/:id
+   */
+  async deleteUser(userId, options = {}) {
+    const id = String(userId || '').trim()
+    if (!id) throw new Error('User id is required.')
+    if (!useRealUsersApi()) {
+      return { data: { id, deleted: true }, meta: null }
+    }
+
+    const response = await apiClient.delete(endpoints.admin.users.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'users',
+      forceReal: true,
+    })
+    return { data: response?.data ?? { id, deleted: true }, meta: response?.meta ?? null }
+  },
+
   async unsuspendUser(userId, options = {}) {
     const id = String(userId || '').trim()
     if (!id) throw new Error('User id is required.')

@@ -19,6 +19,7 @@ export function mapStoreTypeCommissionDefaultsResponse(data) {
       customFees: block.customFees ?? [],
       vatOnCommissionPct: block.vatOnCommissionPct,
       gatewayFees: block.gatewayFees ?? {},
+      methods: block.methods,
       currency: 'BHD',
       inheritance: null,
       seededFromStoreType: sectionInheritance === 'inherited',

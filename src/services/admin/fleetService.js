@@ -200,6 +200,26 @@ export const adminFleetService = {
   },
 
   /**
+   * Super Admin delete. Clears the champ login. Blocked during an active delivery.
+   * DELETE /admin/fleet/champs/:champId
+   */
+  async deleteChamp(champId, options = {}) {
+    const id = String(champId || '').trim()
+    if (!id) throw new Error('Champ id is required.')
+    if (!useFleetRealApi()) {
+      return { data: { id, deleted: true }, meta: null }
+    }
+
+    const response = await apiClient.delete(endpoints.admin.fleet.champRemove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: true,
+    })
+    return { data: response?.data ?? { id, deleted: true }, meta: response?.meta ?? null }
+  },
+
+  /**
    * Message a single champ (push / SMS).
    * Confirmed: POST /admin/fleet/champs/:champId/messages
    * Body: { title, body, push?, sms? }

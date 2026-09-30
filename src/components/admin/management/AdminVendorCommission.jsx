@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import AdminCommissionEditModal from '../AdminCommissionEditModal'
-import { getCommissionInheritanceState } from '../../../mappers/admin/mapAdminVendorCommission'
+import {
+  COMMISSION_ORDER_METHODS,
+  getCommissionInheritanceState,
+} from '../../../mappers/admin/mapAdminVendorCommission'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -43,6 +46,7 @@ export function AdminVendorCommission({
 }) {
   const [commission, setCommission] = useState(initialCommission)
   const [editOpen, setEditOpen] = useState(false)
+  const [methodId, setMethodId] = useState('delivery')
 
   useEffect(() => {
     setCommission(initialCommission)
@@ -50,13 +54,18 @@ export function AdminVendorCommission({
 
   if (!commission) return null
 
-  const inheritance = commission.inheritance || null
-  const seeded = Boolean(commission.seededFromStoreType)
-  const isFlat = commission.model === 'Flat per order' || commission.modelCode === 'FLAT_PER_ORDER'
+  const methods =
+    commission.methods && typeof commission.methods === 'object'
+      ? commission.methods
+      : Object.fromEntries(COMMISSION_ORDER_METHODS.map((method) => [method.id, commission]))
+  const active = methods[methodId] || commission
+  const inheritance = active.inheritance || commission.inheritance || null
+  const seeded = Boolean(active.seededFromStoreType ?? commission.seededFromStoreType)
+  const isFlat = active.model === 'Flat per order' || active.modelCode === 'FLAT_PER_ORDER'
   const ratePath = isFlat ? 'flatFeePerOrder' : 'commissionRate'
   const rateLabel = isFlat ? 'Flat fee per order' : 'Commission rate'
 
-  const gateway = commission.gatewayFees || {}
+  const gateway = active.gatewayFees || {}
   const gatewayRows = [
     ['Fixed %', gateway.fixedPct, 'gatewayFees.fixedPct'],
     ['Debit %', gateway.debitPct, 'gatewayFees.debitPct'],
@@ -67,14 +76,14 @@ export function AdminVendorCommission({
     ['Fixed charge / transaction (BHD)', gateway.fixedCharge, 'gatewayFees.fixedCharge'],
   ]
 
-  const customFeeLines = (Array.isArray(commission.customFees) ? commission.customFees : [])
+  const customFeeLines = (Array.isArray(active.customFees) ? active.customFees : [])
     .map(formatCustomFee)
     .filter(Boolean)
 
   const summaryRows = [
-    ['Model', commission.model, 'model'],
-    [rateLabel, commission.rate, ratePath],
-    ['VAT on commission', commission.vatOnCommission || '10% (auto)', null],
+    ['Model', active.model, 'model'],
+    [rateLabel, active.rate, ratePath],
+    ['VAT on commission', active.vatOnCommission || commission.vatOnCommission || '10% (auto)', null],
     ['Currency', 'BHD', null],
   ]
 
@@ -82,6 +91,26 @@ export function AdminVendorCommission({
     <>
       <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">Commission &amp; fees</h3>
+        <p className="mb-3 text-[12px] text-[#7c8780]">
+          Set separately for each order method. VAT stays the shared Bahrain rate.
+        </p>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {COMMISSION_ORDER_METHODS.map((method) => (
+            <button
+              key={method.id}
+              type="button"
+              onClick={() => setMethodId(method.id)}
+              className={cn(
+                'h-[30px] rounded-full px-3 text-[12px]',
+                methodId === method.id
+                  ? 'bg-[#1aa054] font-bold text-white'
+                  : 'bg-[#f3f5f3] font-medium text-[#455249]',
+              )}
+            >
+              {method.label}
+            </button>
+          ))}
+        </div>
 
         {seeded && storeTypeName ? (
           <div className="mt-3 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
@@ -161,18 +190,29 @@ export function AdminVendorCommission({
 
       <AdminCommissionEditModal
         open={editOpen}
-        commission={commission}
+        commission={active}
+        methodLabel={COMMISSION_ORDER_METHODS.find((method) => method.id === methodId)?.label}
         storeTypeName={storeTypeName}
         saving={isSaving}
         error={saveError}
         onClose={() => setEditOpen(false)}
         onSave={async (updated) => {
+          const next = {
+            ...commission,
+            methods: {
+              ...methods,
+              [methodId]: {
+                ...(methods[methodId] || commission),
+                ...updated,
+              },
+            },
+          }
           if (!onSaveCommission) {
-            setCommission(updated)
+            setCommission(next)
             setEditOpen(false)
             return
           }
-          const saved = await onSaveCommission(updated)
+          const saved = await onSaveCommission(next)
           if (saved) setCommission(saved)
           setEditOpen(false)
         }}

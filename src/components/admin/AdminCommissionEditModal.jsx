@@ -103,6 +103,7 @@ function buildFormState(commission) {
 export default function AdminCommissionEditModal({
   open,
   commission,
+  methodLabel = '',
   storeTypeName = '',
   onClose,
   onSave,
@@ -215,7 +216,7 @@ export default function AdminCommissionEditModal({
             id="commission-edit-title"
             className="text-[16px] font-bold tracking-[-0.02em] text-[#17231c]"
           >
-            Edit commission &amp; fees
+            Edit commission &amp; fees{methodLabel ? ` · ${methodLabel}` : ''}
           </h2>
         </div>
 

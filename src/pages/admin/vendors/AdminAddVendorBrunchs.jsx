@@ -13,6 +13,7 @@ import {
   map24hToUiTime,
   mapOpeningHoursToWizardHours,
   mapUiTimeTo24h,
+  mapWizardHoursToOpeningHours,
 } from '../../../mappers/admin/mapAdminVendorBranches'
 import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
 import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
@@ -505,6 +506,7 @@ export default function AdminAddVendorBrunchs() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [copyMondayPrompt, setCopyMondayPrompt] = useState(null)
+  const hoursTouched = useRef(false)
   const [allBranches, setAllBranches] = useState([])
   const [reopening, setReopening] = useState(false)
   const [actionError, setActionError] = useState(null)
@@ -737,8 +739,17 @@ export default function AdminAddVendorBrunchs() {
   }, [useRealBranchApi, state?.wizardDraft])
 
   useEffect(() => {
+    hoursTouched.current = false
+  }, [branchId])
+
+  useEffect(() => {
     if (isNewBranch || !branch) return
-    const hydratedHours = mapOpeningHoursToWizardHours(branch.openingHours, defaultHours())
+    const savedUiHours =
+      branch.hours && typeof branch.hours === 'object' && branch.hours.Monday ? branch.hours : null
+    const hydratedHours = mapOpeningHoursToWizardHours(
+      branch.openingHours,
+      savedUiHours || defaultHours(),
+    )
     setForm((prev) => ({
         ...prev,
         name: branch.name || '',
@@ -758,7 +769,7 @@ export default function AdminAddVendorBrunchs() {
         pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
           ? `${branch.latitude}° N, ${branch.longitude}° E`
           : prev.pinnedLocation,
-        hours: hydratedHours || prev.hours,
+        hours: hoursTouched.current ? prev.hours : hydratedHours || prev.hours,
       }))
     if (branch.operationalStatus) {
       setBranchOnline(String(branch.operationalStatus).toUpperCase() !== 'CLOSED')
@@ -1001,6 +1012,7 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function toggleDay(day) {
+    hoursTouched.current = true
     setForm((c) => {
       const current = c.hours[day]
       const nextOpen = !current.open
@@ -1024,6 +1036,7 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function addBreak(day) {
+    hoursTouched.current = true
     setForm((c) => {
       const current = c.hours[day]
       const first = current.shifts[0] || { from: '8:00 AM', to: '12:00 PM' }
@@ -1050,6 +1063,7 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function removeBreak(day) {
+    hoursTouched.current = true
     setForm((c) => {
       const current = c.hours[day]
       const first = current.shifts[0]
@@ -1074,6 +1088,7 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function updateShift(day, index, next) {
+    hoursTouched.current = true
     setForm((c) => {
       const current = c.hours[day]
       const shifts = current.shifts.map((shift, i) => (i === index ? { ...shift, ...next } : shift))
@@ -1088,6 +1103,7 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function updateBreak(day, { from, to }) {
+    hoursTouched.current = true
     setForm((c) => {
       const current = c.hours[day]
       const shifts = current.shifts.map((shift, i) => {
@@ -1132,6 +1148,7 @@ export default function AdminAddVendorBrunchs() {
       setCopyMondayPrompt(null)
       return
     }
+    hoursTouched.current = true
     setForm((c) => {
       const monday = c.hours.Monday
       if (!monday?.open) return c
@@ -1209,6 +1226,7 @@ export default function AdminAddVendorBrunchs() {
           minOrderAmount: minOrder,
           etaMin,
           hours: form.hours,
+          openingHours: mapWizardHoursToOpeningHours(form.hours),
           branchOnline,
           operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
           allowsPickup: allowPickup,

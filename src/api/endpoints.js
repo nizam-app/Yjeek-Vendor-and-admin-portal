@@ -186,6 +186,11 @@ export const endpoints = {
        */
       detail: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}`,
       /**
+       * Super Admin: DELETE /admin/vendors/:vendorId
+       * @param {string} vendorId
+       */
+      remove: (vendorId) => `/admin/vendors/${encodeURIComponent(vendorId)}`,
+      /**
        * Confirmed: POST /admin/vendors
        * Create vendor (Add vendor wizard)
        */
@@ -433,6 +438,11 @@ export const endpoints = {
        */
       detail: (storeTypeId) => `/admin/store-types/${encodeURIComponent(storeTypeId)}`,
       /**
+       * DELETE /admin/store-types/:storeTypeId
+       * @param {string} storeTypeId
+       */
+      remove: (storeTypeId) => `/admin/store-types/${encodeURIComponent(storeTypeId)}`,
+      /**
        * Confirmed: POST /admin/store-types/:storeTypeId/publish
        * @param {string} storeTypeId
        */
@@ -666,6 +676,11 @@ export const endpoints = {
        */
       detail: (userId) => `/admin/users/${encodeURIComponent(userId)}`,
       /**
+       * Super Admin: DELETE /admin/users/:adminUserId
+       * @param {string} userId
+       */
+      remove: (userId) => `/admin/users/${encodeURIComponent(userId)}`,
+      /**
        * Confirmed: POST /admin/users/:id/reset-password body `{}`
        * @param {string} userId
        */
@@ -734,6 +749,11 @@ export const endpoints = {
        * @param {string} champId
        */
       champ: (champId) => `/admin/fleet/champs/${encodeURIComponent(champId)}`,
+      /**
+       * Super Admin: DELETE /admin/fleet/champs/:champId
+       * @param {string} champId
+       */
+      champRemove: (champId) => `/admin/fleet/champs/${encodeURIComponent(champId)}`,
       /**
        * Confirmed: GET /admin/fleet/champs/:champId/earnings?from=&to=&limit=
        * @param {string} champId
@@ -990,6 +1010,17 @@ export const endpoints = {
         detail: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}`,
         update: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}`,
         run: (id) => `/admin/marketing/distribution-rules/${encodeURIComponent(id)}/run`,
+      },
+      /** OG §09 Admin › Marketing › Segments (predefined cohorts + custom builder) */
+      segments: {
+        list: '/admin/segments',
+        create: '/admin/segments',
+        preview: '/admin/segments/preview',
+        detail: (id) => `/admin/segments/${encodeURIComponent(id)}`,
+        update: (id) => `/admin/segments/${encodeURIComponent(id)}`,
+        remove: (id) => `/admin/segments/${encodeURIComponent(id)}`,
+        recalculate: (id) => `/admin/segments/${encodeURIComponent(id)}/recalculate`,
+        customers: (id) => `/admin/segments/${encodeURIComponent(id)}/customers`,
       },
     },
     /**

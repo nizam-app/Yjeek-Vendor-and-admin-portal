@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MoreVertical, Plus } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAuth } from '../../../context/AuthContext'
+import { isSuperAdminUser } from '../../../mappers/admin/authMapper'
 import { adminService } from '../../../services/adminService'
 import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
 import { Badge } from '../../../components/admin/Badge'
 import { CatalogStoreIcon } from '../../../components/CatalogStoreIcons'
+import AdminSuperDeleteModal from '../../../components/admin/AdminSuperDeleteModal'
 import { cn } from '../../../components/admin/cn'
 
 const statTone = {
@@ -17,9 +20,12 @@ const statTone = {
 
 export default function AdminStoresPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canDelete = isSuperAdminUser(user)
   const [menuId, setMenuId] = useState(null)
   const [visibilityBusyId, setVisibilityBusyId] = useState(null)
   const [actionError, setActionError] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const menuRef = useRef(null)
   const { data, error, isLoading, refetch } = useApiResource(
     () => adminService.getManagement('stores'),
@@ -232,6 +238,19 @@ export default function AdminStoresPage() {
                                   ? 'Hide'
                                   : 'Show'}
                             </button>
+                            {canDelete ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
+                                onClick={() => {
+                                  setMenuId(null)
+                                  setDeleteTarget(row)
+                                }}
+                              >
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
@@ -244,6 +263,24 @@ export default function AdminStoresPage() {
           </table>
         </div>
       </section>
+
+      <AdminSuperDeleteModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.name || 'store type'}?`}
+        message="If nothing is linked to it, the store type is removed. If vendors or products still use it, it is only hidden."
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          const row = deleteTarget
+          const result = await adminService.deleteAdminStoreType(row.id)
+          setDeleteTarget(null)
+          if (result?.data?.hardDelete === false) {
+            setActionError(`${row.name} was hidden because vendors or products still use it.`)
+          } else {
+            setActionError(null)
+          }
+          await refetch()
+        }}
+      />
     </div>
   )
 }

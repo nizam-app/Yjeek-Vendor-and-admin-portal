@@ -68,6 +68,9 @@ export const adminService = {
   draftAdminStoreType(storeTypeId, options = {}) {
     return adminStoreTypeService.draftStoreType(storeTypeId, options)
   },
+  deleteAdminStoreType(storeTypeId, options = {}) {
+    return adminStoreTypeService.deleteStoreType(storeTypeId, options)
+  },
   addAdminStoreTypeMenuCategory(storeTypeId, form, options = {}) {
     return adminStoreTypeService.addMenuCategory(storeTypeId, form, options)
   },
@@ -152,6 +155,9 @@ export const adminService = {
   suspendAdminFleetChamp(champId, form, options = {}) {
     return adminFleetService.suspendChamp(champId, form, options)
   },
+  deleteAdminFleetChamp(champId, options = {}) {
+    return adminFleetService.deleteChamp(champId, options)
+  },
   unsuspendAdminFleetChamp(champId, options = {}) {
     return adminFleetService.unsuspendChamp(champId, options)
   },
@@ -205,6 +211,9 @@ export const adminService = {
   },
   suspendAdminUser(userId, options = {}) {
     return adminUserService.suspendUser(userId, options)
+  },
+  deleteAdminUser(userId, options = {}) {
+    return adminUserService.deleteUser(userId, options)
   },
   unsuspendAdminUser(userId, options = {}) {
     return adminUserService.unsuspendUser(userId, options)
@@ -289,6 +298,9 @@ export const adminService = {
   },
   deleteVendorBranch(vendorId, branchId, options = {}) {
     return adminVendorService.deleteBranch(vendorId, branchId, options)
+  },
+  deleteVendor(vendorId, options = {}) {
+    return adminVendorService.deleteVendor(vendorId, options)
   },
   listVendorStaff(vendorId, options = {}) {
     return adminVendorService.listStaff(vendorId, options)
@@ -608,6 +620,18 @@ export const adminService = {
   revertAdminCampaignDraft(campaignId, options = {}) {
     return adminMarketingService.revertCampaignDraft(campaignId, options)
   },
+  approveAdminCampaign(campaignId, options = {}) {
+    return adminMarketingService.approveCampaign(campaignId, options)
+  },
+  rejectAdminCampaign(campaignId, body, options = {}) {
+    return adminMarketingService.rejectCampaign(campaignId, body, options)
+  },
+  getAdminBudgetSettings(options = {}) {
+    return adminMarketingService.getBudgetSettings(options)
+  },
+  updateAdminBudgetSettings(body, options = {}) {
+    return adminMarketingService.updateBudgetSettings(body, options)
+  },
   createAdminCampaignFromSeason(body, options = {}) {
     return adminMarketingService.createCampaignFromSeason(body, options)
   },
@@ -649,6 +673,30 @@ export const adminService = {
   },
   deleteAdminSpinWheel(wheelId, options = {}) {
     return adminMarketingService.deleteSpinWheel(wheelId, options)
+  },
+  getAdminSegments(params = {}, options = {}) {
+    return adminMarketingService.getSegments(params, options)
+  },
+  getAdminSegment(id, options = {}) {
+    return adminMarketingService.getSegment(id, options)
+  },
+  previewAdminSegment(body, options = {}) {
+    return adminMarketingService.previewSegment(body, options)
+  },
+  createAdminSegment(body, options = {}) {
+    return adminMarketingService.createSegment(body, options)
+  },
+  updateAdminSegment(id, body, options = {}) {
+    return adminMarketingService.updateSegment(id, body, options)
+  },
+  deleteAdminSegment(id, options = {}) {
+    return adminMarketingService.deleteSegment(id, options)
+  },
+  recalculateAdminSegment(id, options = {}) {
+    return adminMarketingService.recalculateSegment(id, options)
+  },
+  getAdminSegmentCustomers(id, params = {}, options = {}) {
+    return adminMarketingService.getSegmentCustomers(id, params, options)
   },
   getOrdersReport(filters, options = {}) {
     return adminReportService.getOrdersReport(filters, options)

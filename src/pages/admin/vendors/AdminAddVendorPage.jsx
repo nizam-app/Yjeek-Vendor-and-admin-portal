@@ -23,10 +23,14 @@ import {
   matchAdminStoreTypeId,
 } from '../../../mappers/admin/mapAdminStoreTypes'
 import {
+  COMMISSION_ORDER_METHODS,
   mapAdminCommissionToWizardForm,
   mapAdminCustomFeesToWizard,
   getCommissionInheritanceState,
+  snapshotWizardCommissionSlice,
+  wizardCommissionDraftsFromMapped,
 } from '../../../mappers/admin/mapAdminVendorCommission'
+import { mapStoreTypeCommissionDefaultsResponse } from '../../../mappers/admin/mapStoreTypeCommissionDefaults'
 import {
   mapAdminServiceModesToLabels,
   mapSlaModelConfigToWizardModes,
@@ -707,6 +711,10 @@ export default function AdminAddVendorPage({ onBack }) {
   )
   const [commissionTiers, setCommissionTiers] = useState([])
   const [commissionInheritance, setCommissionInheritance] = useState(null)
+  const [activeCommissionMethod, setActiveCommissionMethod] = useState('delivery')
+  const [commissionDrafts, setCommissionDrafts] = useState(null)
+  const activeCommissionMethodRef = useRef('delivery')
+  activeCommissionMethodRef.current = activeCommissionMethod
   const [commissionSeededFromStoreType, setCommissionSeededFromStoreType] = useState(false)
   const [commissionLoading, setCommissionLoading] = useState(false)
   const [commissionSaving, setCommissionSaving] = useState(false)
@@ -1306,13 +1314,16 @@ export default function AdminAddVendorPage({ onBack }) {
           setCommissionSeededFromStoreType(false)
           return
         }
+        const drafts = wizardCommissionDraftsFromMapped(commission)
+        const slice = drafts[activeCommissionMethodRef.current] || drafts.delivery
+        setCommissionDrafts(drafts)
         setForm((prev) => ({
           ...prev,
-          ...mapAdminCommissionToWizardForm(commission),
+          ...slice,
         }))
-        setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
-        setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
-        setCommissionInheritance(commission.inheritance || null)
+        setCustomFees(slice.customFees || [])
+        setCommissionTiers(slice.commissionTiers || [])
+        setCommissionInheritance(slice.inheritance || null)
         setCommissionSeededFromStoreType(Boolean(commission.seededFromStoreType))
       })
       .catch((err) => {
@@ -1362,6 +1373,33 @@ export default function AdminAddVendorPage({ onBack }) {
       return next.length === prev.length ? prev : next
     })
   }, [form.storeTypeId, storeTypes.length, allowedServiceModes.join('|')])
+
+  useEffect(() => {
+    if (!useRealCreateApi || !form.storeTypeId) return undefined
+    let cancelled = false
+    adminService
+      .getAdminStoreTypeCommissionDefaults(form.storeTypeId)
+      .then((response) => {
+        if (cancelled) return
+        const mapped = mapStoreTypeCommissionDefaultsResponse(response?.data)
+        if (!mapped.commission) return
+        const drafts = wizardCommissionDraftsFromMapped(mapped.commission)
+        setCommissionDrafts(drafts)
+        const slice = drafts[activeCommissionMethodRef.current] || drafts.delivery
+        if (!slice) return
+        setForm((prev) => ({ ...prev, ...slice }))
+        setCustomFees(slice.customFees || [])
+        setCommissionTiers(slice.commissionTiers || [])
+        setCommissionInheritance(slice.inheritance || null)
+        setCommissionSeededFromStoreType(true)
+      })
+      .catch(() => {
+        /* Store type may not have commission defaults yet. */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [useRealCreateApi, form.storeTypeId])
 
   useEffect(() => {
     if (!useRealStoreApi) return undefined
@@ -1600,6 +1638,35 @@ export default function AdminAddVendorPage({ onBack }) {
     }
   }
 
+  function mergedCommissionDrafts() {
+    const captured = snapshotWizardCommissionSlice(
+      form,
+      customFees,
+      commissionTiers,
+      commissionInheritance,
+    )
+    const drafts = { ...(commissionDrafts || {}) }
+    for (const method of COMMISSION_ORDER_METHODS) {
+      if (!drafts[method.id]) drafts[method.id] = captured
+    }
+    drafts[activeCommissionMethod] = captured
+    return drafts
+  }
+
+  function selectCommissionMethod(nextId) {
+    if (nextId === activeCommissionMethod) return
+    const drafts = mergedCommissionDrafts()
+    setCommissionDrafts(drafts)
+    const next = drafts[nextId]
+    if (next) {
+      setForm((prev) => ({ ...prev, ...next }))
+      setCustomFees(next.customFees || [])
+      setCommissionTiers(next.commissionTiers || [])
+      setCommissionInheritance(next.inheritance || null)
+    }
+    setActiveCommissionMethod(nextId)
+  }
+
   async function saveCommission() {
     if (!useRealStoreApi) return true
     setCommissionError(null)
@@ -1612,20 +1679,21 @@ export default function AdminAddVendorPage({ onBack }) {
         await adminService.updateVendor(editVendorId, { crNumber, vatNumber })
       }
 
-      const response = await adminService.updateVendorCommission(editVendorId, form, {
-        wizard: true,
-        customFees,
-        commissionTiers,
+      const response = await adminService.updateVendorCommission(editVendorId, {
+        methods: mergedCommissionDrafts(),
       })
       const commission = response?.data
       if (commission) {
+        const drafts = wizardCommissionDraftsFromMapped(commission)
+        const slice = drafts[activeCommissionMethodRef.current] || drafts.delivery
+        setCommissionDrafts(drafts)
         setForm((prev) => ({
           ...prev,
-          ...mapAdminCommissionToWizardForm(commission),
+          ...slice,
         }))
-        setCustomFees(mapAdminCustomFeesToWizard(commission.customFees))
-        setCommissionTiers(Array.isArray(commission.commissionTiers) ? commission.commissionTiers : [])
-        setCommissionInheritance(commission.inheritance || null)
+        setCustomFees(slice.customFees || [])
+        setCommissionTiers(slice.commissionTiers || [])
+        setCommissionInheritance(slice.inheritance || null)
         setCommissionSeededFromStoreType(Boolean(commission.seededFromStoreType))
       }
       return true
@@ -1698,6 +1766,7 @@ export default function AdminAddVendorPage({ onBack }) {
         users,
         customFees,
         commissionTiers,
+        commissionDrafts: mergedCommissionDrafts(),
         serviceModes: mergedServiceModes,
         slaConfigs,
         activate: Boolean(activate),
@@ -2595,6 +2664,27 @@ export default function AdminAddVendorPage({ onBack }) {
             </VendorCard>
 
             <VendorCard title="Commission & fees">
+              <p className="mb-3 text-[12px] text-[#7c8780]">
+                Commission and fees are set separately for each order method and load from the SLA
+                defaults for this store type.
+              </p>
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                {COMMISSION_ORDER_METHODS.map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    onClick={() => selectCommissionMethod(method.id)}
+                    className={cn(
+                      'h-[30px] rounded-full px-3 text-[12px]',
+                      activeCommissionMethod === method.id
+                        ? 'bg-[#1aa054] font-bold text-white'
+                        : 'bg-[#f3f5f3] font-medium text-[#455249]',
+                    )}
+                  >
+                    {method.label}
+                  </button>
+                ))}
+              </div>
               {commissionSeededFromStoreType && selectedStoreType?.name ? (
                 <div className="mb-4 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
                   ✓ Pre-filled from the <strong>{selectedStoreType.name}</strong> commission

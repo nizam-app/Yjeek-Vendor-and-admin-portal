@@ -1,5 +1,5 @@
 import { apiClient } from '../../api/client'
-import { isAdminRealApiFeature } from '../../api/config'
+import { apiConfig, isAdminRealApiFeature } from '../../api/config'
 import { endpoints } from '../../api/endpoints'
 import {
   mapAdminForceCloseRequest,
@@ -678,6 +678,26 @@ export const adminVendorService = {
       data: response?.data ?? null,
       meta: response?.meta ?? null,
     }
+  },
+
+  /**
+   * Super Admin delete. Fails when the vendor already has orders.
+   * DELETE /admin/vendors/:vendorId
+   */
+  async deleteVendor(vendorId, options = {}) {
+    const id = String(vendorId || '').trim()
+    if (!id) throw new Error('Vendor id is required.')
+    if (!isAdminRealApiFeature('vendors') && apiConfig.adminUseMockApi) {
+      return { data: { id, deleted: true }, meta: null }
+    }
+
+    const response = await apiClient.delete(endpoints.admin.vendors.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+      forceReal: true,
+    })
+    return { data: response?.data ?? { id, deleted: true }, meta: response?.meta ?? null }
   },
 
   /**

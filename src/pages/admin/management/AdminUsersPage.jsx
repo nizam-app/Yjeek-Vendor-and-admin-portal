@@ -2,10 +2,13 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Download, Plus, Search } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAuth } from '../../../context/AuthContext'
+import { isSuperAdminUser } from '../../../mappers/admin/authMapper'
 import { isAdminRealApiFeature, apiConfig } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
+import AdminSuperDeleteModal from '../../../components/admin/AdminSuperDeleteModal'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import { cn } from '../../../components/admin/cn'
@@ -113,6 +116,9 @@ function tabPath(item) {
 export default function AdminUsersPage() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
+  const { user } = useAuth()
+  const canDelete = isSuperAdminUser(user)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const tab = tabFromPath(pathname)
   const useRealUsers = isAdminRealApiFeature('users') || !apiConfig.adminUseMockApi
 
@@ -472,6 +478,7 @@ export default function AdminUsersPage() {
                           {column}
                         </th>
                       ))}
+                      {canDelete ? <th className="w-16" /> : null}
                     </tr>
                   </thead>
                   <tbody className="bg-white">
@@ -529,6 +536,22 @@ export default function AdminUsersPage() {
                               <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] text-[#455249]">
                                 {row.lastActive}
                               </td>
+                              {canDelete ? (
+                                <td className="whitespace-nowrap px-2 py-3.5 text-right">
+                                  {row.you || row.id === user?.id ? null : (
+                                    <button
+                                      type="button"
+                                      className="rounded-md px-2 py-1 text-[12px] font-semibold text-[#d64044] hover:bg-[#fdebec]"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        setDeleteTarget(row)
+                                      }}
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
+                                </td>
+                              ) : null}
                             </tr>
                           )
                         })
@@ -726,6 +749,18 @@ export default function AdminUsersPage() {
           </p>
         </section>
       )}
+
+      <AdminSuperDeleteModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.name || 'admin account'}?`}
+        message="This removes the admin login. You cannot delete yourself or the last Super Admin."
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          await adminService.deleteAdminUser(deleteTarget.id)
+          setDeleteTarget(null)
+          await refetchUsers()
+        }}
+      />
     </div>
   )
 }

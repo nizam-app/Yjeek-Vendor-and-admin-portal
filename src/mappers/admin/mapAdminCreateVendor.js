@@ -1,5 +1,6 @@
 import { ApiError } from '../../api/errors'
 import {
+  COMMISSION_ORDER_METHODS,
   COMMISSION_UI_TO_MODEL,
   mapWizardCustomFeesToApi,
 } from './mapAdminVendorCommission'
@@ -386,7 +387,22 @@ export function mapAdminCreateVendorRequest(input = {}) {
       password: ownerPassword,
     },
     additionalUsers: mapAdditionalUsers(users, branches),
-    commission: mapCommission(form, { customFees, commissionTiers }),
+    commission: input.commissionDrafts
+      ? {
+          methods: Object.fromEntries(
+            COMMISSION_ORDER_METHODS.map((method) => {
+              const draft = input.commissionDrafts[method.id] || {}
+              return [
+                method.id,
+                mapCommission(draft, {
+                  customFees: draft.customFees || [],
+                  commissionTiers: draft.commissionTiers || [],
+                }),
+              ]
+            }),
+          ),
+        }
+      : mapCommission(form, { customFees, commissionTiers }),
     sla: mapSla(form, serviceModes, slaConfigs),
     activate: Boolean(activate),
     submitForApproval: Boolean(submitForApproval) && !activate,

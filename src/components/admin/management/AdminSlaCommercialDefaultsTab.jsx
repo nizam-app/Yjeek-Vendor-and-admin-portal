@@ -220,7 +220,7 @@ export default function AdminSlaCommercialDefaultsTab() {
 
       <Card
         title="Commission & other fees"
-        subtitle="Default commission model, gateway fees, and custom fees for new store types and vendors."
+        subtitle="Default commission and fees for each order method. Store types inherit these, and new vendors copy the effective values."
       >
         {commission ? (
           <AdminVendorCommission

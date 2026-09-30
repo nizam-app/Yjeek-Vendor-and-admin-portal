@@ -1509,4 +1509,143 @@ export const adminMarketingService = {
     })
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
+
+  /** OG §09 Admin › Marketing › Segments */
+  async getSegments(params = {}, options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.segments.list, {
+      ...options,
+      params,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getSegment(id, options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.segments.detail(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async previewSegment(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.segments.preview, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async createSegment(body, options = {}) {
+    const response = await apiClient.post(endpoints.admin.marketing.segments.create, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateSegment(id, body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.segments.update(id), body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async deleteSegment(id, options = {}) {
+    const response = await apiClient.delete(endpoints.admin.marketing.segments.remove(id), {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async recalculateSegment(id, options = {}) {
+    const response = await apiClient.post(
+      endpoints.admin.marketing.segments.recalculate(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getSegmentCustomers(id, params = {}, options = {}) {
+    const response = await apiClient.get(endpoints.admin.marketing.segments.customers(id), {
+      ...options,
+      params,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async getBudgetSettings(options = {}) {
+    const response = await apiClient.get('/admin/marketing/budget/settings', {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateBudgetSettings(body, options = {}) {
+    const response = await apiClient.patch('/admin/marketing/budget/settings', body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async approveCampaign(campaignId, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(
+      `/admin/marketing/campaigns/${encodeURIComponent(id)}/approve`,
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async rejectCampaign(campaignId, body, options = {}) {
+    const id = String(campaignId || '').trim()
+    if (!id) throw new Error('Campaign id is required.')
+    const response = await apiClient.post(
+      `/admin/marketing/campaigns/${encodeURIComponent(id)}/reject`,
+      body,
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'marketing',
+        forceReal: true,
+      },
+    )
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
 }

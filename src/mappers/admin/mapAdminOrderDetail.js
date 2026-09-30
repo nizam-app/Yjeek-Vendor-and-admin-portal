@@ -85,6 +85,19 @@ function formatPayment(payment) {
   return status ? `${method} · ${status}` : method
 }
 
+function formatGatewayFee(payment) {
+  const gateway = payment?.gateway
+  if (!gateway || gateway.gatewayFee == null || gateway.gatewayFee === '') return null
+  const amount = formatAdminMoney(gateway.gatewayFee)
+  if (gateway.cash || gateway.band === 'CASH') return `${amount} · Cash`
+  const band = humanizeAdminStatus(gateway.band || 'Other')
+  const parts = []
+  if (gateway.methodRatePct != null) parts.push(`${band} ${Number(gateway.methodRatePct)}%`)
+  if (Number(gateway.fixedPct) > 0) parts.push(`fixed ${Number(gateway.fixedPct)}%`)
+  if (Number(gateway.fixedCharge) > 0) parts.push(formatAdminMoney(gateway.fixedCharge))
+  return parts.length ? `${amount} · ${parts.join(' + ')}` : amount
+}
+
 function formatDropoff(dropoff) {
   if (!dropoff || typeof dropoff !== 'object') return '—'
   const parts = [dropoff.line1, dropoff.area, dropoff.city].filter(Boolean)
@@ -362,10 +375,12 @@ export function mapAdminOrderDetailResponse(data) {
   const isScheduled = data.fulfillmentType === 'SCHEDULED'
   const distanceLabel = distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`
 
+  const gatewayFeeLabel = formatGatewayFee(payment)
   const liveSummaryRows = [
     ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
     ['Order value', orderValue],
     ['Payment', formatPayment(payment)],
+    ...(gatewayFeeLabel ? [['Gateway fee', gatewayFeeLabel]] : []),
     ['Distance', distanceLabel],
     ['Pickup', formatPickup(locations.pickup)],
     ['Drop-off', formatDropoff(locations.dropoff)],
@@ -376,6 +391,7 @@ export function mapAdminOrderDetailResponse(data) {
     ['Order value', orderValue],
     ['Schedule', scheduleWindow ? String(scheduleWindow) : '—'],
     ['Payment', formatPayment(payment)],
+    ...(gatewayFeeLabel ? [['Gateway fee', gatewayFeeLabel]] : []),
     ['Distance', distanceLabel],
     ['Pickup', formatPickup(locations.pickup)],
     ['Drop-off', formatDropoff(locations.dropoff)],

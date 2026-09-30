@@ -5,6 +5,8 @@ import { Bell, Car, MoreVertical, Plus, Search, Star } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAuth } from '../../../context/AuthContext'
+import { isSuperAdminUser } from '../../../mappers/admin/authMapper'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
@@ -13,6 +15,7 @@ import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
 import AdminSuspendChampModal from '../../../components/admin/AdminSuspendChampModal'
 import AdminTerminateChampModal from '../../../components/admin/AdminTerminateChampModal'
+import AdminSuperDeleteModal from '../../../components/admin/AdminSuperDeleteModal'
 import { cn } from '../../../components/admin/cn'
 
 const statTone = {
@@ -79,6 +82,8 @@ function ChampRowMenu({
   onSuspend,
   onUnsuspend,
   onTerminate,
+  onDelete,
+  canDelete,
 }) {
   const triggerRef = useRef(null)
   const menuRef = useRef(null)
@@ -226,6 +231,20 @@ function ChampRowMenu({
                   Terminate
                 </button>
               ) : null}
+              {canDelete ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onClose()
+                    onDelete()
+                  }}
+                >
+                  Delete account
+                </button>
+              ) : null}
             </div>,
             document.body,
           )
@@ -236,6 +255,8 @@ function ChampRowMenu({
 
 export default function AdminFleetPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canDelete = isSuperAdminUser(user)
   // Prefer real fleet APIs when feature flagged OR when admin mocks are fully off
   // (avoids dead GET /admin/management?type=fleet which does not exist on backend).
   const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
@@ -248,6 +269,7 @@ export default function AdminFleetPage() {
   const [actionChamp, setActionChamp] = useState(null)
   const [suspendOpen, setSuspendOpen] = useState(false)
   const [terminateOpen, setTerminateOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [actionBusy, setActionBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
@@ -381,6 +403,21 @@ export default function AdminFleetPage() {
         champId={actionChamp?.id || ''}
         defaultCod="BHD 0.000"
         onSuccess={handleTerminateSuccess}
+      />
+      <AdminSuperDeleteModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.name || 'champ'}?`}
+        message="The champ cannot sign in after this. Delivery history is kept. This is blocked while they have an active delivery."
+        confirmLabel="Delete account"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          await adminService.deleteAdminFleetChamp(deleteTarget.id)
+          const name = deleteTarget.name || 'Champ'
+          setDeleteTarget(null)
+          setActionError('')
+          setActionSuccess(`${name} deleted.`)
+          await refetch()
+        }}
       />
 
       {actionError ? (
@@ -617,6 +654,8 @@ export default function AdminFleetPage() {
                             onSuspend={() => openSuspend(row)}
                             onUnsuspend={() => handleUnsuspend(row)}
                             onTerminate={() => openTerminate(row)}
+                            onDelete={() => setDeleteTarget(row)}
+                            canDelete={canDelete}
                           />
                         </td>
                       </tr>

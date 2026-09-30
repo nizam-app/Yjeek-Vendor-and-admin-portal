@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, Users } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
@@ -147,14 +147,24 @@ export default function AdminCustomersPage() {
             {subtitle}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => navigate('/admin/customers/new')}
-          className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
-        >
-          <Plus size={14} strokeWidth={2.2} />
-          {action}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/admin/customers/segments')}
+            className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border border-[#dfe4e0] bg-white px-4 text-[12px] font-bold text-[#455249] shadow-sm hover:bg-[#f6f8f6]"
+          >
+            <Users size={14} />
+            Segments
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/customers/new')}
+            className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+          >
+            <Plus size={14} strokeWidth={2.2} />
+            {action}
+          </button>
+        </div>
       </div>
 
       <ApiErrorBanner error={error} onRetry={refetch} />

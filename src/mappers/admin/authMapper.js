@@ -28,6 +28,7 @@ export function mapAdminAuthUser(backendUser) {
     fullName: backendUser.fullName ?? displayName,
     jobTitle: backendUser.jobTitle ?? null,
     role: 'admin',
+    isSuperAdmin: Boolean(backendUser.isSuperAdmin),
     backendRole: backendUser.role ?? null,
     roleBadge: backendUser.roleBadge ?? backendUser.role ?? null,
     scopeLevel: backendUser.scopeLevel ?? null,
@@ -49,6 +50,14 @@ export function mapAdminAuthUser(backendUser) {
     createdById: backendUser.createdById ?? null,
     initials: backendUser.initials ?? null,
   }
+}
+
+export function isSuperAdminUser(user) {
+  if (!user) return false
+  if (user.isSuperAdmin === true) return true
+  const role = String(user.backendRole || user.roleBadge || '').trim().toLowerCase()
+  if (role === 'super admin' || role === 'super-admin') return true
+  return String(user.accessLevel || '') === 'Full system access'
 }
 
 /**

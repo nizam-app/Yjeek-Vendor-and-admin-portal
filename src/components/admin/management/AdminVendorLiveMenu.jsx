@@ -88,6 +88,48 @@ function flattenCategories(categories) {
   return rows
 }
 
+const ORDER_METHODS = [
+  ['visibleForDelivery', 'Delivery'],
+  ['visibleForPickup', 'Pickup'],
+  ['visibleForService', 'Services'],
+  ['visibleForDineIn', 'Dine-in'],
+]
+
+function orderMethodDefaults(source = {}) {
+  return {
+    visibleForDelivery: source.visibleForDelivery !== false,
+    visibleForPickup: source.visibleForPickup !== false,
+    visibleForService: source.visibleForService !== false,
+    visibleForDineIn: source.visibleForDineIn !== false,
+  }
+}
+
+function OrderMethodToggles({ value, disabled, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {ORDER_METHODS.map(([key, label]) => {
+        const on = value?.[key] !== false
+        return (
+          <button
+            key={key}
+            type="button"
+            disabled={disabled}
+            aria-pressed={on}
+            onClick={() => onChange({ ...orderMethodDefaults(value), [key]: !on })}
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50 ${
+              on
+                ? 'border-[#b7e4c7] bg-[#e7f6ec] text-[#127338]'
+                : 'border-[#e3e7e4] bg-[#f6f7f6] text-[#9aa49d] line-through'
+            }`}
+          >
+            {label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function emptyProductForm(categoryId = '') {
   return {
     name: '',
@@ -98,6 +140,7 @@ function emptyProductForm(categoryId = '') {
     imageUrl: '',
     isActive: true,
     isAvailable: true,
+    ...orderMethodDefaults(),
     availableFrom: '',
     availableTo: '',
     itemClass: 'NORMAL',
@@ -265,6 +308,18 @@ function ProductFormModal({
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Order methods</label>
+              <p className="mb-2 text-[11px] text-[#7c8780]">
+                Choose which menus this item appears on. Any combination is allowed.
+              </p>
+              <OrderMethodToggles
+                value={form}
+                disabled={busy}
+                onChange={(next) => setForm((prev) => ({ ...prev, ...next }))}
+              />
             </div>
 
             <div>
@@ -716,6 +771,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         availableFrom: detail.availableFrom || '',
         availableTo: detail.availableTo || '',
         itemClass: detail.effectiveItemClass || detail.itemClass || 'NORMAL',
+        ...orderMethodDefaults(detail),
         optionGroups: mapLoadedOptionGroups(detail.optionGroups),
         addOns: mapLoadedAddOns(detail.addons),
       })
@@ -808,6 +864,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       imageUrls: form.imageUrl ? [form.imageUrl] : [],
       isActive: Boolean(form.isActive),
       isAvailable: Boolean(form.isAvailable),
+      ...orderMethodDefaults(form),
       availableFrom: String(form.availableFrom || '').trim() || null,
       availableTo: String(form.availableTo || '').trim() || null,
       optionGroups,
@@ -941,6 +998,25 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         err instanceof ApiError
           ? err.message
           : err?.message || 'Failed to update vendor item classes.'
+      showError(message)
+    } finally {
+      setClassBusyKey('')
+      releaseScroll()
+    }
+  }
+
+  const handleCategoryOrderMethods = async (category, next) => {
+    if (!category?.id) return
+    const releaseScroll = holdPageScroll()
+    setClassBusyKey(`modes:${category.id}`)
+    try {
+      await adminStoresCatalogService.updateCatalogCategory(vendorId, category.id, next)
+      await load({ silent: true })
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err?.message || 'Failed to update category order methods.'
       showError(message)
     } finally {
       setClassBusyKey('')
@@ -1171,6 +1247,11 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
                         </>
                       )}
                     </div>
+                    <OrderMethodToggles
+                      value={cat}
+                      disabled={categoryBusy || classBusyKey === `modes:${cat.id}`}
+                      onChange={(next) => handleCategoryOrderMethods(cat, next)}
+                    />
                     <AdminItemClassSegment
                       value={cat.effectiveItemClass}
                       editable={cat.editable === true}

@@ -3,9 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Copy, MoreVertical, Plus, Search } from 'lucide-react'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { useApiResource } from '../../../hooks/useApiResource'
+import { useAuth } from '../../../context/AuthContext'
+import { isSuperAdminUser } from '../../../mappers/admin/authMapper'
 import { adminVendorService } from '../../../services/admin/vendorService'
 import { matchesVendorTab } from '../../../mappers/admin/mapAdminVendors'
 import { ApiErrorBanner, StatCardsSkeleton, TableBodySkeleton } from '../../../components/admin/ApiState'
+import AdminSuperDeleteModal from '../../../components/admin/AdminSuperDeleteModal'
 import { showFlashMessage } from '../../../utils/toast'
 import { Badge } from '../../../components/admin/Badge'
 import { AdminFilterSelect } from '../../../components/admin/AdminFilterSelect'
@@ -35,8 +38,11 @@ function filterVendorRows(rows, { tab, category, query }) {
 export default function AdminVendorsPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
+  const canDelete = isSuperAdminUser(user)
   const useRealApi = isAdminRealApiFeature('vendors')
   const [tab, setTab] = useState('All')
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [category, setCategory] = useState('')
@@ -300,17 +306,31 @@ export default function AdminVendorsPage() {
                       <Badge tone={vendorStatusTone(row.status)}>{row.status}</Badge>
                     </td>
                     <td className="px-2">
-                      <button
-                        type="button"
-                        className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
-                        aria-label={`Open ${row.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          openVendor(row.id)
-                        }}
-                      >
-                        <MoreVertical size={15} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        {canDelete ? (
+                          <button
+                            type="button"
+                            className="rounded-md px-2 py-1 text-[12px] font-semibold text-[#d64044] hover:bg-[#fdebec]"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              setDeleteTarget(row)
+                            }}
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
+                          aria-label={`Open ${row.name}`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openVendor(row.id)
+                          }}
+                        >
+                          <MoreVertical size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -365,6 +385,19 @@ export default function AdminVendorsPage() {
           </div>
         </div>
       </section>
+
+      <AdminSuperDeleteModal
+        open={Boolean(deleteTarget)}
+        title={`Delete ${deleteTarget?.name || 'vendor'}?`}
+        message="The vendor and its login are removed. This only works when the vendor has no orders."
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          await adminVendorService.deleteVendor(deleteTarget.id)
+          setDeleteTarget(null)
+          showFlashMessage('Vendor deleted.')
+          await refetch()
+        }}
+      />
     </div>
   )
 }
