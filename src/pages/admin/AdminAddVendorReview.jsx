@@ -2,6 +2,27 @@ import { Check } from 'lucide-react'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
+function pickPrimaryBranch(branches) {
+  if (!Array.isArray(branches) || branches.length === 0) return null
+  return branches.find((b) => b.isPrimary) || branches[0]
+}
+
+/** Location on review follows branches (same as create payload), not stale store-profile fields. */
+function formatReviewLocation(branches, form) {
+  const branch = pickPrimaryBranch(branches)
+  if (branch) {
+    const area = String(branch.area || branch.areaCity || '').trim()
+    const city = String(branch.city || '').trim()
+    const parts = []
+    if (area) parts.push(area)
+    if (city && city.toLowerCase() !== area.toLowerCase()) parts.push(city)
+    if (parts.length) return parts.join(', ')
+    const address = String(branch.address || '').trim()
+    if (address) return address
+  }
+  return [form?.area, form?.city].filter(Boolean).join(', ') || '—'
+}
+
 function StatusToggle({ label, hint, checked, onChange }) {
   return (
     <div className="mt-4 flex items-center gap-3">
@@ -53,10 +74,7 @@ export default function AdminAddVendorReview({
   const summaryRows = [
     ['Store', `${form.storeName} · ${form.storeType}`],
     ['Branches', `${(branches || []).length}${branchNames ? ` (${branchNames})` : ''}`],
-    [
-      'Location',
-      [form.area, form.city].filter(Boolean).join(', ') || '—',
-    ],
+    ['Location', formatReviewLocation(branches, form)],
     ['Users', `${ownerLabel} · ${staffCount} additional`],
   ]
 

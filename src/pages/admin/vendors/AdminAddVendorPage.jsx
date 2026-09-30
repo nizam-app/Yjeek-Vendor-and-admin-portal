@@ -10,7 +10,13 @@ import {
 import houseIcon from '../../../assets/icon-house.png'
 import editIcon from '../../../assets/icon-edit.png'
 import AdminAddVendorReview, { AdminAddVendorActivateButton } from '../AdminAddVendorReview'
-import { AdminVendorSlaConfigs, buildAllowedModesFromStoreType, mergeBranchModesIntoServiceModes } from '../../../components/admin/AdminVendorSlaConfigs'
+import {
+  AdminVendorSlaConfigs,
+  branchHasDeliveryModesData,
+  buildAllowedModesFromStoreType,
+  mergeBranchModesIntoServiceModes,
+  slaVisibleServiceModesFromBranches,
+} from '../../../components/admin/AdminVendorSlaConfigs'
 import AdminPasswordField from '../../../components/admin/AdminPasswordField'
 import AdminPhoneField from '../../../components/admin/AdminPhoneField'
 import { parseAdminPhone } from '../../../lib/adminPhone'
@@ -1341,6 +1347,21 @@ export default function AdminAddVendorPage({ onBack }) {
 
   const selectedStoreType = storeTypes.find((t) => String(t.id) === String(form.storeTypeId))
   const allowedServiceModes = buildAllowedModesFromStoreType(selectedStoreType)
+  const [branchDeliveryModesCache, setBranchDeliveryModesCache] = useState({})
+  const branchesWithDeliveryModes = useMemo(
+    () =>
+      branches.map((b) => {
+        if (branchHasDeliveryModesData(b)) return b
+        const cached = b?.id ? branchDeliveryModesCache[b.id] : null
+        if (cached) return { ...b, deliveryModes: cached }
+        return b
+      }),
+    [branches, branchDeliveryModesCache],
+  )
+  const slaVisibleServiceModes = useMemo(
+    () => slaVisibleServiceModesFromBranches(allowedServiceModes, branchesWithDeliveryModes),
+    [allowedServiceModes, branchesWithDeliveryModes],
+  )
   const storeSubTypes = Array.isArray(selectedStoreType?.subTypes) ? selectedStoreType.subTypes : []
   const requiresStoreSubType =
     selectedStoreType?.structure === 'TWO_LEVEL' && storeSubTypes.length > 0
@@ -1365,14 +1386,47 @@ export default function AdminAddVendorPage({ onBack }) {
     serviceModes.includes('Services'),
   )
 
-  // Prune modes that are no longer allowed for the selected store type (never auto-enable).
+  // Prune modes not allowed for store type or not enabled on any branch (never auto-enable).
   useEffect(() => {
     if (!form.storeTypeId || !storeTypes.length) return
     setServiceModes((prev) => {
-      const next = prev.filter((mode) => allowedServiceModes.includes(mode))
+      const next = prev.filter((mode) => slaVisibleServiceModes.includes(mode))
       return next.length === prev.length ? prev : next
     })
-  }, [form.storeTypeId, storeTypes.length, allowedServiceModes.join('|')])
+  }, [form.storeTypeId, storeTypes.length, slaVisibleServiceModes.join('|')])
+
+  useEffect(() => {
+    if (step !== 5 || !useRealStoreApi || !editVendorId) return undefined
+    const missing = branches.filter(
+      (b) =>
+        b?.id &&
+        String(b.id).trim() &&
+        !branchHasDeliveryModesData(b) &&
+        !branchDeliveryModesCache[b.id],
+    )
+    if (!missing.length) return undefined
+    let cancelled = false
+    Promise.all(
+      missing.map((b) =>
+        adminService
+          .getBranchDeliverySettings(editVendorId, b.id)
+          .then((res) => ({ id: b.id, modes: res?.data?.modes }))
+          .catch(() => ({ id: b.id, modes: null })),
+      ),
+    ).then((rows) => {
+      if (cancelled) return
+      setBranchDeliveryModesCache((prev) => {
+        const next = { ...prev }
+        for (const row of rows) {
+          if (row?.id && row.modes) next[row.id] = row.modes
+        }
+        return next
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [step, useRealStoreApi, editVendorId, branches, branchDeliveryModesCache])
 
   useEffect(() => {
     if (!useRealCreateApi || !form.storeTypeId) return undefined
@@ -1507,7 +1561,7 @@ export default function AdminAddVendorPage({ onBack }) {
         const sla = slaResult.value?.data
         if (!sla) return
         const labels = mapAdminServiceModesToLabels(sla.serviceModes || {})
-        // Prune effect (allowedServiceModes) drops modes not supported by store type.
+        // Prune effect (slaVisibleServiceModes) drops modes not on branches / store type.
         if (labels.length) setServiceModes(labels)
 
         const modelId = sla.slaModelId || sla.modelId || ''
@@ -1715,7 +1769,7 @@ export default function AdminAddVendorPage({ onBack }) {
     setSlaError(null)
     setSlaSaving(true)
     try {
-      const modesForSave = serviceModes.filter((mode) => allowedServiceModes.includes(mode))
+      const modesForSave = serviceModes.filter((mode) => slaVisibleServiceModes.includes(mode))
       const configsForSave = Object.fromEntries(
         Object.entries(slaConfigs || {}).filter(([mode]) => modesForSave.includes(mode)),
       )
@@ -1757,8 +1811,8 @@ export default function AdminAddVendorPage({ onBack }) {
     try {
       const mergedServiceModes = mergeBranchModesIntoServiceModes(
         serviceModes,
-        branches,
-        allowedServiceModes,
+        branchesWithDeliveryModes,
+        slaVisibleServiceModes,
       )
       const response = await adminService.createVendor({
         form,
@@ -3082,8 +3136,13 @@ export default function AdminAddVendorPage({ onBack }) {
                   <div className="w-full rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
                     No order modes are configured for this store type in Store Management.
                   </div>
+                ) : branches.length > 0 && !slaVisibleServiceModes.length ? (
+                  <div className="w-full rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                    No order modes are enabled on your branches. Turn on order methods in branch delivery
+                    settings, then return to configure SLA.
+                  </div>
                 ) : (
-                  allowedServiceModes.map((mode) => {
+                  slaVisibleServiceModes.map((mode) => {
                   const selected = serviceModes.includes(mode)
                   return (
                     <button
@@ -3143,7 +3202,7 @@ export default function AdminAddVendorPage({ onBack }) {
             </VendorCard>
 
             <AdminVendorSlaConfigs
-              selectedModes={serviceModes.filter((mode) => allowedServiceModes.includes(mode))}
+              selectedModes={serviceModes.filter((mode) => slaVisibleServiceModes.includes(mode))}
               value={slaConfigs}
               onChange={setSlaConfigs}
               modelDefaults={slaModelDefaults}

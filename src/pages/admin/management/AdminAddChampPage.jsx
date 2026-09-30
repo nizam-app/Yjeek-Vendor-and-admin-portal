@@ -19,8 +19,12 @@ import {
   mapAdminChampDetailToForm,
 } from '../../../mappers/admin/mapAdminFleet'
 import AdminMediaImage from '../../../components/admin/AdminMediaImage'
+import AdminChampNationalitySelect from '../../../components/admin/management/AdminChampNationalitySelect'
 import AdminChampEligibilityPanel, {
+  champAllowedCategorySlugsFromEligibility,
   EMPTY_CHAMP_ELIGIBILITY,
+  isSpecialIncluded,
+  mapSpecialItemTypesToStoreTypeIds,
   normalizeChampEligibility,
   validateChampEligibility,
 } from '../../../components/admin/management/AdminChampEligibilityPanel'
@@ -38,19 +42,6 @@ import { DEFAULT_POD_PLATFORM_SETTINGS } from '../../../mappers/admin/mapAdminPo
 const labelClass = 'mb-1.5 block text-[12px] font-medium text-[#7c8780]'
 const inputClass =
   'box-border h-[40px] w-full rounded-[8px] border border-[rgba(0,0,0,0.1)] bg-white px-3 text-[13px] text-[#17231c] outline-none transition placeholder:text-[#9aa49d] focus:border-[#1aa054]'
-
-const SPECIAL_ITEMS = [
-  'Age-restricted 18+',
-  'Pharmacy',
-  'Fragile',
-  'Vape & Tobacco',
-  'Pharmacy / Rx',
-  'Vape',
-  'Jewelry',
-  'Electronics',
-  'High-value',
-  'Frozen / Chilled',
-]
 
 function isSupplierActive(supplier) {
   const status = String(supplier?.status || '').trim().toLowerCase()
@@ -106,7 +97,17 @@ const EMPTY_CHAMP_FORM = {
   dailyLimit: '',
   orderLimit: '',
   onLimit: '',
-  eligibility: { ...EMPTY_CHAMP_ELIGIBILITY, specialStoreTypeIds: [] },
+  eligibility: { ...EMPTY_CHAMP_ELIGIBILITY, normalStoreTypeIds: [], specialStoreTypeIds: [] },
+}
+
+function normalStoreTypeIdsFromSlugs(slugs, storeTypeOptions) {
+  const slugSet = new Set((slugs || []).map((item) => String(item || '').trim().toLowerCase()))
+  const ids = []
+  for (const item of storeTypeOptions || []) {
+    const slug = String(item?.slug || '').trim().toLowerCase()
+    if (slug && slugSet.has(slug) && item.id) ids.push(String(item.id))
+  }
+  return ids
 }
 
 function serializeChampDraft(form, docs, selectedSlugs, specialTypes) {
@@ -117,6 +118,7 @@ function serializeChampDraft(form, docs, selectedSlugs, specialTypes) {
       eligibility: {
         enabledModes: [...eligibility.enabledModes].sort(),
         scheduledClasses: eligibility.scheduledClasses,
+        normalStoreTypeIds: [...eligibility.normalStoreTypeIds].sort(),
         specialStoreTypeIds: [...eligibility.specialStoreTypeIds].sort(),
       },
     },
@@ -382,9 +384,17 @@ export default function AdminAddChampPage() {
     () => serializeChampDraft(EMPTY_CHAMP_FORM, EMPTY_DOCS, [], []),
     [],
   )
+  const resolvedAllowedSlugs = useMemo(() => {
+    const fromEligibility = champAllowedCategorySlugsFromEligibility(
+      form.eligibility,
+      storeTypeOptions,
+    )
+    return fromEligibility !== null ? fromEligibility : selectedSlugs
+  }, [form.eligibility, storeTypeOptions, selectedSlugs])
+
   const draftSnapshot = useMemo(
-    () => serializeChampDraft(form, docs, selectedSlugs, specialTypes),
-    [form, docs, selectedSlugs, specialTypes],
+    () => serializeChampDraft(form, docs, resolvedAllowedSlugs, specialTypes),
+    [form, docs, resolvedAllowedSlugs, specialTypes],
   )
   const isDirty = isEdit
     ? editBaseline != null && draftSnapshot !== editBaseline
@@ -442,6 +452,22 @@ export default function AdminAddChampPage() {
       cancelled = true
     }
   }, [useRealFleet])
+
+  useEffect(() => {
+    if (!storeTypeOptions.length || loadingEdit) return undefined
+    setForm((prev) => {
+      const eligibility = normalizeChampEligibility(prev.eligibility)
+      if (eligibility.normalStoreTypeIds.length) return prev
+      if (!selectedSlugs.length) return prev
+      const normalIds = normalStoreTypeIdsFromSlugs(selectedSlugs, storeTypeOptions)
+      if (!normalIds.length) return prev
+      return {
+        ...prev,
+        eligibility: { ...eligibility, normalStoreTypeIds: normalIds },
+      }
+    })
+    return undefined
+  }, [storeTypeOptions, loadingEdit, selectedSlugs])
 
   useEffect(() => {
     if (!useRealFleet) return undefined
@@ -605,11 +631,19 @@ export default function AdminAddChampPage() {
       return
     }
 
-    const eligibilityCheck = validateChampEligibility(form.eligibility)
+    const eligibilityCheck = validateChampEligibility(form.eligibility, {
+      specialItemTypes: specialTypes,
+      storeTypeOptions,
+    })
     if (!eligibilityCheck.ok) {
       setSubmitError(eligibilityCheck.message)
       return
     }
+
+    const specialIncluded = isSpecialIncluded(eligibilityCheck.eligibility)
+    const apiSpecialStoreTypeIds = specialIncluded
+      ? mapSpecialItemTypesToStoreTypeIds(specialTypes, storeTypeOptions)
+      : []
 
     if (form.allowCash) {
       const daily = parseDailyCashLimitInput(form.dailyLimit)
@@ -629,16 +663,19 @@ export default function AdminAddChampPage() {
     try {
       const payload = {
         ...form,
-        eligibility: eligibilityCheck.eligibility,
+        eligibility: {
+          ...eligibilityCheck.eligibility,
+          specialStoreTypeIds: apiSpecialStoreTypeIds,
+        },
         enabledModes: eligibilityCheck.eligibility.enabledModes,
         scheduledClasses: eligibilityCheck.eligibility.scheduledClasses,
-        specialStoreTypeIds: eligibilityCheck.eligibility.specialStoreTypeIds,
-        selectedSlugs,
-        storeTypes: selectedSlugs,
-        allowedCategories: selectedSlugs,
-        specialTypes: form.specialItems ? specialTypes : [],
-        specialItemTypes: form.specialItems ? specialTypes : [],
-        specialItems: Boolean(form.specialItems),
+        specialStoreTypeIds: apiSpecialStoreTypeIds,
+        selectedSlugs: resolvedAllowedSlugs,
+        storeTypes: resolvedAllowedSlugs,
+        allowedCategories: resolvedAllowedSlugs,
+        specialTypes: specialIncluded ? specialTypes : [],
+        specialItemTypes: specialIncluded ? specialTypes : [],
+        specialItems: specialIncluded && specialTypes.length > 0,
         docs,
       }
 
@@ -772,16 +809,11 @@ export default function AdminAddChampPage() {
               />
             </Field>
             <Field label="Nationality">
-              <Select value={form.nationality} onChange={update('nationality')}>
-                <option value="" disabled>
-                  Select nationality
-                </option>
-                <option value="Bahraini">Bahraini</option>
-                <option value="Indian">Indian</option>
-                <option value="Pakistani">Pakistani</option>
-                <option value="Filipino">Filipino</option>
-                <option value="Other">Other</option>
-              </Select>
+              <AdminChampNationalitySelect
+                value={form.nationality}
+                onChange={update('nationality')}
+                disabled={saving || loadingEdit}
+              />
             </Field>
           </div>
 
@@ -989,12 +1021,22 @@ export default function AdminAddChampPage() {
           </p>
           <AdminChampEligibilityPanel
             value={normalizeChampEligibility(form.eligibility)}
-            onChange={(next) =>
+            onChange={(next) => {
+              const prevEligibility = normalizeChampEligibility(form.eligibility)
+              const nextEligibility = normalizeChampEligibility(next)
+              if (
+                isSpecialIncluded(prevEligibility) &&
+                !isSpecialIncluded(nextEligibility)
+              ) {
+                setSpecialTypes([])
+              }
               setForm((prev) => ({
                 ...prev,
-                eligibility: normalizeChampEligibility(next),
+                eligibility: nextEligibility,
               }))
-            }
+            }}
+            specialItemTypes={specialTypes}
+            onSpecialItemTypesChange={setSpecialTypes}
             storeTypeOptions={storeTypeOptions}
             storeTypesLoading={storeTypesLoading}
             storeTypesError={storeTypesError}
@@ -1003,77 +1045,6 @@ export default function AdminAddChampPage() {
         </Card>
 
         <Card title="Delivery permissions & limits">
-          <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
-            <div>
-              <p className="text-[13px] font-bold text-[#17231c] mb-1">Can deliver special items</p>
-              <p className="text-[12px] font-medium text-[#7c8780]">
-                Alcohol, age-restricted, pharmacy, fragile or high-value items
-              </p>
-            </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={form.specialItems}
-              onClick={() =>
-                setForm((prev) => {
-                  const nextEnabled = !prev.specialItems
-                  if (!nextEnabled) setSpecialTypes([])
-                  return { ...prev, specialItems: nextEnabled }
-                })
-              }
-              className={cn(
-                'relative h-[28px] w-[48px] shrink-0 rounded-full transition',
-                form.specialItems ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
-                  form.specialItems ? 'left-[23px]' : 'left-[3px]',
-                )}
-              />
-            </button>
-          </div>
-
-          <div className={cn('mb-5', !form.specialItems && 'pointer-events-none opacity-50')}>
-            <p className="mb-2.5 text-[12px] font-medium text-[#7c8780]">Special item types allowed</p>
-            <div className="flex flex-wrap gap-2">
-              {SPECIAL_ITEMS.map((item) => (
-                <Chip
-                  key={item}
-                  label={item}
-                  selected={specialTypes.includes(item)}
-                  onClick={() => {
-                    if (!form.specialItems) return
-                    toggleChip(specialTypes, setSpecialTypes, item)
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="mb-5">
-            <p className="mb-2.5 text-[12px] font-medium text-[#7c8780]">Allowed store types</p>
-            {storeTypesLoading ? (
-              <p className="text-[12px] text-[#7c8780]">Loading store types…</p>
-            ) : storeTypeOptions.length ? (
-              <div className="flex flex-wrap gap-2">
-                {storeTypeOptions.map((item) => (
-                  <Chip
-                    key={item.slug}
-                    label={item.name}
-                    selected={selectedSlugs.includes(item.slug)}
-                    onClick={() => toggleChip(selectedSlugs, setSelectedSlugs, item.slug)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="text-[12px] text-[#b42318]">
-                {storeTypesError || 'No store types available from Store Management.'}
-              </p>
-            )}
-          </div>
-
           <div className="mb-5 flex items-center w-fit gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
             <div>
               <p className="text-[13px] font-bold text-[#17231c] mb-1">Allow cash (Pay on delivery)</p>

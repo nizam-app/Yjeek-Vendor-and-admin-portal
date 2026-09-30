@@ -739,6 +739,8 @@ export const endpoints = {
     fleet: {
       /** Confirmed: GET /admin/fleet/summary — Fleet KPI summary */
       summary: '/admin/fleet/summary',
+      /** GET /admin/fleet/champ-nationalities — list; POST { label } — add custom */
+      champNationalities: '/admin/fleet/champ-nationalities',
       /**
        * Confirmed: GET /admin/fleet/champs?search=&statusTab=&vehicle=&tier=&category=&limit=
        * Confirmed: POST /admin/fleet/champs — create champ

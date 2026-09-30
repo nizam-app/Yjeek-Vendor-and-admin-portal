@@ -431,6 +431,7 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: false })
   applyItemClassFields(body, form)
+  applyStoreTypeNameArFields(body, form)
 
   if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'MODIFIERS') {
     body.catalogMode = form.catalogMode
@@ -468,8 +469,14 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
         ? 'DRAFT'
         : undefined
 
+  const slug = String(form.internalKey ?? form.slug ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+
   const body = {
     name,
+    ...(slug ? { slug } : {}),
     sortOrder,
     onDemandDelivery: isHotFoodOnDemandEnabled(modes),
     pickup: Boolean(modes.Pickup),
@@ -505,6 +512,7 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
 
   applyStoreTypeIconFields(body, form, { clearWhenEmpty: true })
   applyItemClassFields(body, form)
+  applyStoreTypeNameArFields(body, form)
 
   if (form.catalogMode === 'VARIANTS' || form.catalogMode === 'MODIFIERS') {
     body.catalogMode = form.catalogMode
@@ -520,6 +528,12 @@ export function mapAdminUpdateStoreTypeRequest(form = {}) {
 /**
  * Delivery Fees v1 / D05 — item class flags (+ convert confirm when narrowing).
  */
+function applyStoreTypeNameArFields(body, form = {}) {
+  if (form.displayNameAr === undefined && form.nameAr === undefined) return
+  const nameAr = String(form.displayNameAr ?? form.nameAr ?? '').trim()
+  body.nameAr = nameAr || null
+}
+
 function applyItemClassFields(body, form = {}) {
   const classes =
     form.itemClasses && typeof form.itemClasses === 'object' ? form.itemClasses : form
@@ -585,6 +599,7 @@ export function mapAdminStoreTypeDetail(data) {
   return {
     id: String(data.id),
     displayName: String(data.name || ''),
+    displayNameAr: data.nameAr != null ? String(data.nameAr) : '',
     internalKey: slug,
     slug,
     homeOrder: String(data.sortOrder ?? ''),

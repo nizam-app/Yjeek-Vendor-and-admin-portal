@@ -5,7 +5,7 @@
  * Mode accordion toggles + hot-food / scheduled fee panels + driver rates.
  * Pickup / Dine-in / Services have no fee panel.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
 import { cn } from '../cn'
@@ -66,6 +66,27 @@ const ORDER_MODE_CODE_TO_KEY = {
   services: 'SERVICES',
 }
 
+/** Branch delivery UI: store type ∩ vendor SLA (supportedOrderModes prop). */
+export function isBranchOrderModeVisible(modeKey, supportedOrderModes = []) {
+  const codes = new Set(
+    (Array.isArray(supportedOrderModes) ? supportedOrderModes : []).map((code) =>
+      String(code).trim().toLowerCase().replace(/-/g, '_'),
+    ),
+  )
+  for (const [code, key] of Object.entries(ORDER_MODE_CODE_TO_KEY)) {
+    if (key === modeKey) return codes.has(code)
+  }
+  return false
+}
+
+/** Scheduled driver-rate grids only when Scheduled is on and allowed for this vendor/store-type. */
+export function shouldShowScheduledDriverRates(modes, supportedOrderModes = []) {
+  if (!isBranchOrderModeVisible('SCHEDULED', supportedOrderModes)) return false
+  const scheduled = modes?.SCHEDULED
+  if (!scheduled || scheduled.supportedByStoreType === false) return false
+  return Boolean(scheduled.enabled)
+}
+
 /**
  * Local order-mode rows for a branch that has not been saved yet.
  * Supported store-type modes start on. Locked keys (vendor SLA ceiling) stay off.
@@ -103,14 +124,14 @@ export function previewBranchDeliveryModes(codes = [], locks = {}) {
   return base
 }
 
-/** Enabled, store-type-supported modes to send on the first delivery-settings write. */
+/** Store-type-supported modes → PUT `modes` patch (explicit on/off; locked modes omitted). */
 export function buildBranchDeliveryModesPayload(modes) {
   const payload = {}
   if (!modes) return payload
   for (const key of BRANCH_DELIVERY_MODE_ORDER) {
     const mode = modes[key]
-    if (!mode?.supportedByStoreType || mode.locked || !mode.enabled) continue
-    payload[key] = { enabled: true }
+    if (!mode?.supportedByStoreType || mode.locked) continue
+    payload[key] = { enabled: Boolean(mode.enabled) }
   }
   return payload
 }
@@ -262,9 +283,16 @@ function applyServerPayload(
  *   onDraftModesChange?: (modes: object) => void,
  *   draftHotFood?: object | null,
  *   onDraftHotFoodChange?: (form: object) => void,
+ *   draftScheduled?: object | null,
+ *   onDraftScheduledChange?: (form: object) => void,
+ *   draftDriverRates?: object | null,
+ *   onDraftDriverRatesChange?: (form: object) => void,
+ *   draftAllowedVehicles?: object | null,
+ *   onDraftAllowedVehiclesChange?: (form: object) => void,
  * }} props
  */
-export default function AdminBranchDeliverySettings({
+function AdminBranchDeliverySettings(
+  {
   vendorId,
   locationId,
   storeTypeName = '',
@@ -275,7 +303,15 @@ export default function AdminBranchDeliverySettings({
   onDraftModesChange,
   draftHotFood = null,
   onDraftHotFoodChange,
-}) {
+  draftScheduled = null,
+  onDraftScheduledChange,
+  draftDriverRates = null,
+  onDraftDriverRatesChange,
+  draftAllowedVehicles = null,
+  onDraftAllowedVehiclesChange,
+},
+  ref,
+) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [togglingMode, setTogglingMode] = useState(null)
@@ -348,6 +384,7 @@ export default function AdminBranchDeliverySettings({
 
   const hotFoodEnabled = Boolean(modes.HOT_FOOD_ON_DEMAND?.enabled)
   const scheduledEnabled = Boolean(modes.SCHEDULED?.enabled)
+  const showScheduledDriverRates = shouldShowScheduledDriverRates(modes, supportedOrderModes)
   const hotFoodSeeded = Boolean(modes.HOT_FOOD_ON_DEMAND?.seeded)
   const scheduledSeeded = Boolean(modes.SCHEDULED?.seeded)
 
@@ -396,15 +433,46 @@ export default function AdminBranchDeliverySettings({
     setSaveOk(false)
   }
 
-  const onAllowedVehiclesChange = (next) => {
+  const persistAllowedVehicles = async (next) => {
+    if (!canEdit || saving || togglingMode) return false
+    setSaving(true)
+    setError(null)
+    setSaveOk(false)
+    try {
+      const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, {
+        allowedVehicles: buildAllowedVehiclesPayload(next),
+      })
+      applyPayload(res?.data)
+      setDirtyAllowedVehicles(false)
+      setVehiclesError(null)
+      setSaveOk(true)
+      return true
+    } catch (err) {
+      setError(formatApiErrorMessage(err, 'Failed to save allowed vehicles.'))
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onAllowedVehiclesChange = async (next) => {
     if (!next.bike && !next.car) {
       setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
       return
     }
     setVehiclesError(null)
     setAllowedVehiclesForm(next)
-    setDirtyAllowedVehicles(true)
     setSaveOk(false)
+
+    if (canEdit) {
+      const ok = await persistAllowedVehicles(next)
+      if (!ok) {
+        setDirtyAllowedVehicles(true)
+      }
+      return
+    }
+
+    setDirtyAllowedVehicles(true)
   }
 
   const enableHotFoodWithFees = async () => {
@@ -507,16 +575,28 @@ export default function AdminBranchDeliverySettings({
     return body
   }
 
-  const handleSave = async () => {
-    if (!canEdit || saving) return
-    if (!dirtyFields) return
+  const handleSave = useCallback(async () => {
+    if (!canEdit || saving) return false
+    if (!dirtyFields) return true
 
     if (dirtyAllowedVehicles && !allowedVehiclesForm.bike && !allowedVehiclesForm.car) {
       setVehiclesError(VEHICLE_NONE_UI_MESSAGE)
-      return
+      return false
     }
 
-    const body = buildSaveBody()
+    const body = {}
+    if (dirtyHotFood && hotFoodEnabled) {
+      body.hotFoodOnDemand = buildHotFoodDefaultsPayload(hotFoodForm)
+    }
+    if (dirtyScheduled && scheduledEnabled) {
+      body.scheduled = buildScheduledFeesPayload(scheduledForm)
+    }
+    if (dirtyDriverRates) {
+      body.driverRates = buildDriverRatesPayload(driverRatesForm)
+    }
+    if (dirtyAllowedVehicles) {
+      body.allowedVehicles = buildAllowedVehiclesPayload(allowedVehiclesForm)
+    }
     if (
       !body.hotFoodOnDemand &&
       !body.scheduled &&
@@ -526,7 +606,7 @@ export default function AdminBranchDeliverySettings({
       setError(
         'Enable Hot food or Scheduled before saving fee fields, or edit driver rates / vehicles.',
       )
-      return
+      return false
     }
 
     setSaving(true)
@@ -541,12 +621,39 @@ export default function AdminBranchDeliverySettings({
       setDirtyAllowedVehicles(false)
       setVehiclesError(null)
       setSaveOk(true)
+      return true
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to save delivery settings.'))
+      return false
     } finally {
       setSaving(false)
     }
-  }
+  }, [
+    allowedVehiclesForm,
+    applyPayload,
+    canEdit,
+    dirtyAllowedVehicles,
+    dirtyDriverRates,
+    dirtyFields,
+    dirtyHotFood,
+    dirtyScheduled,
+    driverRatesForm,
+    hotFoodEnabled,
+    hotFoodForm,
+    locationId,
+    scheduledEnabled,
+    scheduledForm,
+    saving,
+    vendorId,
+  ])
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      savePending: () => handleSave(),
+    }),
+    [handleSave],
+  )
 
   const handleResetBlock = async () => {
     if (!canEdit || loading) return
@@ -611,7 +718,7 @@ export default function AdminBranchDeliverySettings({
   if (!locationId) {
     const previewModes = draftModes || previewBranchDeliveryModes(supportedOrderModes)
     const anySupported = BRANCH_DELIVERY_MODE_ORDER.some(
-      (key) => previewModes[key]?.supportedByStoreType,
+      (key) => isBranchOrderModeVisible(key, supportedOrderModes) && previewModes[key]?.supportedByStoreType,
     )
 
     return (
@@ -619,7 +726,7 @@ export default function AdminBranchDeliverySettings({
         <div className="border-b border-[#eceeec] px-4 py-3">
           <h3 className="text-[15px] font-bold text-[#17231c]">Order modes</h3>
           <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
-            Saved with this branch. Delivery fees, vehicles, and driver rates open after the branch is saved.
+            Order modes, vehicles, and driver rates are saved when you save this branch.
           </p>
         </div>
         <div className="space-y-2 px-4 py-4">
@@ -630,7 +737,7 @@ export default function AdminBranchDeliverySettings({
           {previewReady && !anySupported ? (
             <p className="text-[12px] leading-[16px] text-[#7c8780]">
               {storeTypeName
-                ? 'No order modes are configured for this store type in Store Management.'
+                ? 'No order modes apply for this vendor (check Vendor SLA service modes and store type in Store Management).'
                 : 'Select a store type to see available order modes.'}
             </p>
           ) : null}
@@ -642,13 +749,16 @@ export default function AdminBranchDeliverySettings({
           ) : null}
 
           {previewReady && anySupported
-            ? BRANCH_DELIVERY_MODE_ORDER.map((modeKey) => {
+            ? BRANCH_DELIVERY_MODE_ORDER.filter((modeKey) =>
+                isBranchOrderModeVisible(modeKey, supportedOrderModes),
+              ).map((modeKey) => {
                 const mode = previewModes[modeKey] || {}
                 const supported = mode.supportedByStoreType !== false
                 const enabled = Boolean(mode.enabled)
                 const label = BRANCH_DELIVERY_MODE_LABELS[modeKey]
 
-                const showPreviewFees = modeKey === 'HOT_FOOD_ON_DEMAND' && enabled && supported
+                const showPreviewHotFood = modeKey === 'HOT_FOOD_ON_DEMAND' && enabled && supported
+                const showPreviewScheduled = modeKey === 'SCHEDULED' && enabled && supported
 
                 return (
                   <div
@@ -681,7 +791,7 @@ export default function AdminBranchDeliverySettings({
                         onChange={(next) => handlePreviewModeToggle(modeKey, next)}
                       />
                     </div>
-                    {showPreviewFees ? (
+                    {showPreviewHotFood ? (
                       <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
                         <p className="text-[12px] leading-[16px] text-[#7c8780]">
                           Pre-filled from vendor Delivery zones (or{' '}
@@ -706,10 +816,48 @@ export default function AdminBranchDeliverySettings({
                         />
                       </div>
                     ) : null}
+                    {showPreviewScheduled ? (
+                      <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
+                        <AdminScheduledFeesPanel
+                          value={draftScheduled || EMPTY_SCHEDULED_FEES}
+                          onChange={(next) => onDraftScheduledChange?.(next)}
+                          disabled={disabled}
+                        />
+                      </div>
+                    ) : null}
                   </div>
                 )
               })
             : null}
+
+          {previewReady && anySupported ? (
+            <div className="space-y-3 border-t border-[#eceeec] pt-4">
+              <AdminAllowedVehiclesPanel
+                value={
+                  draftAllowedVehicles ||
+                  normalizeAllowedVehiclesForm(null)
+                }
+                onChange={(next) => onDraftAllowedVehiclesChange?.(next)}
+                disabled={disabled}
+              />
+              <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
+                <div className="border-b border-[#eceeec] bg-[#f7f8f7] px-3.5 py-3">
+                  <p className="text-[13px] font-bold text-[#17231c]">Driver rates</p>
+                </div>
+                <div className="px-3.5 py-3.5">
+                  <AdminDriverRatesPanel
+                    value={draftDriverRates || EMPTY_DRIVER_RATES}
+                    onChange={(next) => onDraftDriverRatesChange?.(next)}
+                    disabled={disabled}
+                    includeScheduled={shouldShowScheduledDriverRates(
+                      previewModes,
+                      supportedOrderModes,
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     )
@@ -723,13 +871,17 @@ export default function AdminBranchDeliverySettings({
           <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
             Branch-owned modes · {pricingModel === 'delivery_fees_v1' ? 'v1 pricing' : 'legacy until first save'}
           </p>
+          <p className="mt-1 text-[11px] leading-[14px] text-[#7c8780]">
+            Order modes and allowed vehicles save when you toggle them. Use Save below for hot food /
+            scheduled fees and driver rates.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleResetBlock}
             disabled={!canEdit || loading || saving || Boolean(togglingMode)}
-            className="inline-flex h-[32px] items-center justify-center rounded-full border border-[rgba(0,0,0,0.1)] bg-white px-4 text-[12px] font-bold text-[#5c665f] hover:bg-[#f7f8f7] disabled:opacity-60"
+            className="inline-flex h-[32px] items-center justify-center rounded-full border border-[rgba(0,0,0,0.1)] bg-white px-4 text-[12px] font-bold text-[#5c665f] hover:bg-[#f7f8f7] disabled:cursor-not-allowed disabled:border-[#e8ebe9] disabled:text-[#b8c0ba]"
           >
             Reset
           </button>
@@ -737,9 +889,14 @@ export default function AdminBranchDeliverySettings({
             type="button"
             onClick={handleSave}
             disabled={!canEdit || loading || saving || !dirtyFields}
-            className="inline-flex h-[32px] items-center justify-center rounded-full bg-[#2E9E4D] px-4 text-[12px] font-bold text-white hover:bg-[#158a47] disabled:opacity-60"
+            className={cn(
+              'inline-flex h-[32px] items-center justify-center rounded-full px-4 text-[12px] font-bold transition',
+              dirtyFields && canEdit && !loading && !saving
+                ? 'bg-[#2E9E4D] text-white hover:bg-[#158a47]'
+                : 'cursor-not-allowed border border-[#d5dbd7] bg-[#f3f5f4] text-[#6b756e]',
+            )}
           >
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? 'Saving…' : 'Save fees & rates'}
           </button>
         </div>
       </div>
@@ -761,7 +918,9 @@ export default function AdminBranchDeliverySettings({
           </div>
         ) : null}
 
-        {BRANCH_DELIVERY_MODE_ORDER.map((modeKey) => {
+        {BRANCH_DELIVERY_MODE_ORDER.filter((modeKey) =>
+          isBranchOrderModeVisible(modeKey, supportedOrderModes),
+        ).map((modeKey) => {
           const mode = modes[modeKey] || {}
           const supported = mode.supportedByStoreType !== false
           const enabled = Boolean(mode.enabled)
@@ -773,10 +932,7 @@ export default function AdminBranchDeliverySettings({
           return (
             <div
               key={modeKey}
-              className={cn(
-                'overflow-hidden rounded-[10px] border border-[#eceeec]',
-                !supported && 'opacity-60',
-              )}
+              className="overflow-hidden rounded-[10px] border border-[#eceeec]"
             >
               <div
                 className={cn(
@@ -880,7 +1036,9 @@ export default function AdminBranchDeliverySettings({
           <div className="border-b border-[#eceeec] bg-[#f7f8f7] px-3.5 py-3">
             <p className="text-[13px] font-bold text-[#17231c]">Driver rates</p>
             <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
-              What Yjeek pays for the delivery leg · on-demand distance + scheduled flat by vehicle
+              {showScheduledDriverRates
+                ? 'What Yjeek pays for the delivery leg · on-demand distance + scheduled flat by vehicle'
+                : 'What Yjeek pays for the delivery leg · on-demand distance'}
             </p>
           </div>
           <div className="space-y-3 px-3.5 py-3.5">
@@ -896,6 +1054,7 @@ export default function AdminBranchDeliverySettings({
               fieldMeta={driverRatesFieldMeta}
               onResetField={handleResetField}
               resettingPath={resettingPath}
+              includeScheduled={showScheduledDriverRates}
             />
           </div>
         </div>
@@ -903,3 +1062,5 @@ export default function AdminBranchDeliverySettings({
     </div>
   )
 }
+
+export default forwardRef(AdminBranchDeliverySettings)

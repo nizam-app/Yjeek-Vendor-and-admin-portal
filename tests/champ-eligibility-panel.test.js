@@ -5,14 +5,18 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   CHAMP_MODE_REQUIRED_MESSAGE,
-  CHAMP_SPECIAL_STORE_TYPES_REQUIRED_MESSAGE,
+  CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE,
   EMPTY_CHAMP_ELIGIBILITY,
   applyChampModeToggle,
   applyChampScheduledClasses,
   buildChampEligibilityPayload,
   getChampEligibilityVisibility,
+  champAllowedCategorySlugsFromEligibility,
+  mapSpecialItemTypesToStoreTypeIds,
   normalizeChampEligibility,
-  toggleChampSpecialStoreType,
+  clearAllChampNormalStoreTypes,
+  selectAllChampNormalStoreTypes,
+  toggleChampNormalStoreType,
   validateChampEligibility,
 } from '../src/components/admin/management/champEligibilityForm.js'
 
@@ -21,6 +25,7 @@ describe('normalizeChampEligibility', () => {
     const form = normalizeChampEligibility(null)
     assert.deepEqual(form.enabledModes, EMPTY_CHAMP_ELIGIBILITY.enabledModes)
     assert.equal(form.scheduledClasses, 'NORMAL_ONLY')
+    assert.deepEqual(form.normalStoreTypeIds, [])
     assert.deepEqual(form.specialStoreTypeIds, [])
   })
 
@@ -29,12 +34,14 @@ describe('normalizeChampEligibility', () => {
       eligibility: {
         enabledModes: ['SCHEDULED', 'HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
         scheduledClasses: 'BOTH',
-        specialStoreTypeIds: ['st-food', 'st-pharm', 'st-food'],
+        normalStoreTypeIds: ['st-food'],
+        specialStoreTypeIds: ['st-pharm', 'st-pharm'],
       },
     })
     assert.deepEqual(form.enabledModes, ['SCHEDULED', 'HOT_FOOD_ON_DEMAND'])
     assert.equal(form.scheduledClasses, 'BOTH')
-    assert.deepEqual(form.specialStoreTypeIds, ['st-food', 'st-pharm'])
+    assert.deepEqual(form.normalStoreTypeIds, ['st-food'])
+    assert.deepEqual(form.specialStoreTypeIds, ['st-pharm'])
   })
 })
 
@@ -43,35 +50,39 @@ describe('progressive disclosure visibility', () => {
     const vis = getChampEligibilityVisibility({
       enabledModes: ['HOT_FOOD_ON_DEMAND'],
       scheduledClasses: 'BOTH',
-      specialStoreTypeIds: ['st-1'],
+      normalStoreTypeIds: ['st-1'],
     })
     assert.equal(vis.showScheduledClasses, false)
-    assert.equal(vis.showSpecialStoreTypes, false)
+    assert.equal(vis.showNormalStoreTypes, false)
+    assert.equal(vis.showSpecialItemTypes, false)
   })
 
-  it('Scheduled on + Normal only → class block, no store types', () => {
+  it('Scheduled on + Normal only → class + normal store types', () => {
     const vis = getChampEligibilityVisibility({
       enabledModes: ['SCHEDULED'],
       scheduledClasses: 'NORMAL_ONLY',
-      specialStoreTypeIds: [],
+      normalStoreTypeIds: [],
     })
     assert.equal(vis.showScheduledClasses, true)
-    assert.equal(vis.showSpecialStoreTypes, false)
+    assert.equal(vis.showNormalStoreTypes, true)
+    assert.equal(vis.showSpecialItemTypes, false)
   })
 
-  it('Scheduled on + Special/Both → store type multi-select', () => {
+  it('Scheduled on + Special/Both → special item types block', () => {
     const both = getChampEligibilityVisibility({
       enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
       scheduledClasses: 'BOTH',
-      specialStoreTypeIds: [],
+      normalStoreTypeIds: [],
     })
     const special = getChampEligibilityVisibility({
       enabledModes: ['SCHEDULED'],
       scheduledClasses: 'SPECIAL_ONLY',
-      specialStoreTypeIds: ['st-1'],
+      normalStoreTypeIds: [],
     })
-    assert.equal(both.showSpecialStoreTypes, true)
-    assert.equal(special.showSpecialStoreTypes, true)
+    assert.equal(both.showNormalStoreTypes, true)
+    assert.equal(both.showSpecialItemTypes, true)
+    assert.equal(special.showNormalStoreTypes, false)
+    assert.equal(special.showSpecialItemTypes, true)
   })
 })
 
@@ -80,22 +91,23 @@ describe('applyChampModeToggle', () => {
     const current = {
       enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
       scheduledClasses: 'BOTH',
-      specialStoreTypeIds: ['st-food', 'st-pharm'],
+      normalStoreTypeIds: ['st-food'],
+      specialStoreTypeIds: ['st-pharm'],
     }
     const next = applyChampModeToggle(current, 'SCHEDULED', false)
     assert.deepEqual(next.enabledModes, ['HOT_FOOD_ON_DEMAND'])
     assert.equal(next.scheduledClasses, 'BOTH')
-    assert.deepEqual(next.specialStoreTypeIds, ['st-food', 'st-pharm'])
+    assert.deepEqual(next.normalStoreTypeIds, ['st-food'])
     const vis = getChampEligibilityVisibility(next)
     assert.equal(vis.showScheduledClasses, false)
-    assert.equal(vis.showSpecialStoreTypes, false)
+    assert.equal(vis.showNormalStoreTypes, false)
   })
 
   it('refuses to turn off the last remaining mode', () => {
     const current = {
       enabledModes: ['HOT_FOOD_ON_DEMAND'],
       scheduledClasses: 'NORMAL_ONLY',
-      specialStoreTypeIds: [],
+      normalStoreTypeIds: [],
     }
     const next = applyChampModeToggle(current, 'HOT_FOOD_ON_DEMAND', false)
     assert.deepEqual(next.enabledModes, ['HOT_FOOD_ON_DEMAND'])
@@ -103,53 +115,117 @@ describe('applyChampModeToggle', () => {
 })
 
 describe('applyChampScheduledClasses', () => {
-  it('Both → Normal only clears store type selection', () => {
+  it('Both → Normal only clears special store type selection', () => {
     const next = applyChampScheduledClasses(
       {
         enabledModes: ['SCHEDULED'],
         scheduledClasses: 'BOTH',
-        specialStoreTypeIds: ['st-food'],
+        normalStoreTypeIds: ['st-food'],
+        specialStoreTypeIds: ['st-pharm'],
       },
       'NORMAL_ONLY',
     )
     assert.equal(next.scheduledClasses, 'NORMAL_ONLY')
+    assert.deepEqual(next.normalStoreTypeIds, ['st-food'])
     assert.deepEqual(next.specialStoreTypeIds, [])
   })
 
-  it('Special only → Normal only clears store types', () => {
+  it('Both → Special only clears normal store types', () => {
     const next = applyChampScheduledClasses(
       {
         enabledModes: ['SCHEDULED'],
-        scheduledClasses: 'SPECIAL_ONLY',
-        specialStoreTypeIds: ['st-a', 'st-b'],
+        scheduledClasses: 'BOTH',
+        normalStoreTypeIds: ['st-food'],
+        specialStoreTypeIds: ['st-pharm'],
       },
-      'NORMAL_ONLY',
+      'SPECIAL_ONLY',
     )
-    assert.deepEqual(next.specialStoreTypeIds, [])
-  })
-
-  it('Normal → Both keeps existing store types (does not invent)', () => {
-    const next = applyChampScheduledClasses(
-      {
-        enabledModes: ['SCHEDULED'],
-        scheduledClasses: 'NORMAL_ONLY',
-        specialStoreTypeIds: [],
-      },
-      'BOTH',
-    )
-    assert.equal(next.scheduledClasses, 'BOTH')
-    assert.deepEqual(next.specialStoreTypeIds, [])
+    assert.deepEqual(next.normalStoreTypeIds, [])
+    assert.deepEqual(next.specialStoreTypeIds, ['st-pharm'])
   })
 })
 
-describe('toggleChampSpecialStoreType', () => {
+describe('clearAllChampNormalStoreTypes', () => {
+  it('clears normal store type ids', () => {
+    const next = clearAllChampNormalStoreTypes({
+      enabledModes: ['SCHEDULED'],
+      scheduledClasses: 'NORMAL_ONLY',
+      normalStoreTypeIds: ['a', 'b'],
+    })
+    assert.deepEqual(next.normalStoreTypeIds, [])
+  })
+})
+
+describe('selectAllChampNormalStoreTypes', () => {
+  it('selects every option id', () => {
+    const options = [{ id: 'a' }, { id: 'b' }, { id: 'a' }]
+    const next = selectAllChampNormalStoreTypes(
+      {
+        enabledModes: ['SCHEDULED'],
+        scheduledClasses: 'NORMAL_ONLY',
+        normalStoreTypeIds: [],
+      },
+      options,
+    )
+    assert.deepEqual(next.normalStoreTypeIds, ['a', 'b'])
+  })
+})
+
+describe('champAllowedCategorySlugsFromEligibility', () => {
+  it('maps normal ids to slugs when Normal block is visible', () => {
+    const slugs = champAllowedCategorySlugsFromEligibility(
+      {
+        enabledModes: ['SCHEDULED'],
+        scheduledClasses: 'BOTH',
+        normalStoreTypeIds: ['id-food', 'id-pharm'],
+      },
+      [
+        { id: 'id-food', slug: 'food' },
+        { id: 'id-pharm', slug: 'pharmacy' },
+      ],
+    )
+    assert.deepEqual(slugs, ['food', 'pharmacy'])
+  })
+
+  it('returns null when Normal store types are hidden', () => {
+    const slugs = champAllowedCategorySlugsFromEligibility(
+      {
+        enabledModes: ['SCHEDULED'],
+        scheduledClasses: 'SPECIAL_ONLY',
+        normalStoreTypeIds: ['id-food'],
+      },
+      [{ id: 'id-food', slug: 'food' }],
+    )
+    assert.equal(slugs, null)
+  })
+})
+
+describe('mapSpecialItemTypesToStoreTypeIds', () => {
+  it('maps pharmacy label to store type id', () => {
+    const ids = mapSpecialItemTypesToStoreTypeIds(['Pharmacy / Rx'], [
+      { id: 'st-pharm', name: 'Pharmacy', slug: 'pharmacy' },
+      { id: 'st-food', name: 'Food', slug: 'food' },
+    ])
+    assert.deepEqual(ids, ['st-pharm'])
+  })
+
+  it('global handling label includes all store types', () => {
+    const ids = mapSpecialItemTypesToStoreTypeIds(['Fragile'], [
+      { id: 'a', name: 'Food', slug: 'food' },
+      { id: 'b', name: 'Grocery', slug: 'grocery' },
+    ])
+    assert.deepEqual(ids.sort(), ['a', 'b'])
+  })
+})
+
+describe('toggleChampNormalStoreType', () => {
   it('toggles ids without hardcoding store type names', () => {
-    let next = toggleChampSpecialStoreType(EMPTY_CHAMP_ELIGIBILITY, 'id-food')
-    assert.deepEqual(next.specialStoreTypeIds, ['id-food'])
-    next = toggleChampSpecialStoreType(next, 'id-pharm')
-    assert.deepEqual(next.specialStoreTypeIds, ['id-food', 'id-pharm'])
-    next = toggleChampSpecialStoreType(next, 'id-food')
-    assert.deepEqual(next.specialStoreTypeIds, ['id-pharm'])
+    let next = toggleChampNormalStoreType(EMPTY_CHAMP_ELIGIBILITY, 'id-food')
+    assert.deepEqual(next.normalStoreTypeIds, ['id-food'])
+    next = toggleChampNormalStoreType(next, 'id-pharm')
+    assert.deepEqual(next.normalStoreTypeIds, ['id-food', 'id-pharm'])
+    next = toggleChampNormalStoreType(next, 'id-food')
+    assert.deepEqual(next.normalStoreTypeIds, ['id-pharm'])
   })
 })
 
@@ -158,37 +234,46 @@ describe('validateChampEligibility / buildChampEligibilityPayload', () => {
     const result = validateChampEligibility({
       enabledModes: [],
       scheduledClasses: 'NORMAL_ONLY',
-      specialStoreTypeIds: [],
+      normalStoreTypeIds: [],
     })
     assert.equal(result.ok, false)
     assert.equal(result.message, CHAMP_MODE_REQUIRED_MESSAGE)
   })
 
-  it('requires ≥1 store type when Special is included and Scheduled is on', () => {
-    const result = validateChampEligibility({
-      enabledModes: ['SCHEDULED'],
-      scheduledClasses: 'BOTH',
-      specialStoreTypeIds: [],
-    })
+  it('requires ≥1 special item type when Special is included and Scheduled is on', () => {
+    const result = validateChampEligibility(
+      {
+        enabledModes: ['SCHEDULED'],
+        scheduledClasses: 'BOTH',
+        normalStoreTypeIds: [],
+      },
+      { specialItemTypes: [], storeTypeOptions: [] },
+    )
     assert.equal(result.ok, false)
-    assert.equal(result.message, CHAMP_SPECIAL_STORE_TYPES_REQUIRED_MESSAGE)
+    assert.equal(result.message, CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE)
   })
 
-  it('does not require store types when Scheduled is off (values may still be kept)', () => {
+  it('does not require special types when Scheduled is off (values may still be kept)', () => {
     const result = validateChampEligibility({
       enabledModes: ['HOT_FOOD_ON_DEMAND'],
       scheduledClasses: 'BOTH',
-      specialStoreTypeIds: [],
+      normalStoreTypeIds: [],
     })
     assert.equal(result.ok, true)
   })
 
-  it('build payload emits eligibility fields for create/PATCH', () => {
-    const payload = buildChampEligibilityPayload({
-      enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
-      scheduledClasses: 'SPECIAL_ONLY',
-      specialStoreTypeIds: ['st-1'],
-    })
+  it('build payload maps special item types to specialStoreTypeIds', () => {
+    const payload = buildChampEligibilityPayload(
+      {
+        enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
+        scheduledClasses: 'SPECIAL_ONLY',
+        normalStoreTypeIds: [],
+      },
+      {
+        specialItemTypes: ['Pharmacy / Rx'],
+        storeTypeOptions: [{ id: 'st-1', name: 'Pharmacy', slug: 'pharmacy' }],
+      },
+    )
     assert.deepEqual(payload, {
       enabledModes: ['HOT_FOOD_ON_DEMAND', 'SCHEDULED'],
       scheduledClasses: 'SPECIAL_ONLY',

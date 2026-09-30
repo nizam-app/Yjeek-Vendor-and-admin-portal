@@ -15,7 +15,10 @@ import {
   mapUiTimeTo24h,
   mapWizardHoursToOpeningHours,
 } from '../../../mappers/admin/mapAdminVendorBranches'
-import { buildBranchModeGate } from '../../../components/admin/AdminVendorSlaConfigs'
+import {
+  buildBranchModeGate,
+  effectiveBranchOrderModeCodes,
+} from '../../../components/admin/AdminVendorSlaConfigs'
 import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 import AdminBranchDeliverySettings, {
   BRANCH_DELIVERY_MODE_ORDER,
@@ -25,6 +28,15 @@ import {
   hotFoodSeedMissingMessage,
   normalizeHotFoodDefaults,
 } from '../../../components/admin/management/AdminStoreTypeHotFoodDefaults'
+import { normalizeAllowedVehiclesForm } from '../../../components/admin/management/AdminAllowedVehiclesPanel'
+import {
+  EMPTY_DRIVER_RATES,
+  normalizeDriverRates,
+} from '../../../components/admin/management/driverRatesForm'
+import {
+  EMPTY_SCHEDULED_FEES,
+  normalizeScheduledFees,
+} from '../../../components/admin/management/scheduledFeesForm'
 import {
   fetchBranchHotFoodPrefill,
   hotFoodFormHasDisplayValues,
@@ -77,6 +89,56 @@ function formatAreaCity(area, city) {
   const town = clean(city)
   if (place && town && place.toLowerCase() !== town.toLowerCase()) return `${place}, ${town}`
   return town || place
+}
+
+function buildWizardSavedBranch({
+  branchId,
+  form,
+  state,
+  draftHotFood,
+  draftDeliveryModes,
+  draftScheduled,
+  draftDriverRates,
+  draftAllowedVehicles,
+  allowedVehiclesEdited,
+  branchOnline,
+  allowPickup,
+  allowDineIn,
+}) {
+  const hfVendor = draftHotFood?.vendor || {}
+  const radiusKm = hfVendor.radiusKm || form.radiusKm || '5'
+  const etaMin = hfVendor.etaMin || form.etaMin || '30'
+  const minOrder = hfVendor.minOrderAmount || form.minOrderValue || '3'
+  const area = form.areaCity || 'Manama'
+  return {
+    id: branchId || state?.branch?.id || `local-${Date.now()}`,
+    name: form.name.trim() || 'New branch',
+    area,
+    city: area,
+    areaCity: area,
+    address: form.address || '',
+    phone: form.phone || state?.wizardDraft?.form?.ownerPhone || '+973 1700 0000',
+    latitude: form.latitude || '26.2285',
+    longitude: form.longitude || '50.535',
+    deliveryRadiusKm: radiusKm,
+    radiusKm,
+    minOrderAmount: minOrder,
+    etaMin,
+    hours: form.hours,
+    branchOnline,
+    operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
+    allowsPickup: allowPickup,
+    allowsDineIn: allowDineIn,
+    deliveryModes: draftDeliveryModes,
+    draftHotFood,
+    draftScheduled,
+    draftDriverRates,
+    draftAllowedVehicles,
+    allowedVehiclesEdited: Boolean(allowedVehiclesEdited),
+    isPrimary:
+      Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
+    detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
+  }
 }
 
 function orderModeLocks(modeGate) {
@@ -490,11 +552,18 @@ export default function AdminAddVendorBrunchs() {
     ready: false,
   })
   const [supportedOrderModes, setSupportedOrderModes] = useState([])
+  const [vendorSlaModeLabels, setVendorSlaModeLabels] = useState([])
   const [orderModesReady, setOrderModesReady] = useState(false)
   const [draftDeliveryModes, setDraftDeliveryModes] = useState(null)
   const [draftHotFood, setDraftHotFood] = useState(null)
+  const [draftScheduled, setDraftScheduled] = useState(null)
+  const [draftDriverRates, setDraftDriverRates] = useState(null)
+  const [draftAllowedVehicles, setDraftAllowedVehicles] = useState(null)
   const [createdBranchId, setCreatedBranchId] = useState(null)
   const draftModesEdited = useRef(false)
+  const deliveryDraftPrefilled = useRef(false)
+  const allowedVehiclesEdited = useRef(false)
+  const deliverySettingsRef = useRef(null)
   const draftHotFoodPrefilled = useRef(false)
   /** Store type display name for Delivery Settings seed banner (OG §02). */
   const [storeTypeName, setStoreTypeName] = useState('')
@@ -610,6 +679,7 @@ export default function AdminAddVendorBrunchs() {
         setOrderModesReady(true)
         const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
         const vendorModeLabels = mapAdminServiceModesToLabels(modes)
+        setVendorSlaModeLabels(vendorModeLabels)
         setModeGate(buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: false }))
       })
       .catch((err) => {
@@ -651,6 +721,40 @@ export default function AdminAddVendorBrunchs() {
     if (!orderModesReady) return
     void loadDraftHotFoodPrefill()
   }, [orderModesReady, loadDraftHotFoodPrefill])
+
+  const loadDeliveryDraftPrefill = useCallback(async () => {
+    if (!useRealBranchApi || !isNewBranch || !vendorId) return
+    if (deliveryDraftPrefilled.current) return
+    deliveryDraftPrefilled.current = true
+
+    try {
+      const res = await adminService.getVendorDeliverySettings(vendorId)
+      const data = res?.data
+      if (data?.allowedVehicles) {
+        setDraftAllowedVehicles((prev) =>
+          prev || normalizeAllowedVehiclesForm(data.allowedVehicles),
+        )
+      } else {
+        setDraftAllowedVehicles((prev) => prev || normalizeAllowedVehiclesForm(null))
+      }
+      if (data?.driverRates) {
+        setDraftDriverRates((prev) => prev || normalizeDriverRates(data.driverRates))
+      } else {
+        setDraftDriverRates((prev) => prev || EMPTY_DRIVER_RATES)
+      }
+      if (data?.scheduled) {
+        setDraftScheduled((prev) => prev || normalizeScheduledFees(data.scheduled))
+      }
+    } catch {
+      setDraftAllowedVehicles((prev) => prev || normalizeAllowedVehiclesForm(null))
+      setDraftDriverRates((prev) => prev || EMPTY_DRIVER_RATES)
+    }
+  }, [useRealBranchApi, isNewBranch, vendorId])
+
+  useEffect(() => {
+    if (!orderModesReady) return
+    void loadDeliveryDraftPrefill()
+  }, [orderModesReady, loadDeliveryDraftPrefill])
 
   const loadWizardHotFoodPrefill = useCallback(async () => {
     if (useRealBranchApi || !isNewBranch) return
@@ -794,6 +898,18 @@ export default function AdminAddVendorBrunchs() {
     if (src.draftHotFood) {
       setDraftHotFood(normalizeHotFoodDefaults(src.draftHotFood))
     }
+    if (src.draftScheduled) {
+      setDraftScheduled(normalizeScheduledFees(src.draftScheduled))
+    }
+    if (src.draftDriverRates) {
+      setDraftDriverRates(normalizeDriverRates(src.draftDriverRates))
+    }
+    if (src.draftAllowedVehicles) {
+      setDraftAllowedVehicles(normalizeAllowedVehiclesForm(src.draftAllowedVehicles))
+    }
+    if (src.allowedVehiclesEdited) {
+      allowedVehiclesEdited.current = true
+    }
   }, [useRealBranchApi, isNewBranch, state?.branch])
 
   // If store type drops a mode, force branch flags off in UI state.
@@ -804,11 +920,26 @@ export default function AdminAddVendorBrunchs() {
   }, [modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
 
   const showPreviewModes = !useRealBranchApi || isNewBranch
+  const wizardVendorModeLabels = useMemo(() => {
+    const raw = state?.wizardDraft?.serviceModes
+    return Array.isArray(raw) ? raw.map((label) => String(label)) : []
+  }, [state?.wizardDraft?.serviceModes])
+  const effectiveSupportedOrderModes = useMemo(() => {
+    const vendorLabels = useRealBranchApi ? vendorSlaModeLabels : wizardVendorModeLabels
+    return effectiveBranchOrderModeCodes(supportedOrderModes, vendorLabels, {
+      allowAllStoreWhenVendorUnknown: !useRealBranchApi,
+    })
+  }, [
+    supportedOrderModes,
+    vendorSlaModeLabels,
+    wizardVendorModeLabels,
+    useRealBranchApi,
+  ])
   const modeLocks = useMemo(
     () => orderModeLocks(modeGate),
     [modeGate],
   )
-  const supportedModesKey = supportedOrderModes.join('|')
+  const supportedModesKey = effectiveSupportedOrderModes.join('|')
   const modeLockKey = `${modeLocks.PICKUP ? 1 : 0}:${modeLocks.DINE_IN ? 1 : 0}`
 
   useEffect(() => {
@@ -827,7 +958,7 @@ export default function AdminAddVendorBrunchs() {
       })
       return
     }
-    const next = previewBranchDeliveryModes(supportedOrderModes, modeLocks)
+    const next = previewBranchDeliveryModes(effectiveSupportedOrderModes, modeLocks)
     const savedLocal = !useRealBranchApi && !isNewBranch ? state?.branch : null
     if (savedLocal && typeof savedLocal.allowsPickup === 'boolean' && next.PICKUP) {
       next.PICKUP = {
@@ -848,7 +979,7 @@ export default function AdminAddVendorBrunchs() {
     supportedModesKey,
     modeLockKey,
     modeLocks,
-    supportedOrderModes,
+    effectiveSupportedOrderModes,
     useRealBranchApi,
     isNewBranch,
     state?.branch,
@@ -1207,35 +1338,20 @@ export default function AdminAddVendorBrunchs() {
 
     if (!useRealBranchApi) {
       if (isLocalWizardCreate || returnToWizard) {
-        const hfVendor = draftHotFood?.vendor || {}
-        const radiusKm = hfVendor.radiusKm || form.radiusKm || '5'
-        const etaMin = hfVendor.etaMin || form.etaMin || '30'
-        const minOrder = hfVendor.minOrderAmount || form.minOrderValue || '3'
-        const area = form.areaCity || 'Manama'
-        const savedBranch = {
-          id: state?.branch?.id || `local-${Date.now()}`,
-          name: form.name.trim() || 'New branch',
-          area,
-          city: area,
-          address: form.address || '',
-          phone: form.phone || state?.wizardDraft?.form?.ownerPhone || '+973 1700 0000',
-          latitude: form.latitude || '26.2285',
-          longitude: form.longitude || '50.535',
-          deliveryRadiusKm: radiusKm,
-          radiusKm,
-          minOrderAmount: minOrder,
-          etaMin,
-          hours: form.hours,
-          openingHours: mapWizardHoursToOpeningHours(form.hours),
-          branchOnline,
-          operationalStatus: branchOnline ? 'OPEN' : 'CLOSED',
-          allowsPickup: allowPickup,
-          allowsDineIn: allowDineIn,
-          deliveryModes: draftDeliveryModes,
+        const savedBranch = buildWizardSavedBranch({
+          branchId: state?.branch?.id,
+          form,
+          state,
           draftHotFood,
-          isPrimary: Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
-          detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
-        }
+          draftDeliveryModes,
+          draftScheduled,
+          draftDriverRates,
+          draftAllowedVehicles,
+          allowedVehiclesEdited: allowedVehiclesEdited.current,
+          branchOnline,
+          allowPickup,
+          allowDineIn,
+        })
         navigate(returnPath, {
           state: {
             ...baseReturnState,
@@ -1282,6 +1398,10 @@ export default function AdminAddVendorBrunchs() {
         const deliveryBody = mapWizardBranchDeliverySettings({
           deliveryModes: draftDeliveryModes,
           draftHotFood,
+          draftScheduled,
+          draftDriverRates,
+          draftAllowedVehicles,
+          allowedVehiclesEdited: allowedVehiclesEdited.current,
         })
         if (deliveryBody) {
           await adminService.updateBranchDeliverySettings(vendorId, savedBranchId, deliveryBody)
@@ -1294,9 +1414,35 @@ export default function AdminAddVendorBrunchs() {
             /* vendor template mirror is best-effort */
           }
         }
+      } else if (savedBranchId && useRealBranchApi && !showPreviewModes) {
+        const deliveryOk = await deliverySettingsRef.current?.savePending?.()
+        if (deliveryOk === false) {
+          setSaveError('Failed to save delivery settings.')
+          return
+        }
       }
 
-      navigate(returnPath, { state: returnState })
+      const navigateState =
+        returnToWizard && savedBranchId
+          ? {
+              ...returnState,
+              savedBranch: buildWizardSavedBranch({
+                branchId: savedBranchId,
+                form,
+                state,
+                draftHotFood,
+                draftDeliveryModes,
+                draftScheduled,
+                draftDriverRates,
+                draftAllowedVehicles,
+                allowedVehiclesEdited: allowedVehiclesEdited.current,
+                branchOnline,
+                allowPickup,
+                allowDineIn,
+              }),
+            }
+          : returnState
+      navigate(returnPath, { state: navigateState })
     } catch (err) {
       setSaveError(err?.message || (isNewBranch ? 'Failed to create branch.' : 'Failed to update branch.'))
     } finally {
@@ -1580,11 +1726,12 @@ export default function AdminAddVendorBrunchs() {
           <h2 className="mb-3 text-[16px] font-bold text-[#17231c]">Status &amp; controls</h2>
 
           <AdminBranchDeliverySettings
+            ref={deliverySettingsRef}
             vendorId={vendorId}
             locationId={useRealBranchApi && !isNewBranch ? branchId : null}
             storeTypeName={storeTypeName}
             disabled={loading}
-            supportedOrderModes={supportedOrderModes}
+            supportedOrderModes={effectiveSupportedOrderModes}
             previewReady={orderModesReady}
             draftModes={draftDeliveryModes}
             onDraftModesChange={(next) => {
@@ -1605,40 +1752,16 @@ export default function AdminAddVendorBrunchs() {
                 setBranchMapRadiusKm(String(km))
               }
             }}
+            draftScheduled={draftScheduled}
+            onDraftScheduledChange={setDraftScheduled}
+            draftDriverRates={draftDriverRates}
+            onDraftDriverRatesChange={setDraftDriverRates}
+            draftAllowedVehicles={draftAllowedVehicles}
+            onDraftAllowedVehiclesChange={(next) => {
+              allowedVehiclesEdited.current = true
+              setDraftAllowedVehicles(next)
+            }}
           />
-
-          <div className="mt-3 flex items-center justify-between gap-4 rounded-[10px] bg-[#fff7d8] px-3.5 py-3">
-            <div className="min-w-0">
-              <p className="text-[13px] font-bold text-[#c4841a]">
-                {isBranchForceClosed ? 'Branch is force-closed' : 'Force close this branch'}
-              </p>
-              <p className="mt-0.5 text-[12px] leading-[16px] text-[#c4841a]">
-                {isBranchForceClosed
-                  ? 'Customers see this branch as closed. Reopen when ready to accept orders again.'
-                  : 'Temporarily stop orders (e.g. emergency, out of stock). Customers see it as closed.'}
-              </p>
-            </div>
-
-            {isBranchForceClosed ? (
-              <button
-                type="button"
-                onClick={handleReopenBranch}
-                disabled={reopening || isNewBranch}
-                className="inline-flex h-[32px] shrink-0 items-center justify-center rounded-full border border-[#1aa054] bg-white px-4 text-[12px] font-bold text-[#147940] hover:bg-[#e8f7ed] disabled:opacity-60"
-              >
-                {reopening ? 'Reopening…' : 'Reopen'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setForceCloseOpen(true)}
-                disabled={isNewBranch}
-                className="inline-flex h-[32px] shrink-0 items-center justify-center rounded-full border border-[#c4841a] bg-white px-4 text-[12px] font-bold text-[#c4841a] hover:bg-[#fff3d6] disabled:opacity-60"
-              >
-                Force close
-              </button>
-            )}
-          </div>
         </section>
 
         {/* Branch delivery radius & coverage — pin + hot-food vendor radius from Delivery Settings */}
