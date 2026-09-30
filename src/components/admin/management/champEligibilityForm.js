@@ -5,7 +5,7 @@
  * - Hot food only → no further questions
  * - Scheduled on → item class block (Normal only / Special only / Both)
  * - Normal included → store type multi-select (allowedCategories / hot-food dispatch)
- * - Special included → special item types multi-select (maps to specialStoreTypeIds on save)
+ * - Special included → store types with Special items enabled (saved as specialStoreTypeIds)
  *
  * Rules:
  * - ≥1 order mode required
@@ -36,24 +36,11 @@ export const CHAMP_SCHEDULED_CLASS_OPTIONS = [
   { key: 'BOTH', label: 'Both' },
 ]
 
-/** Handling / restriction labels for scheduled Special item class (not store types). */
-export const CHAMP_SPECIAL_ITEM_TYPE_OPTIONS = [
-  'Age-restricted 18+',
-  'Pharmacy / Rx',
-  'Fragile',
-  'Vape & Tobacco',
-  'Jewelry',
-  'Electronics',
-  'High-value',
-  'Frozen / Chilled',
-]
-
-const GLOBAL_SPECIAL_HANDLING_KEYS = new Set([
-  'age-restricted 18+',
-  'fragile',
-  'high-value',
-  'frozen / chilled',
-])
+/**
+ * @deprecated Hardcoded handling labels. Special chips load from store types
+ * with Special items enabled (`allowsSpecialItems`). Kept so older imports still resolve.
+ */
+export const CHAMP_SPECIAL_ITEM_TYPE_OPTIONS = []
 
 export const CHAMP_MODE_REQUIRED_MESSAGE = 'At least one order mode must stay on'
 export const CHAMP_SPECIAL_ITEM_TYPES_REQUIRED_MESSAGE =
@@ -323,53 +310,61 @@ function normalizeSpecialItemLabel(value) {
 }
 
 /**
- * Map admin special item type labels → store-type Category ids for OG §07 `specialStoreTypeIds`.
- * Store-name labels match published store types; global handling labels apply to all store types.
+ * Store type may carry special items (Store Management → Item classes → Special items).
+ * Missing flag follows the schema default (special enabled).
+ *
+ * @param {{ allowsSpecialItems?: boolean, itemClasses?: { allowsSpecialItems?: boolean } }} storeType
+ */
+export function storeTypeAllowsSpecialItems(storeType) {
+  if (!storeType || typeof storeType !== 'object') return false
+  if (storeType.allowsSpecialItems === false) return false
+  if (storeType.itemClasses && storeType.itemClasses.allowsSpecialItems === false) return false
+  return true
+}
+
+/**
+ * Published store types the champ may be allowed to carry as special.
+ *
+ * @param {Array<{ id?: string, name?: string, slug?: string, allowsSpecialItems?: boolean }>} storeTypeOptions
+ */
+export function specialStoreTypeOptions(storeTypeOptions) {
+  const options = []
+  for (const item of storeTypeOptions || []) {
+    const id = String(item?.id || '').trim()
+    if (!id || !storeTypeAllowsSpecialItems(item)) continue
+    options.push(item)
+  }
+  return options
+}
+
+/**
+ * Map selected special chips (store-type ids, or legacy names/slugs) → Category ids.
+ * Only store types with Special items enabled are eligible.
  *
  * @param {string[]} labels
- * @param {Array<{ id?: string, name?: string, slug?: string }>} storeTypeOptions
+ * @param {Array<{ id?: string, name?: string, slug?: string, allowsSpecialItems?: boolean }>} storeTypeOptions
  */
 export function mapSpecialItemTypesToStoreTypeIds(labels, storeTypeOptions) {
   const selected = (labels || []).map((item) => String(item || '').trim()).filter(Boolean)
   if (!selected.length) return []
 
-  const ids = new Set()
-  let anyGlobal = false
+  const allowed = specialStoreTypeOptions(storeTypeOptions)
+  const ids = []
 
   for (const label of selected) {
     const key = normalizeSpecialItemLabel(label)
-    if (GLOBAL_SPECIAL_HANDLING_KEYS.has(key)) {
-      anyGlobal = true
-      continue
-    }
-
-    for (const storeType of storeTypeOptions || []) {
+    for (const storeType of allowed) {
       const id = String(storeType?.id || '').trim()
-      if (!id) continue
+      if (!id || ids.includes(id)) continue
       const name = normalizeSpecialItemLabel(storeType.name)
       const slug = normalizeSpecialItemLabel(storeType.slug).replace(/-/g, ' ')
-      const labelCompact = key.replace(/\//g, ' ').replace(/&/g, 'and')
-
-      if (
-        name === labelCompact ||
-        slug === labelCompact ||
-        name.includes(labelCompact) ||
-        labelCompact.includes(name) ||
-        slug.includes(labelCompact.replace(/\s+/g, ''))
-      ) {
-        ids.add(id)
+      if (label === id || name === key || slug === key) {
+        ids.push(id)
       }
     }
   }
 
-  if (anyGlobal || ids.size === 0) {
-    for (const storeType of storeTypeOptions || []) {
-      const id = String(storeType?.id || '').trim()
-      if (id) ids.add(id)
-    }
-  }
-
-  return [...ids]
+  return ids
 }
 
 /**

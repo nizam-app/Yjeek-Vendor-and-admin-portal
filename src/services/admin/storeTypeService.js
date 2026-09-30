@@ -113,6 +113,8 @@ export const adminStoreTypeService = {
         id: String(item.id),
         name: String(item.name),
         slug: String(item.slug).trim().toLowerCase(),
+        allowsNormalItems: item.allowsNormalItems !== false,
+        allowsSpecialItems: item.allowsSpecialItems !== false,
       }))
 
     return {

@@ -20,6 +20,54 @@ export const COMMISSION_ORDER_METHODS = [
   { id: 'scheduled', label: 'Scheduled' },
 ]
 
+/** Wizard / SLA service-mode labels → commission method id. */
+export const COMMISSION_METHOD_TO_SERVICE_LABEL = {
+  delivery: 'Hot food · on demand',
+  dineIn: 'Dine-in',
+  pickup: 'Pickup',
+  services: 'Services',
+  scheduled: 'Scheduled delivery',
+}
+
+/**
+ * Commission tabs for vendor UI — only methods the vendor has enabled (SLA service modes).
+ *
+ * @param {string[]} serviceLabels e.g. from mapAdminServiceModesToLabels or slaVisibleServiceModes
+ */
+export function commissionOrderMethodsForServiceLabels(serviceLabels = []) {
+  const labelSet = new Set(
+    (Array.isArray(serviceLabels) ? serviceLabels : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean),
+  )
+  if (!labelSet.size) return []
+  return COMMISSION_ORDER_METHODS.filter((method) =>
+    labelSet.has(COMMISSION_METHOD_TO_SERVICE_LABEL[method.id]),
+  )
+}
+
+/**
+ * Keep only commission method slices the vendor may use (PATCH / create body).
+ *
+ * @param {Record<string, unknown>} drafts
+ * @param {string[]} enabledMethodIds
+ */
+export function filterCommissionDraftsByMethodIds(drafts = {}, enabledMethodIds = []) {
+  const allowed = new Set(
+    (Array.isArray(enabledMethodIds) ? enabledMethodIds : [])
+      .map((id) => String(id || '').trim())
+      .filter(Boolean),
+  )
+  if (!allowed.size) return {}
+  const out = {}
+  for (const method of COMMISSION_ORDER_METHODS) {
+    if (allowed.has(method.id) && drafts[method.id]) {
+      out[method.id] = drafts[method.id]
+    }
+  }
+  return out
+}
+
 function stripPercent(value) {
   if (value == null || value === '') return ''
   return String(value).replace(/%/g, '').replace(/\(auto\)/gi, '').trim()
@@ -143,7 +191,7 @@ function mapCommissionBlock(block, parent = {}) {
     ...block,
     inheritance: block?.inheritance ?? parent?.inheritance ?? null,
     seededFromStoreType: parent?.seededFromStoreType ?? block?.seededFromStoreType,
-    currency: block?.currency || parent?.currency || 'BHD',
+    currency: block?.currency ?? parent?.currency ?? null,
     platformServiceFee: block?.platformServiceFee ?? parent?.platformServiceFee,
     vatOnCommissionPct: block?.vatOnCommissionPct ?? parent?.vatOnCommissionPct,
   }
@@ -153,7 +201,7 @@ function mapCommissionBlock(block, parent = {}) {
     })
   }
 
-  const currency = data.currency ? String(data.currency) : 'BHD'
+  const currency = data.currency ? String(data.currency) : '—'
   const modelCode = data.model ? String(data.model) : null
   const modelLabel = (modelCode && COMMISSION_MODEL_TO_UI[modelCode]) || (modelCode || '—')
 
@@ -194,9 +242,10 @@ function mapCommissionBlock(block, parent = {}) {
     /** Kept for legacy callers; Commission UI must not render this (OG §08). */
     platformServiceFee: formatMoney(data.platformServiceFee, currency),
     platformServiceFeeAmount: parseOptionalNumber(data.platformServiceFee),
-    vatOnCommission: vatPct != null ? `${vatPct}% (auto)` : '10% (auto)',
-    vatOnCommissionPct: vatPct != null ? vatPct : 10,
-    currency: 'BHD',
+    vatOnCommission: vatPct != null ? `${vatPct}%` : '—',
+    vatOnCommissionPct: vatPct,
+    currency,
+    label: data.label ? String(data.label) : null,
     gatewayFees: {
       fixedPct: formatGatewayField(gateway.fixedPct),
       debitPct: formatGatewayField(gateway.debitPct),
@@ -242,29 +291,29 @@ export function mapAdminCommissionToWizardForm(commission) {
   const vatPct =
     commission.vatOnCommissionPct != null
       ? commission.vatOnCommissionPct
-      : parseOptionalNumber(stripPercent(commission.vatOnCommission)) ?? 10
+      : parseOptionalNumber(stripPercent(commission.vatOnCommission))
 
-  let commissionRate = '15'
+  let commissionRate = ''
   if (commission.modelCode === 'FLAT_PER_ORDER' && commission.flatFeePerOrder != null) {
     commissionRate = String(commission.flatFeePerOrder)
   } else if (commission.commissionRate != null) {
     commissionRate = String(commission.commissionRate)
   } else if (commission.rate && commission.rate !== '—') {
-    commissionRate = stripPercent(stripCurrency(commission.rate)) || '15'
+    commissionRate = stripPercent(stripCurrency(commission.rate))
   }
 
   return {
     commissionModel: COMMISSION_MODEL_TO_UI[commission.modelCode] || commission.model || '% of order',
     commissionRate,
-    vatOnCommission: `${vatPct}% (auto)`,
-    currency: 'BHD',
-    fixedPct: gateway.fixedPct || '1.000',
-    debitPct: gateway.debitPct || '0.500',
-    creditPct: gateway.creditPct || '2.000',
-    applePayPct: gateway.applePayPct || '1.500',
-    googleWalletPct: gateway.googleWalletPct || '1.500',
-    otherChargesPct: gateway.otherChargesPct || '0.500',
-    fixedCharge: gateway.fixedCharge || '0.050',
+    vatOnCommission: vatPct != null ? `${vatPct}%` : '',
+    currency: commission.currency && commission.currency !== '—' ? String(commission.currency) : '',
+    fixedPct: gateway.fixedPct || '',
+    debitPct: gateway.debitPct || '',
+    creditPct: gateway.creditPct || '',
+    applePayPct: gateway.applePayPct || '',
+    googleWalletPct: gateway.googleWalletPct || '',
+    otherChargesPct: gateway.otherChargesPct || '',
+    fixedCharge: gateway.fixedCharge || '',
   }
 }
 
