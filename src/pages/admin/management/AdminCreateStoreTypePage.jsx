@@ -1340,8 +1340,8 @@ function StoreTypeForm({
 
       <div className="space-y-4">
         <Card title="Identity">
-          <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] items-end gap-3 max-[800px]:grid-cols-1">
-            <div>
+          <div className="flex flex-col gap-5 max-[800px]:gap-4 md:flex-row md:items-start">
+            <div className="shrink-0 md:w-[132px]">
               <span className={labelClass}>Image</span>
               <AdminIconImageUpload
                 iconUrl={iconUrl}
@@ -1352,55 +1352,57 @@ function StoreTypeForm({
               />
             </div>
 
-            <label className="block min-w-0">
-              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-                <span className={labelClass}>Display name</span>
-                <DisplayNameLanguageToggle
-                  value={displayNameLang}
-                  onChange={setDisplayNameLang}
-                  disabled={saving}
+            <div className="grid min-w-0 flex-1 grid-cols-1 gap-5 md:grid-cols-2 md:gap-4">
+              <label className="flex min-w-0 flex-col">
+                <div className="mb-1.5 flex min-h-[28px] items-center justify-between gap-3">
+                  <span className="text-[12px] font-medium text-[#7c8780]">Display name</span>
+                  <DisplayNameLanguageToggle
+                    value={displayNameLang}
+                    onChange={setDisplayNameLang}
+                    disabled={saving}
+                  />
+                </div>
+                <input
+                  className={inputClass}
+                  dir={displayNameLang === 'ar' ? 'rtl' : 'ltr'}
+                  lang={displayNameLang === 'ar' ? 'ar' : 'en'}
+                  value={displayNameLang === 'ar' ? displayNameAr : displayName}
+                  placeholder={
+                    displayNameLang === 'ar'
+                      ? isEditMode
+                        ? undefined
+                        : 'مثال: أطعمة'
+                      : isEditMode
+                        ? undefined
+                        : 'e.g. Food'
+                  }
+                  onChange={(e) =>
+                    displayNameLang === 'ar'
+                      ? setDisplayNameAr(e.target.value)
+                      : setDisplayName(e.target.value)
+                  }
                 />
-              </div>
-              <input
-                className={inputClass}
-                dir={displayNameLang === 'ar' ? 'rtl' : 'ltr'}
-                lang={displayNameLang === 'ar' ? 'ar' : 'en'}
-                value={displayNameLang === 'ar' ? displayNameAr : displayName}
-                placeholder={
-                  displayNameLang === 'ar'
-                    ? isEditMode
-                      ? undefined
-                      : 'مثال: أطعمة'
-                    : isEditMode
-                      ? undefined
-                      : 'e.g. Food'
-                }
-                onChange={(e) =>
-                  displayNameLang === 'ar'
-                    ? setDisplayNameAr(e.target.value)
-                    : setDisplayName(e.target.value)
-                }
-              />
-              <p className="mt-1.5 text-[11px] leading-[14px] text-[#9aa49d]">
-                {displayNameLang === 'ar'
-                  ? 'Arabic customer label — saved as nameAr. Keep Internal key in English (e.g. food).'
-                  : 'English label — required. Use العربية for the Arabic name; do not put Arabic here.'}
-              </p>
-            </label>
+              </label>
 
-            <label className="block min-w-0">
-              <span className={labelClass}>Internal key</span>
-              <input
-                className={inputClass}
-                value={internalKey}
-                placeholder={isEditMode ? undefined : 'e.g. food'}
-                onChange={(e) => setInternalKey(e.target.value)}
-              />
-            </label>
+              <label className="flex min-w-0 flex-col">
+                <div className="mb-1.5 flex min-h-[28px] items-center justify-between gap-3">
+                  <span className="text-[12px] font-medium text-[#7c8780]">Internal key</span>
+                  <span className="hidden h-[28px] shrink-0 md:inline-block md:w-[148px]" aria-hidden />
+                </div>
+                <input
+                  className={inputClass}
+                  value={internalKey}
+                  placeholder={isEditMode ? undefined : 'e.g. food'}
+                  onChange={(e) => setInternalKey(e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+            </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 items-end gap-3 max-[700px]:grid-cols-1">
-            <label className="block w-full ">
+          <div className="mt-5 grid grid-cols-1 items-end gap-4 md:grid-cols-2">
+            <label className="block w-full min-w-0">
               <span className={labelClass}>Home order position</span>
               <input
                 className={inputClass}
@@ -1410,7 +1412,7 @@ function StoreTypeForm({
               />
             </label>
 
-            <div className="flex h-[48px] items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4">
+            <div className="flex h-[40px] items-center justify-between gap-3 rounded-[10px] border border-[#eceeec] bg-[#f8faf8] px-4">
               <span className="text-[13px] font-medium text-[#17231c]">Visible in customer app</span>
               <Toggle checked={visibleInApp} onChange={setVisibleInApp} />
             </div>

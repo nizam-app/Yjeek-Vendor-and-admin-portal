@@ -193,8 +193,13 @@ function closeMinutes(value) {
 
 function isValidShiftRange(from, to) {
   const open = toMinutes(from)
-  const close = closeMinutes(to)
-  return open != null && close != null && open < close
+  const closeRaw = toMinutes(to)
+  if (open == null || closeRaw == null) return false
+  // Same calendar day (incl. close at midnight → 24:00).
+  const close = closeRaw === 0 ? 24 * 60 : closeRaw
+  if (open === close) return false
+  // Overnight into the next morning (e.g. 12:00 PM – 1:00 AM).
+  return open < close || closeRaw < open
 }
 
 function dayHoursError(config) {
@@ -203,7 +208,7 @@ function dayHoursError(config) {
   if (!shifts.length) return 'Set opening hours or mark the day closed.'
   for (let i = 0; i < shifts.length; i += 1) {
     if (!isValidShiftRange(shifts[i].from, shifts[i].to)) {
-      return 'Close time must be after open time (midnight close is allowed).'
+      return 'Close time must be after open time (midnight or next-day AM close is allowed).'
     }
   }
   if (config.mode === 'split' && shifts.length > 1) {

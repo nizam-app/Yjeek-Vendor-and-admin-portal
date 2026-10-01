@@ -811,8 +811,81 @@ export function mapAdminUiEditorBannerDetail(data) {
     active: src.publishImmediately != null ? Boolean(src.publishImmediately) : mapBannerStatus(src.status) === 'Active',
     status: mapBannerStatus(src.status || src.state),
     appTarget: asString(src.appTarget || src.app || 'CUSTOMER').toUpperCase(),
+    scheduleAllDay: src.settings?.schedule?.allDay !== false,
+    scheduleStartTime: asString(src.settings?.schedule?.startTime || ''),
+    scheduleEndTime: asString(src.settings?.schedule?.endTime || ''),
+    runUntilDeactivated: Boolean(src.settings?.schedule?.runUntilDeactivated),
+    rotationSeconds: Number(src.settings?.carousel?.rotationSeconds) || 5,
+    carouselActive: src.isActive !== false,
+    popupFrequency: asString(src.settings?.popup?.frequency || 'ONCE_PER_SESSION'),
+    popupTrigger: asString(src.settings?.popup?.trigger || 'APP_LAUNCH'),
+    popupDismissable: src.settings?.popup?.dismissable !== false,
+    popupDismissCounts: Boolean(src.settings?.popup?.dismissCountsTowardFrequency),
+    slides: asArray(src.slides).map((slide, index) => mapSlideToForm(slide, index)),
     raw: src,
   }
+}
+
+function mapSlideToForm(slide, index = 0) {
+  const src = asObject(slide) || {}
+  const sched = asObject(src.schedule) || {}
+  return {
+    id: asString(src.id) || `slide-${index}`,
+    title: asString(src.title || ''),
+    subtitle: asString(src.subtitle || ''),
+    imageUrl: pickMediaUrl(src.imageUrl, src.image_url),
+    tapAction: TAP_ACTION_API_TO_UI[asString(src.tapAction).toUpperCase()] || 'Open store',
+    targetId: asString(src.targetId || src.vendorId || ''),
+    ctaUrl: asString(src.ctaUrl || ''),
+    ctaLabel: asString(src.ctaLabel || ''),
+    start: toDateInputValue(src.startsAt),
+    end: toDateInputValue(src.endsAt),
+    scheduleAllDay: sched.allDay !== false,
+    scheduleStartTime: asString(sched.startTime || ''),
+    scheduleEndTime: asString(sched.endTime || ''),
+    runUntilDeactivated: Boolean(sched.runUntilDeactivated),
+    active: src.isActive !== false,
+    sortOrder: Number(src.sortOrder) || index,
+  }
+}
+
+function mapSlideToApi(slide, index = 0) {
+  const src = asObject(slide) || {}
+  const tapAction =
+    TAP_ACTION_UI_TO_API[src.tapAction] || TAP_ACTION_UI_TO_API[src.tapActionKey] || 'OPEN_STORE'
+  const schedule = {
+    allDay: src.scheduleAllDay !== false,
+    startTime: asString(src.scheduleStartTime).trim() || null,
+    endTime: asString(src.scheduleEndTime).trim() || null,
+    runUntilDeactivated: Boolean(src.runUntilDeactivated),
+  }
+  const row = {
+    title: asString(src.title).trim() || null,
+    subtitle: asString(src.subtitle).trim() || null,
+    imageUrl: pickMediaUrl(src.imageUrl),
+    ctaLabel: asString(src.ctaLabel).trim() || null,
+    tapAction,
+    sortOrder: Number(src.sortOrder) || index,
+    isActive: src.active !== false,
+    schedule,
+  }
+  if (asString(src.id).trim() && !String(src.id).startsWith('slide-')) {
+    row.id = asString(src.id).trim()
+  }
+  const startsAt = toIsoDate(src.start)
+  if (startsAt) row.startsAt = startsAt
+  if (!schedule.runUntilDeactivated) {
+    const endsAt = toIsoDate(src.end, { endOfDay: true })
+    if (endsAt) row.endsAt = endsAt
+  }
+  const targetId = asString(src.targetId).trim()
+  const ctaUrl = asString(src.ctaUrl).trim()
+  if (tapAction === 'OPEN_URL') row.ctaUrl = ctaUrl || null
+  else if (tapAction === 'OPEN_STORE') {
+    row.targetId = targetId || null
+    row.vendorId = targetId || null
+  } else if (targetId) row.targetId = targetId
+  return row
 }
 
 /**
@@ -830,11 +903,14 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
     TAP_ACTION_UI_TO_API[src.tapActionKey] ||
     'OPEN_STORE'
 
+  const bannerType = BANNER_TYPE_UI_TO_API[src.type] || 'STATIC'
+  const runUntil = Boolean(src.runUntilDeactivated)
+
   const body = {
-    title: asString(src.title).trim(),
+    title: asString(src.title).trim() || (bannerType === 'STATIC' ? 'Banner' : 'Carousel'),
     subtitle: asString(src.subtitle).trim(),
     ctaLabel: asString(src.ctaLabel).trim() || null,
-    bannerType: BANNER_TYPE_UI_TO_API[src.type] || 'STATIC',
+    bannerType,
     placementKey,
     appTarget: String(appTarget || 'CUSTOMER').toUpperCase(),
     tapAction,
@@ -849,9 +925,37 @@ export function mapAdminCreateBannerRequest(form, { appTarget = 'CUSTOMER', plac
   }
 
   const startsAt = toIsoDate(src.start)
-  const endsAt = toIsoDate(src.end, { endOfDay: true })
   if (startsAt) body.startsAt = startsAt
-  if (endsAt) body.endsAt = endsAt
+  if (!runUntil) {
+    const endsAt = toIsoDate(src.end, { endOfDay: true })
+    if (endsAt) body.endsAt = endsAt
+  }
+
+  body.settings = {
+    schedule: {
+      allDay: src.scheduleAllDay !== false,
+      startTime: asString(src.scheduleStartTime).trim() || null,
+      endTime: asString(src.scheduleEndTime).trim() || null,
+      runUntilDeactivated: runUntil,
+    },
+  }
+  if (bannerType === 'SCROLL') {
+    body.settings.carousel = {
+      rotationSeconds: Math.min(Math.max(Number(src.rotationSeconds) || 5, 2), 120),
+    }
+  }
+  if (bannerType === 'POPUP') {
+    body.settings.popup = {
+      frequency: asString(src.popupFrequency || 'ONCE_PER_SESSION'),
+      trigger: asString(src.popupTrigger || 'APP_LAUNCH'),
+      dismissable: src.popupDismissable !== false,
+      dismissCountsTowardFrequency: Boolean(src.popupDismissCounts),
+    }
+  }
+
+  if (bannerType === 'SCROLL' && Array.isArray(src.slides) && src.slides.length) {
+    body.slides = src.slides.map((slide, index) => mapSlideToApi(slide, index))
+  }
 
   const targetId = asString(src.targetId || src.target).trim()
   const ctaUrl = asString(src.ctaUrl || src.url).trim()
@@ -929,6 +1033,7 @@ export function mapAdminUiEditorPublishRequest(app) {
 }
 
 export const EXCLUSIVE_OFFERS_SLOT_ID = 'home_exclusive_offers'
+export const TOP_PICKS_SLOT_ID = 'home_top_picks'
 
 function mapExclusiveOfferItem(item, index = 0) {
   if (!item || typeof item !== 'object') return null
@@ -1122,6 +1227,54 @@ export function buildExclusiveOffersSlot(section, items = []) {
     visibleCount,
     slotBanners: [],
   }
+}
+
+export function buildTopPicksSlot(preview = {}) {
+  const items = Array.isArray(preview.items) ? preview.items : []
+  const activeCount = items.filter((item) => item.isActive !== false).length
+  return {
+    id: TOP_PICKS_SLOT_ID,
+    label: 'Top picks near you',
+    type: 'Static',
+    displayType: 'Static',
+    bannerType: 'STATIC',
+    slotKind: 'top-picks',
+    showInPreview: false,
+    previewLabel: 'Top picks near you',
+    topPicksPreview: preview,
+    bannerCount: activeCount,
+    banners: activeCount,
+    activeCount,
+    active: preview.isActive === false ? 0 : activeCount,
+    slotBanners: [],
+  }
+}
+
+export function injectTopPicksSlot(slots, preview) {
+  if (!Array.isArray(slots) || slots.length === 0) return slots
+  const topPicksSlot = buildTopPicksSlot(preview)
+  const existingIdx = slots.findIndex(
+    (slot) => slot.id === TOP_PICKS_SLOT_ID || slot.slotKind === 'top-picks',
+  )
+  if (existingIdx >= 0) {
+    const next = [...slots]
+    next[existingIdx] = { ...next[existingIdx], ...topPicksSlot }
+    return next
+  }
+  const exclusiveIdx = slots.findIndex(
+    (slot) => slot.id === EXCLUSIVE_OFFERS_SLOT_ID || slot.slotKind === 'exclusive-offers',
+  )
+  if (exclusiveIdx >= 0) {
+    const next = [...slots]
+    next.splice(exclusiveIdx, 0, topPicksSlot)
+    return next
+  }
+  return [...slots, topPicksSlot]
+}
+
+export function injectCustomerHomeSlots(slots, { exclusiveSection, exclusiveItems, topPicksPreview }) {
+  const withTopPicks = injectTopPicksSlot(slots, topPicksPreview)
+  return injectExclusiveOffersSlot(withTopPicks, exclusiveSection, exclusiveItems)
 }
 
 export function injectExclusiveOffersSlot(slots, section, items) {

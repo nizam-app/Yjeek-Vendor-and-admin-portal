@@ -155,3 +155,12 @@ test('POD page has no mock/demo fallback path', () => {
   assert.doesNotMatch(page, /Ahmed K\.|Fatima R\.|Ali M\.|Sara Q\./)
   assert.doesNotMatch(page, /frontend mock only/)
 })
+
+test('POD champ Edit passes returnTo for Fleet edit back navigation', () => {
+  const page = readSrc('src', 'pages', 'admin', 'automation', 'AdminPayOnDeliveryPage.jsx')
+  const champEdit = readSrc('src', 'pages', 'admin', 'management', 'AdminAddChampPage.jsx')
+  assert.match(page, /state:\s*\{\s*returnTo:\s*POD_CHAMP_EDIT_RETURN_TO\s*\}/)
+  assert.match(page, /POD_CHAMP_EDIT_RETURN_TO\s*=\s*'\/admin\/automation\/pay-on-delivery'/)
+  assert.match(champEdit, /resolveAdminReturnToPath/)
+  assert.match(champEdit, /returnToPath/)
+})

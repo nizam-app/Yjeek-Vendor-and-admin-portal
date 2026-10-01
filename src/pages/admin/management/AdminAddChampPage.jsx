@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft } from 'lucide-react'
 import motoBikeIcon from '../../../assets/moto_bike.png'
 import carIcon from '../../../assets/💨.png'
@@ -347,12 +347,26 @@ function DocSection({ title, slots, docs, onDocChange }) {
   )
 }
 
+function resolveAdminReturnToPath(state) {
+  const path = state?.returnTo
+  if (typeof path !== 'string') return null
+  const trimmed = path.trim()
+  if (!trimmed.startsWith('/admin/')) return null
+  return trimmed
+}
+
 export default function AdminAddChampPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { champId } = useParams()
   const isEdit = Boolean(champId)
+  const returnToPath = resolveAdminReturnToPath(location.state)
   const useRealFleet = isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
   const goBack = () => {
+    if (returnToPath) {
+      navigate(returnToPath)
+      return
+    }
     if (isEdit) {
       navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
       return
@@ -696,7 +710,11 @@ export default function AdminAddChampPage() {
       if (isEdit) {
         await adminService.updateAdminFleetChamp(champId, payload)
         allowLeave()
-        navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
+        if (returnToPath) {
+          navigate(returnToPath)
+        } else {
+          navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
+        }
         return
       }
 
