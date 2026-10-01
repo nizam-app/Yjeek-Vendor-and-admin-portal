@@ -9,7 +9,16 @@ import {
   validateAdminImageFile,
 } from '../../services/admin/uploadService'
 import AdminMediaImage from './AdminMediaImage'
+import BannerSchedulingSection from './banner/BannerSchedulingSection'
+import CarouselSlidesEditor from './banner/CarouselSlidesEditor'
+import PopupBannerFields from './banner/PopupBannerFields'
 import { cn } from './cn'
+
+const BANNER_TYPE_TO_SLOT = {
+  static: 'STATIC',
+  scroll: 'SCROLL',
+  popup: 'POPUP',
+}
 
 const DEFAULT_BANNER_TYPES = [
   { id: 'static', label: 'Static banner' },
@@ -162,6 +171,16 @@ function buildBannerForm({
       end: initial.end || '2026-03-30',
       audience: initial.audience || DEFAULT_AUDIENCES[0],
       active: initial.active !== false,
+      scheduleAllDay: initial.scheduleAllDay !== false,
+      scheduleStartTime: initial.scheduleStartTime || '',
+      scheduleEndTime: initial.scheduleEndTime || '',
+      runUntilDeactivated: Boolean(initial.runUntilDeactivated),
+      rotationSeconds: initial.rotationSeconds ?? 5,
+      popupFrequency: initial.popupFrequency || 'ONCE_PER_SESSION',
+      popupTrigger: initial.popupTrigger || 'APP_LAUNCH',
+      popupDismissable: initial.popupDismissable !== false,
+      popupDismissCounts: Boolean(initial.popupDismissCounts),
+      slides: Array.isArray(initial.slides) && initial.slides.length ? initial.slides : [],
     }
   }
 
@@ -181,6 +200,16 @@ function buildBannerForm({
     end: '2026-03-30',
     audience: DEFAULT_AUDIENCES[0],
     active: true,
+    scheduleAllDay: true,
+    scheduleStartTime: '',
+    scheduleEndTime: '',
+    runUntilDeactivated: false,
+    rotationSeconds: 5,
+    popupFrequency: 'ONCE_PER_SESSION',
+    popupTrigger: 'APP_LAUNCH',
+    popupDismissable: true,
+    popupDismissCounts: false,
+    slides: [],
   }
 }
 
@@ -253,7 +282,14 @@ export default function AdminNewBannerModal({
   }, [])
 
   const placementOptions = useMemo(() => {
-    const labels = placements.map((item) =>
+    const wantedType = BANNER_TYPE_TO_SLOT[form.type] || 'STATIC'
+    const labels = placements
+      .filter((item) => {
+        if (typeof item === 'string') return true
+        const slotType = item.bannerType || item.type
+        return !slotType || slotType === wantedType
+      })
+      .map((item) =>
       typeof item === 'string'
         ? { value: item, label: item }
         : {
@@ -266,7 +302,7 @@ export default function AdminNewBannerModal({
       return [{ value: form.placement, label: form.placement }, ...labels]
     }
     return labels
-  }, [placements, form.placement])
+  }, [placements, form.placement, form.type])
 
   const needsTarget = TAP_ACTIONS_NEEDING_TARGET.has(form.tapAction)
   const needsUrl = form.tapAction === 'Open URL'
@@ -378,7 +414,30 @@ export default function AdminNewBannerModal({
 
   const handleSubmit = async () => {
     if (isSubmitting || isUploading) return
-    if (localPreviewUrl && !form.imageUrl) {
+    if (form.type === 'scroll') {
+      const slides = Array.isArray(form.slides) ? form.slides : []
+      if (!slides.length || !slides.some((s) => s.imageUrl)) {
+        setUploadError(
+          Object.assign(new Error('Add at least one carousel image before saving.'), {
+            message: 'Add at least one carousel image before saving.',
+          }),
+        )
+        return
+      }
+    }
+    if (
+      form.type !== 'scroll' &&
+      !form.imageUrl &&
+      (form.type === 'static' || form.type === 'popup')
+    ) {
+      setUploadError(
+        Object.assign(new Error('Upload an image before saving.'), {
+          message: 'Upload an image before saving.',
+        }),
+      )
+      return
+    }
+    if (form.type !== 'scroll' && localPreviewUrl && !form.imageUrl) {
       setUploadError(
         Object.assign(new Error('Image upload did not finish. Please retry before saving.'), {
           message: 'Image upload did not finish. Please retry before saving.',
@@ -462,6 +521,27 @@ export default function AdminNewBannerModal({
             </div>
           </div>
 
+          <BannerSchedulingSection form={form} setField={setField} busy={busy} />
+
+          {form.type === 'popup' ? (
+            <PopupBannerFields form={form} setField={setField} busy={busy} />
+          ) : null}
+
+          {form.type === 'scroll' ? (
+            <CarouselSlidesEditor
+              form={form}
+              setForm={setForm}
+              busy={busy}
+              tapActions={tapActions.length ? tapActions : DEFAULT_TAP_ACTIONS}
+              targetOptions={targetOptions}
+              targetsLoading={targetsLoading}
+              onTapActionChange={(value) =>
+                onTapActionChange?.(TAP_ACTION_TO_API[value] || value)
+              }
+            />
+          ) : null}
+
+          {form.type !== 'scroll' ? (
           <div className="flex w-full flex-col items-start gap-1.5">
             <FieldLabel>Image</FieldLabel>
             <input
@@ -531,7 +611,9 @@ export default function AdminNewBannerModal({
               </p>
             ) : null}
           </div>
+          ) : null}
 
+          {form.type === 'static' ? null : (
           <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
             <label className="flex min-w-0 flex-col items-start gap-1.5">
               <FieldLabel>Title</FieldLabel>
@@ -550,7 +632,9 @@ export default function AdminNewBannerModal({
               />
             </label>
           </div>
+          )}
 
+          {form.type === 'static' ? null : (
           <label className="flex w-full flex-col items-start gap-1.5">
             <FieldLabel>Button label</FieldLabel>
             <TextInput
@@ -559,7 +643,9 @@ export default function AdminNewBannerModal({
               onChange={(value) => setField('ctaLabel', value)}
             />
           </label>
+          )}
 
+          {form.type !== 'scroll' ? (
           <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
             <label className="flex min-w-0 flex-col items-start gap-1.5">
               <FieldLabel>Tap action</FieldLabel>
@@ -605,6 +691,7 @@ export default function AdminNewBannerModal({
               </div>
             )}
           </div>
+          ) : null}
 
           <label className="flex w-full max-w-full flex-col items-start gap-1.5 min-[520px]:w-[188px]">
             <FieldLabel>Placement</FieldLabel>
@@ -616,26 +703,7 @@ export default function AdminNewBannerModal({
             />
           </label>
 
-          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
-            <label className="flex min-w-0 flex-col items-start gap-1.5">
-              <FieldLabel>Start</FieldLabel>
-              <DateField
-                value={form.start}
-                disabled={busy}
-                onChange={(value) => setField('start', value)}
-              />
-            </label>
-            <label className="flex min-w-0 flex-col items-start gap-1.5">
-              <FieldLabel>End</FieldLabel>
-              <DateField
-                value={form.end}
-                disabled={busy}
-                onChange={(value) => setField('end', value)}
-              />
-            </label>
-          </div>
-
-          <div className="grid w-full grid-cols-1 gap-4 min-[520px]:grid-cols-2">
+          {form.type !== 'static' && form.type !== 'popup' ? (
             <label className="flex min-w-0 flex-col items-start gap-1.5">
               <FieldLabel>Audience</FieldLabel>
               <SelectField
@@ -645,11 +713,13 @@ export default function AdminNewBannerModal({
                 options={audiences.length ? audiences : DEFAULT_AUDIENCES}
               />
             </label>
-            <div className="flex min-w-0 flex-col items-start gap-1.5">
-              <FieldLabel>Active</FieldLabel>
+          ) : null}
+
+          <div className="flex min-w-0 flex-col items-start gap-1.5">
+              <FieldLabel>{form.type === 'scroll' ? 'Carousel active' : 'Active'}</FieldLabel>
               <div className="flex min-h-[38px] w-full items-center gap-2.5 rounded-[10px] bg-[#F7FAF7] px-3 py-[9px]">
                 <span className="text-[13px] font-semibold leading-4 text-[#1C211F]">
-                  Publish immediately
+                  {form.active ? 'Published / active' : 'Inactive'}
                 </span>
                 <div className="flex-1" />
                 <button
@@ -667,7 +737,6 @@ export default function AdminNewBannerModal({
                 </button>
               </div>
             </div>
-          </div>
 
           {error ? (
             <p className="w-full text-[12.5px] font-medium text-[#c91a24]">

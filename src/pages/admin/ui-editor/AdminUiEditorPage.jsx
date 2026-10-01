@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ChevronDown,
   CreditCard,
@@ -60,9 +60,12 @@ import {
 import { adminUiEditorService } from '../../../services/admin/uiEditorService'
 import {
   EXCLUSIVE_OFFERS_SLOT_ID,
-  injectExclusiveOffersSlot,
+  TOP_PICKS_SLOT_ID,
+  injectCustomerHomeSlots,
 } from '../../../mappers/admin/mapAdminUiEditor'
 import ExclusiveOffersTab from '../../../components/admin/ui-editor/ExclusiveOffersTab'
+import TopPicksModal from '../../../components/admin/ui-editor/TopPicksModal'
+import { TopPicksHomeSection } from '../../../components/admin/ui-editor/TopPicksPhonePreview'
 import ExclusiveOffersSlotPanel from '../../../components/admin/ui-editor/ExclusiveOffersSlotPanel'
 import AddExclusiveProductsModal from '../../../components/admin/ui-editor/AddExclusiveProductsModal'
 import iconHouse from '../../../assets/icon-house.png'
@@ -75,9 +78,18 @@ const TABS = [
   { id: 'exclusive-offers', label: 'Exclusive offers' },
 ]
 
-/** Old UI Editor home was the Banners tab. That URL now opens Marketing › Banners. */
-const MARKETING_BANNERS_PATH = '/admin/marketing/banners'
-const UI_EDITOR_KEEP_TABS = new Set(['screen-map', 'categories', 'exclusive-offers'])
+const UI_EDITOR_TAB_IDS = new Set([
+  'screen-map',
+  'banners',
+  'categories',
+  'exclusive-offers',
+])
+
+function resolveUiEditorTab(requestedTab) {
+  if (requestedTab === 'top-picks') return 'banners'
+  if (requestedTab && UI_EDITOR_TAB_IDS.has(requestedTab)) return requestedTab
+  return 'banners'
+}
 
 const SLOT_TYPE_STYLE = {
   Scroll: 'bg-[#e3f2fd] text-[#1565c0]',
@@ -622,6 +634,18 @@ function isExclusiveOffersSlot(slot) {
   return slot?.slotKind === 'exclusive-offers' || slot?.id === EXCLUSIVE_OFFERS_SLOT_ID
 }
 
+function isTopPicksSlot(slot) {
+  return slot?.slotKind === 'top-picks' || slot?.id === TOP_PICKS_SLOT_ID
+}
+
+function topPicksSlotCount(slot) {
+  const preview = slot?.topPicksPreview
+  if (Array.isArray(preview?.items) && preview.items.length > 0) {
+    return preview.items.filter((item) => item.isActive !== false).length
+  }
+  return Number(slot?.bannerCount ?? slot?.banners ?? 0)
+}
+
 function formatExclusiveBhd(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '0.000'
@@ -963,7 +987,17 @@ function enrichScreensWithBanners(screens, banners = []) {
   })
 }
 
-function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading, onAddExclusive, exclusiveEditor }) {
+function ScreenCard({
+  screen,
+  onAdd,
+  onEdit,
+  onDelete,
+  onPreview,
+  previewLoading,
+  onAddExclusive,
+  onAddTopPicks,
+  exclusiveEditor,
+}) {
   const [open, setOpen] = useState(true)
   const [openSlots, setOpenSlots] = useState(() => {
     const initial = {}
@@ -1043,8 +1077,17 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
               const nestedBanners = Array.isArray(slot.slotBanners) ? slot.slotBanners : []
               const exclusiveItems = Array.isArray(slot.exclusiveItems) ? slot.exclusiveItems : []
               const exclusive = isExclusiveOffersSlot(slot)
-              const count = exclusive ? exclusiveSlotCount(slot) : slotBannerCount(slot)
-              const active = exclusive ? exclusiveSlotLiveCount(slot) : slotActiveCount(slot)
+              const topPicks = isTopPicksSlot(slot)
+              const count = exclusive
+                ? exclusiveSlotCount(slot)
+                : topPicks
+                  ? topPicksSlotCount(slot)
+                  : slotBannerCount(slot)
+              const active = exclusive
+                ? exclusiveSlotLiveCount(slot)
+                : topPicks
+                  ? topPicksSlotCount(slot)
+                  : slotActiveCount(slot)
               const primaryBanner = toEditableBanner(nestedBanners[0], slot)
               const slotLabel = slotDisplayLabel(slot)
               const slotMenuKey = `slot:${slot.id}`
@@ -1067,28 +1110,34 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
                         <p className="mt-[3px] text-[12px] leading-none text-[#707070]">
                           {exclusive
                             ? `${count} product${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} live` : ''}`
-                            : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
+                            : topPicks
+                              ? `${count} item${count === 1 ? '' : 's'} · per branch`
+                              : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
                         </p>
                       </div>
                     </button>
                     <div className="flex shrink-0 items-center gap-2">
-                      <SlotTypeBadge type={slot.displayType || slot.type} />
+                      {!exclusive && !topPicks ? (
+                        <SlotTypeBadge type={slot.displayType || slot.type} />
+                      ) : null}
                       <button
                         type="button"
                         onClick={() =>
-                          exclusive
-                            ? onAddExclusive?.()
-                            : onAdd?.({
-                                placement: slotLabel,
-                                placementKey: slot.id,
-                              })
+                          topPicks
+                            ? onAddTopPicks?.()
+                            : exclusive
+                              ? onAddExclusive?.()
+                              : onAdd?.({
+                                  placement: slotLabel,
+                                  placementKey: slot.id,
+                                })
                         }
                         className="inline-flex h-[30px] items-center gap-1 rounded-full bg-[#e8f5e9] px-3 text-[12px] font-bold text-[#2e7d32] hover:bg-[#dcedc8]"
                       >
                         <Plus size={13} strokeWidth={2.8} />
                         Add
                       </button>
-                      {!exclusive ? (
+                      {!exclusive && !topPicks ? (
                         <SlotActionMenu
                           menuId={menuId}
                           setMenuId={setMenuId}
@@ -1102,6 +1151,21 @@ function ScreenCard({ screen, onAdd, onEdit, onDelete, onPreview, previewLoading
                       ) : null}
                     </div>
                   </div>
+
+                  {slotOpen && topPicks ? (
+                    <div className="relative ml-[11px] border-l border-[#d5ddd7] pb-2 pl-4">
+                      <p className="text-[12px] text-[#7c8780]">
+                        Menu items, order, radius (km) and active toggle — per branch.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onAddTopPicks?.()}
+                        className="mt-2 inline-flex h-[32px] items-center rounded-full bg-[#1aa054] px-3 text-[12px] font-bold text-white"
+                      >
+                        Manage Top picks
+                      </button>
+                    </div>
+                  ) : null}
 
                   {slotOpen && exclusive && exclusiveEditor ? (
                     <div className="relative ml-[11px] border-l border-[#d5ddd7] pb-2 pl-4">
@@ -1461,6 +1525,10 @@ function PhoneLivePreview({
   exclusiveSection,
   exclusiveItems = [],
   onAddExclusive,
+  onAddTopPicks,
+  topPicksPreviewItems = [],
+  topPicksPreviewActive = true,
+  topPicksPreviewBranchName = '',
 }) {
   if (platform === 'champ') {
     return (
@@ -1544,13 +1612,12 @@ function PhoneLivePreview({
             />
           ) : null}
 
-          <div>
-            <p className="mb-2 text-[12px] font-bold text-[#17231c]">Top picks near you</p>
-            <div className="space-y-2">
-              <div className="h-11 rounded-[10px] bg-[#e8f5e9]" />
-              <div className="h-11 rounded-[10px] bg-[#e8f5e9]" />
-            </div>
-          </div>
+          <TopPicksHomeSection
+            items={topPicksPreviewItems}
+            isActive={topPicksPreviewActive}
+            branchName={topPicksPreviewBranchName}
+            onConfigure={onAddTopPicks}
+          />
 
           {showExclusive ? (
             <div>
@@ -1632,6 +1699,10 @@ function MobilePreviewModal({
   exclusiveSection,
   exclusiveItems,
   onAddExclusive,
+  onAddTopPicks,
+  topPicksPreviewItems,
+  topPicksPreviewActive,
+  topPicksPreviewBranchName,
 }) {
   if (!open) return null
 
@@ -1706,6 +1777,10 @@ function MobilePreviewModal({
             exclusiveSection={exclusiveSection}
             exclusiveItems={exclusiveItems}
             onAddExclusive={onAddExclusive}
+            onAddTopPicks={onAddTopPicks}
+            topPicksPreviewItems={topPicksPreviewItems}
+            topPicksPreviewActive={topPicksPreviewActive}
+            topPicksPreviewBranchName={topPicksPreviewBranchName}
           />
         </div>
       </div>
@@ -1723,9 +1798,14 @@ function BannersAdsTab({
   bannersRefreshKey = 0,
   exclusiveEditor,
   onAddExclusive,
+  onAddTopPicks,
   mobilePreviewOpen = false,
   onMobilePreviewClose,
+  topPicksPreview,
 }) {
+  const topPicksPreviewItems = topPicksPreview?.items ?? []
+  const topPicksPreviewActive = topPicksPreview?.isActive !== false
+  const topPicksPreviewBranchName = topPicksPreview?.branchName ?? ''
   const [screenId, setScreenId] = useState('home')
   const [menuId, setMenuId] = useState(null)
   const [openSlots, setOpenSlots] = useState({})
@@ -1836,10 +1916,14 @@ function BannersAdsTab({
     })
 
     if (platform === 'customer' && screenId === 'home') {
-      return injectExclusiveOffersSlot(mapped, exclusiveSection, exclusiveItems)
+      return injectCustomerHomeSlots(mapped, {
+        exclusiveSection,
+        exclusiveItems,
+        topPicksPreview,
+      })
     }
     return mapped
-  }, [slots, banners, platform, screenId, exclusiveSection, exclusiveItems])
+  }, [slots, banners, platform, screenId, exclusiveSection, exclusiveItems, topPicksPreview])
 
   useEffect(() => {
     setOpenSlots((prev) => {
@@ -1901,6 +1985,10 @@ function BannersAdsTab({
                 exclusiveSection={exclusiveSection}
                 exclusiveItems={exclusiveItems}
                 onAddExclusive={onAddExclusive}
+                onAddTopPicks={onAddTopPicks}
+                topPicksPreviewItems={topPicksPreviewItems}
+                topPicksPreviewActive={topPicksPreviewActive}
+                topPicksPreviewBranchName={topPicksPreviewBranchName}
               />
             </div>
           </div>
@@ -1941,11 +2029,18 @@ function BannersAdsTab({
                   ? slot.exclusiveItems
                   : []
                 const exclusive = isExclusiveOffersSlot(slot)
+                const topPicks = isTopPicksSlot(slot)
                 const slotOpen = openSlots[slot.id] !== false
-                const count = exclusive ? exclusiveSlotCount(slot) : Number(slot.bannerCount ?? slot.banners ?? nestedBanners.length ?? 0)
+                const count = exclusive
+                  ? exclusiveSlotCount(slot)
+                  : topPicks
+                    ? topPicksSlotCount(slot)
+                    : Number(slot.bannerCount ?? slot.banners ?? nestedBanners.length ?? 0)
                 const active = exclusive
                   ? exclusiveSlotLiveCount(slot)
-                  : Number(slot.activeCount ?? slot.active ?? 0)
+                  : topPicks
+                    ? topPicksSlotCount(slot)
+                    : Number(slot.activeCount ?? slot.active ?? 0)
                 const primaryBanner = nestedBanners[0] || null
                 const slotLabel = slot.label || slotDisplayLabel(slot)
                 const slotMenuKey = `ads-slot:${slot.id}`
@@ -1972,6 +2067,8 @@ function BannersAdsTab({
                         <div className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#eef2ef] text-[#637068]">
                           {exclusive ? (
                             <Package size={16} strokeWidth={2} />
+                          ) : topPicks ? (
+                            <MapPin size={16} strokeWidth={2} />
                           ) : (
                             <ImageIcon size={16} strokeWidth={2} />
                           )}
@@ -1981,26 +2078,30 @@ function BannersAdsTab({
                           <p className="mt-0.5 text-[12px] text-[#7c8780]">
                             {exclusive
                               ? `${count} product${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} live` : ''}`
-                              : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
+                              : topPicks
+                                ? `${count} item${count === 1 ? '' : 's'} · per branch`
+                                : `${count} banner${count === 1 ? '' : 's'}${active > 0 ? ` · ${active} active` : ''}`}
                           </p>
                         </div>
                       </button>
                       <button
                         type="button"
                         onClick={() =>
-                          exclusive
-                            ? onAddExclusive?.()
-                            : onAdd?.({
-                                placement: slotLabel,
-                                placementKey: slot.id,
-                              })
+                          topPicks
+                            ? onAddTopPicks?.()
+                            : exclusive
+                              ? onAddExclusive?.()
+                              : onAdd?.({
+                                  placement: slotLabel,
+                                  placementKey: slot.id,
+                                })
                         }
                         className="inline-flex h-[30px] shrink-0 items-center gap-1 rounded-full border border-[#1aa054] bg-white px-3 text-[12px] font-bold text-[#1aa054] hover:bg-[#e8f7ed]"
                       >
                         <Plus size={13} strokeWidth={2.8} />
                         Add
                       </button>
-                      {!exclusive ? (
+                      {!exclusive && !topPicks ? (
                         <SlotActionMenu
                           menuId={menuId}
                           setMenuId={setMenuId}
@@ -2013,6 +2114,21 @@ function BannersAdsTab({
                         />
                       ) : null}
                     </div>
+
+                    {slotOpen && topPicks ? (
+                      <div className="border-t border-[#eef1ef] bg-[#fafbfa] px-3 py-2.5">
+                        <p className="text-[12px] text-[#7c8780]">
+                          Configure per branch: menu items, order, radius, active.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => onAddTopPicks?.()}
+                          className="mt-2 inline-flex h-[32px] items-center rounded-full bg-[#1aa054] px-3 text-[12px] font-bold text-white"
+                        >
+                          Manage Top picks
+                        </button>
+                      </div>
+                    ) : null}
 
                     {slotOpen && exclusive && exclusiveEditor ? (
                       <div className="border-t border-[#eef1ef] bg-[#fafbfa] px-2 py-2">
@@ -2249,6 +2365,10 @@ function BannersAdsTab({
         exclusiveSection={exclusiveSection}
         exclusiveItems={exclusiveItems}
         onAddExclusive={onAddExclusive}
+        onAddTopPicks={onAddTopPicks}
+        topPicksPreviewItems={topPicksPreviewItems}
+        topPicksPreviewActive={topPicksPreviewActive}
+        topPicksPreviewBranchName={topPicksPreviewBranchName}
       />
     </div>
   )
@@ -3214,10 +3334,9 @@ function CategoriesTab({ onMessage }) {
 
 export default function AdminUiEditorPage({ surface = 'editor' }) {
   const marketingBanners = surface === 'marketing'
-  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedTab = searchParams.get('tab')
-  const editorTab = UI_EDITOR_KEEP_TABS.has(requestedTab) ? requestedTab : null
+  const editorTab = resolveUiEditorTab(requestedTab)
   const tab = marketingBanners ? 'banners' : editorTab
   const [platform, setPlatform] = useState('customer')
   const [bannerModal, setBannerModal] = useState({
@@ -3243,12 +3362,55 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
   })
   const [actionMessage, setActionMessage] = useState(null)
   const [exclusiveModalOpen, setExclusiveModalOpen] = useState(false)
+  const [topPicksModalOpen, setTopPicksModalOpen] = useState(false)
+  const [topPicksPreview, setTopPicksPreview] = useState({
+    items: [],
+    isActive: true,
+    branchName: '',
+  })
   const exclusiveEditor = useExclusiveOffersEditor({ onMessage: setActionMessage })
   const exclusiveSection = exclusiveEditor.section
   const exclusiveItems = exclusiveEditor.items
   const { apps, isLoading: appsLoading, error: appsError, refetch: refetchApps } =
     useAdminUiEditorApps()
   const appKey = platform === 'champ' ? 'CHAMP' : 'CUSTOMER'
+
+  useEffect(() => {
+    if (platform !== 'customer') {
+      setTopPicksPreview({ items: [], isActive: true })
+      return
+    }
+    let cancelled = false
+    const loadTopPicksPreview = async () => {
+      try {
+        const result = await adminUiEditorService.listTopPicksBranches()
+        const list = result?.data?.branches || []
+        const branch =
+          list.find((row) => row.isActive && row.itemCount > 0) ||
+          list.find((row) => row.itemCount > 0) ||
+          list[0]
+        if (!branch?.branchId) {
+          if (!cancelled) setTopPicksPreview({ items: [], isActive: true })
+          return
+        }
+        const cfgResult = await adminUiEditorService.getBranchTopPicks(branch.branchId)
+        const data = cfgResult?.data
+        if (!cancelled) {
+          setTopPicksPreview({
+            items: data?.items || [],
+            isActive: data?.isActive !== false,
+            branchName: data?.branchName || branch.branchName || '',
+          })
+        }
+      } catch {
+        if (!cancelled) setTopPicksPreview({ items: [], isActive: true })
+      }
+    }
+    loadTopPicksPreview()
+    return () => {
+      cancelled = true
+    }
+  }, [platform, editorTab, bannersRefreshKey])
 
   const visibleTabs = useMemo(
     () =>
@@ -3259,11 +3421,18 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
   )
 
   useEffect(() => {
-    if (marketingBanners || !editorTab) return
-    if (platform === 'champ' && (editorTab === 'categories' || editorTab === 'exclusive-offers')) {
-      setSearchParams({ tab: 'screen-map' }, { replace: true })
+    if (marketingBanners) return
+    if (requestedTab !== editorTab) {
+      setSearchParams({ tab: editorTab }, { replace: true })
+      return
     }
-  }, [marketingBanners, editorTab, platform, setSearchParams])
+    if (
+      platform === 'champ' &&
+      (editorTab === 'categories' || editorTab === 'exclusive-offers')
+    ) {
+      setSearchParams({ tab: 'banners' }, { replace: true })
+    }
+  }, [marketingBanners, requestedTab, editorTab, platform, setSearchParams])
   const {
     screens: apiScreens,
     apps: screenMapApps,
@@ -3312,18 +3481,23 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
       if (screen.id !== 'home') return screen
       return {
         ...screen,
-        slots: injectExclusiveOffersSlot(screen.slots, exclusiveSection, exclusiveItems),
+        slots: injectCustomerHomeSlots(screen.slots, {
+          exclusiveSection,
+          exclusiveItems,
+          topPicksPreview,
+        }),
       }
     })
-  }, [apiScreens, platform, allBanners, exclusiveSection, exclusiveItems])
+  }, [apiScreens, platform, allBanners, exclusiveSection, exclusiveItems, topPicksPreview])
 
   const modalPlacements = useMemo(() => {
     const fromMeta = bannersMeta?.placements || []
     if (fromMeta.length > 0) {
       return fromMeta.map((item) => ({
-        id: item.id,
-        key: item.id,
+        id: item.key || item.id,
+        key: item.key || item.id,
         label: item.label || item.id,
+        bannerType: item.bannerType,
       }))
     }
     const fromScreenMap = apiScreens.flatMap((screen) =>
@@ -3377,6 +3551,10 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
       typeof input === 'string' ? '' : input?.placementKey || input?.id || ''
     if (placementKey === EXCLUSIVE_OFFERS_SLOT_ID) {
       setExclusiveModalOpen(true)
+      return
+    }
+    if (placementKey === TOP_PICKS_SLOT_ID) {
+      setTopPicksModalOpen(true)
       return
     }
     const placement =
@@ -3604,10 +3782,6 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
         ? 'home'
         : screens[0]?.id || 'home'
 
-  if (!marketingBanners && !editorTab) {
-    return <Navigate to={MARKETING_BANNERS_PATH} replace />
-  }
-
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
       {marketingBanners ? <MarketingViewTabs active="banners" /> : null}
@@ -3714,13 +3888,7 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
           <button
             key={item.id}
             type="button"
-            onClick={() => {
-              if (item.id === 'banners') {
-                navigate(MARKETING_BANNERS_PATH)
-                return
-              }
-              setSearchParams({ tab: item.id }, { replace: true })
-            }}
+            onClick={() => setSearchParams({ tab: item.id }, { replace: true })}
             className={cn(
               'h-[34px] flex-1 rounded-[8px] px-3.5 text-[12.5px] font-bold transition',
               tab === item.id
@@ -3763,6 +3931,7 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
                 screen={screen}
                 onAdd={openBannerModal}
                 onAddExclusive={() => setExclusiveModalOpen(true)}
+                onAddTopPicks={() => setTopPicksModalOpen(true)}
                 exclusiveEditor={exclusiveEditor}
                 onEdit={openEditBannerModal}
                 onDelete={handleDeleteBanner}
@@ -3787,8 +3956,10 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
           bannersRefreshKey={bannersRefreshKey}
           exclusiveEditor={exclusiveEditor}
           onAddExclusive={() => setExclusiveModalOpen(true)}
+          onAddTopPicks={() => setTopPicksModalOpen(true)}
           mobilePreviewOpen={bannersMobilePreviewOpen}
           onMobilePreviewClose={() => setBannersMobilePreviewOpen(false)}
+          topPicksPreview={topPicksPreview}
         />
       ) : null}
 
@@ -3799,6 +3970,13 @@ export default function AdminUiEditorPage({ surface = 'editor' }) {
       {tab === 'exclusive-offers' ? (
         <ExclusiveOffersTab editor={exclusiveEditor} />
       ) : null}
+
+      <TopPicksModal
+        open={topPicksModalOpen}
+        onClose={() => setTopPicksModalOpen(false)}
+        onMessage={setActionMessage}
+        onPreviewChange={setTopPicksPreview}
+      />
 
       <AddExclusiveProductsModal
         open={exclusiveModalOpen}

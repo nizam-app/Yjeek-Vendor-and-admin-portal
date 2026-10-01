@@ -42,7 +42,7 @@ export function mapAdminVendorsStatusQuery(tab = 'All') {
 
 /**
  * Match a vendor row to a Vendor Management status tab.
- * Uses accountStatus from the API when present; falls back to display status.
+ * Active tab follows the Status column; other tabs use accountStatus / display status.
  */
 export function matchesVendorTab(row, tab = 'All') {
   const label = String(tab || 'All').trim()
@@ -52,10 +52,8 @@ export function matchesVendorTab(row, tab = 'All') {
   const accountStatus = String(row?.accountStatus || '').trim().toUpperCase()
 
   if (label === 'Active') {
-    return (
-      accountStatus === 'ACTIVE' ||
-      (status === 'active' && accountStatus !== 'SUSPENDED' && accountStatus !== 'DRAFT')
-    )
+    // Tab matches the Status column (operational), not accountStatus alone.
+    return status === 'active'
   }
   if (label === 'Pending') {
     return accountStatus === 'PENDING_APPROVAL' || /pending/.test(status)

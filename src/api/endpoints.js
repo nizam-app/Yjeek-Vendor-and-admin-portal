@@ -1141,6 +1141,19 @@ export const endpoints = {
         /** Confirmed: POST /admin/ui-editor/home/exclusive-offers/publish */
         exclusiveOffersPublish: '/admin/ui-editor/home/exclusive-offers/publish',
       },
+      topPicks: {
+        branches: '/admin/ui-editor/top-picks/branches',
+        branch: (branchId) =>
+          `/admin/ui-editor/top-picks/branches/${encodeURIComponent(String(branchId || '').trim())}`,
+        branchProducts: (branchId) =>
+          `/admin/ui-editor/top-picks/branches/${encodeURIComponent(String(branchId || '').trim())}/products`,
+        branchItems: (branchId) =>
+          `/admin/ui-editor/top-picks/branches/${encodeURIComponent(String(branchId || '').trim())}/items`,
+        branchItemsReorder: (branchId) =>
+          `/admin/ui-editor/top-picks/branches/${encodeURIComponent(String(branchId || '').trim())}/items/reorder`,
+        branchItem: (branchId, itemId) =>
+          `/admin/ui-editor/top-picks/branches/${encodeURIComponent(String(branchId || '').trim())}/items/${encodeURIComponent(String(itemId || '').trim())}`,
+      },
     },
     reports: {
       /**

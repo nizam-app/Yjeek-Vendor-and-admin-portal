@@ -689,4 +689,80 @@ export const adminUiEditorService = {
       raw: response?.data ?? null,
     }
   },
+
+  async listTopPicksBranches(params = {}, options = {}) {
+    if (!useRealUiEditorApi()) return { data: { branches: [] }, meta: null }
+    const response = await apiClient.get(endpoints.admin.uiEditor.topPicks.branches, {
+      ...requestOptions(options),
+      params,
+    })
+    return { data: response?.data ?? { branches: [] }, meta: response?.meta ?? null }
+  },
+
+  async getBranchTopPicks(branchId, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.get(
+      endpoints.admin.uiEditor.topPicks.branch(branchId),
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
+
+  async updateBranchTopPicks(branchId, body, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.topPicks.branch(branchId),
+      body,
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
+
+  async listBranchTopPickProducts(branchId, params = {}, options = {}) {
+    if (!useRealUiEditorApi()) return { data: { products: [] }, meta: null }
+    const response = await apiClient.get(endpoints.admin.uiEditor.topPicks.branchProducts(branchId), {
+      ...requestOptions(options),
+      params,
+    })
+    return { data: response?.data ?? { products: [] }, meta: response?.meta ?? null }
+  },
+
+  async addBranchTopPickItems(branchId, body, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.post(
+      endpoints.admin.uiEditor.topPicks.branchItems(branchId),
+      body,
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
+
+  async reorderBranchTopPickItems(branchId, body, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.topPicks.branchItemsReorder(branchId),
+      body,
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
+
+  async updateBranchTopPickItem(branchId, itemId, body, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.patch(
+      endpoints.admin.uiEditor.topPicks.branchItem(branchId, itemId),
+      body,
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
+
+  async deleteBranchTopPickItem(branchId, itemId, options = {}) {
+    if (!useRealUiEditorApi()) throw new Error('UI Editor API is not enabled.')
+    const response = await apiClient.delete(
+      endpoints.admin.uiEditor.topPicks.branchItem(branchId, itemId),
+      requestOptions(options),
+    )
+    return { data: response?.data, meta: response?.meta ?? null }
+  },
 }

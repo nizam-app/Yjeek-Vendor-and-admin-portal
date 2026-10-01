@@ -43,7 +43,7 @@ const navItems = [
   ['Marketing', '/admin/marketing', Megaphone],
   ['SLA Models', '/admin/sla-models', Clock3],
   ['Automation', '/admin/automation', Workflow],
-  ['UI Editor', '/admin/ui-editor?tab=screen-map', PanelTop],
+  ['UI Editor', '/admin/ui-editor?tab=banners', PanelTop],
   ['Users', '/admin/users', ShieldCheck],
   ['Reports', '/admin/reports', BarChart3],
   ['Settings', '/admin/settings', Settings],

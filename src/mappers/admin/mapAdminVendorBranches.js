@@ -86,6 +86,33 @@ export function map24hToUiTime(value) {
   return `${hour}:${minute} ${period}`
 }
 
+function timeToMinutes(time24) {
+  const [h, m] = String(time24 || '00:00')
+    .split(':')
+    .map((part) => Number(part) || 0)
+  return h * 60 + m
+}
+
+function minutesToTime(total) {
+  const normalized = ((total % (24 * 60)) + 24 * 60) % (24 * 60)
+  const hour = Math.floor(normalized / 60)
+  const minute = normalized % 60
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+/** Last order 30 minutes before close; supports overnight close (e.g. 12:00 → 01:00). */
+function deriveLastOrder(open24, close24) {
+  const openMins = timeToMinutes(open24)
+  let closeMins = timeToMinutes(close24)
+  if (closeMins <= openMins) closeMins += 24 * 60
+
+  let lastOrderMins = closeMins - 30
+  if (lastOrderMins <= openMins) lastOrderMins = openMins + 30
+  if (lastOrderMins >= closeMins) lastOrderMins = closeMins
+
+  return minutesToTime(lastOrderMins)
+}
+
 /**
  * Wizard hours UI → API openingHours (sun|mon|…|sat).
  * Closed day: "closed". Open day: { open, close } (+ optional shifts for split).
@@ -120,15 +147,17 @@ export function mapWizardHoursToOpeningHours(hours) {
       openingHours[key] = 'closed'
       continue
     }
-    if (mappedShifts.length === 1) {
-      openingHours[key] = mappedShifts[0]
-    } else {
-      openingHours[key] = {
-        open: mappedShifts[0].open,
-        close: mappedShifts[mappedShifts.length - 1].close,
-        shifts: mappedShifts,
-      }
+    const first = mappedShifts[0]
+    const last = mappedShifts[mappedShifts.length - 1]
+    const dayPayload = {
+      open: first.open,
+      lastOrder: deriveLastOrder(first.open, last.close),
+      close: last.close,
     }
+    if (mappedShifts.length > 1) {
+      dayPayload.shifts = mappedShifts
+    }
+    openingHours[key] = dayPayload
   }
 
   return any ? openingHours : undefined

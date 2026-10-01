@@ -20,6 +20,9 @@ import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationF
 import { adminPodAutomationService } from '../../../services/admin/podAutomationService'
 import { showError, showInfo, showSuccess } from '../../../utils/toast'
 
+/** Fleet champ edit uses `location.state.returnTo` to land back here after Back / Save. */
+export const POD_CHAMP_EDIT_RETURN_TO = '/admin/automation/pay-on-delivery'
+
 /**
  * Automation → Pay on Delivery.
  * Live Fleet + SystemConfig.platformSettings.pod — no mock/demo champs.
@@ -142,7 +145,9 @@ function RealPayOnDeliveryPage() {
   }
 
   function handleEdit(champ) {
-    navigate(`/admin/fleet/${encodeURIComponent(champ.id)}/edit`)
+    navigate(`/admin/fleet/${encodeURIComponent(champ.id)}/edit`, {
+      state: { returnTo: POD_CHAMP_EDIT_RETURN_TO },
+    })
   }
 
   function handleReset() {
