@@ -484,6 +484,22 @@ export default function AdminAddChampPage() {
   }, [storeTypeOptions, loadingEdit, selectedSlugs])
 
   useEffect(() => {
+    if (!storeTypeOptions.length || loadingEdit) return undefined
+    setSpecialTypes((prev) => {
+      if (!prev.length) return prev
+      const mapped = mapSpecialItemTypesToStoreTypeIds(prev, storeTypeOptions)
+      if (
+        mapped.length === prev.length &&
+        mapped.every((id, index) => id === prev[index])
+      ) {
+        return prev
+      }
+      return mapped
+    })
+    return undefined
+  }, [storeTypeOptions, loadingEdit])
+
+  useEffect(() => {
     if (!useRealFleet) return undefined
 
     let cancelled = false
@@ -570,20 +586,18 @@ export default function AdminAddChampPage() {
             ? nextStoreTypes
             : []
         setSelectedSlugs(hydratedSlugs)
-        if (Array.isArray(nextSpecialTypes) && nextSpecialTypes.length) {
-          setSpecialTypes(nextSpecialTypes)
-        }
+        const specialFromStoreTypes = hydratedEligibility.specialStoreTypeIds
+        const specialFinal =
+          specialFromStoreTypes.length > 0
+            ? specialFromStoreTypes
+            : Array.isArray(nextSpecialTypes)
+              ? nextSpecialTypes
+              : []
+        setSpecialTypes(specialFinal)
         if (nextDocs && typeof nextDocs === 'object') {
           setDocs((prev) => ({ ...prev, ...nextDocs }))
         }
-        const hydratedSlugsFinal = Array.isArray(nextSelectedSlugs)
-          ? nextSelectedSlugs
-          : Array.isArray(nextStoreTypes)
-            ? nextStoreTypes
-            : []
-        const specialFinal = Array.isArray(nextSpecialTypes) && nextSpecialTypes.length
-          ? nextSpecialTypes
-          : []
+        const hydratedSlugsFinal = hydratedSlugs
         setEditBaseline(
           serializeChampDraft(
             {

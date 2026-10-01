@@ -390,7 +390,13 @@ export function mapAdminCreateVendorRequest(input = {}) {
     commission: input.commissionDrafts
       ? {
           methods: Object.fromEntries(
-            COMMISSION_ORDER_METHODS.map((method) => {
+            (Array.isArray(input.enabledCommissionMethodIds) &&
+            input.enabledCommissionMethodIds.length
+              ? COMMISSION_ORDER_METHODS.filter((method) =>
+                  input.enabledCommissionMethodIds.includes(method.id),
+                )
+              : COMMISSION_ORDER_METHODS
+            ).map((method) => {
               const draft = input.commissionDrafts[method.id] || {}
               return [
                 method.id,

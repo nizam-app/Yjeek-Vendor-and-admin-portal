@@ -1,11 +1,40 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
+  commissionOrderMethodsForServiceLabels,
+  filterCommissionDraftsByMethodIds,
   getCommissionInheritanceState,
   mapAdminUpdateVendorCommissionRequest,
   mapAdminVendorCommissionResponse,
   mapAdminWizardCommissionRequest,
 } from '../src/mappers/admin/mapAdminVendorCommission.js'
+
+describe('commissionOrderMethodsForServiceLabels', () => {
+  it('returns only methods matching vendor SLA service mode labels', () => {
+    const methods = commissionOrderMethodsForServiceLabels([
+      'Hot food · on demand',
+      'Pickup',
+    ])
+    assert.deepEqual(
+      methods.map((item) => item.id),
+      ['delivery', 'pickup'],
+    )
+  })
+
+  it('returns empty when no labels', () => {
+    assert.deepEqual(commissionOrderMethodsForServiceLabels([]), [])
+  })
+})
+
+describe('filterCommissionDraftsByMethodIds', () => {
+  it('keeps only allowed method slices', () => {
+    const filtered = filterCommissionDraftsByMethodIds(
+      { delivery: { a: 1 }, pickup: { b: 2 }, dineIn: { c: 3 } },
+      ['delivery', 'pickup'],
+    )
+    assert.deepEqual(filtered, { delivery: { a: 1 }, pickup: { b: 2 } })
+  })
+})
 
 describe('mapAdminVendorCommission — D08 Batch 5', () => {
   it('maps inheritance + seededFromStoreType and formats VAT as auto', () => {
@@ -37,7 +66,7 @@ describe('mapAdminVendorCommission — D08 Batch 5', () => {
       seededFromStoreType: true,
     })
 
-    assert.equal(mapped.vatOnCommission, '10% (auto)')
+    assert.equal(mapped.vatOnCommission, '10%')
     assert.equal(mapped.currency, 'BHD')
     assert.equal(mapped.seededFromStoreType, true)
     assert.equal(mapped.inheritance.commissionRate.state, 'overridden')

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AdminCommissionEditModal from '../AdminCommissionEditModal'
 import {
   COMMISSION_ORDER_METHODS,
+  commissionOrderMethodsForServiceLabels,
   getCommissionInheritanceState,
 } from '../../../mappers/admin/mapAdminVendorCommission'
 
@@ -40,6 +41,7 @@ function formatCustomFee(fee) {
 export function AdminVendorCommission({
   commission: initialCommission,
   storeTypeName = '',
+  enabledServiceLabels = null,
   onSaveCommission,
   isSaving = false,
   saveError = null,
@@ -48,9 +50,23 @@ export function AdminVendorCommission({
   const [editOpen, setEditOpen] = useState(false)
   const [methodId, setMethodId] = useState('delivery')
 
+  const visibleOrderMethods = useMemo(() => {
+    if (Array.isArray(enabledServiceLabels)) {
+      return commissionOrderMethodsForServiceLabels(enabledServiceLabels)
+    }
+    return COMMISSION_ORDER_METHODS
+  }, [enabledServiceLabels])
+
   useEffect(() => {
     setCommission(initialCommission)
   }, [initialCommission])
+
+  useEffect(() => {
+    if (!visibleOrderMethods.length) return
+    if (!visibleOrderMethods.some((method) => method.id === methodId)) {
+      setMethodId(visibleOrderMethods[0].id)
+    }
+  }, [visibleOrderMethods, methodId])
 
   if (!commission) return null
 
@@ -83,8 +99,8 @@ export function AdminVendorCommission({
   const summaryRows = [
     ['Model', active.model, 'model'],
     [rateLabel, active.rate, ratePath],
-    ['VAT on commission', active.vatOnCommission || commission.vatOnCommission || '10% (auto)', null],
-    ['Currency', 'BHD', null],
+    ['VAT on commission', active.vatOnCommission || '—', null],
+    ['Currency', active.currency || commission.currency || '—', null],
   ]
 
   return (
@@ -92,27 +108,35 @@ export function AdminVendorCommission({
       <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
         <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">Commission &amp; fees</h3>
         <p className="mb-3 text-[12px] text-[#7c8780]">
-          Set separately for each order method. VAT stays the shared Bahrain rate.
+          Set separately for each order method enabled for this vendor. VAT stays the shared
+          Bahrain rate.
         </p>
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {COMMISSION_ORDER_METHODS.map((method) => (
-            <button
-              key={method.id}
-              type="button"
-              onClick={() => setMethodId(method.id)}
-              className={cn(
-                'h-[30px] rounded-full px-3 text-[12px]',
-                methodId === method.id
-                  ? 'bg-[#1aa054] font-bold text-white'
-                  : 'bg-[#f3f5f3] font-medium text-[#455249]',
-              )}
-            >
-              {method.label}
-            </button>
-          ))}
-        </div>
+        {!visibleOrderMethods.length ? (
+          <p className="mb-3 text-[12px] text-[#d64044]">
+            No order methods are enabled for this vendor. Turn on service modes on the SLA tab
+            first.
+          </p>
+        ) : (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {visibleOrderMethods.map((method) => (
+              <button
+                key={method.id}
+                type="button"
+                onClick={() => setMethodId(method.id)}
+                className={cn(
+                  'h-[30px] rounded-full px-3 text-[12px]',
+                  methodId === method.id
+                    ? 'bg-[#1aa054] font-bold text-white'
+                    : 'bg-[#f3f5f3] font-medium text-[#455249]',
+                )}
+              >
+                {methods[method.id]?.label || method.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {seeded && storeTypeName ? (
+        {visibleOrderMethods.length > 0 && seeded && storeTypeName ? (
           <div className="mt-3 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
             ✓ Pre-filled from <strong>{storeTypeName}</strong> commission defaults (store type
             inherits <strong>SLA → Delivery &amp; fees</strong> unless overridden). Edit any field
@@ -120,6 +144,8 @@ export function AdminVendorCommission({
           </div>
         ) : null}
 
+        {visibleOrderMethods.length > 0 ? (
+        <>
         <div className="mt-3">
           {summaryRows.map(([label, value, path]) => (
             <div
@@ -186,26 +212,33 @@ export function AdminVendorCommission({
         >
           Edit commission
         </button>
+        </>
+        ) : null}
       </section>
 
       <AdminCommissionEditModal
         open={editOpen}
         commission={active}
-        methodLabel={COMMISSION_ORDER_METHODS.find((method) => method.id === methodId)?.label}
+        methodLabel={visibleOrderMethods.find((method) => method.id === methodId)?.label}
         storeTypeName={storeTypeName}
         saving={isSaving}
         error={saveError}
         onClose={() => setEditOpen(false)}
         onSave={async (updated) => {
+          const mergedMethods = {
+            ...methods,
+            [methodId]: {
+              ...(methods[methodId] || commission),
+              ...updated,
+            },
+          }
+          const allowedIds = new Set(visibleOrderMethods.map((item) => item.id))
+          const filteredMethods = Object.fromEntries(
+            Object.entries(mergedMethods).filter(([key]) => allowedIds.has(key)),
+          )
           const next = {
             ...commission,
-            methods: {
-              ...methods,
-              [methodId]: {
-                ...(methods[methodId] || commission),
-                ...updated,
-              },
-            },
+            methods: filteredMethods,
           }
           if (!onSaveCommission) {
             setCommission(next)

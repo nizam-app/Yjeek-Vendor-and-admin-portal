@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ChevronLeft, Pause, Play, Plus, Star } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
@@ -24,6 +24,7 @@ import {
   emptyAdminDeliveryZones,
   mapAdminDeliveryZoneOverridesFromBranches,
 } from '../../../mappers/admin/mapAdminVendors'
+import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 
 function normalizeVendorDetailTab(raw) {
   const tab = String(raw || '').trim()
@@ -356,6 +357,13 @@ export default function AdminVendorDetailPage() {
       cancelled = true
     }
   }, [vendorId, location.key, tab])
+
+  const commissionEnabledServiceLabels = useMemo(() => {
+    if (!data) return null
+    if (slaLoading && !sla && !data?.sla) return null
+    const slaSource = sla || data?.sla
+    return mapAdminServiceModesToLabels(slaSource?.serviceModes || {})
+  }, [data, sla, slaLoading])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
 
@@ -1145,6 +1153,7 @@ export default function AdminVendorDetailPage() {
             <AdminVendorCommission
               commission={commissionForTab}
               storeTypeName={data.storeType || ''}
+              enabledServiceLabels={commissionEnabledServiceLabels}
               onSaveCommission={handleSaveCommission}
               isSaving={commissionSaving}
               saveError={commissionSaveError}

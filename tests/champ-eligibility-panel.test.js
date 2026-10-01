@@ -201,20 +201,28 @@ describe('champAllowedCategorySlugsFromEligibility', () => {
 })
 
 describe('mapSpecialItemTypesToStoreTypeIds', () => {
-  it('maps pharmacy label to store type id', () => {
-    const ids = mapSpecialItemTypesToStoreTypeIds(['Pharmacy / Rx'], [
-      { id: 'st-pharm', name: 'Pharmacy', slug: 'pharmacy' },
-      { id: 'st-food', name: 'Food', slug: 'food' },
+  it('keeps a selected store type id only when special items are enabled', () => {
+    const ids = mapSpecialItemTypesToStoreTypeIds(['st-pharm', 'st-food'], [
+      { id: 'st-pharm', name: 'Pharmacy', slug: 'pharmacy', allowsSpecialItems: true },
+      { id: 'st-food', name: 'Food', slug: 'food', allowsSpecialItems: false },
     ])
     assert.deepEqual(ids, ['st-pharm'])
   })
 
-  it('global handling label includes all store types', () => {
-    const ids = mapSpecialItemTypesToStoreTypeIds(['Fragile'], [
-      { id: 'a', name: 'Food', slug: 'food' },
-      { id: 'b', name: 'Grocery', slug: 'grocery' },
+  it('maps a store type name when that type allows special items', () => {
+    const ids = mapSpecialItemTypesToStoreTypeIds(['Pharmacy'], [
+      { id: 'st-pharm', name: 'Pharmacy', slug: 'pharmacy', allowsSpecialItems: true },
+      { id: 'st-food', name: 'Food', slug: 'food', allowsSpecialItems: true },
     ])
-    assert.deepEqual(ids.sort(), ['a', 'b'])
+    assert.deepEqual(ids, ['st-pharm'])
+  })
+
+  it('does not expand a handling label to every store type', () => {
+    const ids = mapSpecialItemTypesToStoreTypeIds(['Fragile'], [
+      { id: 'a', name: 'Food', slug: 'food', allowsSpecialItems: true },
+      { id: 'b', name: 'Grocery', slug: 'grocery', allowsSpecialItems: true },
+    ])
+    assert.deepEqual(ids, [])
   })
 })
 
@@ -270,8 +278,10 @@ describe('validateChampEligibility / buildChampEligibilityPayload', () => {
         normalStoreTypeIds: [],
       },
       {
-        specialItemTypes: ['Pharmacy / Rx'],
-        storeTypeOptions: [{ id: 'st-1', name: 'Pharmacy', slug: 'pharmacy' }],
+        specialItemTypes: ['st-1'],
+        storeTypeOptions: [
+          { id: 'st-1', name: 'Pharmacy', slug: 'pharmacy', allowsSpecialItems: true },
+        ],
       },
     )
     assert.deepEqual(payload, {

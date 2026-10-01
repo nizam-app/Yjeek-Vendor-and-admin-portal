@@ -8,12 +8,12 @@ import { cn } from '../cn'
 import {
   CHAMP_ORDER_MODE_OPTIONS,
   CHAMP_SCHEDULED_CLASS_OPTIONS,
-  CHAMP_SPECIAL_ITEM_TYPE_OPTIONS,
   applyChampModeToggle,
   applyChampScheduledClasses,
   getChampEligibilityVisibility,
   clearAllChampNormalStoreTypes,
   selectAllChampNormalStoreTypes,
+  specialStoreTypeOptions,
   toggleChampNormalStoreType,
 } from './champEligibilityForm'
 
@@ -184,6 +184,7 @@ export default function AdminChampEligibilityPanel({
 }) {
   const visibility = getChampEligibilityVisibility(value)
   const enabledSet = new Set(value?.enabledModes || [])
+  const specialOptions = specialStoreTypeOptions(storeTypeOptions)
   const selectedSpecialSet = new Set(specialItemTypes)
 
   const handleModeToggle = (modeKey, nextOn) => {
@@ -211,17 +212,17 @@ export default function AdminChampEligibilityPanel({
     onChange(clearAllChampNormalStoreTypes(value))
   }
 
-  const handleSpecialItemTypeToggle = (label) => {
+  const handleSpecialItemTypeToggle = (storeTypeId) => {
     if (disabled) return
-    const next = selectedSpecialSet.has(label)
-      ? specialItemTypes.filter((item) => item !== label)
-      : [...specialItemTypes, label]
+    const next = selectedSpecialSet.has(storeTypeId)
+      ? specialItemTypes.filter((item) => item !== storeTypeId)
+      : [...specialItemTypes, storeTypeId]
     onSpecialItemTypesChange(next)
   }
 
   const handleSelectAllSpecialItemTypes = () => {
-    if (disabled) return
-    onSpecialItemTypesChange([...CHAMP_SPECIAL_ITEM_TYPE_OPTIONS])
+    if (disabled || !specialOptions.length) return
+    onSpecialItemTypesChange(specialOptions.map((item) => String(item.id)))
   }
 
   const handleUnselectAllSpecialItemTypes = () => {
@@ -236,8 +237,8 @@ export default function AdminChampEligibilityPanel({
     )
 
   const allSpecialItemTypesSelected =
-    CHAMP_SPECIAL_ITEM_TYPE_OPTIONS.length > 0 &&
-    CHAMP_SPECIAL_ITEM_TYPE_OPTIONS.every((label) => selectedSpecialSet.has(label))
+    specialOptions.length > 0 &&
+    specialOptions.every((item) => selectedSpecialSet.has(String(item.id)))
 
   const anyNormalStoreTypesSelected = (value?.normalStoreTypeIds || []).length > 0
   const anySpecialItemTypesSelected = specialItemTypes.length > 0
@@ -341,30 +342,42 @@ export default function AdminChampEligibilityPanel({
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-[13px] font-bold text-[#17231c]">Special item types allowed</h4>
-            <BulkSelectToggle
-              disabled={disabled}
-              allSelected={allSpecialItemTypesSelected}
-              anySelected={anySpecialItemTypesSelected}
-              onSelectAll={handleSelectAllSpecialItemTypes}
-              onUnselectAll={handleUnselectAllSpecialItemTypes}
-            />
+            {specialOptions.length > 0 ? (
+              <BulkSelectToggle
+                disabled={disabled}
+                allSelected={allSpecialItemTypesSelected}
+                anySelected={anySpecialItemTypesSelected}
+                onSelectAll={handleSelectAllSpecialItemTypes}
+                onUnselectAll={handleUnselectAllSpecialItemTypes}
+              />
+            ) : null}
           </div>
           <p className={cn(hintClass, 'mt-0 mb-3')}>
-            Shown because Special is included. Age-restricted, pharmacy, fragile, vape,
-            high-value and similar handling rules.
+            Shown because Special is included. Only store types with Special items turned on in
+            Store Management.
           </p>
-          <div className="flex flex-wrap gap-2">
-            {CHAMP_SPECIAL_ITEM_TYPE_OPTIONS.map((label) => (
-              <ItemTypeChip
-                key={label}
-                label={label}
-                selected={selectedSpecialSet.has(label)}
-                onClick={() => handleSpecialItemTypeToggle(label)}
-              />
-            ))}
-          </div>
+          {storeTypesLoading ? (
+            <p className="text-[12px] text-[#7c8780]">Loading store types…</p>
+          ) : specialOptions.length ? (
+            <div className="flex flex-wrap gap-2">
+              {specialOptions.map((item) => (
+                <ItemTypeChip
+                  key={item.id}
+                  label={item.name}
+                  selected={selectedSpecialSet.has(String(item.id))}
+                  onClick={() => handleSpecialItemTypeToggle(String(item.id))}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-[12px] text-[#b42318]">
+              {storeTypesError ||
+                'No store types with Special items enabled. Turn Special items on for a store type in Store Management.'}
+            </p>
+          )}
           <p className={cn(hintClass, 'mt-2')}>
-            At least one required when Special is included.
+            List comes from store types with Special items enabled. At least one required when
+            Special is included.
           </p>
         </div>
       ) : null}

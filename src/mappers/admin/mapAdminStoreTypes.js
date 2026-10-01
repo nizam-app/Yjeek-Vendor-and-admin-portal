@@ -89,6 +89,10 @@ export function mapAdminStoreTypesResponse(data, options = {}) {
       supportedOrderModes: Array.isArray(item.supportedOrderModes)
         ? item.supportedOrderModes.map((code) => String(code))
         : [],
+      allowsNormalItems:
+        item.allowsNormalItems !== false && item.itemClasses?.allowsNormalItems !== false,
+      allowsSpecialItems:
+        item.allowsSpecialItems !== false && item.itemClasses?.allowsSpecialItems !== false,
       subTypes: Array.isArray(item.subTypes)
         ? item.subTypes
             .filter((sub) => sub && sub.id && sub.name)

@@ -11,16 +11,6 @@ const hintClass = 'mt-1 text-[11px] leading-[14px] text-[#8a948e]'
 
 const MODELS = ['% of order', 'Flat per order', 'Tiered']
 
-const DEFAULT_GATEWAY = {
-  fixedPct: '1.000',
-  debitPct: '0.500',
-  creditPct: '2.000',
-  applePayPct: '1.500',
-  googleWalletPct: '1.500',
-  otherChargesPct: '0.500',
-  fixedCharge: '0.050',
-}
-
 const GATEWAY_FIELDS = [
   ['fixedPct', 'Fixed %', 'Applied on every online order, on top of the method rate below.'],
   ['debitPct', 'Debit %', 'Used only when the customer pays by debit card.'],
@@ -81,20 +71,22 @@ function buildFormState(commission) {
   const rateValue = isFlat
     ? stripCurrency(commission?.rate) ||
       (commission?.flatFeePerOrder != null ? String(commission.flatFeePerOrder) : '')
-    : stripPercent(commission?.rate ?? commission?.commissionRate ?? '15')
+    : stripPercent(commission?.rate ?? commission?.commissionRate ?? '')
 
   return {
     model: MODELS.includes(commission?.model) ? commission.model : MODELS[0],
-    rate: rateValue || '15',
-    vatOnCommission: commission?.vatOnCommission || '10% (auto)',
-    currency: 'BHD',
-    fixedPct: gateway.fixedPct ?? DEFAULT_GATEWAY.fixedPct,
-    debitPct: gateway.debitPct ?? DEFAULT_GATEWAY.debitPct,
-    creditPct: gateway.creditPct ?? DEFAULT_GATEWAY.creditPct,
-    applePayPct: gateway.applePayPct ?? DEFAULT_GATEWAY.applePayPct,
-    googleWalletPct: gateway.googleWalletPct ?? DEFAULT_GATEWAY.googleWalletPct,
-    otherChargesPct: gateway.otherChargesPct ?? DEFAULT_GATEWAY.otherChargesPct,
-    fixedCharge: gateway.fixedCharge ?? DEFAULT_GATEWAY.fixedCharge,
+    rate: rateValue,
+    vatOnCommission: commission?.vatOnCommission && commission.vatOnCommission !== '—'
+      ? commission.vatOnCommission
+      : '',
+    currency: commission?.currency && commission.currency !== '—' ? commission.currency : '',
+    fixedPct: gateway.fixedPct ?? '',
+    debitPct: gateway.debitPct ?? '',
+    creditPct: gateway.creditPct ?? '',
+    applePayPct: gateway.applePayPct ?? '',
+    googleWalletPct: gateway.googleWalletPct ?? '',
+    otherChargesPct: gateway.otherChargesPct ?? '',
+    fixedCharge: gateway.fixedCharge ?? '',
     customFees: mapCustomFeesFromCommission(commission),
     commissionTiers: Array.isArray(commission?.commissionTiers) ? commission.commissionTiers : [],
   }
@@ -159,7 +151,7 @@ export default function AdminCommissionEditModal({
       commissionRate: form.model === 'Flat per order' ? undefined : stripPercent(form.rate),
       flatFeePerOrder: form.model === 'Flat per order' ? stripCurrency(form.rate) || form.rate : undefined,
       vatOnCommission: form.vatOnCommission,
-      currency: 'BHD',
+      currency: form.currency,
       commissionTiers: form.commissionTiers,
       customFees: form.customFees.map((fee) => ({
         name: fee.name,

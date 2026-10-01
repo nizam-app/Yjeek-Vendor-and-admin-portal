@@ -30,6 +30,8 @@ import {
 } from '../../../mappers/admin/mapAdminStoreTypes'
 import {
   COMMISSION_ORDER_METHODS,
+  commissionOrderMethodsForServiceLabels,
+  filterCommissionDraftsByMethodIds,
   mapAdminCommissionToWizardForm,
   mapAdminCustomFeesToWizard,
   getCommissionInheritanceState,
@@ -658,16 +660,16 @@ export default function AdminAddVendorPage({ onBack }) {
     vatNumber: '',
     // Prefer neutral defaults when real API is on — edit load / create APIs overwrite these.
     commissionModel: isAdminRealApiFeature('vendors') ? '% of order' : 'Tiered',
-    commissionRate: '15',
-    vatOnCommission: '10% (auto)',
-    currency: 'BHD',
-    fixedPct: '1.000',
-    debitPct: '0.500',
-    creditPct: '2.000',
-    applePayPct: '1.500',
-    googleWalletPct: '1.500',
-    otherChargesPct: '0.500',
-    fixedCharge: '0.050',
+    commissionRate: isAdminRealApiFeature('vendors') ? '' : '15',
+    vatOnCommission: '',
+    currency: '',
+    fixedPct: '',
+    debitPct: '',
+    creditPct: '',
+    applePayPct: '',
+    googleWalletPct: '',
+    otherChargesPct: '',
+    fixedCharge: '',
     acceptSla: '2 min',
     prepSla: '18 min',
     readySla: '20 min',
@@ -728,6 +730,8 @@ export default function AdminAddVendorPage({ onBack }) {
   const [serviceModes, setServiceModes] = useState(() =>
     isAdminRealApiFeature('vendors') ? [] : [],
   )
+  /** Edit wizard: SLA service modes from the vendor record. Same source as the detail Commission tab. */
+  const [editSlaServiceLabels, setEditSlaServiceLabels] = useState(null)
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
   const [tierDraft, setTierDraft] = useState({ fromAmount: '0', ratePct: '15' })
   const [createSaving, setCreateSaving] = useState(false)
@@ -1362,6 +1366,19 @@ export default function AdminAddVendorPage({ onBack }) {
     () => slaVisibleServiceModesFromBranches(allowedServiceModes, branchesWithDeliveryModes),
     [allowedServiceModes, branchesWithDeliveryModes],
   )
+  /** Create: store type ∩ branch modes. Edit: saved vendor SLA modes (matches the detail tab). */
+  const vendorEnabledCommissionLabels = useMemo(() => {
+    if (isEdit) return Array.isArray(editSlaServiceLabels) ? editSlaServiceLabels : []
+    return slaVisibleServiceModes
+  }, [isEdit, editSlaServiceLabels, slaVisibleServiceModes])
+  const commissionOrderMethods = useMemo(
+    () => commissionOrderMethodsForServiceLabels(vendorEnabledCommissionLabels),
+    [vendorEnabledCommissionLabels],
+  )
+  const enabledCommissionMethodIds = useMemo(
+    () => commissionOrderMethods.map((method) => method.id),
+    [commissionOrderMethods],
+  )
   const storeSubTypes = Array.isArray(selectedStoreType?.subTypes) ? selectedStoreType.subTypes : []
   const requiresStoreSubType =
     selectedStoreType?.structure === 'TWO_LEVEL' && storeSubTypes.length > 0
@@ -1396,7 +1413,15 @@ export default function AdminAddVendorPage({ onBack }) {
   }, [form.storeTypeId, storeTypes.length, slaVisibleServiceModes.join('|')])
 
   useEffect(() => {
-    if (step !== 5 || !useRealStoreApi || !editVendorId) return undefined
+    if (!commissionOrderMethods.length) return undefined
+    if (!commissionOrderMethods.some((method) => method.id === activeCommissionMethod)) {
+      setActiveCommissionMethod(commissionOrderMethods[0].id)
+    }
+    return undefined
+  }, [commissionOrderMethods, activeCommissionMethod])
+
+  useEffect(() => {
+    if ((step !== 4 && step !== 5) || !useRealStoreApi || !editVendorId) return undefined
     const missing = branches.filter(
       (b) =>
         b?.id &&
@@ -1551,6 +1576,7 @@ export default function AdminAddVendorPage({ onBack }) {
 
         if (slaResult.status !== 'fulfilled') {
           if (!cancelled) {
+            setEditSlaServiceLabels([])
             setSlaError(
               formatApiErrorMessage(slaResult.reason, 'Failed to load SLA.'),
             )
@@ -1559,8 +1585,12 @@ export default function AdminAddVendorPage({ onBack }) {
         }
 
         const sla = slaResult.value?.data
-        if (!sla) return
+        if (!sla) {
+          if (!cancelled) setEditSlaServiceLabels([])
+          return
+        }
         const labels = mapAdminServiceModesToLabels(sla.serviceModes || {})
+        setEditSlaServiceLabels(labels)
         // Prune effect (slaVisibleServiceModes) drops modes not on branches / store type.
         if (labels.length) setServiceModes(labels)
 
@@ -1704,7 +1734,7 @@ export default function AdminAddVendorPage({ onBack }) {
       if (!drafts[method.id]) drafts[method.id] = captured
     }
     drafts[activeCommissionMethod] = captured
-    return drafts
+    return filterCommissionDraftsByMethodIds(drafts, enabledCommissionMethodIds)
   }
 
   function selectCommissionMethod(nextId) {
@@ -1814,6 +1844,9 @@ export default function AdminAddVendorPage({ onBack }) {
         branchesWithDeliveryModes,
         slaVisibleServiceModes,
       )
+      const createCommissionMethodIds = commissionOrderMethodsForServiceLabels(
+        mergedServiceModes,
+      ).map((method) => method.id)
       const response = await adminService.createVendor({
         form,
         branches,
@@ -1821,6 +1854,7 @@ export default function AdminAddVendorPage({ onBack }) {
         customFees,
         commissionTiers,
         commissionDrafts: mergedCommissionDrafts(),
+        enabledCommissionMethodIds: createCommissionMethodIds,
         serviceModes: mergedServiceModes,
         slaConfigs,
         activate: Boolean(activate),
@@ -2719,32 +2753,52 @@ export default function AdminAddVendorPage({ onBack }) {
 
             <VendorCard title="Commission & fees">
               <p className="mb-3 text-[12px] text-[#7c8780]">
-                Commission and fees are set separately for each order method and load from the SLA
-                defaults for this store type.
+                Commission and fees are set separately for each order method enabled for this vendor.
+                Values load from the SLA defaults for this store type.
               </p>
-              <div className="mb-4 flex flex-wrap gap-1.5">
-                {COMMISSION_ORDER_METHODS.map((method) => (
-                  <button
-                    key={method.id}
-                    type="button"
-                    onClick={() => selectCommissionMethod(method.id)}
-                    className={cn(
-                      'h-[30px] rounded-full px-3 text-[12px]',
-                      activeCommissionMethod === method.id
-                        ? 'bg-[#1aa054] font-bold text-white'
-                        : 'bg-[#f3f5f3] font-medium text-[#455249]',
-                    )}
-                  >
-                    {method.label}
-                  </button>
-                ))}
-              </div>
-              {commissionSeededFromStoreType && selectedStoreType?.name ? (
+              {!form.storeTypeId ? (
+                <p className="mb-4 text-[12px] text-[#7c8780]">
+                  Select a store type to see available order methods.
+                </p>
+              ) : !allowedServiceModes.length ? (
+                <div className="mb-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                  No order modes are configured for this store type in Store Management.
+                </div>
+              ) : isEdit && (slaLoading || editSlaServiceLabels == null) ? (
+                <p className="mb-4 text-[12px] text-[#7c8780]">Loading order methods…</p>
+              ) : !commissionOrderMethods.length ? (
+                <div className="mb-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
+                  {isEdit
+                    ? 'No order methods are enabled on this vendor’s SLA.'
+                    : 'No order methods enabled for this vendor yet. Enable them on the SLA step or on branch delivery settings.'}
+                </div>
+              ) : (
+                <div className="mb-4 flex flex-wrap gap-1.5">
+                  {commissionOrderMethods.map((method) => (
+                    <button
+                      key={method.id}
+                      type="button"
+                      onClick={() => selectCommissionMethod(method.id)}
+                      className={cn(
+                        'h-[30px] rounded-full px-3 text-[12px]',
+                        activeCommissionMethod === method.id
+                          ? 'bg-[#1aa054] font-bold text-white'
+                          : 'bg-[#f3f5f3] font-medium text-[#455249]',
+                      )}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {commissionOrderMethods.length > 0 && commissionSeededFromStoreType && selectedStoreType?.name ? (
                 <div className="mb-4 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
                   ✓ Pre-filled from the <strong>{selectedStoreType.name}</strong> commission
                   defaults. Edit any field to override it for this vendor.
                 </div>
               ) : null}
+              {commissionOrderMethods.length > 0 ? (
+              <>
               <p className="mb-2 text-[12px] font-medium text-[#7c8780]">
                 Commission model
                 <InheritanceBadge
@@ -2798,7 +2852,7 @@ export default function AdminAddVendorPage({ onBack }) {
                   hint="Bahrain standard rate — not editable"
                 >
                   <VendorInput
-                    value={form.vatOnCommission || '10% (auto)'}
+                    value={form.vatOnCommission || '—'}
                     readOnly
                     className="cursor-default bg-[#f7f8f7] text-[#5c665f] focus:border-[rgba(0,0,0,0.1)]"
                   />
@@ -2808,7 +2862,7 @@ export default function AdminAddVendorPage({ onBack }) {
                   hint="Governs every amount on this vendor — fees, contributions and payouts."
                 >
                   <VendorInput
-                    value="BHD"
+                    value={form.currency || '—'}
                     readOnly
                     className="cursor-default bg-[#f7f8f7] text-[#5c665f] focus:border-[rgba(0,0,0,0.1)]"
                   />
@@ -2886,8 +2940,12 @@ export default function AdminAddVendorPage({ onBack }) {
                   )}
                 </div>
               ) : null}
+              </>
+              ) : null}
             </VendorCard>
 
+            {commissionOrderMethods.length > 0 ? (
+            <>
             <VendorCard title="Online gateway fees">
               <p className="mb-3 text-[12px] leading-[16px] text-[#7c8780]">
                 Charged by the payment gateway. The rate applied depends on the method the customer
@@ -3091,6 +3149,8 @@ export default function AdminAddVendorPage({ onBack }) {
                 </p>
               ) : null}
             </VendorCard>
+              </>
+              ) : null}
           </>
         ) : null}
 
