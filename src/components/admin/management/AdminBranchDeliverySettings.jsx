@@ -66,7 +66,7 @@ const ORDER_MODE_CODE_TO_KEY = {
   services: 'SERVICES',
 }
 
-/** Branch delivery UI: store type ∩ vendor SLA (supportedOrderModes prop). */
+/** Branch delivery UI: store type supportedOrderModes (supportedOrderModes prop). */
 export function isBranchOrderModeVisible(modeKey, supportedOrderModes = []) {
   const codes = new Set(
     (Array.isArray(supportedOrderModes) ? supportedOrderModes : []).map((code) =>

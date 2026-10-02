@@ -15,7 +15,6 @@ import {
   branchHasDeliveryModesData,
   buildAllowedModesFromStoreType,
   mergeBranchModesIntoServiceModes,
-  slaVisibleServiceModesFromBranches,
 } from '../../../components/admin/AdminVendorSlaConfigs'
 import AdminPasswordField from '../../../components/admin/AdminPasswordField'
 import AdminPhoneField from '../../../components/admin/AdminPhoneField'
@@ -730,8 +729,6 @@ export default function AdminAddVendorPage({ onBack }) {
   const [serviceModes, setServiceModes] = useState(() =>
     isAdminRealApiFeature('vendors') ? [] : [],
   )
-  /** Edit wizard: SLA service modes from the vendor record. Same source as the detail Commission tab. */
-  const [editSlaServiceLabels, setEditSlaServiceLabels] = useState(null)
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
   const [tierDraft, setTierDraft] = useState({ fromAmount: '0', ratePct: '15' })
   const [createSaving, setCreateSaving] = useState(false)
@@ -1362,15 +1359,9 @@ export default function AdminAddVendorPage({ onBack }) {
       }),
     [branches, branchDeliveryModesCache],
   )
-  const slaVisibleServiceModes = useMemo(
-    () => slaVisibleServiceModesFromBranches(allowedServiceModes, branchesWithDeliveryModes),
-    [allowedServiceModes, branchesWithDeliveryModes],
-  )
-  /** Create: store type ∩ branch modes. Edit: saved vendor SLA modes (matches the detail tab). */
-  const vendorEnabledCommissionLabels = useMemo(() => {
-    if (isEdit) return Array.isArray(editSlaServiceLabels) ? editSlaServiceLabels : []
-    return slaVisibleServiceModes
-  }, [isEdit, editSlaServiceLabels, slaVisibleServiceModes])
+  /** Order-mode toggles (SLA + commission tabs): store type ceiling only. */
+  const slaOrderModeOptions = allowedServiceModes
+  const vendorEnabledCommissionLabels = slaOrderModeOptions
   const commissionOrderMethods = useMemo(
     () => commissionOrderMethodsForServiceLabels(vendorEnabledCommissionLabels),
     [vendorEnabledCommissionLabels],
@@ -1403,14 +1394,14 @@ export default function AdminAddVendorPage({ onBack }) {
     serviceModes.includes('Services'),
   )
 
-  // Prune modes not allowed for store type or not enabled on any branch (never auto-enable).
+  // Drop modes the store type no longer supports (never auto-enable).
   useEffect(() => {
     if (!form.storeTypeId || !storeTypes.length) return
     setServiceModes((prev) => {
-      const next = prev.filter((mode) => slaVisibleServiceModes.includes(mode))
+      const next = prev.filter((mode) => slaOrderModeOptions.includes(mode))
       return next.length === prev.length ? prev : next
     })
-  }, [form.storeTypeId, storeTypes.length, slaVisibleServiceModes.join('|')])
+  }, [form.storeTypeId, storeTypes.length, slaOrderModeOptions.join('|')])
 
   useEffect(() => {
     if (!commissionOrderMethods.length) return undefined
@@ -1576,7 +1567,6 @@ export default function AdminAddVendorPage({ onBack }) {
 
         if (slaResult.status !== 'fulfilled') {
           if (!cancelled) {
-            setEditSlaServiceLabels([])
             setSlaError(
               formatApiErrorMessage(slaResult.reason, 'Failed to load SLA.'),
             )
@@ -1586,12 +1576,9 @@ export default function AdminAddVendorPage({ onBack }) {
 
         const sla = slaResult.value?.data
         if (!sla) {
-          if (!cancelled) setEditSlaServiceLabels([])
           return
         }
         const labels = mapAdminServiceModesToLabels(sla.serviceModes || {})
-        setEditSlaServiceLabels(labels)
-        // Prune effect (slaVisibleServiceModes) drops modes not on branches / store type.
         if (labels.length) setServiceModes(labels)
 
         const modelId = sla.slaModelId || sla.modelId || ''
@@ -1799,7 +1786,7 @@ export default function AdminAddVendorPage({ onBack }) {
     setSlaError(null)
     setSlaSaving(true)
     try {
-      const modesForSave = serviceModes.filter((mode) => slaVisibleServiceModes.includes(mode))
+      const modesForSave = serviceModes.filter((mode) => slaOrderModeOptions.includes(mode))
       const configsForSave = Object.fromEntries(
         Object.entries(slaConfigs || {}).filter(([mode]) => modesForSave.includes(mode)),
       )
@@ -1842,7 +1829,7 @@ export default function AdminAddVendorPage({ onBack }) {
       const mergedServiceModes = mergeBranchModesIntoServiceModes(
         serviceModes,
         branchesWithDeliveryModes,
-        slaVisibleServiceModes,
+        slaOrderModeOptions,
       )
       const createCommissionMethodIds = commissionOrderMethodsForServiceLabels(
         mergedServiceModes,
@@ -2764,13 +2751,9 @@ export default function AdminAddVendorPage({ onBack }) {
                 <div className="mb-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
                   No order modes are configured for this store type in Store Management.
                 </div>
-              ) : isEdit && (slaLoading || editSlaServiceLabels == null) ? (
-                <p className="mb-4 text-[12px] text-[#7c8780]">Loading order methods…</p>
               ) : !commissionOrderMethods.length ? (
                 <div className="mb-4 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
-                  {isEdit
-                    ? 'No order methods are enabled on this vendor’s SLA.'
-                    : 'No order methods enabled for this vendor yet. Enable them on the SLA step or on branch delivery settings.'}
+                  No order modes are configured for this store type in Store Management.
                 </div>
               ) : (
                 <div className="mb-4 flex flex-wrap gap-1.5">
@@ -3196,13 +3179,8 @@ export default function AdminAddVendorPage({ onBack }) {
                   <div className="w-full rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
                     No order modes are configured for this store type in Store Management.
                   </div>
-                ) : branches.length > 0 && !slaVisibleServiceModes.length ? (
-                  <div className="w-full rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
-                    No order modes are enabled on your branches. Turn on order methods in branch delivery
-                    settings, then return to configure SLA.
-                  </div>
                 ) : (
-                  slaVisibleServiceModes.map((mode) => {
+                  slaOrderModeOptions.map((mode) => {
                   const selected = serviceModes.includes(mode)
                   return (
                     <button
@@ -3262,7 +3240,7 @@ export default function AdminAddVendorPage({ onBack }) {
             </VendorCard>
 
             <AdminVendorSlaConfigs
-              selectedModes={serviceModes.filter((mode) => slaVisibleServiceModes.includes(mode))}
+              selectedModes={serviceModes.filter((mode) => slaOrderModeOptions.includes(mode))}
               value={slaConfigs}
               onChange={setSlaConfigs}
               modelDefaults={slaModelDefaults}
