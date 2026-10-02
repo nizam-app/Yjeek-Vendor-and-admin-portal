@@ -16,10 +16,9 @@ import {
   mapWizardHoursToOpeningHours,
 } from '../../../mappers/admin/mapAdminVendorBranches'
 import {
+  buildAllowedModesFromStoreType,
   buildBranchModeGate,
-  effectiveBranchOrderModeCodes,
 } from '../../../components/admin/AdminVendorSlaConfigs'
-import { mapAdminServiceModesToLabels } from '../../../mappers/admin/mapAdminVendorSla'
 import AdminBranchDeliverySettings, {
   BRANCH_DELIVERY_MODE_ORDER,
   previewBranchDeliveryModes,
@@ -557,7 +556,6 @@ export default function AdminAddVendorBrunchs() {
     ready: false,
   })
   const [supportedOrderModes, setSupportedOrderModes] = useState([])
-  const [vendorSlaModeLabels, setVendorSlaModeLabels] = useState([])
   const [orderModesReady, setOrderModesReady] = useState(false)
   const [draftDeliveryModes, setDraftDeliveryModes] = useState(null)
   const [draftHotFood, setDraftHotFood] = useState(null)
@@ -612,7 +610,6 @@ export default function AdminAddVendorBrunchs() {
     const tasks = [
       adminService.getVendorDetail(vendorId),
       adminService.listStoreTypes(),
-      adminService.getVendorSla(vendorId).catch(() => ({ data: null })),
     ]
     if (!isNewBranch) {
       tasks.unshift(adminService.listVendorBranches(vendorId))
@@ -660,7 +657,6 @@ export default function AdminAddVendorBrunchs() {
           : Array.isArray(storeTypesPayload?.items)
             ? storeTypesPayload.items
             : []
-        const sla = results[offset + 2]?.data || null
         const storeTypeFromId = detail?.storeTypeId ? String(detail.storeTypeId) : ''
         const storeTypeByName = storeTypes.find(
           (row) =>
@@ -682,10 +678,14 @@ export default function AdminAddVendorBrunchs() {
             : [],
         )
         setOrderModesReady(true)
-        const modes = sla?.serviceModes && typeof sla.serviceModes === 'object' ? sla.serviceModes : {}
-        const vendorModeLabels = mapAdminServiceModesToLabels(modes)
-        setVendorSlaModeLabels(vendorModeLabels)
-        setModeGate(buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: false }))
+        const storeTypeModeLabels = buildAllowedModesFromStoreType(storeType)
+        setModeGate(
+          buildBranchModeGate({
+            storeType,
+            vendorModeLabels: storeTypeModeLabels,
+            isWizardDraft: true,
+          }),
+        )
       })
       .catch((err) => {
         if (!cancelled) {
@@ -830,8 +830,13 @@ export default function AdminAddVendorBrunchs() {
             : [],
         )
         setOrderModesReady(true)
+        const storeTypeModeLabels = buildAllowedModesFromStoreType(storeType)
         setModeGate(
-          buildBranchModeGate({ storeType, vendorModeLabels, isWizardDraft: true }),
+          buildBranchModeGate({
+            storeType,
+            vendorModeLabels: storeTypeModeLabels,
+            isWizardDraft: true,
+          }),
         )
       })
       .catch(() => {
@@ -925,26 +930,13 @@ export default function AdminAddVendorBrunchs() {
   }, [modeGate.ready, modeGate.showPickup, modeGate.showDineIn])
 
   const showPreviewModes = !useRealBranchApi || isNewBranch
-  const wizardVendorModeLabels = useMemo(() => {
-    const raw = state?.wizardDraft?.serviceModes
-    return Array.isArray(raw) ? raw.map((label) => String(label)) : []
-  }, [state?.wizardDraft?.serviceModes])
-  const effectiveSupportedOrderModes = useMemo(() => {
-    const vendorLabels = useRealBranchApi ? vendorSlaModeLabels : wizardVendorModeLabels
-    return effectiveBranchOrderModeCodes(supportedOrderModes, vendorLabels, {
-      allowAllStoreWhenVendorUnknown: !useRealBranchApi,
-    })
-  }, [
-    supportedOrderModes,
-    vendorSlaModeLabels,
-    wizardVendorModeLabels,
-    useRealBranchApi,
-  ])
+  /** Branch delivery UI: store type supportedOrderModes (not vendor SLA ∩). */
+  const branchOrderModeCodes = supportedOrderModes
   const modeLocks = useMemo(
     () => orderModeLocks(modeGate),
     [modeGate],
   )
-  const supportedModesKey = effectiveSupportedOrderModes.join('|')
+  const supportedModesKey = branchOrderModeCodes.join('|')
   const modeLockKey = `${modeLocks.PICKUP ? 1 : 0}:${modeLocks.DINE_IN ? 1 : 0}`
 
   useEffect(() => {
@@ -963,7 +955,7 @@ export default function AdminAddVendorBrunchs() {
       })
       return
     }
-    const next = previewBranchDeliveryModes(effectiveSupportedOrderModes, modeLocks)
+    const next = previewBranchDeliveryModes(branchOrderModeCodes, modeLocks)
     const savedLocal = !useRealBranchApi && !isNewBranch ? state?.branch : null
     if (savedLocal && typeof savedLocal.allowsPickup === 'boolean' && next.PICKUP) {
       next.PICKUP = {
@@ -984,7 +976,7 @@ export default function AdminAddVendorBrunchs() {
     supportedModesKey,
     modeLockKey,
     modeLocks,
-    effectiveSupportedOrderModes,
+    branchOrderModeCodes,
     useRealBranchApi,
     isNewBranch,
     state?.branch,
@@ -1736,7 +1728,7 @@ export default function AdminAddVendorBrunchs() {
             locationId={useRealBranchApi && !isNewBranch ? branchId : null}
             storeTypeName={storeTypeName}
             disabled={loading}
-            supportedOrderModes={effectiveSupportedOrderModes}
+            supportedOrderModes={branchOrderModeCodes}
             previewReady={orderModesReady}
             draftModes={draftDeliveryModes}
             onDraftModesChange={(next) => {
