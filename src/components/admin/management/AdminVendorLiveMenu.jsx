@@ -75,15 +75,18 @@ function parseAddonPrice(raw) {
   return Number.isFinite(n) ? Math.max(0, n) : 0
 }
 
-function flattenCategories(categories) {
+function categoryLevelLabel(depth) {
+  if (depth >= 2) return 'Sub-subcategory'
+  if (depth === 1) return 'Subcategory'
+  return 'Main category'
+}
+
+function flattenCategories(categories, depth = 0) {
   const rows = []
   for (const cat of Array.isArray(categories) ? categories : []) {
-    if (!cat?.id) continue
-    rows.push(cat)
-    for (const child of Array.isArray(cat.children) ? cat.children : []) {
-      if (!child?.id) continue
-      rows.push(child)
-    }
+    if (!cat?.id || depth > 2) continue
+    rows.push({ ...cat, depth })
+    if (depth < 2) rows.push(...flattenCategories(cat.children, depth + 1))
   }
   return rows
 }
@@ -304,7 +307,7 @@ function ProductFormModal({
                 <option value="">Uncategorized</option>
                 {categoryOptions.map((opt) => (
                   <option key={opt.id} value={opt.id}>
-                    {opt.depth ? `— ${opt.name}` : opt.name}
+                    {opt.depth >= 2 ? `—— ${opt.name}` : opt.depth ? `— ${opt.name}` : opt.name}
                   </option>
                 ))}
               </select>
@@ -660,6 +663,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
     lockedBy: null,
   })
   const [categoryName, setCategoryName] = useState('')
+  const [categoryParentId, setCategoryParentId] = useState('')
   const [categoryBusy, setCategoryBusy] = useState(false)
   const [classBusyKey, setClassBusyKey] = useState('')
   const [renamingId, setRenamingId] = useState(null)
@@ -918,8 +922,12 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
     if (!name) return
     setCategoryBusy(true)
     try {
-      await adminStoresCatalogService.createCatalogCategory(vendorId, { name })
+      await adminStoresCatalogService.createCatalogCategory(vendorId, {
+        name,
+        ...(categoryParentId ? { parentId: categoryParentId } : {}),
+      })
       setCategoryName('')
+      setCategoryParentId('')
       showSuccess('Category created.')
       await load()
     } catch (err) {
@@ -1222,7 +1230,8 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
                 flatCategories.map((cat) => (
                   <div
                     key={cat.id}
-                    className="flex flex-wrap items-center gap-3 border-b border-[#f0f2f0] px-5 py-3 last:border-0"
+                    className="flex flex-wrap items-center gap-3 border-b border-[#f0f2f0] py-3 pe-5 last:border-0"
+                    style={{ paddingInlineStart: `${20 + (cat.depth || 0) * 16}px` }}
                   >
                     <div className="min-w-0 flex-1">
                       {renamingId === cat.id ? (
@@ -1242,6 +1251,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
                         <>
                           <p className="text-[13px] font-semibold text-[#17231c]">{cat.name}</p>
                           <p className="text-[11px] text-[#9aa49d]">
+                            {categoryLevelLabel(cat.depth || 0)} ·{' '}
                             {(productsByCategory.get(cat.id) || []).length} items
                           </p>
                         </>
@@ -1298,9 +1308,27 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
             </div>
             <div className="border-t border-[#f0f2f0] px-5 py-3">
               <label className={labelClass}>New category</label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <select
+                  className={`${inputClass} max-w-[240px]`}
+                  value={categoryParentId}
+                  disabled={categoryBusy}
+                  onChange={(e) => setCategoryParentId(e.target.value)}
+                  aria-label="Place category under"
+                >
+                  <option value="">Main category</option>
+                  {flatCategories
+                    .filter((cat) => (cat.depth || 0) < 2)
+                    .map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {(cat.depth || 0) === 0
+                          ? `Subcategory of ${cat.name}`
+                          : `Sub-subcategory of ${cat.name}`}
+                      </option>
+                    ))}
+                </select>
                 <input
-                  className={inputClass}
+                  className={`${inputClass} min-w-[180px] flex-1`}
                   value={categoryName}
                   onChange={(e) => setCategoryName(e.target.value)}
                   placeholder="Category name"

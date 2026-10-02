@@ -184,6 +184,7 @@ function mapReviewCategory(raw) {
     nameAr: src.nameAr ? String(src.nameAr) : null,
     displayOrder: toNumber(src.displayOrder, 0),
     backendCategoryId: src.backendCategoryId ?? null,
+    parentId: src.parentId ? String(src.parentId) : null,
     items,
   }
 }

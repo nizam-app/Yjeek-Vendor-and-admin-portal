@@ -58,8 +58,9 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
   }, [loadReview])
 
   const categories = review?.categories || []
+  const displayCategories = nestReviewCategories(categories)
   const flatItems = categories.flatMap((cat) =>
-    cat.items.map((item) => ({
+    (cat.items || []).map((item) => ({
       ...item,
       categoryName: cat.name,
       categoryNameAr: cat.nameAr,
@@ -135,11 +136,19 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
     }
   }
 
-  const handleSaveCategory = async ({ name, nameAr }) => {
+  const handleSaveCategory = async ({ name, nameAr, parentId }) => {
     if (!editable || !catModal) return
     setBusy(true)
     try {
-      const body = { name, ...(nameAr ? { nameAr } : {}) }
+      const body = {
+        name,
+        ...(nameAr ? { nameAr } : {}),
+        ...(parentId
+          ? { parentId }
+          : catModal.mode === 'edit'
+            ? { parentId: null }
+            : {}),
+      }
       if (catModal.mode === 'create') {
         await adminMenuImportService.createCategory(vendorId, imp.id, body)
       } else {
@@ -237,10 +246,11 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
 
         {categories.length ? (
           <div className="space-y-4">
-            {categories.map((cat) => (
+            {displayCategories.map((cat) => (
               <section
                 key={cat.id}
                 className="overflow-hidden rounded-[10px] border border-[#edf0ee]"
+                style={{ marginInlineStart: `${(cat.depth || 0) * 16}px` }}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#edf0ee] bg-[#fafbfa] px-3 py-2.5">
                   <div>
@@ -255,7 +265,8 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
                       </span>
                     ) : null}
                     <span className="mt-1 block text-[11px] text-[#8a948e]">
-                      {(cat.items || []).length} item{(cat.items || []).length === 1 ? '' : 's'}
+                      {reviewCategoryLevel(cat.depth || 0)} · {(cat.items || []).length} item
+                      {(cat.items || []).length === 1 ? '' : 's'}
                     </span>
                   </div>
                   {editable ? (
@@ -452,6 +463,8 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
         <CategoryForm
           initialName={catModal?.category?.name || ''}
           initialNameAr={catModal?.category?.nameAr || ''}
+          initialParentId={catModal?.category?.parentId || ''}
+          parentOptions={reviewParentOptions(displayCategories, catModal?.category?.id)}
           busy={busy}
           onCancel={() => setCatModal(null)}
           onSave={handleSaveCategory}
@@ -519,16 +532,91 @@ function SimpleModal({ open, title, onClose, children }) {
   )
 }
 
-function CategoryForm({ initialName, initialNameAr, busy, onCancel, onSave }) {
+function reviewCategoryLevel(depth) {
+  if (depth >= 2) return 'Sub-subcategory'
+  if (depth === 1) return 'Subcategory'
+  return 'Main category'
+}
+
+function nestReviewCategories(categories) {
+  const byParent = new Map()
+  for (const cat of categories) {
+    const key = cat.parentId || ''
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key).push(cat)
+  }
+  const out = []
+  const seen = new Set()
+  function walk(parentId, depth) {
+    for (const cat of byParent.get(parentId) || []) {
+      if (seen.has(cat.id) || depth > 2) continue
+      seen.add(cat.id)
+      out.push({ ...cat, depth })
+      walk(cat.id, depth + 1)
+    }
+  }
+  walk('', 0)
+  for (const cat of categories) {
+    if (!seen.has(cat.id)) out.push({ ...cat, depth: 0 })
+  }
+  return out
+}
+
+function reviewDescendantIds(categories, categoryId) {
+  const ids = new Set()
+  const queue = categories.filter((cat) => cat.parentId === categoryId)
+  for (let index = 0; index < queue.length; index += 1) {
+    const node = queue[index]
+    if (!node?.id || ids.has(node.id)) continue
+    ids.add(node.id)
+    for (const child of categories) {
+      if (child.parentId === node.id) queue.push(child)
+    }
+  }
+  return ids
+}
+
+function reviewParentOptions(categories, editingId) {
+  const blocked = editingId ? reviewDescendantIds(categories, editingId) : new Set()
+  if (editingId) blocked.add(editingId)
+  return categories.filter((cat) => (cat.depth || 0) < 2 && !blocked.has(cat.id))
+}
+
+function CategoryForm({
+  initialName,
+  initialNameAr,
+  initialParentId = '',
+  parentOptions = [],
+  busy,
+  onCancel,
+  onSave,
+}) {
   const [name, setName] = useState(initialName)
   const [nameAr, setNameAr] = useState(initialNameAr)
+  const [parentId, setParentId] = useState(initialParentId)
   useEffect(() => {
     setName(initialName)
     setNameAr(initialNameAr)
-  }, [initialName, initialNameAr])
+    setParentId(initialParentId || '')
+  }, [initialName, initialNameAr, initialParentId])
 
   return (
     <div>
+      <label className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Place under</label>
+      <select
+        className={`${inputClass} mb-3`}
+        value={parentId}
+        onChange={(e) => setParentId(e.target.value)}
+      >
+        <option value="">Main category</option>
+        {parentOptions.map((cat) => (
+          <option key={cat.id} value={cat.id}>
+            {(cat.depth || 0) === 0
+              ? `Subcategory of ${cat.name}`
+              : `Sub-subcategory of ${cat.name}`}
+          </option>
+        ))}
+      </select>
       <label className="mb-1.5 block text-[12px] font-medium text-[#7c8780]">Category name (English)</label>
       <input
         className={inputClass}
@@ -552,7 +640,13 @@ function CategoryForm({ initialName, initialNameAr, busy, onCancel, onSave }) {
           type="button"
           className={primaryBtn}
           disabled={busy || !name.trim()}
-          onClick={() => onSave({ name: name.trim(), nameAr: nameAr.trim() || undefined })}
+          onClick={() =>
+            onSave({
+              name: name.trim(),
+              nameAr: nameAr.trim() || undefined,
+              parentId: parentId || null,
+            })
+          }
         >
           Save
         </button>

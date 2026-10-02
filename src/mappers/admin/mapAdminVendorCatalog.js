@@ -132,21 +132,22 @@ export function mapAdminVendorCatalog(raw) {
   }
 }
 
-/** Flat category options for selects (root + children). */
+/** Flat category options for selects (main, sub, and sub-sub). */
 export function flattenCatalogCategoryOptions(categories) {
   const rows = []
-  for (const cat of Array.isArray(categories) ? categories : []) {
-    if (!cat?.id) continue
-    rows.push({ id: cat.id, name: cat.name, depth: 0, isActive: cat.isActive !== false })
-    for (const child of Array.isArray(cat.children) ? cat.children : []) {
-      if (!child?.id) continue
+  function walk(nodes, depth) {
+    for (const cat of Array.isArray(nodes) ? nodes : []) {
+      if (!cat?.id || depth > 2) continue
       rows.push({
-        id: child.id,
-        name: child.name,
-        depth: 1,
-        isActive: child.isActive !== false,
+        id: cat.id,
+        name: cat.name,
+        depth,
+        parentId: cat.parentId || null,
+        isActive: cat.isActive !== false,
       })
+      if (depth < 2) walk(cat.children, depth + 1)
     }
   }
+  walk(categories, 0)
   return rows
 }
