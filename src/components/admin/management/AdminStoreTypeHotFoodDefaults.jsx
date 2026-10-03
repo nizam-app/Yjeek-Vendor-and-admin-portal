@@ -6,6 +6,7 @@
  * INHERITED / OVERRIDDEN badges and per-field reset.
  */
 import { calcMaxContribution, maxDistanceBelowRadiusError } from '../../../utils/calcMaxContribution'
+import HotFoodPerOrderPreview from './HotFoodPerOrderPreview'
 import { cn } from '../cn'
 
 const inputClass =
@@ -233,7 +234,7 @@ function Field({ label, badge, stateBadge, aside, hint, error, children }) {
   )
 }
 
-function MoneyOrKmInput({ readOnly = false, className, ...props }) {
+export function MoneyOrKmInput({ readOnly = false, className, ...props }) {
   return (
     <input
       readOnly={readOnly}
@@ -495,7 +496,7 @@ export default function AdminStoreTypeHotFoodDefaults({
             hint={inheritanceHint(
               'vendor',
               'extraPerKm',
-              'Charged to the vendor for each km between the radius and the max distance.',
+              'Per km between radius and max distance (billable extra km are capped at max distance − radius).',
             )}
           >
             <MoneyOrKmInput
@@ -508,7 +509,7 @@ export default function AdminStoreTypeHotFoodDefaults({
           <Field
             label="Max contribution (BHD)"
             badge="AUTO"
-            hint="Read-only ceiling: contribution + (max distance − radius) × extra per km. Recalculates live."
+            hint="Worst-case ceiling at max distance only — not the fee for every trip. Use the per-order preview below for a sample distance."
           >
             <MoneyOrKmInput
               value={vendorMaxContribution ?? '—'}
@@ -593,7 +594,7 @@ export default function AdminStoreTypeHotFoodDefaults({
             hint={inheritanceHint(
               'customer',
               'extraPerKm',
-              'Charged to the customer for each km between the customer radius and the max distance.',
+              'Per km between customer radius and max distance (capped at max distance − customer radius).',
             )}
           >
             <MoneyOrKmInput
@@ -606,7 +607,7 @@ export default function AdminStoreTypeHotFoodDefaults({
           <Field
             label="Max contribution (BHD)"
             badge="AUTO"
-            hint="Read-only ceiling: contribution + (vendor max distance − customer radius) × extra per km. Recalculates live."
+            hint="Worst-case customer ceiling at max distance — not the fee for every trip."
           >
             <MoneyOrKmInput
               value={customerMaxContribution ?? '—'}
@@ -633,6 +634,8 @@ export default function AdminStoreTypeHotFoodDefaults({
           </Field>
         </div>
       </div>
+
+      <HotFoodPerOrderPreview vendor={vendor} customer={customer} disabled={disabled} />
     </div>
   )
 }

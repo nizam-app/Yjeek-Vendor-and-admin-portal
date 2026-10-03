@@ -105,7 +105,7 @@ function buildWizardSavedBranch({
   allowDineIn,
 }) {
   const hfVendor = draftHotFood?.vendor || {}
-  const radiusKm = hfVendor.radiusKm || form.radiusKm || '5'
+  const radiusKm = [hfVendor.radiusKm, form.radiusKm].map((value) => Number(value)).find((value) => Number.isFinite(value) && value > 0)
   const etaMin = hfVendor.etaMin || form.etaMin || '30'
   const minOrder = hfVendor.minOrderAmount || form.minOrderValue || '3'
   const area = form.areaCity || 'Manama'
@@ -119,8 +119,7 @@ function buildWizardSavedBranch({
     phone: form.phone || state?.wizardDraft?.form?.ownerPhone || '+973 1700 0000',
     latitude: form.latitude || '26.2285',
     longitude: form.longitude || '50.535',
-    deliveryRadiusKm: radiusKm,
-    radiusKm,
+    ...(radiusKm != null ? { deliveryRadiusKm: radiusKm, radiusKm } : {}),
     minOrderAmount: minOrder,
     etaMin,
     hours: form.hours,
@@ -136,7 +135,7 @@ function buildWizardSavedBranch({
     allowedVehiclesEdited: Boolean(allowedVehiclesEdited),
     isPrimary:
       Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
-    detail: `radius ${radiusKm} km · ETA ${etaMin} min · min BHD ${minOrder}`,
+    detail: `radius ${radiusKm ?? '—'} km · ETA ${etaMin} min · min BHD ${minOrder}`,
   }
 }
 
@@ -467,8 +466,12 @@ function normalizeBranch(branch) {
   if (!branch) return null
   if (branch.detail) return branch
 
-  const radiusKmRaw =
-    branch.radiusKm != null ? String(branch.radiusKm) : String(branch.radius || '').replace(/[^\d.]/g, '')
+  const radiusNumeric = Number(
+    branch.radiusKm != null && branch.radiusKm !== ''
+      ? branch.radiusKm
+      : String(branch.radius || '').replace(/[^\d.]/g, ''),
+  )
+  const radiusKmRaw = Number.isFinite(radiusNumeric) && radiusNumeric > 0 ? String(radiusNumeric) : ''
   const etaMinRaw =
     branch.etaMin != null ? String(branch.etaMin) : String(branch.eta || '').replace(/[^\d.]/g, '')
   const minOrderRaw =
@@ -478,7 +481,7 @@ function normalizeBranch(branch) {
 
   return {
     ...branch,
-    radiusKm: branch.radiusKm ?? (radiusKmRaw ? Number(radiusKmRaw) : null),
+    radiusKm: radiusKmRaw ? Number(radiusKmRaw) : null,
     etaMin: branch.etaMin ?? (etaMinRaw ? Number(etaMinRaw) : null),
     minOrderAmount: branch.minOrderAmount ?? (minOrderRaw ? Number(minOrderRaw) : null),
     detail: `Block ${branch.block || '—'} · radius ${radiusKmRaw || '—'} km · ETA ${etaMinRaw || '—'} min · min BHD ${minOrderRaw || '—'}`,
@@ -876,7 +879,8 @@ export default function AdminAddVendorBrunchs() {
         longitude: isPlottableLatLng(branch.latitude, branch.longitude)
           ? String(branch.longitude)
           : prev.longitude,
-        radiusKm: branch.radiusKm != null ? String(branch.radiusKm) : prev.radiusKm,
+        radiusKm:
+          Number(branch.radiusKm) > 0 ? String(branch.radiusKm) : prev.radiusKm,
         etaMin: branch.etaMin != null ? String(branch.etaMin) : prev.etaMin,
         minOrderValue:
           branch.minOrderAmount != null ? String(branch.minOrderAmount) : prev.minOrderValue,
@@ -1014,24 +1018,22 @@ export default function AdminAddVendorBrunchs() {
     if (!isPlottableLatLng(lat, lng)) {
       return { center: null, circles: [] }
     }
-    const radiusSource =
-      draftHotFood?.vendor?.radiusKm ||
-      branchMapRadiusKm ||
-      form.radiusKm ||
-      '5'
+    const radiusSource = draftHotFood?.vendor?.radiusKm || branchMapRadiusKm || form.radiusKm
     const radiusRaw = Number(radiusSource)
-    const radiusKm = !Number.isNaN(radiusRaw) && radiusRaw > 0 ? radiusRaw : 5
+    const radiusKm = !Number.isNaN(radiusRaw) && radiusRaw > 0 ? radiusRaw : null
     const name = String(form.name || '').trim() || 'This branch'
     return {
       center: { latitude: lat, longitude: lng },
-      circles: [
-        {
-          name,
-          latitude: lat,
-          longitude: lng,
-          radiusKm,
-        },
-      ],
+      circles: radiusKm
+        ? [
+            {
+              name,
+              latitude: lat,
+              longitude: lng,
+              radiusKm,
+            },
+          ]
+        : [],
     }
   }, [
     form.latitude,

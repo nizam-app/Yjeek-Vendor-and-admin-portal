@@ -8,7 +8,7 @@ function asInputValue(value) {
 function formatRadius(value) {
   if (value === null || value === undefined || value === '') return '—'
   const numeric = Number(value)
-  if (Number.isNaN(numeric)) return String(value)
+  if (Number.isNaN(numeric) || numeric <= 0) return '—'
   return `${numeric} km`
 }
 
