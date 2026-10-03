@@ -11,7 +11,11 @@ import {
   pickVendorDeliveryTemplateFromBranches,
 } from '../../utils/mapWizardBranchDeliverySettings'
 
-export { requiresServiceSubTypeSelection } from './taxonomyHelpers'
+export {
+  findServicesStoreType,
+  listServiceSubTypes,
+  requiresServiceSubTypeSelection,
+} from './taxonomyHelpers'
 
 const SERVICE_MODE_UI_TO_API = {
   'Hot food · on demand': 'hotFoodOnDemand',

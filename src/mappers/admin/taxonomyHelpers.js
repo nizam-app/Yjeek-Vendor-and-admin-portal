@@ -60,12 +60,50 @@ export function buildFleetCategoryFilterOptions(storeTypes) {
 }
 
 /**
- * Rule 5 UI: Services mode on a non-Services store type requires a service sub-type.
- * @param {string|null|undefined} storeTypeSlug
+ * Rule 5 UI: cross-list under platform Services (Food + Services mode) needs serviceSubTypeId.
+ * Dedicated service store types (slug `services` or TWO_LEVEL with own sub-types) use store sub-type instead.
+ * @param {{ slug?: string|null, structure?: string, subTypes?: unknown[] }|string|null|undefined} storeTypeOrSlug
  * @param {boolean} servicesModeEnabled
  * @returns {boolean}
  */
-export function requiresServiceSubTypeSelection(storeTypeSlug, servicesModeEnabled) {
+export function requiresServiceSubTypeSelection(storeTypeOrSlug, servicesModeEnabled) {
   if (!servicesModeEnabled) return false
-  return String(storeTypeSlug || '').trim().toLowerCase() !== 'services'
+
+  const storeType =
+    typeof storeTypeOrSlug === 'string' || storeTypeOrSlug == null
+      ? { slug: storeTypeOrSlug }
+      : storeTypeOrSlug
+
+  const slug = String(storeType?.slug || '').trim().toLowerCase()
+  if (slug === 'services') return false
+
+  if (storeType?.structure === 'TWO_LEVEL') {
+    const subs = Array.isArray(storeType?.subTypes) ? storeType.subTypes : []
+    if (subs.length > 0) return false
+  }
+
+  return true
+}
+
+/**
+ * Store Management "Services" store type (slug `services`) — only source for vendor Services sub-type options.
+ * @param {Array<{ slug?: string|null, subTypes?: unknown[] }>|null|undefined} storeTypes
+ * @returns {{ slug?: string|null, subTypes?: unknown[] }|null}
+ */
+export function findServicesStoreType(storeTypes) {
+  if (!Array.isArray(storeTypes)) return null
+  return (
+    storeTypes.find((t) => String(t?.slug || '').trim().toLowerCase() === 'services') ?? null
+  )
+}
+
+/**
+ * Sub-types configured on the Services store type in Store Management (no hardcoded fallbacks).
+ * @param {Array<{ slug?: string|null, subTypes?: unknown[] }>|null|undefined} storeTypes
+ * @returns {Array<{ id: string, name: string, slug?: string|null, iconUrl?: string|null }>}
+ */
+export function listServiceSubTypes(storeTypes) {
+  const services = findServicesStoreType(storeTypes)
+  if (!Array.isArray(services?.subTypes)) return []
+  return services.subTypes.filter((sub) => sub && sub.id && sub.name)
 }
