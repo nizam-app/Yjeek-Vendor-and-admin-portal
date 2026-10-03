@@ -45,6 +45,9 @@ export function AdminVendorCommission({
   onSaveCommission,
   isSaving = false,
   saveError = null,
+  embedded = false,
+  sectionTitle = 'Commission & fees',
+  sectionDescription = 'Set separately for each order method enabled for this vendor. VAT stays the shared Bahrain rate.',
 }) {
   const [commission, setCommission] = useState(initialCommission)
   const [editOpen, setEditOpen] = useState(false)
@@ -105,12 +108,15 @@ export function AdminVendorCommission({
 
   return (
     <>
-      <section className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
-        <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">Commission &amp; fees</h3>
-        <p className="mb-3 text-[12px] text-[#7c8780]">
-          Set separately for each order method enabled for this vendor. VAT stays the shared
-          Bahrain rate.
-        </p>
+      <section
+        className={
+          embedded
+            ? 'px-0 py-0'
+            : 'rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]'
+        }
+      >
+        <h3 className="mb-1 text-[15px] font-bold text-[#17231c]">{sectionTitle}</h3>
+        <p className="mb-3 text-[12px] text-[#7c8780]">{sectionDescription}</p>
         {!visibleOrderMethods.length ? (
           <p className="mb-3 text-[12px] text-[#d64044]">
             No order methods are enabled for this vendor. Turn on service modes on the SLA tab
