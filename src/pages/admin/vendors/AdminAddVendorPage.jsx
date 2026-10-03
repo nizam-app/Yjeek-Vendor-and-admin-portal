@@ -43,7 +43,10 @@ import {
   mapSlaModelConfigToWizardModes,
   mergeWizardSlaModes,
 } from '../../../mappers/admin/mapAdminVendorSla'
-import { requiresServiceSubTypeSelection } from '../../../mappers/admin/mapAdminCreateVendor'
+import {
+  listServiceSubTypes,
+  requiresServiceSubTypeSelection,
+} from '../../../mappers/admin/mapAdminCreateVendor'
 import { adminService } from '../../../services/adminService'
 import { useAdminShell } from '../../../context/AdminShellContext'
 
@@ -1385,12 +1388,9 @@ export default function AdminAddVendorPage({ onBack }) {
         : { ...prev, multiSubTypes: allowsMultipleSubTypes }
     ))
   }, [allowsMultipleSubTypes])
-  const servicesStoreType = storeTypes.find(
-    (t) => String(t.slug) === 'services' || (t.structure === 'TWO_LEVEL' && String(t.slug).includes('service')),
-  ) || storeTypes.find((t) => t.structure === 'TWO_LEVEL' && t.id !== selectedStoreType?.id)
-  const serviceSubTypes = Array.isArray(servicesStoreType?.subTypes) ? servicesStoreType.subTypes : []
+  const serviceSubTypes = listServiceSubTypes(storeTypes)
   const showServiceSubType = requiresServiceSubTypeSelection(
-    selectedStoreType?.slug,
+    selectedStoreType,
     serviceModes.includes('Services'),
   )
 

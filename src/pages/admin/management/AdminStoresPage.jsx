@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { MoreVertical, Plus } from 'lucide-react'
 import { useApiResource } from '../../../hooks/useApiResource'
@@ -18,33 +19,60 @@ const statTone = {
   red: 'text-[#e14b42]',
 }
 
-export default function AdminStoresPage() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const canDelete = isSuperAdminUser(user)
-  const [menuId, setMenuId] = useState(null)
-  const [visibilityBusyId, setVisibilityBusyId] = useState(null)
-  const [actionError, setActionError] = useState(null)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+function StoreTypeRowMenu({
+  open,
+  row,
+  visibilityBusy,
+  canDelete,
+  onToggle,
+  onClose,
+  onEdit,
+  onToggleVisibility,
+  onDelete,
+}) {
+  const triggerRef = useRef(null)
   const menuRef = useRef(null)
-  const { data, error, isLoading, refetch } = useApiResource(
-    () => adminService.getManagement('stores'),
-    [],
-  )
+  const [coords, setCoords] = useState(null)
 
-  const rows = useMemo(() => data?.rows || [], [data])
+  useLayoutEffect(() => {
+    if (!open) return undefined
 
-  useEffect(() => {
-    if (!menuId) return undefined
-
-    const handlePointerDown = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setMenuId(null)
-      }
+    const place = () => {
+      const trigger = triggerRef.current
+      if (!trigger) return
+      const rect = trigger.getBoundingClientRect()
+      const width = menuRef.current?.offsetWidth || 140
+      const height = menuRef.current?.offsetHeight || 132
+      const gap = 4
+      const left = Math.min(Math.max(8, rect.right - width), window.innerWidth - width - 8)
+      const openUp =
+        rect.bottom + gap + height > window.innerHeight - 8 && rect.top - gap - height > 8
+      const top = openUp ? rect.top - height - gap : rect.bottom + gap
+      setCoords({ top, left })
     }
 
+    place()
+    const raf = requestAnimationFrame(place)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const handlePointerDown = (event) => {
+      if (triggerRef.current?.contains(event.target) || menuRef.current?.contains(event.target)) {
+        return
+      }
+      onClose()
+    }
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') setMenuId(null)
+      if (event.key === 'Escape') onClose()
     }
 
     document.addEventListener('mousedown', handlePointerDown)
@@ -53,7 +81,91 @@ export default function AdminStoresPage() {
       document.removeEventListener('mousedown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [menuId])
+  }, [open, onClose])
+
+  return (
+    <div className="inline-block" ref={triggerRef}>
+      <button
+        type="button"
+        className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`More actions for ${row.name}`}
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle()
+        }}
+      >
+        <MoreVertical size={15} />
+      </button>
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              className="fixed z-[200] w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
+              style={
+                coords ? { top: coords.top, left: coords.left } : { top: 0, left: 0, visibility: 'hidden' }
+              }
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onEdit()
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={visibilityBusy}
+                className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:opacity-60"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onToggleVisibility()
+                }}
+              >
+                {visibilityBusy ? 'Updating…' : row.visible ? 'Hide' : 'Show'}
+              </button>
+              {canDelete ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onDelete()
+                  }}
+                >
+                  Delete
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  )
+}
+
+export default function AdminStoresPage() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const canDelete = isSuperAdminUser(user)
+  const [menuId, setMenuId] = useState(null)
+  const [visibilityBusyId, setVisibilityBusyId] = useState(null)
+  const [actionError, setActionError] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const { data, error, isLoading, refetch } = useApiResource(
+    () => adminService.getManagement('stores'),
+    [],
+  )
+
+  const rows = useMemo(() => data?.rows || [], [data])
 
   const title = data?.title || 'Store types'
   const subtitle = data?.subtitle || 'Catalog store types shown in the customer app.'
@@ -198,62 +310,23 @@ export default function AdminStoresPage() {
                       </Badge>
                     </td>
                     <td className="relative whitespace-nowrap px-4 py-3.5 text-right">
-                      <div className="inline-block" ref={menuOpen ? menuRef : null}>
-                        <button
-                          type="button"
-                          className="grid h-8 w-8 place-items-center rounded-md text-[#8a948e] hover:bg-[#f3f5f3] hover:text-[#455249]"
-                          aria-haspopup="menu"
-                          aria-expanded={menuOpen}
-                          aria-label={`More actions for ${row.name}`}
-                          onClick={() => setMenuId(menuOpen ? null : row.id)}
-                        >
-                          <MoreVertical size={15} />
-                        </button>
-                        {menuOpen ? (
-                          <div
-                            role="menu"
-                            className="absolute top-[calc(100%-6px)] right-4 z-30 w-[140px] overflow-hidden rounded-[10px] border border-[#e4e8e4] bg-white py-1 shadow-[0_10px_24px_rgba(20,40,28,.14)]"
-                          >
-                            <button
-                              type="button"
-                              role="menuitem"
-                              className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6]"
-                              onClick={() => {
-                                setMenuId(null)
-                                navigate(`/admin/stores/${encodeURIComponent(row.id)}`)
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={visibilityBusyId === row.id}
-                              className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#17231c] hover:bg-[#f6f8f6] disabled:opacity-60"
-                              onClick={() => handleToggleVisibility(row)}
-                            >
-                              {visibilityBusyId === row.id
-                                ? 'Updating…'
-                                : row.visible
-                                  ? 'Hide'
-                                  : 'Show'}
-                            </button>
-                            {canDelete ? (
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="flex w-full px-3.5 py-2.5 text-left text-[13px] font-medium text-[#d64044] hover:bg-[#fdebec]"
-                                onClick={() => {
-                                  setMenuId(null)
-                                  setDeleteTarget(row)
-                                }}
-                              >
-                                Delete
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
+                      <StoreTypeRowMenu
+                        open={menuOpen}
+                        row={row}
+                        visibilityBusy={visibilityBusyId === row.id}
+                        canDelete={canDelete}
+                        onToggle={() => setMenuId(menuOpen ? null : row.id)}
+                        onClose={() => setMenuId(null)}
+                        onEdit={() => {
+                          setMenuId(null)
+                          navigate(`/admin/stores/${encodeURIComponent(row.id)}`)
+                        }}
+                        onToggleVisibility={() => handleToggleVisibility(row)}
+                        onDelete={() => {
+                          setMenuId(null)
+                          setDeleteTarget(row)
+                        }}
+                      />
                     </td>
                   </tr>
                 )
