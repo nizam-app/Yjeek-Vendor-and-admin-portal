@@ -45,6 +45,8 @@ export default function AdminVendorDetailPage() {
   const [unsuspending, setUnsuspending] = useState(false)
   const [storeOnlineSaving, setStoreOnlineSaving] = useState(false)
   const [storeVisibleSaving, setStoreVisibleSaving] = useState(false)
+  const [acceptsCashOrders, setAcceptsCashOrders] = useState(null)
+  const [cashOrdersSaving, setCashOrdersSaving] = useState(false)
   const [activating, setActivating] = useState(false)
   const [deactivating, setDeactivating] = useState(false)
   const [dispatchModeValue, setDispatchModeValue] = useState(null)
@@ -108,11 +110,15 @@ export default function AdminVendorDetailPage() {
         : Boolean(data.storeOnline),
     )
     setDispatchModeValue(data.dispatchModeValue || 'AUTO')
+    setAcceptsCashOrders(
+      typeof data.acceptsCashOrders === 'boolean' ? data.acceptsCashOrders : true,
+    )
   }, [
     data?.backendId,
     data?.storeOnline,
     data?.isOnline,
     data?.isCustomerVisible,
+    data?.acceptsCashOrders,
     data?.status,
     data?.dispatchModeValue,
   ])
@@ -371,6 +377,9 @@ export default function AdminVendorDetailPage() {
   const visible =
     storeVisible ??
     (typeof data.isCustomerVisible === 'boolean' ? data.isCustomerVisible : Boolean(online))
+  const cashOrdersEnabled =
+    acceptsCashOrders ??
+    (typeof data.acceptsCashOrders === 'boolean' ? data.acceptsCashOrders : true)
   const statusLower = String(data.status || '').toLowerCase()
   const accountStatusUpper = String(data.accountStatus || '').toUpperCase()
   const isDraft =
@@ -388,6 +397,7 @@ export default function AdminVendorDetailPage() {
     isForceClosed ||
     storeOnlineSaving ||
     storeVisibleSaving ||
+    cashOrdersSaving ||
     activating ||
     deactivating
   const storeVisibleHint = isDraft || isPending
@@ -404,6 +414,9 @@ export default function AdminVendorDetailPage() {
     : online
       ? 'Accept new orders.'
       : 'Not accepting orders.'
+  const cashOrdersHint = cashOrdersEnabled
+    ? 'Customers can choose cash on delivery where allowed.'
+    : 'Cash on delivery is hidden for this vendor in the customer app.'
   const profileLocation = [data.area, data.city].filter(Boolean).join(', ') || '—'
   const showMoveToDraft = isActiveAccount && !isForceClosed && !isSuspended
 
@@ -684,6 +697,34 @@ export default function AdminVendorDetailPage() {
     }
   }
 
+  const handleAcceptsCashToggle = async () => {
+    if (storeControlsDisabled) return
+    const next = !cashOrdersEnabled
+
+    if (!isAdminRealApiFeature('vendors')) {
+      setAcceptsCashOrders(next)
+      showSuccess(next ? 'Cash orders enabled.' : 'Cash orders disabled for this vendor.')
+      return
+    }
+
+    setCashOrdersSaving(true)
+    try {
+      const response = await adminService.updateVendorStoreControls(vendorId, {
+        acceptsCashOrders: next,
+      })
+      applyVendorDetail(response?.data)
+      if (!response?.data) {
+        await refetch()
+        setAcceptsCashOrders(next)
+      }
+      showSuccess(next ? 'Cash orders enabled.' : 'Cash orders disabled for this vendor.')
+    } catch (err) {
+      showError(formatApiErrorMessage(err, 'Failed to update cash order setting.'))
+    } finally {
+      setCashOrdersSaving(false)
+    }
+  }
+
   const handleStoreOnlineToggle = async () => {
     if (storeControlsDisabled) return
 
@@ -919,6 +960,34 @@ export default function AdminVendorDetailPage() {
                     className={cn(
                       'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
                       online ? 'left-[23px]' : 'left-[3px]',
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-3 flex items-start justify-between gap-3 border-t border-[#f0f2f0] pt-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-[#17231c]">Accept cash orders</p>
+                  <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+                    {cashOrdersHint}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={cashOrdersEnabled}
+                  aria-label="Accept cash orders"
+                  disabled={storeControlsDisabled}
+                  onClick={handleAcceptsCashToggle}
+                  className={cn(
+                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
+                    cashOrdersEnabled ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
+                      cashOrdersEnabled ? 'left-[23px]' : 'left-[3px]',
                     )}
                   />
                 </button>

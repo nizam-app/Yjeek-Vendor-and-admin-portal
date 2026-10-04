@@ -322,6 +322,7 @@ export function mapAdminVendorBranchListItem(branch) {
     areaCity: branch.area || branch.city || 'Manama',
     allowsPickup: typeof branch.allowsPickup === 'boolean' ? branch.allowsPickup : true,
     allowsDineIn: typeof branch.allowsDineIn === 'boolean' ? branch.allowsDineIn : true,
+    cuisineTags: Array.isArray(branch.cuisineTags) ? branch.cuisineTags.filter(Boolean) : [],
   }
 }
 
@@ -403,7 +404,24 @@ export function mapAdminCreateBranchRequest(form = {}) {
   if (typeof form.allowsPickup === 'boolean') body.allowsPickup = form.allowsPickup
   if (typeof form.allowsDineIn === 'boolean') body.allowsDineIn = form.allowsDineIn
 
+  if (form.cuisineTags !== undefined) {
+    body.cuisineTags = parseCuisineTagsField(form.cuisineTags)
+  }
+
   return body
+}
+
+function parseCuisineTagsField(value) {
+  if (Array.isArray(value)) {
+    return value.map((t) => String(t || '').trim()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+  }
+  return []
 }
 
 /**
@@ -459,6 +477,10 @@ export function mapAdminUpdateBranchRequest(form = {}) {
 
   if (typeof form.allowsPickup === 'boolean') body.allowsPickup = form.allowsPickup
   if (typeof form.allowsDineIn === 'boolean') body.allowsDineIn = form.allowsDineIn
+
+  if (form.cuisineTags !== undefined) {
+    body.cuisineTags = parseCuisineTagsField(form.cuisineTags)
+  }
 
   if (Object.keys(body).length === 0) {
     throw new ApiError({ message: 'No branch fields to update.' })

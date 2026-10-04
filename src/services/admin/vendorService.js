@@ -252,6 +252,9 @@ export const adminVendorService = {
       body.isCustomerVisible = Boolean(controls.isCustomerVisible)
     }
     if (controls.dispatchMode !== undefined) body.dispatchMode = controls.dispatchMode
+    if (controls.acceptsCashOrders !== undefined) {
+      body.acceptsCashOrders = Boolean(controls.acceptsCashOrders)
+    }
 
     if (!Object.keys(body).length) {
       throw new Error('No store control changes were provided.')
