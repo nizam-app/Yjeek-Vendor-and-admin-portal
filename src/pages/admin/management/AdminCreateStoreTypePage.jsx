@@ -43,6 +43,7 @@ import {
 } from '../../../components/admin/management/scheduledFeesForm'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
+import { commissionServiceLabelsForStoreTypeModes } from '../../../mappers/admin/mapAdminVendorCommission'
 import { mapStoreTypeCommissionDefaultsResponse } from '../../../mappers/admin/mapStoreTypeCommissionDefaults'
 import AdminStoreTypeCommissionSection from '../../../components/admin/management/AdminStoreTypeCommissionSection'
 
@@ -625,6 +626,10 @@ function StoreTypeForm({
   const [visibleInApp, setVisibleInApp] = useState(initial.visibleInApp)
   const [iconUrl, setIconUrl] = useState(initial.iconUrl)
   const [modes, setModes] = useState(initial.modes)
+  const commissionServiceLabels = useMemo(
+    () => commissionServiceLabelsForStoreTypeModes(modes),
+    [modes],
+  )
   const [allowedVehicles, setAllowedVehicles] = useState(() =>
     normalizeAllowedVehicles(initial.allowedVehicles),
   )
@@ -774,6 +779,8 @@ function StoreTypeForm({
   const titleName = displayName.trim() || displayNameAr.trim() || 'New'
   const isEditMode = mode === 'edit'
   const canManageNested = Boolean(storeTypeId && isEditMode && canSaveRemote)
+  const showAllowedVehicles =
+    Boolean(modes['Hot food — on demand']) || Boolean(modes.Scheduled)
 
   const buildFormPayload = (publishStatus = 'DRAFT', visible = visibleInApp) => ({
     displayName,
@@ -1590,32 +1597,34 @@ function StoreTypeForm({
           </Card>
         ) : null}
 
-        <Card
-          title="Allowed vehicles"
-          subtitle="Which vehicles may carry orders for this store type. A vendor may narrow this further, never widen it."
-        >
-          <div className="flex w-fit flex-col gap-2.5">
-            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
-              <span className="text-[13px] font-medium text-[#17231c]">Bike</span>
-              <Toggle
-                checked={Boolean(allowedVehicles.bike)}
-                onChange={() => toggleAllowedVehicle('bike')}
-              />
+        {showAllowedVehicles ? (
+          <Card
+            title="Allowed vehicles"
+            subtitle="Which vehicles may carry orders for this store type. A vendor may narrow this further, never widen it."
+          >
+            <div className="flex w-fit flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+                <span className="text-[13px] font-medium text-[#17231c]">Bike</span>
+                <Toggle
+                  checked={Boolean(allowedVehicles.bike)}
+                  onChange={() => toggleAllowedVehicle('bike')}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+                <span className="text-[13px] font-medium text-[#17231c]">Car</span>
+                <Toggle
+                  checked={Boolean(allowedVehicles.car)}
+                  onChange={() => toggleAllowedVehicle('car')}
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
-              <span className="text-[13px] font-medium text-[#17231c]">Car</span>
-              <Toggle
-                checked={Boolean(allowedVehicles.car)}
-                onChange={() => toggleAllowedVehicle('car')}
-              />
+            <div className="mt-3 rounded-[8px] border border-[#b9cfe9] bg-[#eaf2fc] px-3.5 py-2.5 text-[12px] leading-[1.5] text-[#2b66a5]">
+              Set <strong>Car only</strong> where goods cannot travel by bike — for example pharmacy
+              items needing refrigeration. When both are allowed, the system forces Car if the order
+              exceeds the bike capacity threshold.
             </div>
-          </div>
-          <div className="mt-3 rounded-[8px] border border-[#b9cfe9] bg-[#eaf2fc] px-3.5 py-2.5 text-[12px] leading-[1.5] text-[#2b66a5]">
-            Set <strong>Car only</strong> where goods cannot travel by bike — for example pharmacy
-            items needing refrigeration. When both are allowed, the system forces Car if the order
-            exceeds the bike capacity threshold.
-          </div>
-        </Card>
+          </Card>
+        ) : null}
 
         {isEditMode && canSaveRemote && storeTypeId ? (
           <Card
@@ -1625,6 +1634,7 @@ function StoreTypeForm({
             <AdminStoreTypeCommissionSection
               storeTypeId={storeTypeId}
               commission={liveCommission ?? initial.commission}
+              enabledServiceLabels={commissionServiceLabels}
               sectionInheritance={
                 liveCommissionSectionInheritance ?? initial.commissionSectionInheritance
               }

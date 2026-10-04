@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import {
   commissionOrderMethodsForServiceLabels,
+  commissionServiceLabelsForStoreTypeModes,
   filterCommissionDraftsByMethodIds,
   getCommissionInheritanceState,
   mapAdminUpdateVendorCommissionRequest,
@@ -23,6 +24,48 @@ describe('commissionOrderMethodsForServiceLabels', () => {
 
   it('returns empty when no labels', () => {
     assert.deepEqual(commissionOrderMethodsForServiceLabels([]), [])
+  })
+})
+
+describe('commissionServiceLabelsForStoreTypeModes', () => {
+  it('maps only the store-type order modes that are on', () => {
+    assert.deepEqual(
+      commissionServiceLabelsForStoreTypeModes({
+        'Hot food — on demand': false,
+        Pickup: false,
+        'Dine-in': false,
+        Scheduled: false,
+        Services: true,
+      }),
+      ['Services'],
+    )
+    assert.deepEqual(
+      commissionOrderMethodsForServiceLabels(
+        commissionServiceLabelsForStoreTypeModes({
+          'Hot food — on demand': false,
+          Pickup: true,
+          'Dine-in': true,
+          Scheduled: false,
+          Services: false,
+        }),
+      ).map((item) => item.id),
+      ['dineIn', 'pickup'],
+    )
+  })
+
+  it('maps hot food and scheduled onto the delivery and scheduled commission tabs', () => {
+    assert.deepEqual(
+      commissionOrderMethodsForServiceLabels(
+        commissionServiceLabelsForStoreTypeModes({
+          'Hot food — on demand': true,
+          Pickup: false,
+          'Dine-in': false,
+          Scheduled: true,
+          Services: false,
+        }),
+      ).map((item) => item.id),
+      ['delivery', 'scheduled'],
+    )
   })
 })
 

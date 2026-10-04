@@ -161,7 +161,9 @@ function mapReviewItem(raw) {
     sourcePageNumber: src.sourcePageNumber ?? null,
     backendItemId: src.backendItemId ?? null,
     subcategory: src.subcategory ? String(src.subcategory) : null,
+    subcategoryAr: src.subcategoryAr ? String(src.subcategoryAr) : null,
     subSubcategory: src.subSubcategory ? String(src.subSubcategory) : null,
+    subSubcategoryAr: src.subSubcategoryAr ? String(src.subSubcategoryAr) : null,
     prepTimeMin: src.prepTimeMin != null ? toNumber(src.prepTimeMin, 0) || null : null,
     badges: Array.isArray(src.badges) ? src.badges.map(String) : [],
     availabilitySlots: Array.isArray(src.availabilitySlots)

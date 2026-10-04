@@ -131,7 +131,9 @@ function buildInitialForm(item, categories, initialCategoryId) {
     nameAr: item?.nameAr || '',
     price: item ? Number(item.price).toFixed(3) : '',
     subcategory: item?.subcategory || '',
+    subcategoryAr: item?.subcategoryAr || '',
     subSubcategory: item?.subSubcategory || '',
+    subSubcategoryAr: item?.subSubcategoryAr || '',
     prepTime: item?.prepTimeMin != null ? String(item.prepTimeMin) : '',
     description: item?.description || '',
     descriptionAr: item?.descriptionAr || '',
@@ -313,7 +315,9 @@ export default function AdminEditImportItemModal({
       imageUrl: imageUrls[0] || undefined,
       imageUrls,
       subcategory: form.subcategory.trim() || null,
+      subcategoryAr: form.subcategoryAr.trim() || null,
       subSubcategory: form.subSubcategory.trim() || null,
+      subSubcategoryAr: form.subSubcategoryAr.trim() || null,
       prepTimeMin: Number.isFinite(prep) && prep > 0 ? Math.trunc(prep) : null,
       badges: form.badges,
       availabilitySlots: form.timeSlot ? [form.timeSlot] : ['ALL_DAY'],
@@ -474,12 +478,32 @@ export default function AdminEditImportItemModal({
                 />
               </label>
               <label className="block">
+                <span className={`mb-1.5 block ${labelClass}`}>SUBCATEGORY (AR)</span>
+                <input
+                  className={inputClass}
+                  value={form.subcategoryAr}
+                  onChange={(e) => updateField('subcategoryAr', e.target.value)}
+                  placeholder="Optional"
+                  dir="rtl"
+                />
+              </label>
+              <label className="block">
                 <span className={`mb-1.5 block ${labelClass}`}>SUB-SUBCATEGORY</span>
                 <input
                   className={inputClass}
                   value={form.subSubcategory}
                   onChange={(e) => updateField('subSubcategory', e.target.value)}
                   placeholder="Optional"
+                />
+              </label>
+              <label className="block">
+                <span className={`mb-1.5 block ${labelClass}`}>SUB-SUBCATEGORY (AR)</span>
+                <input
+                  className={inputClass}
+                  value={form.subSubcategoryAr}
+                  onChange={(e) => updateField('subSubcategoryAr', e.target.value)}
+                  placeholder="Optional"
+                  dir="rtl"
                 />
               </label>
               <label className="block">

@@ -42,6 +42,7 @@ export function AdminVendorCommission({
   commission: initialCommission,
   storeTypeName = '',
   enabledServiceLabels = null,
+  emptyMethodsMessage = 'No order methods are enabled for this vendor. Turn on service modes on the SLA tab first.',
   onSaveCommission,
   isSaving = false,
   saveError = null,
@@ -119,8 +120,7 @@ export function AdminVendorCommission({
         <p className="mb-3 text-[12px] text-[#7c8780]">{sectionDescription}</p>
         {!visibleOrderMethods.length ? (
           <p className="mb-3 text-[12px] text-[#d64044]">
-            No order methods are enabled for this vendor. Turn on service modes on the SLA tab
-            first.
+            {emptyMethodsMessage}
           </p>
         ) : (
           <div className="mb-3 flex flex-wrap gap-1.5">

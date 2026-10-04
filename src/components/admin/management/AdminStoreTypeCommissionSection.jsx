@@ -8,6 +8,7 @@ export default function AdminStoreTypeCommissionSection({
   storeTypeId,
   commission: initialCommission,
   sectionInheritance = 'empty',
+  enabledServiceLabels = null,
   onInheritanceChange,
   disabled = false,
 }) {
@@ -111,6 +112,8 @@ export default function AdminStoreTypeCommissionSection({
       <AdminVendorCommission
         commission={commission}
         storeTypeName={sourceLabel}
+        enabledServiceLabels={enabledServiceLabels}
+        emptyMethodsMessage="No order modes are on. Turn on an order mode above to set commission for that method."
         onSaveCommission={handleSave}
         isSaving={saving}
         saveError={error}

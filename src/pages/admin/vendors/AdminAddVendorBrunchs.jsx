@@ -202,6 +202,7 @@ function isValidShiftRange(from, to) {
 
 function dayHoursError(config) {
   if (!config?.open) return null
+  if (config.mode === '24h') return null
   const shifts = Array.isArray(config.shifts) ? config.shifts : []
   if (!shifts.length) return 'Set opening hours or mark the day closed.'
   for (let i = 0; i < shifts.length; i += 1) {
@@ -276,7 +277,8 @@ function DayCard({
   onBreakChange,
 }) {
   const isOpen = config.open
-  const isSplit = config.mode === 'split' && config.shifts.length > 1
+  const is24h = config.mode === '24h'
+  const isSplit = !is24h && config.mode === 'split' && config.shifts.length > 1
   const [editingBreak, setEditingBreak] = useState(false)
   const breakInputRef = useRef(null)
   const error = dayHoursError(config)
@@ -315,7 +317,7 @@ function DayCard({
           <div className="relative shrink-0">
             <select
               className="box-border h-[25px] appearance-none rounded-sm border border-[#E0E6E0] bg-[#E3F2EB] py-[5px] pr-6 pl-2.5 text-[12.5px] leading-[15px] font-medium text-[#127036] outline-none"
-              value={isSplit ? 'split' : 'single'}
+              value={is24h ? '24h' : isSplit ? 'split' : 'single'}
               onChange={(e) => {
                 const mode = e.target.value
                 onModeChange?.(mode)
@@ -325,6 +327,7 @@ function DayCard({
             >
               <option value="single">Single shift</option>
               <option value="split">Split shift</option>
+              <option value="24h">24 hours</option>
             </select>
             <span className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[10px] leading-none text-[#127036]">
               ▾
@@ -344,6 +347,8 @@ function DayCard({
 
       {!isOpen ? (
         <p className="text-[12.5px] leading-[15px] font-medium text-[#949C94]">Closed all day</p>
+      ) : is24h ? (
+        <p className="text-[12.5px] leading-[15px] font-medium text-[#6B756E]">Open 24 hours</p>
       ) : isSplit ? (
         <div className="flex w-full flex-row flex-wrap items-center gap-2 self-stretch">
           <ShiftTimeRange
@@ -431,7 +436,7 @@ function DayCard({
               × Remove break
             </button>
           </>
-        ) : (
+        ) : is24h ? null : (
           <button
             type="button"
             onClick={() => {
@@ -1185,8 +1190,58 @@ export default function AdminAddVendorBrunchs() {
   }
 
   function setDayMode(day, mode) {
+    if (mode === '24h') {
+      hoursTouched.current = true
+      setForm((c) => ({
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: {
+            open: true,
+            mode: '24h',
+            shifts: [{ from: '12:00 AM', to: '11:59 PM' }],
+          },
+        },
+      }))
+      return
+    }
     if (mode === 'split') {
+      const current = form.hours[day]
+      if (current?.mode === '24h') {
+        hoursTouched.current = true
+        setForm((c) => ({
+          ...c,
+          hours: {
+            ...c.hours,
+            [day]: {
+              open: true,
+              mode: 'split',
+              shifts: [
+                { from: '8:00 AM', to: '12:00 PM' },
+                { from: '4:00 PM', to: '10:00 PM' },
+              ],
+            },
+          },
+        }))
+        return
+      }
       addBreak(day)
+      return
+    }
+    const current = form.hours[day]
+    if (current?.mode === '24h') {
+      hoursTouched.current = true
+      setForm((c) => ({
+        ...c,
+        hours: {
+          ...c.hours,
+          [day]: {
+            open: true,
+            mode: 'single',
+            shifts: [{ from: '9:00 AM', to: '11:00 PM' }],
+          },
+        },
+      }))
       return
     }
     removeBreak(day)
@@ -1655,7 +1710,8 @@ export default function AdminAddVendorBrunchs() {
               {copyMondayPrompt ? (
                 <div className="mt-3 rounded-[10px] border border-[#D8EDE0] bg-[#F3FAF5] px-3.5 py-3">
                   <p className="text-[12.5px] font-medium text-[#17231c]">
-                    Apply Monday’s shifts
+                    Apply Monday’s{' '}
+                    {form.hours.Monday?.mode === '24h' ? '24 hours' : 'shifts'}
                     {form.hours.Monday?.mode === 'split' ? ' + break' : ''} to{' '}
                     <span className="font-bold">{copyMondayPrompt.targets.join(', ')}</span>?
                   </p>

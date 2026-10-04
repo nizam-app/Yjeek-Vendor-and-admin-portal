@@ -1,4 +1,4 @@
-import { ApiError } from '../../api/errors'
+import { ApiError } from '../../api/errors.js'
 
 const DAY_TO_API = {
   Monday: 'mon',
@@ -100,6 +100,15 @@ function minutesToTime(total) {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+/** Full calendar day. lastOrder matches close so checkout stays open until 23:59. */
+export const ALL_DAY_HOURS = { open: '00:00', close: '23:59', lastOrder: '23:59' }
+
+export function isAllDayClock(open, close) {
+  const openHm = String(open || '').slice(0, 5)
+  const closeHm = String(close || '').slice(0, 5)
+  return openHm === '00:00' && (closeHm === '23:59' || closeHm === '24:00' || closeHm === '00:00')
+}
+
 /** Last order 30 minutes before close; supports overnight close (e.g. 12:00 → 01:00). */
 function deriveLastOrder(open24, close24) {
   const openMins = timeToMinutes(open24)
@@ -115,7 +124,8 @@ function deriveLastOrder(open24, close24) {
 
 /**
  * Wizard hours UI → API openingHours (sun|mon|…|sat).
- * Closed day: "closed". Open day: { open, close } (+ optional shifts for split).
+ * Closed day: "closed". 24 hours: 00:00–23:59 with lastOrder 23:59.
+ * Open day: { open, close } (+ optional shifts for split).
  */
 export function mapWizardHoursToOpeningHours(hours) {
   if (!hours || typeof hours !== 'object') return undefined
@@ -128,6 +138,10 @@ export function mapWizardHoursToOpeningHours(hours) {
     any = true
     if (!config.open) {
       openingHours[key] = 'closed'
+      continue
+    }
+    if (config.mode === '24h') {
+      openingHours[key] = { ...ALL_DAY_HOURS }
       continue
     }
     const shifts = Array.isArray(config.shifts) ? config.shifts.filter(Boolean) : []
@@ -149,6 +163,10 @@ export function mapWizardHoursToOpeningHours(hours) {
     }
     const first = mappedShifts[0]
     const last = mappedShifts[mappedShifts.length - 1]
+    if (mappedShifts.length === 1 && isAllDayClock(first.open, first.close)) {
+      openingHours[key] = { ...ALL_DAY_HOURS }
+      continue
+    }
     const dayPayload = {
       open: first.open,
       lastOrder: deriveLastOrder(first.open, last.close),
@@ -196,14 +214,34 @@ export function mapOpeningHoursToWizardHours(openingHours, fallbackHours) {
     }
     if (dayValue && typeof dayValue === 'object') {
       const shiftsRaw = Array.isArray(dayValue.shifts) ? dayValue.shifts : null
-      if (shiftsRaw?.length) {
+      if (shiftsRaw?.length > 1) {
         hours[day] = {
           open: true,
-          mode: shiftsRaw.length > 1 ? 'split' : 'single',
+          mode: 'split',
           shifts: shiftsRaw.map((shift) => ({
             from: map24hToUiTime(shift.open || shift.from),
             to: map24hToUiTime(shift.close || shift.to),
           })),
+        }
+      } else if (
+        isAllDayClock(dayValue.open, dayValue.close) ||
+        (shiftsRaw?.length === 1 && isAllDayClock(shiftsRaw[0].open || shiftsRaw[0].from, shiftsRaw[0].close || shiftsRaw[0].to))
+      ) {
+        hours[day] = {
+          open: true,
+          mode: '24h',
+          shifts: [{ from: '12:00 AM', to: '11:59 PM' }],
+        }
+      } else if (shiftsRaw?.length === 1) {
+        hours[day] = {
+          open: true,
+          mode: 'single',
+          shifts: [
+            {
+              from: map24hToUiTime(shiftsRaw[0].open || shiftsRaw[0].from),
+              to: map24hToUiTime(shiftsRaw[0].close || shiftsRaw[0].to),
+            },
+          ],
         }
       } else if (dayValue.open && dayValue.close) {
         hours[day] = {

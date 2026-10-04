@@ -29,6 +29,33 @@ export const COMMISSION_METHOD_TO_SERVICE_LABEL = {
   scheduled: 'Scheduled delivery',
 }
 
+/** Store Management order-mode keys → commission method id. */
+const STORE_TYPE_ORDER_MODE_TO_METHOD_ID = {
+  'Hot food — on demand': 'delivery',
+  Pickup: 'pickup',
+  'Dine-in': 'dineIn',
+  Scheduled: 'scheduled',
+  Services: 'services',
+}
+
+/**
+ * Commission service labels for the order modes currently on for a store type.
+ * Labels match COMMISSION_METHOD_TO_SERVICE_LABEL so the existing tab filter applies.
+ *
+ * @param {Record<string, boolean>} modes
+ * @returns {string[]}
+ */
+export function commissionServiceLabelsForStoreTypeModes(modes = {}) {
+  if (!modes || typeof modes !== 'object') return []
+  const labels = []
+  for (const [modeKey, methodId] of Object.entries(STORE_TYPE_ORDER_MODE_TO_METHOD_ID)) {
+    if (!modes[modeKey]) continue
+    const label = COMMISSION_METHOD_TO_SERVICE_LABEL[methodId]
+    if (label) labels.push(label)
+  }
+  return labels
+}
+
 /**
  * Commission tabs for vendor UI — only methods the vendor has enabled (SLA service modes).
  *
