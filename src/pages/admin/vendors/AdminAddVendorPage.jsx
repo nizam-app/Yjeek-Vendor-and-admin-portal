@@ -43,10 +43,6 @@ import {
   mapSlaModelConfigToWizardModes,
   mergeWizardSlaModes,
 } from '../../../mappers/admin/mapAdminVendorSla'
-import {
-  listServiceSubTypes,
-  requiresServiceSubTypeSelection,
-} from '../../../mappers/admin/mapAdminCreateVendor'
 import { adminService } from '../../../services/adminService'
 import { useAdminShell } from '../../../context/AdminShellContext'
 
@@ -167,6 +163,7 @@ function serializeWizardSnapshot({
   slaConfigs,
   vendorVisible,
   vendorActive,
+  vendorAcceptsCash,
 }) {
   return JSON.stringify({
     form: pickWizardFormFields(form),
@@ -178,6 +175,7 @@ function serializeWizardSnapshot({
     slaConfigs,
     vendorVisible,
     vendorActive,
+    vendorAcceptsCash,
     // Legacy key kept so older session drafts still hydrate.
     activateImmediately: Boolean(vendorVisible && vendorActive),
   })
@@ -268,6 +266,9 @@ function applyWizardDraft(draft, setters) {
     setters.setVendorActive(draft.vendorActive)
   } else if (typeof draft.activateImmediately === 'boolean' && setters.setVendorActive) {
     setters.setVendorActive(draft.activateImmediately)
+  }
+  if (typeof draft.vendorAcceptsCash === 'boolean' && setters.setVendorAcceptsCash) {
+    setters.setVendorAcceptsCash(draft.vendorAcceptsCash)
   }
 }
 
@@ -739,6 +740,7 @@ export default function AdminAddVendorPage({ onBack }) {
   const [activateSaving, setActivateSaving] = useState(false)
   const [vendorVisible, setVendorVisible] = useState(true)
   const [vendorActive, setVendorActive] = useState(true)
+  const [vendorAcceptsCash, setVendorAcceptsCash] = useState(true)
   const [editAccountStatus, setEditAccountStatus] = useState(null)
   const [leaveModalOpen, setLeaveModalOpen] = useState(false)
   const [leaveBusy, setLeaveBusy] = useState(false)
@@ -777,8 +779,10 @@ export default function AdminAddVendorPage({ onBack }) {
         slaConfigs,
         vendorVisible,
         vendorActive,
+        vendorAcceptsCash,
       }),
     [
+      vendorAcceptsCash,
       vendorActive,
       vendorVisible,
       branches,
@@ -808,6 +812,7 @@ export default function AdminAddVendorPage({ onBack }) {
         slaConfigs,
         vendorVisible,
         vendorActive,
+        vendorAcceptsCash,
       }),
     )
     // Reset baseline only after edit data loads or when returning from branch/user editors.
@@ -832,6 +837,7 @@ export default function AdminAddVendorPage({ onBack }) {
       slaConfigs,
       vendorVisible,
       vendorActive,
+      vendorAcceptsCash,
       ...overrides,
     }
   }
@@ -842,6 +848,7 @@ export default function AdminAddVendorPage({ onBack }) {
       writeWizardSessionDraft(buildWizardDraft(overrides))
     },
     [
+      vendorAcceptsCash,
       vendorActive,
       vendorVisible,
       branches,
@@ -912,6 +919,7 @@ export default function AdminAddVendorPage({ onBack }) {
       setStep,
       setVendorVisible,
       setVendorActive,
+      setVendorAcceptsCash,
     })
   }, [isEdit, location.state?.wizardDraft])
 
@@ -931,6 +939,7 @@ export default function AdminAddVendorPage({ onBack }) {
         setStep,
         setVendorVisible,
         setVendorActive,
+        setVendorAcceptsCash,
       }
       if (!isEdit) {
         setters.setBranches = setBranches
@@ -1259,6 +1268,9 @@ export default function AdminAddVendorPage({ onBack }) {
         } else if (typeof vendor.storeOnline === 'boolean') {
           setVendorActive(vendor.storeOnline)
         }
+        if (typeof vendor.acceptsCashOrders === 'boolean') {
+          setVendorAcceptsCash(vendor.acceptsCashOrders)
+        }
         setEditAccountStatus(vendor.accountStatus || null)
       })
       .catch((err) => {
@@ -1388,12 +1400,6 @@ export default function AdminAddVendorPage({ onBack }) {
         : { ...prev, multiSubTypes: allowsMultipleSubTypes }
     ))
   }, [allowsMultipleSubTypes])
-  const serviceSubTypes = listServiceSubTypes(storeTypes)
-  const showServiceSubType = requiresServiceSubTypeSelection(
-    selectedStoreType,
-    serviceModes.includes('Services'),
-  )
-
   // Drop modes the store type no longer supports (never auto-enable).
   useEffect(() => {
     if (!form.storeTypeId || !storeTypes.length) return
@@ -1817,6 +1823,7 @@ export default function AdminAddVendorPage({ onBack }) {
     successMessage = '',
     isCustomerVisible,
     isOnline,
+    acceptsCashOrders,
   }) {
     if (!useRealCreateApi) {
       handleBack()
@@ -1848,6 +1855,7 @@ export default function AdminAddVendorPage({ onBack }) {
         submitForApproval: Boolean(submitForApproval) && !activate,
         isCustomerVisible,
         isOnline,
+        acceptsCashOrders,
       })
       const id = response?.data?.id
       if (!id) {
@@ -1909,13 +1917,6 @@ export default function AdminAddVendorPage({ onBack }) {
       return false
     }
 
-    if (showServiceSubType && !String(form.serviceSubTypeId || '').trim()) {
-      const message = 'Select a services sub-type when Services mode is enabled.'
-      setCreateError(message)
-      showError(message)
-      return false
-    }
-
     setCreateError(null)
     return true
   }
@@ -1956,6 +1957,7 @@ export default function AdminAddVendorPage({ onBack }) {
         await adminService.updateVendorStoreControls(editVendorId, {
           isCustomerVisible: vendorVisible,
           isOnline: vendorActive,
+          acceptsCashOrders: vendorAcceptsCash,
         })
         allowLeaveRef.current = true
         showSuccess('Vendor status updated.')
@@ -1964,6 +1966,7 @@ export default function AdminAddVendorPage({ onBack }) {
           activate: true,
           isCustomerVisible: vendorVisible,
           isOnline: vendorActive,
+          acceptsCashOrders: vendorAcceptsCash,
         })
         allowLeaveRef.current = true
         showSuccess('Vendor activated successfully.')
@@ -2058,6 +2061,7 @@ export default function AdminAddVendorPage({ onBack }) {
         submitForApproval: false,
         isCustomerVisible: vendorVisible,
         isOnline: vendorActive,
+        acceptsCashOrders: vendorAcceptsCash,
         successMessage: 'Vendor created successfully.',
       })
       return
@@ -2243,9 +2247,6 @@ export default function AdminAddVendorPage({ onBack }) {
       const next = turningOff ? prev.filter((item) => item !== mode) : [...prev, mode]
       return next
     })
-    if (mode === 'Services' && serviceModes.includes('Services')) {
-      setForm((prev) => ({ ...prev, serviceSubTypeId: '' }))
-    }
   }
 
   return (
@@ -2489,24 +2490,6 @@ export default function AdminAddVendorPage({ onBack }) {
                   >
                     <option value="">Select sub-type</option>
                     {storeSubTypes.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </VendorSelect>
-                </VendorField>
-              ) : null}
-              {showServiceSubType ? (
-                <VendorField label="Services sub-type">
-                  <VendorSelect
-                    value={form.serviceSubTypeId || ''}
-                    onChange={(event) => {
-                      setCreateError(null)
-                      setForm((prev) => ({ ...prev, serviceSubTypeId: event.target.value }))
-                    }}
-                  >
-                    <option value="">Select which service it appears under</option>
-                    {serviceSubTypes.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                       </option>
@@ -3210,26 +3193,6 @@ export default function AdminAddVendorPage({ onBack }) {
                   })
                 )}
               </div>
-              {showServiceSubType ? (
-                <div className="mt-4 max-w-md">
-                  <VendorField label="Services sub-type">
-                    <VendorSelect
-                      value={form.serviceSubTypeId || ''}
-                      onChange={(event) => {
-                        setCreateError(null)
-                        setForm((prev) => ({ ...prev, serviceSubTypeId: event.target.value }))
-                      }}
-                    >
-                      <option value="">Select which service it appears under</option>
-                      {serviceSubTypes.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </VendorSelect>
-                  </VendorField>
-                </div>
-              ) : null}
               <button
                 type="button"
                 onClick={() => navigate('/admin/sla-models')}
@@ -3264,10 +3227,12 @@ export default function AdminAddVendorPage({ onBack }) {
               users={users}
               vendorVisible={vendorVisible}
               vendorActive={vendorActive}
+              vendorAcceptsCash={vendorAcceptsCash}
               storeTypePublished={selectedStoreType ? selectedStoreType.visible === true : true}
               storeTypeName={selectedStoreType?.name || form.storeType}
               onVendorVisibleChange={setVendorVisible}
               onVendorActiveChange={setVendorActive}
+              onVendorAcceptsCashChange={setVendorAcceptsCash}
             />
           </>
         ) : null}

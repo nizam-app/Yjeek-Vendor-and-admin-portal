@@ -96,6 +96,20 @@ function mapCreateBranches(branches = []) {
       if (etaMin != null) item.etaMin = etaMin
       if (deliveryFee != null) item.deliveryFee = deliveryFee
 
+      const cuisineTags = (() => {
+        if (Array.isArray(branch.cuisineTags)) {
+          return branch.cuisineTags.map((t) => trim(t)).filter(Boolean)
+        }
+        if (typeof branch.cuisineTags === 'string' && branch.cuisineTags.trim()) {
+          return branch.cuisineTags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        }
+        return []
+      })()
+      if (cuisineTags.length) item.cuisineTags = cuisineTags
+
       const openingHours =
         branch.openingHours ||
         mapWizardHoursToOpeningHours(branch.hours)
@@ -308,6 +322,7 @@ function mapSla(form = {}, selectedModes = [], slaConfigs = {}) {
  * @param {boolean} [input.submitForApproval]
  * @param {boolean} [input.isCustomerVisible]
  * @param {boolean} [input.isOnline]
+ * @param {boolean} [input.acceptsCashOrders]
  */
 export function mapAdminCreateVendorRequest(input = {}) {
   const {
@@ -322,6 +337,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     submitForApproval = false,
     isCustomerVisible,
     isOnline,
+    acceptsCashOrders,
   } = input
 
   const name = trim(form.storeName || form.name)
@@ -418,6 +434,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
     submitForApproval: Boolean(submitForApproval) && !activate,
     ...(typeof isCustomerVisible === 'boolean' ? { isCustomerVisible } : {}),
     ...(typeof isOnline === 'boolean' ? { isOnline } : {}),
+    ...(typeof acceptsCashOrders === 'boolean' ? { acceptsCashOrders } : {}),
   }
 
   const vendorDeliveryTemplate = pickVendorDeliveryTemplateFromBranches(branches)

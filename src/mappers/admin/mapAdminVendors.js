@@ -243,6 +243,8 @@ export function mapAdminVendorDetailResponse(data) {
   const isOnline = controls.isOnline ?? data.isOnline ?? false
   const isCustomerVisible =
     controls.isCustomerVisible ?? data.isCustomerVisible ?? Boolean(isOnline)
+  const acceptsCashOrders =
+    controls.acceptsCashOrders ?? data.acceptsCashOrders ?? true
   const openIssues = Number(kpis.openIssues) || 0
   const avgRating = kpis.avgRating ?? data.rating
 
@@ -296,6 +298,7 @@ export function mapAdminVendorDetailResponse(data) {
     vatNumber: data.vatNumber ?? '',
     isOnline: Boolean(isOnline),
     isCustomerVisible: Boolean(isCustomerVisible),
+    acceptsCashOrders: Boolean(acceptsCashOrders),
     storeOnline: Boolean(isOnline),
     storeOnlineHint,
     dispatchMode: formatDispatchMode(controls.dispatchMode ?? data.dispatchMode),
@@ -400,14 +403,17 @@ export function mapAdminUpdateVendorStoreRequest(form = {}) {
   const vatNumber = String(form.vatNumber || '').trim()
   if (vatNumber) body.vatNumber = vatNumber
 
-  if (Array.isArray(form.cuisineTags)) {
-    const tags = form.cuisineTags.map((t) => String(t || '').trim()).filter(Boolean)
-    if (tags.length) body.cuisineTags = tags
-  } else if (typeof form.cuisineTags === 'string' && form.cuisineTags.trim()) {
-    body.cuisineTags = form.cuisineTags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
+  if (form.cuisineTags !== undefined) {
+    let tags = []
+    if (Array.isArray(form.cuisineTags)) {
+      tags = form.cuisineTags.map((t) => String(t || '').trim()).filter(Boolean)
+    } else if (typeof form.cuisineTags === 'string') {
+      tags = form.cuisineTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    }
+    body.cuisineTags = tags
   }
 
   if (
