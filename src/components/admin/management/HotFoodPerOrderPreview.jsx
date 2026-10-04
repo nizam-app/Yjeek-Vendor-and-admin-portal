@@ -45,50 +45,52 @@ export default function HotFoodPerOrderPreview({ vendor, customer, disabled = fa
     !customerPreview.outOfRange
 
   return (
-    <div className="rounded-[12px] border border-[#d4e8dc] bg-[#f4fbf7] p-4">
-      <div className="mb-3">
-        <h4 className="text-[13.5px] font-bold text-[#17231c]">Per-order fee preview</h4>
-        <p className="mt-0.5 text-[12px] leading-[16px] text-[#5c665f]">
-          Uses actual trip distance: contribution + (billable extra km × extra per km). This is not
-          the same as <strong>Max contribution</strong>, which is only the worst-case ceiling at max
-          distance.
-        </p>
-      </div>
-      <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-3 max-[700px]:grid-cols-1">
-        <label className="block text-[12px] font-medium text-[#455249]">
-          Sample distance (km)
-          <MoneyOrKmInput
-            className="mt-1"
-            value={distanceKm}
-            onChange={(event) => setDistanceKm(event.target.value)}
-            disabled={disabled}
-            inputMode="decimal"
+    <>
+      {/* <div className="rounded-[12px] border border-[#d4e8dc] bg-[#f4fbf7] p-4">
+        <div className="mb-3">
+          <h4 className="text-[13.5px] font-bold text-[#17231c]">Per-order fee preview</h4>
+          <p className="mt-0.5 text-[12px] leading-[16px] text-[#5c665f]">
+            Uses actual trip distance: contribution + (billable extra km × extra per km). This is not
+            the same as <strong>Max contribution</strong>, which is only the worst-case ceiling at max
+            distance.
+          </p>
+        </div>
+        <div className="mb-3 grid grid-cols-2 gap-x-4 gap-y-3 max-[700px]:grid-cols-1">
+          <label className="block text-[12px] font-medium text-[#455249]">
+            Sample distance (km)
+            <MoneyOrKmInput
+              className="mt-1"
+              value={distanceKm}
+              onChange={(event) => setDistanceKm(event.target.value)}
+              disabled={disabled}
+              inputMode="decimal"
+            />
+          </label>
+          <label className="block text-[12px] font-medium text-[#455249]">
+            Sample cart net (BHD)
+            <MoneyOrKmInput
+              className="mt-1"
+              value={itemsNet}
+              onChange={(event) => setItemsNet(event.target.value)}
+              disabled={disabled}
+              inputMode="decimal"
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
+          <PreviewCard
+            title="Vendor contribution"
+            preview={vendorPreview}
+            waived={false}
           />
-        </label>
-        <label className="block text-[12px] font-medium text-[#455249]">
-          Sample cart net (BHD)
-          <MoneyOrKmInput
-            className="mt-1"
-            value={itemsNet}
-            onChange={(event) => setItemsNet(event.target.value)}
-            disabled={disabled}
-            inputMode="decimal"
+          <PreviewCard
+            title="Customer delivery fee"
+            preview={customerPreview}
+            waived={customerWaived}
           />
-        </label>
-      </div>
-      <div className="grid grid-cols-2 gap-3 max-[700px]:grid-cols-1">
-        <PreviewCard
-          title="Vendor contribution"
-          preview={vendorPreview}
-          waived={false}
-        />
-        <PreviewCard
-          title="Customer delivery fee"
-          preview={customerPreview}
-          waived={customerWaived}
-        />
-      </div>
-    </div>
+        </div>
+      </div> */}
+    </>
   )
 }
 
