@@ -135,6 +135,7 @@ function buildWizardSavedBranch({
     allowedVehiclesEdited: Boolean(allowedVehiclesEdited),
     isPrimary:
       Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
+    cuisineTags: form.cuisineTags,
     detail: `radius ${radiusKm ?? '—'} km · ETA ${etaMin} min · min BHD ${minOrder}`,
   }
 }
@@ -541,6 +542,7 @@ export default function AdminAddVendorBrunchs() {
     radiusKm: '',
     etaMin: '',
     minOrderValue: '',
+    cuisineTags: '',
     hours: defaultHours(),
   }))
   const [branchOnline, setBranchOnline] = useState(true)
@@ -884,6 +886,9 @@ export default function AdminAddVendorBrunchs() {
         etaMin: branch.etaMin != null ? String(branch.etaMin) : prev.etaMin,
         minOrderValue:
           branch.minOrderAmount != null ? String(branch.minOrderAmount) : prev.minOrderValue,
+        cuisineTags: Array.isArray(branch.cuisineTags)
+          ? branch.cuisineTags.join(', ')
+          : prev.cuisineTags,
         pinnedLocation: isPlottableLatLng(branch.latitude, branch.longitude)
           ? `${branch.latitude}° N, ${branch.longitude}° E`
           : prev.pinnedLocation,
@@ -1557,6 +1562,15 @@ export default function AdminAddVendorBrunchs() {
                 value={form.areaCity}
                 onChange={(e) => updateField('areaCity', e.target.value)}
                 placeholder="Filled when you pin the map"
+              />
+            </Field>
+
+            <Field label="Cuisine" className="col-span-2 max-[700px]:col-span-1">
+              <input
+                className={inputClass}
+                value={form.cuisineTags}
+                onChange={(e) => updateField('cuisineTags', e.target.value)}
+                placeholder="e.g. Burgers, Shawarma — customer app filter & store header"
               />
             </Field>
 
