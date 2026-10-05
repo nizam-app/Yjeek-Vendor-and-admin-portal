@@ -61,6 +61,17 @@ export function splitOwnerPhone(phoneRaw, fallbackCountryCode = '+973') {
   }
 }
 
+function serviceSubTypeIdFromBranches(branches = []) {
+  for (const branch of Array.isArray(branches) ? branches : []) {
+    const id = trim(branch?.serviceSubTypeId)
+    if (!id) continue
+    const mode = branch?.deliveryModes?.SERVICES
+    const servicesOn = Boolean(mode?.enabled && mode?.supportedByStoreType !== false && !mode?.locked)
+    if (servicesOn) return id
+  }
+  return ''
+}
+
 function mapCreateBranches(branches = []) {
   return (Array.isArray(branches) ? branches : [])
     .map((branch, index) => {
@@ -377,6 +388,8 @@ export function mapAdminCreateVendorRequest(input = {}) {
   const subcategoryId = trim(form.subcategoryId)
   const crNumber = trim(form.crNumber)
   const vatNumber = trim(form.vatNumber)
+  const serviceSubTypeId =
+    trim(form.serviceSubTypeId) || serviceSubTypeIdFromBranches(branches)
 
   const body = {
     name,
@@ -389,7 +402,7 @@ export function mapAdminCreateVendorRequest(input = {}) {
       form.multiSubTypes && Array.isArray(form.storeSubTypeIds)
         ? [...new Set(form.storeSubTypeIds.map((id) => trim(id)).filter(Boolean))]
         : undefined,
-    serviceSubTypeId: trim(form.serviceSubTypeId) || undefined,
+    serviceSubTypeId: serviceSubTypeId || undefined,
     categoryLabel,
     description: trim(form.description) || undefined,
     logoUrl: trim(form.logoUrl) || undefined,

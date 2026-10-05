@@ -8,6 +8,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
 import { formatApiErrorMessage } from '../../../api/errors'
 import { adminService } from '../../../services/adminService'
+import { listServiceSubTypes, findServicesStoreType } from '../../../mappers/admin/taxonomyHelpers'
 import { cn } from '../cn'
 import AdminStoreTypeHotFoodDefaults, {
   EMPTY_HOT_FOOD_DEFAULTS,
@@ -35,6 +36,11 @@ import AdminAllowedVehiclesPanel, {
   normalizeAllowedVehiclesForm,
   VEHICLE_NONE_UI_MESSAGE,
 } from './AdminAllowedVehiclesPanel'
+import {
+  branchDriverRatesCaption,
+  shouldShowBranchDeliveryFleet,
+  shouldShowOnDemandDriverRates,
+} from './branchDeliveryFleet'
 
 export const BRANCH_DELIVERY_MODE_ORDER = [
   'HOT_FOOD_ON_DEMAND',
@@ -57,6 +63,12 @@ const MODES_WITH_PANEL = new Set(['HOT_FOOD_ON_DEMAND', 'SCHEDULED'])
 
 const LAST_MODE_OFF_MESSAGE = 'At least one order mode must stay on'
 const UNSUPPORTED_MODE_MESSAGE = 'Mode not available for this store type'
+const SERVICE_ATTACHMENT_NOTE =
+  'Services lets vendors of this type also appear under a Services sub-type.'
+const SERVICES_STORE_TYPE_MISSING_MESSAGE =
+  'Create a Services store type before turning Services on.'
+const SERVICE_SUB_TYPE_REQUIRED_MESSAGE =
+  'Choose a Services sub-type before turning Services on.'
 
 const ORDER_MODE_CODE_TO_KEY = {
   delivery: 'HOT_FOOD_ON_DEMAND',
@@ -296,6 +308,9 @@ function AdminBranchDeliverySettings(
   vendorId,
   locationId,
   storeTypeName = '',
+  storeTypeSlug = '',
+  serviceSubTypeId = '',
+  onServiceSubTypeIdChange,
   disabled = false,
   supportedOrderModes = [],
   previewReady = false,
@@ -337,6 +352,41 @@ function AdminBranchDeliverySettings(
   const [dirtyDriverRates, setDirtyDriverRates] = useState(false)
   const [dirtyAllowedVehicles, setDirtyAllowedVehicles] = useState(false)
   const [hotFoodEnableDraft, setHotFoodEnableDraft] = useState(false)
+  const [serviceSubTypes, setServiceSubTypes] = useState([])
+  const [servicesStoreTypeExists, setServicesStoreTypeExists] = useState(false)
+  const [selectedServiceSubTypeId, setSelectedServiceSubTypeId] = useState(
+    () => String(serviceSubTypeId || ''),
+  )
+  const [serviceArm, setServiceArm] = useState(false)
+  const [savedServiceSubTypeId, setSavedServiceSubTypeId] = useState(
+    () => String(serviceSubTypeId || ''),
+  )
+
+  const isServicesPrimary = String(storeTypeSlug || '').trim().toLowerCase() === 'services'
+
+  useEffect(() => {
+    setSelectedServiceSubTypeId(String(serviceSubTypeId || ''))
+  }, [serviceSubTypeId])
+
+  useEffect(() => {
+    let cancelled = false
+    adminService
+      .listStoreTypes()
+      .then((result) => {
+        if (cancelled) return
+        const rows = Array.isArray(result?.data?.storeTypes) ? result.data.storeTypes : []
+        setServicesStoreTypeExists(Boolean(findServicesStoreType(rows)))
+        setServiceSubTypes(listServiceSubTypes(rows))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setServicesStoreTypeExists(false)
+        setServiceSubTypes([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const canEdit = Boolean(vendorId && locationId) && !disabled
   const dirtyFields =
@@ -356,7 +406,13 @@ function AdminBranchDeliverySettings(
       setAllowedVehiclesForm,
       setAllowedVehiclesFieldMeta,
     )
-  }, [])
+    if (data && Object.prototype.hasOwnProperty.call(data, 'serviceSubTypeId')) {
+      const id = String(data.serviceSubTypeId || '')
+      setSelectedServiceSubTypeId(id)
+      setSavedServiceSubTypeId(id)
+      onServiceSubTypeIdChange?.(id)
+    }
+  }, [onServiceSubTypeIdChange])
 
   const load = useCallback(async () => {
     if (!vendorId || !locationId) return
@@ -385,6 +441,9 @@ function AdminBranchDeliverySettings(
   const hotFoodEnabled = Boolean(modes.HOT_FOOD_ON_DEMAND?.enabled)
   const scheduledEnabled = Boolean(modes.SCHEDULED?.enabled)
   const showScheduledDriverRates = shouldShowScheduledDriverRates(modes, supportedOrderModes)
+  const showOnDemandDriverRates = shouldShowOnDemandDriverRates(modes)
+  const showDeliveryFleet = shouldShowBranchDeliveryFleet(modes)
+  const showDriverRatesCard = showOnDemandDriverRates || showScheduledDriverRates
   const hotFoodSeeded = Boolean(modes.HOT_FOOD_ON_DEMAND?.seeded)
   const scheduledSeeded = Boolean(modes.SCHEDULED?.seeded)
 
@@ -505,6 +564,50 @@ function AdminBranchDeliverySettings(
     }
   }
 
+  const serviceEnableBlock = (nextEnabled) => {
+    if (!nextEnabled) return null
+    if (!servicesStoreTypeExists) return SERVICES_STORE_TYPE_MISSING_MESSAGE
+    return null
+  }
+
+  const chooseServiceSubType = async (id) => {
+    setSelectedServiceSubTypeId(id)
+    onServiceSubTypeIdChange?.(id)
+    if (!id) return
+    setError(null)
+
+    if (!locationId) {
+      if (!serviceArm) return
+      const currentModes = draftModes || previewBranchDeliveryModes(supportedOrderModes)
+      const current = currentModes.SERVICES
+      if (current) {
+        onDraftModesChange?.({
+          ...currentModes,
+          SERVICES: { ...current, enabled: true },
+        })
+      }
+      setServiceArm(false)
+      return
+    }
+
+    if (!serviceArm && !modes.SERVICES?.enabled) return
+    setTogglingMode('SERVICES')
+    setSaveOk(false)
+    try {
+      const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, {
+        modes: { SERVICES: { enabled: true } },
+        serviceSubTypeId: id,
+      })
+      applyPayload(res?.data)
+      setServiceArm(false)
+      setSaveOk(true)
+    } catch (err) {
+      setError(formatApiErrorMessage(err, 'Failed to save the service sub-type.'))
+    } finally {
+      setTogglingMode(null)
+    }
+  }
+
   const handleModeToggle = async (modeKey, nextEnabled) => {
     if (!canEdit || togglingMode) return
     const current = modes[modeKey]
@@ -513,6 +616,20 @@ function AdminBranchDeliverySettings(
     if (nextEnabled && current.supportedByStoreType === false) {
       setError(UNSUPPORTED_MODE_MESSAGE)
       return
+    }
+
+    if (modeKey === 'SERVICES') {
+      const blocked = serviceEnableBlock(nextEnabled)
+      if (blocked) {
+        setError(blocked)
+        return
+      }
+      if (!nextEnabled) setServiceArm(false)
+      if (nextEnabled && !isServicesPrimary && !String(selectedServiceSubTypeId || '').trim()) {
+        setServiceArm(true)
+        setError(SERVICE_SUB_TYPE_REQUIRED_MESSAGE)
+        return
+      }
     }
 
     if (!nextEnabled && current.enabled && countEnabled(modes) <= 1) {
@@ -536,9 +653,11 @@ function AdminBranchDeliverySettings(
     setSaveOk(false)
 
     try {
-      const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, {
-        modes: { [modeKey]: { enabled: nextEnabled } },
-      })
+      const body = { modes: { [modeKey]: { enabled: nextEnabled } } }
+      if (modeKey === 'SERVICES' && nextEnabled && !isServicesPrimary && selectedServiceSubTypeId) {
+        body.serviceSubTypeId = selectedServiceSubTypeId
+      }
+      const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, body)
       applyPayload(res?.data)
       setHotFoodEnableDraft(false)
       setDirtyHotFood(false)
@@ -647,12 +766,56 @@ function AdminBranchDeliverySettings(
     vendorId,
   ])
 
+  const persistServiceSelection = useCallback(
+    async (subtypeId) => {
+      const id = String(subtypeId || '').trim()
+      if (!id) {
+        setError(SERVICE_SUB_TYPE_REQUIRED_MESSAGE)
+        return false
+      }
+      setError(null)
+      setSaveOk(false)
+      try {
+        const res = await adminService.updateBranchDeliverySettings(vendorId, locationId, {
+          modes: { SERVICES: { enabled: true } },
+          serviceSubTypeId: id,
+        })
+        applyPayload(res?.data)
+        setServiceArm(false)
+        setSaveOk(true)
+        return true
+      } catch (err) {
+        setError(formatApiErrorMessage(err, 'Failed to save the service sub-type.'))
+        return false
+      }
+    },
+    [applyPayload, locationId, vendorId],
+  )
+
   useImperativeHandle(
     ref,
     () => ({
-      savePending: () => handleSave(),
+      savePending: async () => {
+        const subtypeId = String(selectedServiceSubTypeId || '').trim()
+        const servicesOn = Boolean(modes.SERVICES?.enabled) || serviceArm
+        const feesOk = await handleSave()
+        if (feesOk === false) return false
+        if (isServicesPrimary || !servicesOn) return true
+        if (Boolean(modes.SERVICES?.enabled) && subtypeId && subtypeId === savedServiceSubTypeId) {
+          return true
+        }
+        return persistServiceSelection(subtypeId)
+      },
     }),
-    [handleSave],
+    [
+      handleSave,
+      isServicesPrimary,
+      modes.SERVICES?.enabled,
+      persistServiceSelection,
+      savedServiceSubTypeId,
+      selectedServiceSubTypeId,
+      serviceArm,
+    ],
   )
 
   const handleResetBlock = async () => {
@@ -702,6 +865,20 @@ function AdminBranchDeliverySettings(
       return
     }
 
+    if (modeKey === 'SERVICES') {
+      const blocked = serviceEnableBlock(nextEnabled)
+      if (blocked) {
+        setError(blocked)
+        return
+      }
+      if (!nextEnabled) setServiceArm(false)
+      if (nextEnabled && !isServicesPrimary && !String(selectedServiceSubTypeId || '').trim()) {
+        setServiceArm(true)
+        setError(SERVICE_SUB_TYPE_REQUIRED_MESSAGE)
+        return
+      }
+    }
+
     if (!nextEnabled && current.enabled && countEnabled(currentModes) <= 1) {
       setError(LAST_MODE_OFF_MESSAGE)
       return
@@ -715,6 +892,37 @@ function AdminBranchDeliverySettings(
     onDraftModesChange?.(next)
   }
 
+  const serviceAttachmentPanel = (showSelect) => {
+    if (servicesStoreTypeExists && !showSelect) return null
+    return (
+    <div className="space-y-2 border-t border-[#eceeec] px-3.5 py-3">
+      {!servicesStoreTypeExists ? (
+        <p className="text-[12px] leading-[16px] text-[#b42318]">{SERVICES_STORE_TYPE_MISSING_MESSAGE}</p>
+      ) : null}
+      {showSelect ? (
+        <label className="block text-[12px] text-[#17231c]">
+          <span className="mb-1 block font-medium">Service sub-type</span>
+          <select
+            className="h-[36px] w-full rounded-[8px] border border-[#e1e5e2] bg-white px-2 text-[13px]"
+            value={selectedServiceSubTypeId}
+            disabled={disabled || Boolean(togglingMode)}
+            onChange={(event) => {
+              void chooseServiceSubType(event.target.value)
+            }}
+          >
+            <option value="">Select a sub-type</option>
+            {serviceSubTypes.map((sub) => (
+              <option key={sub.id} value={sub.id}>
+                {sub.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+    </div>
+    )
+  }
+
   if (!locationId) {
     const previewModes = draftModes || previewBranchDeliveryModes(supportedOrderModes)
     const anySupported = BRANCH_DELIVERY_MODE_ORDER.some(
@@ -726,7 +934,9 @@ function AdminBranchDeliverySettings(
         <div className="border-b border-[#eceeec] px-4 py-3">
           <h3 className="text-[15px] font-bold text-[#17231c]">Order modes</h3>
           <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
-            Order modes, vehicles, and driver rates are saved when you save this branch.
+            {shouldShowBranchDeliveryFleet(previewModes)
+              ? 'Order modes, vehicles, and driver rates are saved when you save this branch.'
+              : 'Order modes are saved when you save this branch.'}
           </p>
         </div>
         <div className="space-y-2 px-4 py-4">
@@ -768,6 +978,11 @@ function AdminBranchDeliverySettings(
                       (!supported || mode.locked) && 'opacity-60',
                     )}
                   >
+                    {modeKey === 'SERVICES' ? (
+                      <p className="border-b border-[#eceeec] px-3.5 py-2.5 text-[12px] leading-[16px] text-[#5c665f]">
+                        {SERVICE_ATTACHMENT_NOTE}
+                      </p>
+                    ) : null}
                     <div className="flex items-center justify-between gap-3 px-3.5 py-3">
                       <div className="min-w-0">
                         <p className="text-[13px] font-bold text-[#17231c]">
@@ -785,12 +1000,19 @@ function AdminBranchDeliverySettings(
                         </p>
                       </div>
                       <ModeToggle
-                        checked={enabled}
+                        checked={enabled || (modeKey === 'SERVICES' && serviceArm)}
                         disabled={disabled || mode.locked || (!supported && !enabled)}
                         label={label}
                         onChange={(next) => handlePreviewModeToggle(modeKey, next)}
                       />
                     </div>
+                    {modeKey === 'SERVICES'
+                      ? serviceAttachmentPanel(
+                          !isServicesPrimary &&
+                            servicesStoreTypeExists &&
+                            (enabled || serviceArm),
+                        )
+                      : null}
                     {showPreviewHotFood ? (
                       <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
                         <p className="text-[12px] leading-[16px] text-[#7c8780]">
@@ -830,7 +1052,7 @@ function AdminBranchDeliverySettings(
               })
             : null}
 
-          {previewReady && anySupported ? (
+          {previewReady && anySupported && shouldShowBranchDeliveryFleet(previewModes) ? (
             <div className="space-y-3 border-t border-[#eceeec] pt-4">
               <AdminAllowedVehiclesPanel
                 value={
@@ -840,15 +1062,24 @@ function AdminBranchDeliverySettings(
                 onChange={(next) => onDraftAllowedVehiclesChange?.(next)}
                 disabled={disabled}
               />
+              {shouldShowOnDemandDriverRates(previewModes) ||
+              shouldShowScheduledDriverRates(previewModes, supportedOrderModes) ? (
               <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
                 <div className="border-b border-[#eceeec] bg-[#f7f8f7] px-3.5 py-3">
                   <p className="text-[13px] font-bold text-[#17231c]">Driver rates</p>
+                  <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
+                    {branchDriverRatesCaption(
+                      shouldShowOnDemandDriverRates(previewModes),
+                      shouldShowScheduledDriverRates(previewModes, supportedOrderModes),
+                    )}
+                  </p>
                 </div>
                 <div className="px-3.5 py-3.5">
                   <AdminDriverRatesPanel
                     value={draftDriverRates || EMPTY_DRIVER_RATES}
                     onChange={(next) => onDraftDriverRatesChange?.(next)}
                     disabled={disabled}
+                    includeOnDemand={shouldShowOnDemandDriverRates(previewModes)}
                     includeScheduled={shouldShowScheduledDriverRates(
                       previewModes,
                       supportedOrderModes,
@@ -856,6 +1087,7 @@ function AdminBranchDeliverySettings(
                   />
                 </div>
               </div>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -872,8 +1104,9 @@ function AdminBranchDeliverySettings(
             Branch-owned modes · {pricingModel === 'delivery_fees_v1' ? 'v1 pricing' : 'legacy until first save'}
           </p>
           <p className="mt-1 text-[11px] leading-[14px] text-[#7c8780]">
-            Order modes and allowed vehicles save when you toggle them. Use Save below for hot food /
-            scheduled fees and driver rates.
+            {showDeliveryFleet
+              ? 'Order modes and allowed vehicles save when you toggle them. Use Save below for hot food / scheduled fees and driver rates.'
+              : 'Order modes save when you toggle them. Vehicles and driver rates appear when Hot food or Scheduled is on.'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -934,6 +1167,11 @@ function AdminBranchDeliverySettings(
               key={modeKey}
               className="overflow-hidden rounded-[10px] border border-[#eceeec]"
             >
+              {modeKey === 'SERVICES' ? (
+                <p className="border-b border-[#eceeec] px-3.5 py-2.5 text-[12px] leading-[16px] text-[#5c665f]">
+                  {SERVICE_ATTACHMENT_NOTE}
+                </p>
+              ) : null}
               <div
                 className={cn(
                   'flex items-center justify-between gap-3 px-3.5 py-3',
@@ -951,12 +1189,19 @@ function AdminBranchDeliverySettings(
                   </p>
                 </div>
                 <ModeToggle
-                  checked={enabled || showHotFoodDraft}
+                  checked={enabled || showHotFoodDraft || (modeKey === 'SERVICES' && serviceArm)}
                   disabled={!canEdit || loading || saving || busy || (!supported && !enabled && !showHotFoodDraft)}
                   label={label}
                   onChange={(next) => handleModeToggle(modeKey, next)}
                 />
               </div>
+              {modeKey === 'SERVICES'
+                ? serviceAttachmentPanel(
+                    !isServicesPrimary &&
+                      servicesStoreTypeExists &&
+                      (enabled || serviceArm),
+                  )
+                : null}
 
               {showHotFoodDraft ? (
                 <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
@@ -1018,6 +1263,7 @@ function AdminBranchDeliverySettings(
           )
         })}
 
+        {showDeliveryFleet ? (
         <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
           <div className="space-y-3 px-3.5 py-3.5">
             <AdminAllowedVehiclesPanel
@@ -1031,14 +1277,14 @@ function AdminBranchDeliverySettings(
             />
           </div>
         </div>
+        ) : null}
 
+        {showDriverRatesCard ? (
         <div className="overflow-hidden rounded-[10px] border border-[#eceeec]">
           <div className="border-b border-[#eceeec] bg-[#f7f8f7] px-3.5 py-3">
             <p className="text-[13px] font-bold text-[#17231c]">Driver rates</p>
             <p className="mt-0.5 text-[11px] leading-[14px] text-[#9aa49d]">
-              {showScheduledDriverRates
-                ? 'What Yjeek pays for the delivery leg · on-demand distance + scheduled flat by vehicle'
-                : 'What Yjeek pays for the delivery leg · on-demand distance'}
+              {branchDriverRatesCaption(showOnDemandDriverRates, showScheduledDriverRates)}
             </p>
           </div>
           <div className="space-y-3 px-3.5 py-3.5">
@@ -1054,10 +1300,12 @@ function AdminBranchDeliverySettings(
               fieldMeta={driverRatesFieldMeta}
               onResetField={handleResetField}
               resettingPath={resettingPath}
+              includeOnDemand={showOnDemandDriverRates}
               includeScheduled={showScheduledDriverRates}
             />
           </div>
         </div>
+        ) : null}
       </div>
     </div>
   )

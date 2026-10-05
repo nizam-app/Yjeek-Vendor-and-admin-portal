@@ -75,6 +75,7 @@ export function mapAdminCatalogProduct(raw) {
     imageUrls: Array.isArray(raw.imageUrls) ? raw.imageUrls.filter(Boolean) : [],
     isActive: raw.isActive !== false,
     isAvailable: raw.isAvailable !== false,
+    catalogLane: raw.catalogLane === 'SERVICE' ? 'SERVICE' : 'PRODUCT',
     visibleForDelivery: raw.visibleForDelivery !== false,
     visibleForPickup: raw.visibleForPickup !== false,
     visibleForDineIn: raw.visibleForDineIn !== false,
@@ -117,12 +118,15 @@ export function mapAdminVendorCatalog(raw) {
       logoUrl: vendor.logoUrl || null,
       displayCode: vendor.displayCode || '',
       storeTypeId: vendor.storeTypeId || storeType?.id || null,
+      storeTypeSlug: vendor.storeTypeSlug || storeType?.slug || '',
+      serviceSubTypeId: vendor.serviceSubTypeId || null,
       storeTypeName: storeType?.name || '',
       itemClasses: vendorItemClasses,
       storeType: storeType
         ? {
             id: String(storeType.id || '').trim() || null,
             name: storeType.name || '',
+            slug: storeType.slug || vendor.storeTypeSlug || '',
             itemClasses: storeTypeItemClasses,
           }
         : null,
