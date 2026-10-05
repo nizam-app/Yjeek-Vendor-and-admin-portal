@@ -1,4 +1,5 @@
 import { ApiError } from '../../api/errors'
+import { vendorSupportsDelivery } from '../../utils/vendorSupportsDelivery'
 import {
   COMMISSION_ORDER_METHODS,
   COMMISSION_UI_TO_MODEL,
@@ -434,7 +435,9 @@ export function mapAdminCreateVendorRequest(input = {}) {
     submitForApproval: Boolean(submitForApproval) && !activate,
     ...(typeof isCustomerVisible === 'boolean' ? { isCustomerVisible } : {}),
     ...(typeof isOnline === 'boolean' ? { isOnline } : {}),
-    ...(typeof acceptsCashOrders === 'boolean' ? { acceptsCashOrders } : {}),
+    acceptsCashOrders: vendorSupportsDelivery({ serviceModes })
+      ? acceptsCashOrders ?? true
+      : false,
   }
 
   const vendorDeliveryTemplate = pickVendorDeliveryTemplateFromBranches(branches)
