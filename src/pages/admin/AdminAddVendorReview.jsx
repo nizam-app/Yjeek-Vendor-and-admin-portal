@@ -64,6 +64,7 @@ export default function AdminAddVendorReview({
   onVendorVisibleChange,
   onVendorActiveChange,
   onVendorAcceptsCashChange,
+  showCashOrders = true,
 }) {
   const branchNames = (branches || [])
     .map((branch) => String(branch.name || '').split('—')[0]?.trim() || branch.name)
@@ -167,16 +168,18 @@ export default function AdminAddVendorReview({
           onChange={onVendorActiveChange}
         />
 
-        <StatusToggle
-          label="Accept cash orders"
-          hint={
-            vendorAcceptsCash
-              ? 'Customers can pay with cash on delivery where the platform allows COD.'
-              : 'Cash on delivery is hidden in the customer app for this vendor.'
-          }
-          checked={vendorAcceptsCash}
-          onChange={onVendorAcceptsCashChange}
-        />
+        {showCashOrders ? (
+          <StatusToggle
+            label="Accept cash orders"
+            hint={
+              vendorAcceptsCash
+                ? 'Customers can pay with cash on delivery where the platform allows COD.'
+                : 'Cash on delivery is hidden in the customer app for this vendor.'
+            }
+            checked={vendorAcceptsCash}
+            onChange={onVendorAcceptsCashChange}
+          />
+        ) : null}
       </section>
     </div>
   )

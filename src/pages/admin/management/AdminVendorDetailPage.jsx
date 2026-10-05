@@ -8,6 +8,7 @@ import { adminService } from '../../../services/adminService'
 import { ApiState } from '../../../components/admin/ApiState'
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
 import { showError, showFlashMessage, showSuccess } from '../../../utils/toast'
+import { vendorSupportsDelivery } from '../../../utils/vendorSupportsDelivery'
 import AdminSuspendVendorModal from '../../../components/admin/AdminSuspendVendorModal'
 import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { AdminVendorBranches } from '../../../components/admin/management/AdminVendorBranches'
@@ -380,6 +381,7 @@ export default function AdminVendorDetailPage() {
   const cashOrdersEnabled =
     acceptsCashOrders ??
     (typeof data.acceptsCashOrders === 'boolean' ? data.acceptsCashOrders : true)
+  const vendorHasDelivery = vendorSupportsDelivery({ orderTypes: data.orderTypes })
   const statusLower = String(data.status || '').toLowerCase()
   const accountStatusUpper = String(data.accountStatus || '').toUpperCase()
   const isDraft =
@@ -965,33 +967,35 @@ export default function AdminVendorDetailPage() {
                 </button>
               </div>
 
-              <div className="mt-3 flex items-start justify-between gap-3 border-t border-[#f0f2f0] pt-3">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-bold text-[#17231c]">Accept cash orders</p>
-                  <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-                    {cashOrdersHint}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={cashOrdersEnabled}
-                  aria-label="Accept cash orders"
-                  disabled={storeControlsDisabled}
-                  onClick={handleAcceptsCashToggle}
-                  className={cn(
-                    'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
-                    cashOrdersEnabled ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
-                  )}
-                >
-                  <span
+              {vendorHasDelivery ? (
+                <div className="mt-3 flex items-start justify-between gap-3 border-t border-[#f0f2f0] pt-3">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-[#17231c]">Accept cash orders</p>
+                    <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+                      {cashOrdersHint}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={cashOrdersEnabled}
+                    aria-label="Accept cash orders"
+                    disabled={storeControlsDisabled}
+                    onClick={handleAcceptsCashToggle}
                     className={cn(
-                      'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
-                      cashOrdersEnabled ? 'left-[23px]' : 'left-[3px]',
+                      'relative mt-0.5 h-[28px] w-[48px] shrink-0 rounded-full transition disabled:cursor-not-allowed disabled:opacity-60',
+                      cashOrdersEnabled ? 'bg-[#1aa054]' : 'bg-[#d5dbd7]',
                     )}
-                  />
-                </button>
-              </div>
+                  >
+                    <span
+                      className={cn(
+                        'absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition',
+                        cashOrdersEnabled ? 'left-[23px]' : 'left-[3px]',
+                      )}
+                    />
+                  </button>
+                </div>
+              ) : null}
 
               {isDraft ? (
                 <div className="mt-4 border-t border-[#f0f2f0] pt-4">

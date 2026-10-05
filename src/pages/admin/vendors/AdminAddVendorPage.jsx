@@ -24,6 +24,7 @@ import { formatApiErrorMessage } from '../../../api/errors'
 import AdminVendorImageUpload from '../../../components/admin/AdminVendorImageUpload'
 import AdminStoreTypeChangeModal from '../../../components/admin/management/AdminStoreTypeChangeModal'
 import { showError, showFlashMessage, showInfo, showSuccess } from '../../../utils/toast'
+import { vendorSupportsDelivery } from '../../../utils/vendorSupportsDelivery'
 import {
   matchAdminStoreTypeId,
 } from '../../../mappers/admin/mapAdminStoreTypes'
@@ -1376,6 +1377,10 @@ export default function AdminAddVendorPage({ onBack }) {
   )
   /** Order-mode toggles (SLA + commission tabs): store type ceiling only. */
   const slaOrderModeOptions = allowedServiceModes
+  const vendorOffersDelivery = useMemo(
+    () => vendorSupportsDelivery({ serviceModes }),
+    [serviceModes],
+  )
   const vendorEnabledCommissionLabels = slaOrderModeOptions
   const commissionOrderMethods = useMemo(
     () => commissionOrderMethodsForServiceLabels(vendorEnabledCommissionLabels),
@@ -1408,6 +1413,10 @@ export default function AdminAddVendorPage({ onBack }) {
       return next.length === prev.length ? prev : next
     })
   }, [form.storeTypeId, storeTypes.length, slaOrderModeOptions.join('|')])
+
+  useEffect(() => {
+    if (!vendorOffersDelivery) setVendorAcceptsCash(false)
+  }, [vendorOffersDelivery])
 
   useEffect(() => {
     if (!commissionOrderMethods.length) return undefined
@@ -1957,7 +1966,7 @@ export default function AdminAddVendorPage({ onBack }) {
         await adminService.updateVendorStoreControls(editVendorId, {
           isCustomerVisible: vendorVisible,
           isOnline: vendorActive,
-          acceptsCashOrders: vendorAcceptsCash,
+          acceptsCashOrders: vendorOffersDelivery ? vendorAcceptsCash : false,
         })
         allowLeaveRef.current = true
         showSuccess('Vendor status updated.')
@@ -1966,7 +1975,7 @@ export default function AdminAddVendorPage({ onBack }) {
           activate: true,
           isCustomerVisible: vendorVisible,
           isOnline: vendorActive,
-          acceptsCashOrders: vendorAcceptsCash,
+          acceptsCashOrders: vendorOffersDelivery ? vendorAcceptsCash : false,
         })
         allowLeaveRef.current = true
         showSuccess('Vendor activated successfully.')
@@ -3228,6 +3237,7 @@ export default function AdminAddVendorPage({ onBack }) {
               vendorVisible={vendorVisible}
               vendorActive={vendorActive}
               vendorAcceptsCash={vendorAcceptsCash}
+              showCashOrders={vendorOffersDelivery}
               storeTypePublished={selectedStoreType ? selectedStoreType.visible === true : true}
               storeTypeName={selectedStoreType?.name || form.storeType}
               onVendorVisibleChange={setVendorVisible}
