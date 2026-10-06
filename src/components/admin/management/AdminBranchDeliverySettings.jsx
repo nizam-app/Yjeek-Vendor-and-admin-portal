@@ -818,6 +818,15 @@ function AdminBranchDeliverySettings(
                     ) : null}
                     {showPreviewScheduled ? (
                       <div className="space-y-3 border-t border-[#eceeec] px-3.5 py-3.5">
+                        <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                          Pre-filled from vendor Delivery zones (or{' '}
+                          {storeTypeName ? (
+                            <strong>{storeTypeName}</strong>
+                          ) : (
+                            'store type'
+                          )}{' '}
+                          defaults). Edit any field for this branch before saving.
+                        </p>
                         <AdminScheduledFeesPanel
                           value={draftScheduled || EMPTY_SCHEDULED_FEES}
                           onChange={(next) => onDraftScheduledChange?.(next)}

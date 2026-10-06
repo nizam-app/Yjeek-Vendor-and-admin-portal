@@ -1,4 +1,8 @@
 import { ApiError } from '../../api/errors'
+import {
+  mapBadgesCreateRequest,
+  mapMenuCategoriesCreateRequest,
+} from './storeTypeNestedCreateMappers.js'
 
 /** OG §01 / §02 — same label as Branch › Delivery Settings & champ eligibility. */
 const HOT_FOOD_ON_DEMAND_UI = 'Hot food — on demand'
@@ -444,6 +448,12 @@ export function mapAdminCreateStoreTypeRequest(form = {}) {
     const n = Number(form.lowStockThreshold)
     if (Number.isFinite(n) && n >= 0) body.lowStockThreshold = Math.floor(n)
   }
+
+  const menuCategories = mapMenuCategoriesCreateRequest(form.categories)
+  if (menuCategories.length) body.menuCategories = menuCategories
+
+  const badges = mapBadgesCreateRequest(form.badges)
+  if (badges.length) body.badges = badges
 
   return body
 }

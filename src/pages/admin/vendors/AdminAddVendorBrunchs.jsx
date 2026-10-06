@@ -40,6 +40,10 @@ import {
   fetchBranchHotFoodPrefill,
   hotFoodFormHasDisplayValues,
 } from '../../../utils/branchHotFoodPrefill'
+import {
+  fetchBranchScheduledPrefill,
+  scheduledFormHasDisplayValues,
+} from '../../../utils/branchScheduledPrefill'
 import { mapWizardBranchDeliverySettings } from '../../../utils/mapWizardBranchDeliverySettings'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
@@ -737,6 +741,37 @@ export default function AdminAddVendorBrunchs() {
     void loadDraftHotFoodPrefill()
   }, [orderModesReady, loadDraftHotFoodPrefill])
 
+  const loadDraftScheduledPrefill = useCallback(async () => {
+    if (!isNewBranch) return
+    if (scheduledFormHasDisplayValues(draftScheduled)) return
+
+    const wizardStoreTypeId = state?.wizardDraft?.form?.storeTypeId
+      ? String(state.wizardDraft.form.storeTypeId)
+      : ''
+    const storeTypeId = useRealBranchApi ? vendorStoreTypeId : wizardStoreTypeId
+    if (!storeTypeId && !vendorId) return
+
+    const next = await fetchBranchScheduledPrefill({
+      vendorId: useRealBranchApi ? vendorId : undefined,
+      vendorStoreTypeId: storeTypeId,
+      adminService,
+    })
+    if (!next) return
+    setDraftScheduled(next)
+  }, [
+    isNewBranch,
+    draftScheduled,
+    useRealBranchApi,
+    vendorStoreTypeId,
+    vendorId,
+    state?.wizardDraft?.form?.storeTypeId,
+  ])
+
+  useEffect(() => {
+    if (!orderModesReady) return
+    void loadDraftScheduledPrefill()
+  }, [orderModesReady, loadDraftScheduledPrefill])
+
   const loadDeliveryDraftPrefill = useCallback(async () => {
     if (!useRealBranchApi || !isNewBranch || !vendorId) return
     if (deliveryDraftPrefilled.current) return
@@ -756,9 +791,6 @@ export default function AdminAddVendorBrunchs() {
         setDraftDriverRates((prev) => prev || normalizeDriverRates(data.driverRates))
       } else {
         setDraftDriverRates((prev) => prev || EMPTY_DRIVER_RATES)
-      }
-      if (data?.scheduled) {
-        setDraftScheduled((prev) => prev || normalizeScheduledFees(data.scheduled))
       }
     } catch {
       setDraftAllowedVehicles((prev) => prev || normalizeAllowedVehiclesForm(null))

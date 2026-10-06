@@ -4,13 +4,17 @@ import {
   KNOWN_CREATE_ERRORS,
   canCancelImport,
   canEditReview,
+  formatImportAvailabilitySummary,
+  formatImportBadgesSummary,
   isPollingStatus,
   mapAdminMenuImport,
   mapAdminMenuImportList,
   mapAdminMenuImportReview,
   menuImportErrorCode,
   messageForMenuImportError,
+  normalizeImportAvailabilitySlots,
   parseBhdInput,
+  toggleImportAvailabilitySlot,
 } from '../src/mappers/admin/mapAdminMenuImport.js'
 
 test('mapAdminMenuImportList accepts a raw array or { imports } or paged { items }', () => {
@@ -61,4 +65,30 @@ test('parseBhdInput rounds to 3 decimals', () => {
   assert.equal(parseBhdInput('1.5555'), 1.556)
   assert.equal(parseBhdInput(''), null)
   assert.equal(mapAdminMenuImport({ id: 'x' }).id, 'x')
+})
+
+test('availability slot helpers match spreadsheet semantics', () => {
+  assert.deepEqual(normalizeImportAvailabilitySlots(['ALL_DAY', 'LUNCH']), ['ALL_DAY'])
+  assert.deepEqual(toggleImportAvailabilitySlot(['ALL_DAY'], 'LUNCH'), ['LUNCH'])
+  assert.deepEqual(toggleImportAvailabilitySlot(['LUNCH', 'DINNER'], 'LUNCH'), ['DINNER'])
+  assert.equal(
+    formatImportAvailabilitySummary({ availabilitySlots: ['LUNCH', 'DINNER'] }),
+    'Lunch, Dinner',
+  )
+  assert.equal(
+    formatImportAvailabilitySummary({ availableFrom: '11:00', availableTo: '23:00' }),
+    '11:00–23:00',
+  )
+})
+
+test('formatImportBadgesSummary humanizes unknown codes', () => {
+  assert.equal(formatImportBadgesSummary([]), '—')
+  assert.equal(
+    formatImportBadgesSummary(['NEW', 'TOP_RATED'], { NEW: 'New' }),
+    'New, Top Rated',
+  )
+  assert.equal(
+    formatImportBadgesSummary(['A', 'B', 'C'], { A: 'Alpha', B: 'Beta' }),
+    'Alpha, Beta +1',
+  )
 })

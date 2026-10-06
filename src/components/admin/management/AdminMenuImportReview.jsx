@@ -7,10 +7,15 @@ import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
 import { adminMenuImportService } from '../../../services/admin/menuImportService'
 import { showError, showSuccess } from '../../../utils/toast'
 import {
+  buildImportBadgeLabelMap,
   canEditReview,
   formatBhd,
+  formatImportAvailabilitySummary,
+  formatImportBadgesSummary,
+  mapStoreTypeBadgeOptions,
   messageForMenuImportError,
 } from '../../../mappers/admin/mapAdminMenuImport'
+import { adminService } from '../../../services/adminService'
 import AdminEditImportItemModal from './AdminEditImportItemModal'
 
 const cardClass =
@@ -37,6 +42,8 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
   const [catModal, setCatModal] = useState(null)
   const [itemModal, setItemModal] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null)
+  const [storeTypeBadgeOptions, setStoreTypeBadgeOptions] = useState([])
+  const [badgeLabelByCode, setBadgeLabelByCode] = useState({})
 
   const loadReview = useCallback(async () => {
     setLoading(true)
@@ -56,6 +63,32 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
   useEffect(() => {
     void loadReview()
   }, [loadReview])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadStoreTypeBadges() {
+      try {
+        const vendorRes = await adminService.getVendorDetail(vendorId)
+        const storeTypeId = vendorRes?.data?.storeTypeId
+        if (!storeTypeId || cancelled) return
+        const typeRes = await adminService.getAdminStoreType(storeTypeId)
+        const options = mapStoreTypeBadgeOptions(typeRes?.data?.badges)
+        if (cancelled) return
+        setStoreTypeBadgeOptions(options)
+        setBadgeLabelByCode(buildImportBadgeLabelMap(options))
+      } catch {
+        if (!cancelled) {
+          const options = mapStoreTypeBadgeOptions([])
+          setStoreTypeBadgeOptions(options)
+          setBadgeLabelByCode(buildImportBadgeLabelMap(options))
+        }
+      }
+    }
+    void loadStoreTypeBadges()
+    return () => {
+      cancelled = true
+    }
+  }, [vendorId])
 
   const categories = review?.categories || []
   const displayCategories = nestReviewCategories(categories)
@@ -315,6 +348,8 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
                           'Item (AR)',
                           'Image',
                           'Price (BHD)',
+                          'Badges',
+                          'Availability',
                           'Description (EN)',
                           'Description (AR)',
                           editable ? '' : null,
@@ -353,6 +388,12 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
                             </td>
                             <td className="whitespace-nowrap px-3 py-2.5 text-[12px]">
                               {formatBhd(row.price)}
+                            </td>
+                            <td className="max-w-[140px] px-3 py-2.5 text-[11px] text-[#455249]">
+                              {formatImportBadgesSummary(row.badges, badgeLabelByCode)}
+                            </td>
+                            <td className="max-w-[120px] px-3 py-2.5 text-[11px] text-[#455249]">
+                              {formatImportAvailabilitySummary(row)}
                             </td>
                             <td className="max-w-[200px] px-3 py-2.5 text-[12px] text-[#7c8780]">
                               <span className="line-clamp-2">{row.description || '—'}</span>
@@ -400,7 +441,7 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
                       ) : (
                         <tr>
                           <td
-                            colSpan={editable ? 7 : 6}
+                            colSpan={editable ? 9 : 8}
                             className="px-3 py-5 text-center text-[12px] text-[#7c8780]"
                           >
                             No items in this category
@@ -477,6 +518,7 @@ export function AdminMenuImportReview({ vendorId, imp, onImportUpdate, onCancel 
         categories={categories}
         initialCategoryId={itemModal?.categoryId}
         item={itemModal?.item}
+        storeTypeBadgeOptions={storeTypeBadgeOptions}
         busy={busy}
         onClose={() => setItemModal(null)}
         onSave={(data) => void handleSaveItem(data)}

@@ -4,7 +4,14 @@ import AdminIconImageUpload from '../AdminIconImageUpload'
 import AdminMediaImage from '../AdminMediaImage'
 import AdminModifierImageThumb, { moveListItem } from '../AdminModifierImageThumb'
 import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
-import { parseBhdInput } from '../../../mappers/admin/mapAdminMenuImport'
+import {
+  DEFAULT_IMPORT_BADGE_OPTIONS,
+  humanizeImportBadgeCode,
+  normalizeImportAvailabilitySlots,
+  normalizeImportBadgeCode,
+  parseBhdInput,
+  toggleImportAvailabilitySlot,
+} from '../../../mappers/admin/mapAdminMenuImport'
 import {
   ADMIN_IMAGE_UPLOAD_ACCEPT,
   adminUploadService,
@@ -39,17 +46,6 @@ function toTimeInputValue(value) {
 const ghostBtn =
   'inline-flex size-8 items-center justify-center rounded-full text-[#637068] hover:bg-[#f3f5f3] disabled:opacity-50'
 
-const DEFAULT_BADGES = [
-  { code: 'NEW', label: 'New' },
-  { code: 'BESTSELLER', label: 'Bestseller' },
-  { code: 'HALAL', label: 'Halal' },
-  { code: 'SPICY', label: 'Spicy' },
-  { code: 'VEGETARIAN', label: 'Vegetarian' },
-  { code: 'VEGAN', label: 'Vegan' },
-  { code: 'GLUTEN_FREE', label: 'Gluten free' },
-  { code: 'HEALTHY', label: 'Healthy' },
-]
-
 const TIME_SLOTS = [
   { value: 'ALL_DAY', label: 'All day' },
   { value: 'BREAKFAST', label: 'Breakfast' },
@@ -57,14 +53,6 @@ const TIME_SLOTS = [
   { value: 'DINNER', label: 'Dinner' },
   { value: 'LATE_NIGHT', label: 'Late night' },
 ]
-
-function normalizeBadge(code) {
-  return String(code || '')
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
-}
 
 function parseAddonPrice(raw) {
   const cleaned = String(raw || '')
@@ -81,8 +69,7 @@ function buildInitialForm(item, categories, initialCategoryId) {
       ? [item.imageUrl]
       : []
   while (imageUrls.length < 4) imageUrls.push('')
-  const slots = Array.isArray(item?.availabilitySlots) ? item.availabilitySlots : []
-  const timeSlot = slots[0] || 'ALL_DAY'
+  const availabilitySlots = normalizeImportAvailabilitySlots(item?.availabilitySlots)
   const addons =
     Array.isArray(item?.addons) && item.addons.length
       ? item.addons.map((a) => ({
@@ -138,10 +125,10 @@ function buildInitialForm(item, categories, initialCategoryId) {
     description: item?.description || '',
     descriptionAr: item?.descriptionAr || '',
     imageUrls: imageUrls.slice(0, 4),
-    badges: Array.isArray(item?.badges) ? item.badges.map(normalizeBadge) : [],
-    timeSlot,
-    availableFrom: item?.availableFrom || '11:00',
-    availableTo: item?.availableTo || '23:00',
+    badges: Array.isArray(item?.badges) ? item.badges.map(normalizeImportBadgeCode) : [],
+    availabilitySlots,
+    availableFrom: item?.availableFrom ? String(item.availableFrom) : '',
+    availableTo: item?.availableTo ? String(item.availableTo) : '',
     optionGroups,
     addOns: addons,
     active: item?.isActive === true,
@@ -171,6 +158,7 @@ export default function AdminEditImportItemModal({
   categories = [],
   initialCategoryId,
   item,
+  storeTypeBadgeOptions = [],
   busy = false,
   onClose,
   onSave,
@@ -207,8 +195,15 @@ export default function AdminEditImportItemModal({
 
   const updateField = (key, value) => setForm((c) => ({ ...c, [key]: value }))
 
+  const configuredBadgeOptions =
+    Array.isArray(storeTypeBadgeOptions) && storeTypeBadgeOptions.length
+      ? storeTypeBadgeOptions
+      : DEFAULT_IMPORT_BADGE_OPTIONS
+  const configuredCodes = new Set(configuredBadgeOptions.map((b) => b.code))
+  const unknownBadges = form.badges.filter((b) => !configuredCodes.has(b))
+
   const toggleBadge = (code) => {
-    const normalized = normalizeBadge(code)
+    const normalized = normalizeImportBadgeCode(code)
     setForm((c) => {
       const has = c.badges.includes(normalized)
       return {
@@ -216,6 +211,14 @@ export default function AdminEditImportItemModal({
         badges: has ? c.badges.filter((b) => b !== normalized) : [...c.badges, normalized],
       }
     })
+  }
+
+  const removeUnknownBadge = (code) => {
+    const normalized = normalizeImportBadgeCode(code)
+    setForm((c) => ({
+      ...c,
+      badges: c.badges.filter((b) => b !== normalized),
+    }))
   }
 
   const setImageAt = (slot, url) => {
@@ -320,7 +323,7 @@ export default function AdminEditImportItemModal({
       subSubcategoryAr: form.subSubcategoryAr.trim() || null,
       prepTimeMin: Number.isFinite(prep) && prep > 0 ? Math.trunc(prep) : null,
       badges: form.badges,
-      availabilitySlots: form.timeSlot ? [form.timeSlot] : ['ALL_DAY'],
+      availabilitySlots: normalizeImportAvailabilitySlots(form.availabilitySlots),
       availableFrom: form.availableFrom.trim() || null,
       availableTo: form.availableTo.trim() || null,
       optionGroups,
@@ -542,17 +545,50 @@ export default function AdminEditImportItemModal({
             {/* Badges */}
             <div>
               <p className="mb-2 text-[12.5px] font-bold text-[#17231c]">Badges</p>
-              <div className="flex flex-wrap gap-2">
-                {DEFAULT_BADGES.map((badge) => (
-                  <Chip
-                    key={badge.code}
-                    selected={form.badges.includes(badge.code)}
-                    onClick={() => toggleBadge(badge.code)}
-                  >
-                    {badge.label}
-                  </Chip>
-                ))}
-              </div>
+              {configuredBadgeOptions.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {configuredBadgeOptions.map((badge) => (
+                    <Chip
+                      key={badge.code}
+                      selected={form.badges.includes(badge.code)}
+                      onClick={() => toggleBadge(badge.code)}
+                    >
+                      {badge.label}
+                    </Chip>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-[12px] text-[#7c8780]">
+                  No badges configured for this store type. Imported codes from the sheet still
+                  publish to Core.
+                </p>
+              )}
+              {unknownBadges.length ? (
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-[11px] text-[#9a6510]">
+                    From spreadsheet (not in store type config — still published to the customer
+                    menu API):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {unknownBadges.map((code) => (
+                      <span
+                        key={code}
+                        className="inline-flex items-center gap-1 rounded-full bg-[#fff5d9] px-2.5 py-1 text-[11px] font-medium text-[#7a5a10]"
+                      >
+                        {humanizeImportBadgeCode(code)}
+                        <button
+                          type="button"
+                          className="text-[#9a6510] hover:text-[#17231c]"
+                          aria-label={`Remove ${code}`}
+                          onClick={() => removeUnknownBadge(code)}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Availability slots */}
@@ -562,8 +598,16 @@ export default function AdminEditImportItemModal({
                 {TIME_SLOTS.map((slot) => (
                   <Chip
                     key={slot.value}
-                    selected={form.timeSlot === slot.value}
-                    onClick={() => updateField('timeSlot', slot.value)}
+                    selected={(form.availabilitySlots || []).includes(slot.value)}
+                    onClick={() =>
+                      setForm((c) => ({
+                        ...c,
+                        availabilitySlots: toggleImportAvailabilitySlot(
+                          c.availabilitySlots,
+                          slot.value,
+                        ),
+                      }))
+                    }
                   >
                     {slot.label}
                   </Chip>

@@ -201,3 +201,111 @@ export function mapAdminMenuImportReview(raw) {
     categories,
   }
 }
+
+/** Same normalization as Menu Import extract + Core internal create. */
+export function normalizeImportBadgeCode(code) {
+  return String(code || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+export function humanizeImportBadgeCode(code) {
+  const normalized = normalizeImportBadgeCode(code)
+  if (!normalized) return ''
+  return normalized
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(' ')
+}
+
+export const DEFAULT_IMPORT_BADGE_OPTIONS = [
+  { code: 'NEW', label: 'New' },
+  { code: 'BESTSELLER', label: 'Bestseller' },
+  { code: 'HALAL', label: 'Halal' },
+  { code: 'SPICY', label: 'Spicy' },
+  { code: 'VEGETARIAN', label: 'Vegetarian' },
+  { code: 'VEGAN', label: 'Vegan' },
+  { code: 'GLUTEN_FREE', label: 'Gluten free' },
+  { code: 'HEALTHY', label: 'Healthy' },
+]
+
+/** Store-type badge rows → toggle options (label from admin, code normalized). */
+export function mapStoreTypeBadgeOptions(storeTypeBadges) {
+  if (!Array.isArray(storeTypeBadges) || storeTypeBadges.length === 0) {
+    return DEFAULT_IMPORT_BADGE_OPTIONS
+  }
+  const seen = new Set()
+  const out = []
+  for (const row of storeTypeBadges) {
+    if (!row || typeof row !== 'object') continue
+    const label = String(row.label || '').trim()
+    if (!label) continue
+    const code = normalizeImportBadgeCode(row.code || label)
+    if (!code || seen.has(code)) continue
+    seen.add(code)
+    out.push({ code, label })
+  }
+  return out.length ? out : DEFAULT_IMPORT_BADGE_OPTIONS
+}
+
+export function buildImportBadgeLabelMap(badgeOptions) {
+  const map = {}
+  for (const opt of badgeOptions || []) {
+    if (opt?.code) map[opt.code] = opt.label || humanizeImportBadgeCode(opt.code)
+  }
+  return map
+}
+
+export function formatImportBadgesSummary(badges, labelByCode = {}) {
+  const list = Array.isArray(badges) ? badges.map(normalizeImportBadgeCode).filter(Boolean) : []
+  if (!list.length) return '—'
+  const labels = list.map((code) => labelByCode[code] || humanizeImportBadgeCode(code))
+  if (labels.length <= 2) return labels.join(', ')
+  return `${labels.slice(0, 2).join(', ')} +${labels.length - 2}`
+}
+
+const AVAILABILITY_SLOT_LABELS = {
+  ALL_DAY: 'All day',
+  BREAKFAST: 'Breakfast',
+  LUNCH: 'Lunch',
+  DINNER: 'Dinner',
+  LATE_NIGHT: 'Late night',
+}
+
+export function normalizeImportAvailabilitySlots(slots) {
+  const list = Array.isArray(slots)
+    ? slots.map((s) => String(s || '').trim().toUpperCase()).filter(Boolean)
+    : []
+  if (!list.length || list.includes('ALL_DAY')) return ['ALL_DAY']
+  return [...new Set(list)]
+}
+
+export function toggleImportAvailabilitySlot(current, slotValue) {
+  const value = String(slotValue || '').trim().toUpperCase()
+  const base = normalizeImportAvailabilitySlots(current)
+  if (value === 'ALL_DAY') return ['ALL_DAY']
+  let next = base.filter((s) => s !== 'ALL_DAY')
+  if (next.includes(value)) {
+    next = next.filter((s) => s !== value)
+  } else {
+    next.push(value)
+  }
+  return next.length ? next : ['ALL_DAY']
+}
+
+export function formatImportAvailabilitySummary(item) {
+  if (!item || typeof item !== 'object') return '—'
+  const from = item.availableFrom ? String(item.availableFrom).trim() : ''
+  const to = item.availableTo ? String(item.availableTo).trim() : ''
+  if (from || to) {
+    if (from && to) return `${from}–${to}`
+    if (from) return `From ${from}`
+    return `Until ${to}`
+  }
+  const slots = normalizeImportAvailabilitySlots(item.availabilitySlots)
+  if (slots.length === 1 && slots[0] === 'ALL_DAY') return 'All day'
+  return slots.map((s) => AVAILABILITY_SLOT_LABELS[s] || s).join(', ')
+}

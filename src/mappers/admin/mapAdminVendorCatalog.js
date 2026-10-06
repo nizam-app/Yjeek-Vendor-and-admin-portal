@@ -83,8 +83,12 @@ export function mapAdminCatalogProduct(raw) {
     availableFrom: raw.availableFrom || '',
     availableTo: raw.availableTo || '',
     prepTimeMin: raw.prepTimeMin != null ? Number(raw.prepTimeMin) : null,
-    catalogCategoryId: raw.catalogCategory?.id || raw.catalogCategoryId || null,
-    catalogCategoryName: raw.catalogCategory?.name || '',
+    catalogCategoryId:
+      raw.storeTypeMenuCategory?.id ||
+      raw.catalogCategory?.id ||
+      raw.catalogCategoryId ||
+      null,
+    catalogCategoryName: raw.storeTypeMenuCategory?.name || raw.catalogCategory?.name || '',
     platformCategoryId: raw.platformCategory?.id || raw.categoryId || null,
     platformCategoryName: raw.platformCategory?.name || '',
     optionGroupCount: Number(raw.optionGroupCount) || 0,

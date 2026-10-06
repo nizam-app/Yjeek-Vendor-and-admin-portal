@@ -51,7 +51,7 @@ Confirmed from Postman **11. Store types → Create** and live `POST /admin/stor
 | Save draft | `publishStatus: "DRAFT"` |
 | Publish | `publishStatus: "PUBLISHED"` |
 
-Not in confirmed Create body: menu categories, badges (UI chrome only until those APIs are wired).
+Optional nested create: `menuCategories[]` (tree) and `badges[]` when added on the create form before first save.
 
 ### Success (HTTP 201)
 
