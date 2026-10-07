@@ -897,6 +897,66 @@ export const adminMarketingService = {
     return { data: response?.data ?? null, meta: response?.meta ?? null }
   },
 
+  async getZood(options = {}) {
+    if (!useRealMarketingApi()) {
+      return { data: null, meta: null }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.zood.root, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async updateZoodSettings(body, options = {}) {
+    const response = await apiClient.patch(endpoints.admin.marketing.zood.settings, body, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async listZoodWaitlist(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      return {
+        data: { items: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 1 } },
+        meta: null,
+      }
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.zood.waitlist, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
+  async exportZoodWaitlist(params = {}, options = {}) {
+    if (!useRealMarketingApi()) {
+      throw new Error('Real marketing API is required to export.')
+    }
+    const response = await apiClient.get(endpoints.admin.marketing.zood.waitlistExport, {
+      ...options,
+      scope: 'admin',
+      feature: 'marketing',
+      forceReal: true,
+      params,
+    })
+    const csv =
+      typeof response?.data === 'string'
+        ? response.data
+        : response?.data == null
+          ? ''
+          : String(response.data)
+    return { data: csv, meta: response?.meta ?? null }
+  },
+
   async listVoucherTemplates(params = {}, options = {}) {
     if (!useRealMarketingApi()) {
       return { data: { templates: [], total: 0, page: 1, limit: 50 }, meta: null }

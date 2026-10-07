@@ -536,6 +536,18 @@ export const adminService = {
   unblockAdminReferralInviter(customerId, options = {}) {
     return adminMarketingService.unblockReferralInviter(customerId, options)
   },
+  getAdminZood(options = {}) {
+    return adminMarketingService.getZood(options)
+  },
+  updateAdminZoodSettings(body, options = {}) {
+    return adminMarketingService.updateZoodSettings(body, options)
+  },
+  listAdminZoodWaitlist(params, options = {}) {
+    return adminMarketingService.listZoodWaitlist(params, options)
+  },
+  exportAdminZoodWaitlist(params, options = {}) {
+    return adminMarketingService.exportZoodWaitlist(params, options)
+  },
   listAdminVoucherTemplates(params, options = {}) {
     return adminMarketingService.listVoucherTemplates(params, options)
   },

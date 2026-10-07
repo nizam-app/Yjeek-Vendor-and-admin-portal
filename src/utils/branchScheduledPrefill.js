@@ -64,15 +64,17 @@ export function pickScheduledPrefill(...candidates) {
 }
 
 /**
- * Scheduled fee prefill for new branch draft: vendor template (incl. ephemeral store-type seed) → store type.
+ * Scheduled fee prefill for new branch draft: SLA platform → store type → vendor template.
  */
 export async function fetchBranchScheduledPrefill({
   vendorId,
   vendorStoreTypeId,
   adminService,
+  adminSlaModelsService,
 }) {
   let vendorScheduled = null
   let storeTypeScheduled = null
+  let platformScheduled = null
 
   if (vendorId) {
     try {
@@ -92,5 +94,14 @@ export async function fetchBranchScheduledPrefill({
     }
   }
 
-  return pickScheduledPrefill(vendorScheduled, storeTypeScheduled)
+  if (adminSlaModelsService) {
+    try {
+      const platform = await adminSlaModelsService.getCommercialDefaults()
+      platformScheduled = platform?.data?.scheduled ?? null
+    } catch {
+      /* platform SLA optional */
+    }
+  }
+
+  return pickScheduledPrefill(platformScheduled, storeTypeScheduled, vendorScheduled)
 }

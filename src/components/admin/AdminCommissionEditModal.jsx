@@ -1,5 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { extractFieldErrors, formatApiErrorMessage } from '../../api/errors'
 import { getCommissionInheritanceState } from '../../mappers/admin/mapAdminVendorCommission'
+import {
+  mapCommissionApiFieldErrors,
+  validateCommissionEditForm,
+} from '../../utils/validateCommissionEditForm'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
 
@@ -105,13 +110,16 @@ export default function AdminCommissionEditModal({
   const [form, setForm] = useState(() => buildFormState(commission))
   const [feeDraft, setFeeDraft] = useState({ name: '', amount: '0.000', type: 'BHD' })
   const [localError, setLocalError] = useState(null)
+  const [fieldErrors, setFieldErrors] = useState({})
   const [pending, setPending] = useState(false)
+  const formRef = useRef(null)
 
   useEffect(() => {
     if (open) {
       setForm(buildFormState(commission))
       setFeeDraft({ name: '', amount: '0.000', type: 'BHD' })
       setLocalError(null)
+      setFieldErrors({})
     }
   }, [open, commission])
 
@@ -124,10 +132,24 @@ export default function AdminCommissionEditModal({
 
   const setField = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+    setFieldErrors((prev) => {
+      if (!prev[key]) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
   }
 
   const busy = saving || pending
   const displayError = localError || error
+  const formLevelError =
+    fieldErrors._form ||
+    (displayError && !Object.keys(fieldErrors).length
+      ? formatApiErrorMessage(displayError, 'Failed to save commission.')
+      : null)
+
+  const inputWithError = (key) =>
+    cn(inputClass, fieldErrors[key] && 'border-[#e57373] bg-[#fff8f8] focus:border-[#d64044]')
 
   const addCustomFee = () => {
     const name = String(feeDraft.name || '').trim()
@@ -144,6 +166,16 @@ export default function AdminCommissionEditModal({
   }
 
   const handleSave = async () => {
+    const clientErrors = validateCommissionEditForm(form)
+    if (Object.keys(clientErrors).length) {
+      setFieldErrors(clientErrors)
+      setLocalError(null)
+      const firstKey = Object.keys(clientErrors)[0]
+      const el = formRef.current?.querySelector(`[data-commission-field="${firstKey}"]`)
+      el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      return
+    }
+
     const payload = {
       ...commission,
       model: form.model,
@@ -170,11 +202,21 @@ export default function AdminCommissionEditModal({
     }
 
     setLocalError(null)
+    setFieldErrors({})
     setPending(true)
     try {
       await onSave?.(payload)
     } catch (err) {
       setLocalError(err)
+      const apiMapped = mapCommissionApiFieldErrors(
+        err?.fieldErrors || extractFieldErrors(err?.raw),
+      )
+      if (Object.keys(apiMapped).length) {
+        setFieldErrors(apiMapped)
+        const firstKey = Object.keys(apiMapped).find((k) => k !== '_form') || '_form'
+        const el = formRef.current?.querySelector(`[data-commission-field="${firstKey}"]`)
+        el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      }
     } finally {
       setPending(false)
     }
@@ -212,7 +254,7 @@ export default function AdminCommissionEditModal({
           </h2>
         </div>
 
-        <div className="space-y-5 px-5 py-4">
+        <div ref={formRef} className="space-y-5 px-5 py-4">
           {seeded && storeTypeName ? (
             <div className="rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
               ✓ Pre-filled from the <strong>{storeTypeName}</strong> commission defaults. Edit any
@@ -246,7 +288,7 @@ export default function AdminCommissionEditModal({
           </div>
 
           <div className="grid grid-cols-2 gap-3 max-[520px]:grid-cols-1">
-            <label className="block min-w-0">
+            <label className="block min-w-0" data-commission-field="rate">
               <span className={labelClass}>
                 {rateLabel}
                 <InheritanceBadge
@@ -254,12 +296,17 @@ export default function AdminCommissionEditModal({
                 />
               </span>
               <input
-                className={inputClass}
+                className={inputWithError('rate')}
                 value={form.rate}
                 disabled={busy}
                 onChange={(e) => setField('rate', e.target.value)}
+                aria-invalid={Boolean(fieldErrors.rate)}
               />
-              <p className={hintClass}>{rateHint}</p>
+              {fieldErrors.rate ? (
+                <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">{fieldErrors.rate}</p>
+              ) : (
+                <p className={hintClass}>{rateHint}</p>
+              )}
             </label>
             <label className="block min-w-0">
               <span className={labelClass}>VAT on commission</span>
@@ -284,7 +331,7 @@ export default function AdminCommissionEditModal({
 
             <div className="mt-3 grid grid-cols-3 gap-3 max-[520px]:grid-cols-1">
               {GATEWAY_FIELDS.map(([key, label, hint]) => (
-                <label key={key} className="block min-w-0">
+                <label key={key} className="block min-w-0" data-commission-field={key}>
                   <span className={labelClass}>
                     {label}
                     <InheritanceBadge
@@ -292,15 +339,25 @@ export default function AdminCommissionEditModal({
                     />
                   </span>
                   <input
-                    className={inputClass}
+                    className={inputWithError(key)}
                     value={form[key]}
                     disabled={busy}
                     onChange={(e) => setField(key, e.target.value)}
+                    aria-invalid={Boolean(fieldErrors[key])}
                   />
-                  <p className={hintClass}>{hint}</p>
+                  {fieldErrors[key] ? (
+                    <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">
+                      {fieldErrors[key]}
+                    </p>
+                  ) : (
+                    <p className={hintClass}>{hint}</p>
+                  )}
                 </label>
               ))}
-              <label className="col-span-3 block min-w-0 max-[520px]:col-span-1">
+              <label
+                className="col-span-3 block min-w-0 max-[520px]:col-span-1"
+                data-commission-field="fixedCharge"
+              >
                 <span className={labelClass}>
                   Fixed charge / transaction (BHD)
                   <InheritanceBadge
@@ -308,14 +365,21 @@ export default function AdminCommissionEditModal({
                   />
                 </span>
                 <input
-                  className={inputClass}
+                  className={inputWithError('fixedCharge')}
                   value={form.fixedCharge}
                   disabled={busy}
                   onChange={(e) => setField('fixedCharge', e.target.value)}
+                  aria-invalid={Boolean(fieldErrors.fixedCharge)}
                 />
-                <p className={hintClass}>
-                  Flat amount added once per online transaction, whatever the order value.
-                </p>
+                {fieldErrors.fixedCharge ? (
+                  <p className="mt-1 text-[11px] leading-[14px] text-[#d64044]">
+                    {fieldErrors.fixedCharge}
+                  </p>
+                ) : (
+                  <p className={hintClass}>
+                    Flat amount added once per online transaction, whatever the order value.
+                  </p>
+                )}
               </label>
             </div>
           </div>
@@ -416,10 +480,11 @@ export default function AdminCommissionEditModal({
             </div>
           </div>
 
-          {displayError ? (
-            <p className="text-[12px] text-[#d64044]">
-              {displayError.message || 'Failed to save commission.'}
-            </p>
+          {fieldErrors.customFees ? (
+            <p className="text-[12px] text-[#d64044]">{fieldErrors.customFees}</p>
+          ) : null}
+          {formLevelError ? (
+            <p className="text-[12px] text-[#d64044]">{formLevelError}</p>
           ) : null}
         </div>
 

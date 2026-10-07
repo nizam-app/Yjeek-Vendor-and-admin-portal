@@ -9,6 +9,7 @@ export const MARKETING_VIEW_TABS = [
   { id: 'geofence', label: 'Geofence offers', path: '/admin/marketing/geofence' },
   { id: 'cashback', label: 'Cashback', path: '/admin/marketing/cashback' },
   { id: 'referral', label: 'Referral', path: '/admin/marketing/referral' },
+  { id: 'zood', label: 'Zoood', path: '/admin/marketing/zood' },
   { id: 'vouchers', label: 'Vouchers', path: '/admin/marketing/vouchers' },
   { id: 'campaigns', label: 'Campaigns', path: '/admin/marketing/campaigns' },
   { id: 'banners', label: 'Banners', path: '/admin/marketing/banners' },
