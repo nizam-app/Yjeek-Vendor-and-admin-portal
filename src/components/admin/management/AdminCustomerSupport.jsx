@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Badge } from '../Badge'
+import { AdminCustomerSupportTicketModal } from './AdminCustomerSupportTicketModal'
 
 function statusTone(status) {
   if (status === 'Resolved') return 'green'
@@ -6,7 +8,9 @@ function statusTone(status) {
   return 'gray'
 }
 
-export function AdminCustomerSupport({ support }) {
+export function AdminCustomerSupport({ support, customerId }) {
+  const [selectedTicketId, setSelectedTicketId] = useState(null)
+
   if (!support) return null
 
   return (
@@ -36,7 +40,11 @@ export function AdminCustomerSupport({ support }) {
             <tbody>
               {support.tickets?.length ? (
                 support.tickets.map((row) => (
-                  <tr key={row.id || row.ticket} className="border-b border-[#f0f2f0] last:border-0 hover:bg-[#fafbfa]">
+                  <tr
+                    key={row.id || row.ticket}
+                    className="cursor-pointer border-b border-[#f0f2f0] last:border-0 hover:bg-[#fafbfa]"
+                    onClick={() => customerId && row.id ? setSelectedTicketId(row.id) : null}
+                  >
                     <td className="whitespace-nowrap px-4 py-3.5 text-[12.5px] font-bold text-[#17231c]">
                       {row.ticket}
                     </td>
@@ -62,6 +70,13 @@ export function AdminCustomerSupport({ support }) {
           </table>
         </div>
       </section>
+      {selectedTicketId && customerId ? (
+        <AdminCustomerSupportTicketModal
+          customerId={customerId}
+          ticketId={selectedTicketId}
+          onClose={() => setSelectedTicketId(null)}
+        />
+      ) : null}
     </div>
   )
 }

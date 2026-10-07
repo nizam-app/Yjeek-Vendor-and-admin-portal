@@ -174,6 +174,30 @@ export const adminCustomerService = {
     }
   },
 
+  async getSupportTicketDetail(customerId, ticketId, options = {}) {
+    const cid = String(customerId || '').trim()
+    const tid = String(ticketId || '').trim()
+    if (!cid || !tid) {
+      throw new Error('Customer id and ticket id are required.')
+    }
+
+    if (!useRealCustomersApi()) {
+      return { data: null, meta: null }
+    }
+
+    const response = await apiClient.get(endpoints.admin.customers.supportTicket(cid, tid), {
+      ...options,
+      scope: 'admin',
+      feature: 'customers',
+      forceReal: true,
+    })
+
+    return {
+      data: response?.data ?? null,
+      meta: response?.meta ?? null,
+    }
+  },
+
   /**
    * Suspend customer.
    * Confirmed: POST /admin/customers/:id/suspend { reason, duration, notifyCustomer }

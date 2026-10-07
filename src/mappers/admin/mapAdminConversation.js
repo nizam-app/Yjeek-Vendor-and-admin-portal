@@ -11,6 +11,7 @@ export function mapAdminChatMessage(item) {
 
   const senderRole = item.senderRole ? String(item.senderRole).toUpperCase() : ''
   const own = senderRole === 'ADMIN'
+  const system = senderRole === 'SYSTEM'
 
   return {
     id: item.id ? String(item.id) : `msg-${item.createdAt || Date.now()}`,
@@ -24,6 +25,7 @@ export function mapAdminChatMessage(item) {
       ? item.attachments.map((url) => String(url || '').trim()).filter(Boolean)
       : attachmentsFromMetadata(item.metadata),
     own,
+    system,
   }
 }
 

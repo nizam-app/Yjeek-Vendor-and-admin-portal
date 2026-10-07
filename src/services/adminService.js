@@ -401,6 +401,9 @@ export const adminService = {
   getAdminCustomerSupport(customerId, options = {}) {
     return adminCustomerService.getSupportTickets(customerId, options)
   },
+  getAdminCustomerSupportTicket(customerId, ticketId, options = {}) {
+    return adminCustomerService.getSupportTicketDetail(customerId, ticketId, options)
+  },
   suspendAdminCustomer(customerId, form, options = {}) {
     return adminCustomerService.suspendCustomer(customerId, form, options)
   },
