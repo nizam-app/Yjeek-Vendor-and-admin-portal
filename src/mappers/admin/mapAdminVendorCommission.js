@@ -361,8 +361,7 @@ function appendSharedCommissionFields(body, form = {}) {
   }
 
   if (gatewaySource && typeof gatewaySource === 'object') {
-    const mapped = {}
-    for (const key of [
+    const keys = [
       'fixedPct',
       'debitPct',
       'creditPct',
@@ -370,11 +369,25 @@ function appendSharedCommissionFields(body, form = {}) {
       'googleWalletPct',
       'otherChargesPct',
       'fixedCharge',
-    ]) {
-      const num = parseOptionalNumber(gatewaySource[key])
-      if (num != null) mapped[key] = num
+    ]
+    const mapped = {}
+    let anyGateway = false
+    for (const key of keys) {
+      const raw = gatewaySource[key]
+      const trimmed = raw == null ? '' : String(raw).trim()
+      if (trimmed === '') continue
+      const num = parseOptionalNumber(raw)
+      if (num != null) {
+        mapped[key] = num
+        anyGateway = true
+      }
     }
-    if (Object.keys(mapped).length) body.gatewayFees = mapped
+    if (anyGateway) {
+      for (const key of keys) {
+        if (mapped[key] == null) mapped[key] = 0
+      }
+      body.gatewayFees = mapped
+    }
   }
 
   return body

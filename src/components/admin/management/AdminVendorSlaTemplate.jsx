@@ -1,5 +1,8 @@
 import { ChevronDown } from 'lucide-react'
+import { SLA_DURATION_HOUR_MAX, formatSlaDurationHours } from '../../../constants/adminSlaDuration'
 import { cn } from '../cn'
+
+export { SLA_DURATION_HOUR_MAX } from '../../../constants/adminSlaDuration'
 
 const OPERATORS = ['≤', '≥', '=', '<', '>']
 
@@ -14,9 +17,16 @@ function pad2(n) {
 }
 
 function clampUnit(raw, max) {
-  const digits = String(raw).replace(/\D/g, '').slice(0, 2)
+  const maxDigits = max > 99 ? 3 : 2
+  const digits = String(raw).replace(/\D/g, '').slice(0, maxDigits)
   if (!digits) return ''
   return String(Math.min(max, Number.parseInt(digits, 10)))
+}
+
+function padHourUnit(value, max = 23) {
+  const parsed = Math.min(max, Math.max(0, Number.parseInt(value, 10) || 0))
+  if (max > 99) return String(parsed)
+  return pad2(parsed)
 }
 
 function toClockString(parts) {
@@ -33,15 +43,22 @@ function fromClockString(raw) {
   }
 }
 
-function TimeBox({ value, onChange, max = 59, label }) {
+function TimeBox({ value, onChange, max = 59, label, padOnBlur = true, wide = false }) {
   return (
     <input
-      className={inputClass}
+      className={cn(inputClass, wide && 'w-[60px]')}
       aria-label={label}
       inputMode="numeric"
       value={value}
       onChange={(event) => onChange(clampUnit(event.target.value, max))}
-      onBlur={() => onChange(pad2(Number.parseInt(value, 10) || 0))}
+      onBlur={() => {
+        if (!padOnBlur) return
+        if (label === 'Hours' && max > 99) {
+          onChange(padHourUnit(value, max))
+          return
+        }
+        onChange(pad2(Number.parseInt(value, 10) || 0))
+      }}
     />
   )
 }
@@ -70,16 +87,26 @@ function OperatorSelect({ value, onChange }) {
   )
 }
 
-function DurationInput({ value, onChange, showOperator = true, showUnits = false, hourMax = 23, tone = 'default' }) {
+function DurationInput({
+  value,
+  onChange,
+  showOperator = true,
+  showUnits = false,
+  hourMax = SLA_DURATION_HOUR_MAX,
+  tone = 'default',
+  invalid = false,
+}) {
   const safe = value || { operator: '≤', h: '00', m: '00', s: '00' }
   const toneClass =
-    tone === 'risk'
-      ? '[&_input]:border-[#E3B341] [&_input]:bg-[#FFF4DE] [&_input]:text-[#9A6B00]'
-      : tone === 'critical'
-        ? '[&_input]:border-[#E3A1A1] [&_input]:bg-[#FDECEC] [&_input]:text-[#B3261E]'
-        : tone === 'target'
-          ? '[&_input]:border-[rgba(0,0,0,0.08)] [&_input]:bg-[#f8faf8] [&_input]:text-[#455249]'
-          : ''
+    invalid
+      ? '[&_input]:border-[#D64545]! [&_input]:bg-[#FDECEC]! [&_input]:text-[#B3261E]! [&_input]:focus:border-[#D64545]!'
+      : tone === 'risk'
+        ? '[&_input]:border-[#E3B341] [&_input]:bg-[#FFF4DE] [&_input]:text-[#9A6B00]'
+        : tone === 'critical'
+          ? '[&_input]:border-[#E3A1A1] [&_input]:bg-[#FDECEC] [&_input]:text-[#B3261E]'
+          : tone === 'target'
+            ? '[&_input]:border-[rgba(0,0,0,0.08)] [&_input]:bg-[#f8faf8] [&_input]:text-[#455249]'
+            : ''
   return (
     <div className={cn('flex flex-nowrap items-center gap-1.5', toneClass)}>
       {showOperator ? (
@@ -88,7 +115,14 @@ function DurationInput({ value, onChange, showOperator = true, showUnits = false
           onChange={(operator) => onChange({ ...safe, operator })}
         />
       ) : null}
-      <TimeBox value={safe.h} max={hourMax} label="Hours" onChange={(h) => onChange({ ...safe, h })} />
+      <TimeBox
+        value={safe.h}
+        max={hourMax}
+        label="Hours"
+        wide={hourMax > 99}
+        padOnBlur={hourMax <= 99}
+        onChange={(h) => onChange({ ...safe, h })}
+      />
       {showUnits ? <span className="text-[12px] text-[#7c8780]">h</span> : null}
       <TimeBox value={safe.m} label="Minutes" onChange={(m) => onChange({ ...safe, m })} />
       {showUnits ? <span className="text-[12px] text-[#7c8780]">m</span> : null}
@@ -98,7 +132,7 @@ function DurationInput({ value, onChange, showOperator = true, showUnits = false
   )
 }
 
-function DurationTierInput({ value, onChange, showUnits = true }) {
+function DurationTierInput({ value, onChange, showUnits = true, hourMax = SLA_DURATION_HOUR_MAX }) {
   const safe = value || {
     target: { operator: '≤', h: '00', m: '00', s: '00' },
     atRisk: { operator: '≤', h: '00', m: '00', s: '00' },
@@ -110,18 +144,21 @@ function DurationTierInput({ value, onChange, showUnits = true }) {
         value={safe.target}
         showUnits={showUnits}
         tone="target"
+        hourMax={hourMax}
         onChange={(target) => onChange({ ...safe, target })}
       />
       <DurationInput
         value={safe.atRisk}
         showUnits={showUnits}
         tone="risk"
+        hourMax={hourMax}
         onChange={(atRisk) => onChange({ ...safe, atRisk })}
       />
       <DurationInput
         value={safe.critical}
         showUnits={showUnits}
         tone="critical"
+        hourMax={hourMax}
         onChange={(critical) => onChange({ ...safe, critical })}
       />
     </div>
@@ -138,7 +175,7 @@ function StatusFlags() {
   )
 }
 
-function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
+function TierGrid({ fields, values, onChange, metricLabel = 'Metric', fieldErrors = {}, rowIdForField }) {
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[720px]">
@@ -149,21 +186,37 @@ function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
           <span className="text-[#B3261E]">Critical threshold</span>
           <span className="text-center">Flags</span>
         </div>
-        {fields.map((field) => (
+        {fields.map((field) => {
+          const rowId = rowIdForField?.(field.key)
+          const rowErrors = rowId ? fieldErrors[rowId] : null
+          const tierErrors = rowErrors?.tiers || {}
+          const hourMax = field.hourMax ?? SLA_DURATION_HOUR_MAX
+          return (
           <div
             key={field.key}
-            className="grid grid-cols-[1.5fr_1fr_1fr_1fr_0.6fr] items-center gap-2.5 border-b border-[#eceeec] px-1 py-3 last:border-b-0"
+            id={rowId || undefined}
+            className={cn(
+              'grid grid-cols-[1.5fr_1fr_1fr_1fr_0.6fr] items-center gap-2.5 border-b border-[#eceeec] px-1 py-3 last:border-b-0',
+              rowErrors?.messages?.length && 'rounded-[8px] bg-[#fff8f8]',
+            )}
           >
             <div className="min-w-0">
               <div className="text-[13.5px] font-medium text-[#17231c]">{field.label}</div>
               {field.hint ? (
                 <div className="mt-0.5 text-[11px] leading-snug text-[#7c8780]">{field.hint}</div>
               ) : null}
+              {rowErrors?.messages?.length ? (
+                <div className="mt-1 text-[11px] font-medium leading-snug text-[#B3261E]" role="alert">
+                  {rowErrors.messages.join(' · ')}
+                </div>
+              ) : null}
             </div>
             <DurationInput
               value={values?.[field.key]?.target}
               showUnits={field.showUnits !== false}
               tone="target"
+              hourMax={hourMax}
+              invalid={Boolean(tierErrors.target)}
               onChange={(target) =>
                 onChange({
                   ...values,
@@ -175,6 +228,8 @@ function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
               value={values?.[field.key]?.atRisk}
               showUnits={field.showUnits !== false}
               tone="risk"
+              hourMax={hourMax}
+              invalid={Boolean(tierErrors.atRisk)}
               onChange={(atRisk) =>
                 onChange({
                   ...values,
@@ -186,6 +241,8 @@ function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
               value={values?.[field.key]?.critical}
               showUnits={field.showUnits !== false}
               tone="critical"
+              hourMax={hourMax}
+              invalid={Boolean(tierErrors.critical)}
               onChange={(critical) =>
                 onChange({
                   ...values,
@@ -195,7 +252,7 @@ function TierGrid({ fields, values, onChange, metricLabel = 'Metric' }) {
             />
             <StatusFlags />
           </div>
-        ))}
+        )})}
       </div>
     </div>
   )
@@ -259,7 +316,7 @@ function PriorityDurationInput({ value, onChange, readOnly = false }) {
         <DurationInput
           value={safe}
           showOperator={false}
-          hourMax={99}
+          hourMax={SLA_DURATION_HOUR_MAX}
           onChange={(next) => onChange({ ...safe, h: next.h, m: next.m, s: next.s })}
         />
       )}
@@ -591,11 +648,12 @@ function PeakHoursInput({ value, onChange, showUnits = false }) {
   }
   return (
     <div className="flex flex-nowrap items-center gap-2">
-      <DurationInput
-        value={safe.duration}
-        showUnits={showUnits}
-        onChange={(duration) => onChange({ ...safe, duration })}
-      />
+        <DurationInput
+          value={safe.duration}
+          showUnits={showUnits}
+          hourMax={SLA_DURATION_HOUR_MAX}
+          onChange={(duration) => onChange({ ...safe, duration })}
+        />
       <PercentInput
         value={safe.percent}
         onChange={(percent) => onChange({ ...safe, percent })}
@@ -608,10 +666,25 @@ function FieldControl({ field, value, onChange }) {
   const showUnits = Boolean(field.showUnits)
   const readOnly = Boolean(field.readOnly)
   if (field.type === 'duration') {
-    return <DurationInput value={value} onChange={onChange} showUnits={showUnits} />
+    return (
+      <DurationInput
+        value={value}
+        onChange={onChange}
+        showUnits={showUnits}
+        hourMax={field.hourMax ?? SLA_DURATION_HOUR_MAX}
+        showOperator={field.showOperator !== false}
+      />
+    )
   }
   if (field.type === 'durationTier') {
-    return <DurationTierInput value={value} onChange={onChange} showUnits={showUnits} />
+    return (
+      <DurationTierInput
+        value={value}
+        onChange={onChange}
+        showUnits={showUnits}
+        hourMax={field.hourMax ?? SLA_DURATION_HOUR_MAX}
+      />
+    )
   }
   if (field.type === 'priorityDuration') {
     return <PriorityDurationInput value={value} onChange={onChange} readOnly={readOnly} />
@@ -711,7 +784,7 @@ function secToDurationParts(totalSec, operator = '≤') {
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
-  return { operator, h: pad2(h), m: pad2(m), s: pad2(s) }
+  return { operator, h: formatSlaDurationHours(h), m: pad2(m), s: pad2(s) }
 }
 
 function durationDefaultToTier(defaultValue) {
@@ -744,27 +817,41 @@ function resolveTierGridFields(section) {
   const explicit = section.tierGridFields ?? []
   const usedKeys = new Set(explicit.map((field) => field.key))
   const auto = (section.fields ?? [])
-    .filter((field) => TIER_GRID_FIELD_TYPES.has(field.type) && !usedKeys.has(field.key))
+    .filter(
+      (field) =>
+        TIER_GRID_FIELD_TYPES.has(field.type) && !usedKeys.has(field.key) && !field.skipTierGrid,
+    )
     .map(fieldToGridField)
   return [...explicit, ...auto]
 }
 
+function isScalarTierField(field) {
+  return Boolean(field?.skipTierGrid) && TIER_GRID_FIELD_TYPES.has(field?.type)
+}
+
 function nonTierFields(section) {
-  return (section.fields ?? []).filter((field) => !TIER_GRID_FIELD_TYPES.has(field.type))
+  return (section.fields ?? []).filter(
+    (field) => isScalarTierField(field) || !TIER_GRID_FIELD_TYPES.has(field.type),
+  )
 }
 
 function defaultValueForField(field) {
+  if (field.type === 'duration' && field.skipTierGrid) {
+    return structuredClone(field.default)
+  }
   if (field.type === 'duration') return durationDefaultToTier(field.default)
   return structuredClone(field.default)
 }
 
-function TierGridSection({ tierGridFields, values, onChange, metricLabel }) {
+function TierGridSection({ tierGridFields, values, onChange, metricLabel, fieldErrors, rowIdForField }) {
   if (!tierGridFields.length) return null
   return (
     <TierGrid
       fields={tierGridFields}
       values={values}
       metricLabel={metricLabel}
+      fieldErrors={fieldErrors}
+      rowIdForField={rowIdForField}
       onChange={onChange}
     />
   )
@@ -782,7 +869,12 @@ export function SlaTierPageFooter({ footnote }) {
   )
 }
 
-export function AdminVendorSlaTemplate({ sections, values, onChange }) {
+export function AdminVendorSlaTemplate({ sections, values, onChange, tab = 'vendor', fieldErrors = {} }) {
+  const rowId = (sectionId, tierId, fieldKey) => {
+    if (!tab) return null
+    return ['sla-field', tab, sectionId, tierId || '_', fieldKey].join('::')
+  }
+
   return (
     <div className="space-y-4">
       {sections.map((section) => {
@@ -808,6 +900,8 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
             tierGridFields={tierGridFields}
             values={values[section.id]}
             metricLabel={section.metricLabel || 'Metric'}
+            fieldErrors={fieldErrors}
+            rowIdForField={(fieldKey) => rowId(section.id, null, fieldKey)}
             onChange={(next) =>
               onChange({
                 ...values,
@@ -824,7 +918,7 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
               {section.tiers.map((tier) => {
                 const tierGrid = resolveTierGridFields({ fields: tier.fields })
                 const tierOther = (tier.fields ?? []).filter(
-                  (field) => !TIER_GRID_FIELD_TYPES.has(field.type),
+                  (field) => isScalarTierField(field) || !TIER_GRID_FIELD_TYPES.has(field.type),
                 )
                 const alignTierOther = tierGrid.length > 0
                 return (
@@ -836,6 +930,8 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                     tierGridFields={tierGrid}
                     values={values[section.id]?.[tier.id]}
                     metricLabel="Metric"
+                    fieldErrors={fieldErrors}
+                    rowIdForField={(fieldKey) => rowId(section.id, tier.id, fieldKey)}
                     onChange={(next) =>
                       onChange({
                         ...values,
@@ -891,6 +987,8 @@ export function AdminVendorSlaTemplate({ sections, values, onChange }) {
                     tierGridFields={resolveTierGridFields({ fields: section.allTiers })}
                     values={values[section.id]?.all}
                     metricLabel="Metric"
+                    fieldErrors={fieldErrors}
+                    rowIdForField={(fieldKey) => rowId(section.id, 'all', fieldKey)}
                     onChange={(next) =>
                       onChange({
                         ...values,
@@ -1097,7 +1195,14 @@ const scheduledTierFields = [
   tierField('champCollection', 'Champ collection time', '00', '20', '00', '00', '28', '00', '00', '40', '00'),
   withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') }),
   { key: 'cutoff', label: 'Cutoff time', type: 'clock', default: clock('12:00:00', 'PM') },
-  { key: 'prepMax', label: 'Prepare time (max)', type: 'clock', default: clock('08:00:00', 'PM', '≤') },
+  withUnits({
+    key: 'prepMax',
+    label: 'Prepare time (max)',
+    type: 'duration',
+    skipTierGrid: true,
+    default: duration('08', '00', '00', '≤'),
+    hint: 'Duration — hours field accepts up to 999',
+  }),
   withUnits({
     key: 'markReady',
     label: 'Mark ready within delivery window',

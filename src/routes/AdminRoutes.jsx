@@ -32,6 +32,7 @@ import AdminBudgetPage from '../pages/admin/management/AdminBudgetPage'
 import AdminMarketingPage from '../pages/admin/management/AdminMarketingPage'
 import AdminCashbackPage from '../pages/admin/management/AdminCashbackPage'
 import AdminReferralPage from '../pages/admin/management/AdminReferralPage'
+import AdminZoodPage from '../pages/admin/management/AdminZoodPage'
 import AdminVouchersPage from '../pages/admin/management/AdminVouchersPage'
 import AdminCampaignsPage from '../pages/admin/management/AdminCampaignsPage'
 import AdminSpinWheelPage from '../pages/admin/management/AdminSpinWheelPage'
@@ -114,6 +115,7 @@ export const adminRoutes = (
     <Route path="marketing/promo-categories" element={<AdminMarketingPage />} />
     <Route path="marketing/cashback" element={<AdminCashbackPage />} />
     <Route path="marketing/referral" element={<AdminReferralPage />} />
+    <Route path="marketing/zood" element={<AdminZoodPage />} />
     <Route path="marketing/vouchers" element={<AdminVouchersPage />} />
     <Route path="marketing/campaigns" element={<AdminCampaignsPage />} />
     <Route path="marketing/banners" element={<AdminUiEditorPage surface="marketing" />} />

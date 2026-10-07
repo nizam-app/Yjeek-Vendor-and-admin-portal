@@ -930,6 +930,12 @@ export const endpoints = {
         report: '/admin/marketing/cashback/report',
         reportExport: '/admin/marketing/cashback/report/export',
       },
+      zood: {
+        root: '/admin/marketing/zood',
+        settings: '/admin/marketing/zood/settings',
+        waitlist: '/admin/marketing/zood/waitlist',
+        waitlistExport: '/admin/marketing/zood/waitlist/export',
+      },
       referral: {
         root: '/admin/marketing/referral',
         settings: '/admin/marketing/referral/settings',

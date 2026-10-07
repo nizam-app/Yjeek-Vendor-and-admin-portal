@@ -767,6 +767,7 @@ export default function AdminAddVendorBrunchs() {
       vendorId: useRealBranchApi ? vendorId : undefined,
       vendorStoreTypeId: storeTypeId,
       adminService,
+      adminSlaModelsService,
     })
     if (!next) return
     setDraftScheduled(next)

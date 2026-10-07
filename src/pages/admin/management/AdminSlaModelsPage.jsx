@@ -15,6 +15,11 @@ import { cn } from '../../../components/admin/cn'
 import { useAdminSlaModels } from '../../../hooks/admin/useAdminSlaModels'
 import AdminSlaCommercialDefaultsTab from '../../../components/admin/management/AdminSlaCommercialDefaultsTab'
 import { mapSlaConfigToForm } from '../../../mappers/admin/mapAdminSlaModels'
+import {
+  groupSlaValidationErrors,
+  mapApiFieldErrorsToSlaValidation,
+  validateAdminSlaFormAndConfig,
+} from '../../../mappers/admin/validateAdminSlaForm'
 import { useApiMutation } from '../../../hooks/useApiMutation'
 import { adminSlaModelsService } from '../../../services/admin/slaModelsService'
 import { useAuth } from '../../../context/AuthContext'
@@ -151,6 +156,8 @@ export default function AdminSlaModelsPage() {
   const [template, setTemplate] = useState(null)
   const [config, setConfig] = useState({})
   const [saveMessage, setSaveMessage] = useState(null)
+  const [slaFieldErrors, setSlaFieldErrors] = useState({})
+  const [scrollToSlaErrorId, setScrollToSlaErrorId] = useState(null)
   const [changeLog, setChangeLog] = useState([])
   const [expandedChangeBatches, setExpandedChangeBatches] = useState(() => new Set())
   const [versionUsage, setVersionUsage] = useState(null)
@@ -160,6 +167,48 @@ export default function AdminSlaModelsPage() {
   const [versionMenuOpen, setVersionMenuOpen] = useState(false)
   const versionMenuRef = useRef(null)
   const changeLogPeople = useMemo(() => groupSlaChangeLog(changeLog), [changeLog])
+  const slaValidationBlocked = Object.keys(slaFieldErrors).length > 0
+
+  useEffect(() => {
+    if (!scrollToSlaErrorId) return
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(scrollToSlaErrorId)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setScrollToSlaErrorId(null)
+    }, 120)
+    return () => window.clearTimeout(timer)
+  }, [scrollToSlaErrorId, tab, slaFieldErrors])
+
+  function clearSlaFieldErrors() {
+    setSlaFieldErrors({})
+  }
+
+  function showSlaValidationErrors(list) {
+    if (!list?.length) {
+      setSlaFieldErrors({})
+      return false
+    }
+    setSlaFieldErrors(groupSlaValidationErrors(list))
+    const first = list.find((entry) => !entry.unmapped) || list[0]
+    if (first?.tab && first.tab !== tab) {
+      const target = TABS.find((item) => item.id === first.tab)
+      if (target) navigate(target.path)
+    }
+    if (first?.id && !String(first.id).startsWith('sla-config::')) {
+      setScrollToSlaErrorId(first.id)
+    }
+    return true
+  }
+
+  function validateSlaBeforeSave() {
+    const list = validateAdminSlaFormAndConfig({
+      vendorValues,
+      champValues,
+      dispatcherValues,
+      baseConfig: config,
+    })
+    return !showSlaValidationErrors(list)
+  }
 
   function formatThresholdSec(seconds) {
     const total = Math.max(0, Math.round(Number(seconds) || 0))
@@ -452,6 +501,8 @@ export default function AdminSlaModelsPage() {
   async function handleSave() {
     setSaveMessage(null)
     resetSave()
+    clearSlaFieldErrors()
+    if (!validateSlaBeforeSave()) return
     try {
       const result = await saveForm({
         model,
@@ -487,6 +538,18 @@ export default function AdminSlaModelsPage() {
       if (error?.savedModel) {
         setModel(error.savedModel)
         if (error.savedModel.config) setConfig(error.savedModel.config)
+      }
+      let validationList = validateAdminSlaFormAndConfig({
+        vendorValues,
+        champValues,
+        dispatcherValues,
+        baseConfig: config,
+      })
+      if (!validationList.length && error?.fieldErrors) {
+        validationList = mapApiFieldErrorsToSlaValidation(error.fieldErrors)
+      }
+      if (validationList.length) {
+        showSlaValidationErrors(validationList)
       }
     }
   }
@@ -717,7 +780,13 @@ export default function AdminSlaModelsPage() {
       ) : null}
 
       {!isCommercialTab ? <ApiErrorBanner error={error} onRetry={refetch} /> : null}
-      {saveErrorMessage ? (
+      {slaValidationBlocked ? (
+        <div className="mb-3 rounded-[10px] border border-[#f2cccc] bg-[#fff5f5] px-3 py-2 text-[12.5px] text-[#a93e42]">
+          Fix the highlighted metrics below — threshold tiers must stay in order (target → at-risk →
+          critical).
+        </div>
+      ) : null}
+      {saveErrorMessage && !slaValidationBlocked ? (
         <div className="mb-3 rounded-[10px] border border-[#f2cccc] bg-[#fff5f5] px-3 py-2 text-[12.5px] text-[#a93e42]">
           {saveErrorMessage}
         </div>
@@ -750,9 +819,18 @@ export default function AdminSlaModelsPage() {
       {tab === 'vendor' ? (
         <div className={cn(isPreviewing && 'pointer-events-none select-none opacity-[0.92]')}>
           <AdminVendorSlaTemplate
+            tab="vendor"
             sections={VENDOR_SLA_SECTIONS}
             values={displayVendorValues}
-            onChange={isPreviewing ? noopChange : setVendorValues}
+            fieldErrors={slaFieldErrors}
+            onChange={
+              isPreviewing
+                ? noopChange
+                : (next) => {
+                    clearSlaFieldErrors()
+                    setVendorValues(next)
+                  }
+            }
           />
         </div>
       ) : null}
@@ -760,9 +838,18 @@ export default function AdminSlaModelsPage() {
       {tab === 'champ' ? (
         <div className={cn(isPreviewing && 'pointer-events-none select-none opacity-[0.92]')}>
           <AdminVendorSlaTemplate
+            tab="champ"
             sections={CHAMP_SLA_SECTIONS}
             values={displayChampValues}
-            onChange={isPreviewing ? noopChange : setChampValues}
+            fieldErrors={slaFieldErrors}
+            onChange={
+              isPreviewing
+                ? noopChange
+                : (next) => {
+                    clearSlaFieldErrors()
+                    setChampValues(next)
+                  }
+            }
           />
         </div>
       ) : null}
@@ -770,9 +857,18 @@ export default function AdminSlaModelsPage() {
       {tab === 'dispatcher' ? (
         <div className={cn(isPreviewing && 'pointer-events-none select-none opacity-[0.92]')}>
           <AdminVendorSlaTemplate
+            tab="dispatcher"
             sections={DISPATCHER_SLA_SECTIONS}
             values={displayDispatcherValues}
-            onChange={isPreviewing ? noopChange : setDispatcherValues}
+            fieldErrors={slaFieldErrors}
+            onChange={
+              isPreviewing
+                ? noopChange
+                : (next) => {
+                    clearSlaFieldErrors()
+                    setDispatcherValues(next)
+                  }
+            }
           />
         </div>
       ) : null}

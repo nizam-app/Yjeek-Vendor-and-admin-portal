@@ -1,4 +1,5 @@
 import { ApiError } from '../../api/errors'
+import { clampSlaDurationSec, formatSlaDurationHours } from '../../constants/adminSlaDuration'
 import {
   VENDOR_SLA_SECTIONS,
   CHAMP_SLA_SECTIONS,
@@ -21,11 +22,11 @@ function asRecord(value) {
 }
 
 export function durationFromSec(seconds, operator = '≤') {
-  const total = Math.max(0, Math.round(num(seconds) ?? 0))
+  const total = clampSlaDurationSec(num(seconds) ?? 0)
   const h = Math.floor(total / 3600)
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
-  return { operator, h: pad2(h), m: pad2(m), s: pad2(s) }
+  return { operator, h: formatSlaDurationHours(h), m: pad2(m), s: pad2(s) }
 }
 
 export function secFromDuration(value) {
@@ -36,7 +37,7 @@ export function secFromDuration(value) {
   const h = Number.parseInt(value.h, 10) || 0
   const m = Number.parseInt(value.m, 10) || 0
   const s = Number.parseInt(value.s, 10) || 0
-  return h * 3600 + m * 60 + s
+  return clampSlaDurationSec(h * 3600 + m * 60 + s)
 }
 
 const DEFAULT_AT_RISK_RATIO = 1.67
@@ -260,6 +261,17 @@ const GPS_TO_API = {
   'End of shift': 'WITHIN_WINDOW',
 }
 
+/** Legacy scheduled prep used a clock widget; normalize to duration parts for the API mapper. */
+function normalizeScheduledPrepMax(value) {
+  if (!value || typeof value !== 'object') return value
+  if (value.h != null || value.m != null || value.s != null) return value
+  if (value.time) {
+    const clock = clockToApi(value)
+    if (clock) return durationFromSec(clockToSeconds(clock), value.operator || '≤')
+  }
+  return value
+}
+
 const SCHEDULED_TIER_MAP = {
   'same-day': 'sameDay',
   'next-day': 'nextDay',
@@ -279,8 +291,8 @@ function mapScheduledTierFromApi(tier, fallback) {
   if (source.preparationTimeHours != null) {
     const hours = num(source.preparationTimeHours)
     if (hours != null) {
-      const h24 = Math.min(23, Math.max(0, Math.round(hours)))
-      next.prepMax = clockFromApi(`${pad2(h24)}:00:00`, fallback?.prepMax?.operator || '≤')
+      const totalSec = Math.max(0, Math.round(hours * 3600))
+      next.prepMax = durationFromSec(totalSec, fallback?.prepMax?.operator || '≤')
     }
   }
   if (source.customerPaymentWindowSec === null) {
@@ -303,9 +315,10 @@ function mapScheduledTierToApi(tier, uiKey) {
   if (collection) payload.champCollectionTimeSec = collection
   if (online) payload.earlyOnlineHoursSec = online
   if (cutoff) payload.cutoffTime = cutoff
-  const prepClock = clockToApi(source.prepMax)
-  if (prepClock) {
-    payload.preparationTimeHours = Math.max(0, Math.round(clockToSeconds(prepClock) / 3600))
+  const prepSec = secFromDuration(normalizeScheduledPrepMax(source.prepMax))
+  if (prepSec != null) {
+    const hours = prepSec / 3600
+    payload.preparationTimeHours = Math.max(0, Math.min(720, hours))
   }
   // Same Day: scheduled 5-min payment window feature is N/A — always null.
   if (uiKey === 'same-day') {
