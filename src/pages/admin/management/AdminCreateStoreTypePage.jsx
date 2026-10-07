@@ -820,6 +820,8 @@ function StoreTypeForm({
       : {}),
     structure,
     subTypes,
+    categories,
+    badges,
     publishStatus,
     catalogMode,
     lowStockThreshold,

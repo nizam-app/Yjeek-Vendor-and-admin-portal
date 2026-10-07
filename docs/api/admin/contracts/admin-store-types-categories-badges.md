@@ -51,7 +51,7 @@ Wired on **edit** store type (`/admin/stores/:storeTypeId`) only — needs an ex
 | Edit badge label | PATCH badge |
 | Remove badge | DELETE badge |
 
-Create store type keeps empty categories/badges until the type exists (save first, then edit).
+On **create** (`/admin/stores/new`), categories and badges added in the form are sent on the initial `POST /admin/store-types` as `menuCategories` and `badges` (nested create). After save, edit mode uses the per-item APIs below.
 
 ## Files
 
