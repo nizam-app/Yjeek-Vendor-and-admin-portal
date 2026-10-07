@@ -114,6 +114,7 @@ const DRIVER_SCHEDULED_FIELDS = [
  *   } | null,
  *   onResetField?: (path: string) => void,
  *   resettingPath?: string | null,
+ *   includeOnDemand?: boolean,
  *   includeScheduled?: boolean,
  * }} props
  */
@@ -124,6 +125,7 @@ export default function AdminDriverRatesPanel({
   fieldMeta = null,
   onResetField = null,
   resettingPath = null,
+  includeOnDemand = true,
   includeScheduled = false,
 }) {
   const form = value || EMPTY_DRIVER_RATES
@@ -247,39 +249,41 @@ export default function AdminDriverRatesPanel({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[12px] border border-[#eceeec] bg-[#fafbfa] p-4">
-        <div className="mb-3">
-          <h4 className="text-[13.5px] font-bold text-[#17231c]">
-            On-demand — base rate by vehicle
-          </h4>
-          <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
-            Distance beyond the free radius is added per km.
-          </p>
+      {includeOnDemand ? (
+        <div className="rounded-[12px] border border-[#eceeec] bg-[#fafbfa] p-4">
+          <div className="mb-3">
+            <h4 className="text-[13.5px] font-bold text-[#17231c]">
+              On-demand — base rate by vehicle
+            </h4>
+            <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+              Distance beyond the free radius is added per km.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 max-[700px]:grid-cols-1">
+            {ON_DEMAND_FIELDS.map(({ key, label, hint }) => {
+              const path = `driverRates.onDemand.${key}`
+              const meta = fieldMeta?.onDemand?.[key]
+              return (
+                <Field
+                  key={key}
+                  label={label}
+                  stateBadge={stateBadgeFor(meta)}
+                  hint={inheritanceHint(path, meta, hint)}
+                >
+                  <MoneyInput
+                    value={onDemand[key]}
+                    onChange={(event) => patchOnDemand(key, event.target.value)}
+                    disabled={disabled}
+                    inputMode="decimal"
+                    placeholder="—"
+                    aria-label={label}
+                  />
+                </Field>
+              )
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 max-[700px]:grid-cols-1">
-          {ON_DEMAND_FIELDS.map(({ key, label, hint }) => {
-            const path = `driverRates.onDemand.${key}`
-            const meta = fieldMeta?.onDemand?.[key]
-            return (
-              <Field
-                key={key}
-                label={label}
-                stateBadge={stateBadgeFor(meta)}
-                hint={inheritanceHint(path, meta, hint)}
-              >
-                <MoneyInput
-                  value={onDemand[key]}
-                  onChange={(event) => patchOnDemand(key, event.target.value)}
-                  disabled={disabled}
-                  inputMode="decimal"
-                  placeholder="—"
-                  aria-label={label}
-                />
-              </Field>
-            )
-          })}
-        </div>
-      </div>
+      ) : null}
 
       {includeScheduled
         ? renderScheduledGrid(

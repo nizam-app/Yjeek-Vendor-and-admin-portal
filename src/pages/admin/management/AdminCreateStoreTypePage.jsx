@@ -626,6 +626,26 @@ function StoreTypeForm({
   const [visibleInApp, setVisibleInApp] = useState(initial.visibleInApp)
   const [iconUrl, setIconUrl] = useState(initial.iconUrl)
   const [modes, setModes] = useState(initial.modes)
+  const [servicesStoreTypeExists, setServicesStoreTypeExists] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    adminService
+      .listStoreTypes()
+      .then((result) => {
+        if (cancelled) return
+        const rows = Array.isArray(result?.data?.storeTypes) ? result.data.storeTypes : []
+        setServicesStoreTypeExists(
+          rows.some((row) => String(row?.slug || '').trim().toLowerCase() === 'services'),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setServicesStoreTypeExists(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const commissionServiceLabels = useMemo(
     () => commissionServiceLabelsForStoreTypeModes(modes),
     [modes],
@@ -998,7 +1018,14 @@ function StoreTypeForm({
     }
   }
 
+  const servicesModeBlocked =
+    String(internalKey || '').trim().toLowerCase() !== 'services' && !servicesStoreTypeExists
+
   const toggleMode = (modeKey) => {
+    if (modeKey === 'Services' && !modes.Services && servicesModeBlocked) {
+      return
+    }
+    setSaveError('')
     setModes((prev) => ({ ...prev, [modeKey]: !prev[modeKey] }))
   }
 
@@ -1525,14 +1552,21 @@ function StoreTypeForm({
           title="Order modes"
           subtitle="Which order types customers can use for stores of this type."
         >
+          <p className="mb-3 max-w-xl text-[12.5px] leading-[18px] text-[#5c665f]">
+            Services lets vendors of this type also appear under a Services sub-type.
+          </p>
           <div className="flex w-fit flex-col gap-2.5">
             {ORDER_MODES.map((mode) => (
-              <div
-                key={mode}
-                className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3"
-              >
-                <span className="text-[13px] font-medium text-[#17231c]">{mode}</span>
-                <Toggle checked={Boolean(modes[mode])} onChange={() => toggleMode(mode)} />
+              <div key={mode}>
+                <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[#f3f5f3] px-4 py-3">
+                  <span className="text-[13px] font-medium text-[#17231c]">{mode}</span>
+                  <Toggle checked={Boolean(modes[mode])} onChange={() => toggleMode(mode)} />
+                </div>
+                {mode === 'Services' && servicesModeBlocked ? (
+                  <p className="mt-1.5 max-w-[280px] text-[12px] leading-[16px] text-[#d64044]">
+                    Create a Services store type before turning Services on.
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>

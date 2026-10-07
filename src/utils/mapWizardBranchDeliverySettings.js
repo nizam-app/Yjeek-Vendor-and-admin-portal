@@ -41,13 +41,17 @@ export function mapWizardBranchDeliverySettings(branch) {
   if (branch.allowedVehiclesEdited && branch.draftAllowedVehicles) {
     body.allowedVehicles = buildAllowedVehiclesPayload(branch.draftAllowedVehicles)
   }
+  if (modeEnabled(modes, 'SERVICES') && branch.serviceSubTypeId) {
+    body.serviceSubTypeId = String(branch.serviceSubTypeId)
+  }
 
   if (
     !body.modes &&
     !body.hotFoodOnDemand &&
     !body.scheduled &&
     !body.driverRates &&
-    !body.allowedVehicles
+    !body.allowedVehicles &&
+    !body.serviceSubTypeId
   ) {
     return null
   }

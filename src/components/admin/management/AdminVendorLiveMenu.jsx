@@ -143,6 +143,7 @@ function emptyProductForm(categoryId = '') {
     imageUrl: '',
     isActive: true,
     isAvailable: true,
+    catalogLane: 'PRODUCT',
     ...orderMethodDefaults(),
     availableFrom: '',
     availableTo: '',
@@ -212,6 +213,7 @@ function ProductFormModal({
   form,
   setForm,
   categoryOptions,
+  canChooseServiceMenu,
   itemClassEditable,
   itemClassLockedBy,
   busy,
@@ -313,10 +315,32 @@ function ProductFormModal({
               </select>
             </div>
 
+            {canChooseServiceMenu ? (
+              <div>
+                <label className={labelClass}>Menu</label>
+                <p className="mb-2 text-[11px] text-[#7c8780]">
+                  Product menu items can be delivered. Service menu items are booked.
+                </p>
+                <select
+                  className={inputClass}
+                  value={form.catalogLane === 'SERVICE' ? 'SERVICE' : 'PRODUCT'}
+                  disabled={busy}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, catalogLane: e.target.value }))
+                  }
+                >
+                  <option value="PRODUCT">Product menu</option>
+                  <option value="SERVICE">Service menu</option>
+                </select>
+              </div>
+            ) : null}
+
             <div>
               <label className={labelClass}>Order methods</label>
               <p className="mb-2 text-[11px] text-[#7c8780]">
-                Choose which menus this item appears on. Any combination is allowed.
+                {canChooseServiceMenu
+                  ? 'These switches hide the item inside the menu chosen above. They do not move it between menus.'
+                  : 'These switches hide the item on a product order method. They do not choose a service menu.'}
               </p>
               <OrderMethodToggles
                 value={form}
@@ -743,6 +767,11 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
   const vendorBoth =
     vendorItemClasses.allowsNormalItems !== false &&
     vendorItemClasses.allowsSpecialItems !== false
+  const canChooseServiceMenu =
+    String(catalog?.vendor?.storeType?.slug || catalog?.vendor?.storeTypeSlug || '')
+      .trim()
+      .toLowerCase() === 'services' ||
+    Boolean(String(catalog?.vendor?.serviceSubTypeId || '').trim())
 
   const openCreate = (categoryId = '') => {
     setModalMode('create')
@@ -775,6 +804,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         availableFrom: detail.availableFrom || '',
         availableTo: detail.availableTo || '',
         itemClass: detail.effectiveItemClass || detail.itemClass || 'NORMAL',
+        catalogLane: detail.catalogLane === 'SERVICE' ? 'SERVICE' : 'PRODUCT',
         ...orderMethodDefaults(detail),
         optionGroups: mapLoadedOptionGroups(detail.optionGroups),
         addOns: mapLoadedAddOns(detail.addons),
@@ -869,6 +899,9 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       isActive: Boolean(form.isActive),
       isAvailable: Boolean(form.isAvailable),
       ...orderMethodDefaults(form),
+      ...(canChooseServiceMenu
+        ? { catalogLane: form.catalogLane === 'SERVICE' ? 'SERVICE' : 'PRODUCT' }
+        : {}),
       availableFrom: String(form.availableFrom || '').trim() || null,
       availableTo: String(form.availableTo || '').trim() || null,
       optionGroups,
@@ -1092,6 +1125,9 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         )}
         <div className="min-w-0">
           <p className="truncate text-[13px] font-semibold text-[#17231c]">{item.name}</p>
+          {item.catalogLane === 'SERVICE' ? (
+            <p className="text-[11px] font-semibold text-[#127338]">Service menu</p>
+          ) : null}
           <p className="text-[11px] text-[#7c8780]">
             {formatPrice(item.price)}
             {item.optionGroupCount || item.addonCount
@@ -1395,6 +1431,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         form={form}
         setForm={setForm}
         categoryOptions={categoryOptions}
+        canChooseServiceMenu={canChooseServiceMenu}
         itemClassEditable={formItemClassMeta.editable}
         itemClassLockedBy={formItemClassMeta.lockedBy}
         busy={busy}

@@ -4,6 +4,8 @@ import { ChevronDown, Copy, MapPin, Pause, Pencil, Play, Trash2 } from 'lucide-r
 import AdminForceCloseModal from '../../../components/admin/AdminForceCloseModal'
 import AdminDeleteBranchModal from '../../../components/admin/AdminDeleteBranchModal'
 import AdminBranchLocationPicker from '../../../components/admin/AdminBranchLocationPicker'
+import AdminPhoneField from '../../../components/admin/AdminPhoneField'
+import { formatAdminPhoneDisplay, parseAdminPhone } from '../../../lib/adminPhone'
 import AdminDeliveryCoverageMap from '../../../components/admin/AdminDeliveryCoverageMap'
 import { isAdminRealApiFeature } from '../../../api/config'
 import { adminService } from '../../../services/adminService'
@@ -103,6 +105,7 @@ function buildWizardSavedBranch({
   branchOnline,
   allowPickup,
   allowDineIn,
+  serviceSubTypeId,
 }) {
   const hfVendor = draftHotFood?.vendor || {}
   const radiusKm = [hfVendor.radiusKm, form.radiusKm].map((value) => Number(value)).find((value) => Number.isFinite(value) && value > 0)
@@ -133,6 +136,7 @@ function buildWizardSavedBranch({
     draftDriverRates,
     draftAllowedVehicles,
     allowedVehiclesEdited: Boolean(allowedVehiclesEdited),
+    serviceSubTypeId: String(serviceSubTypeId || '').trim() || null,
     isPrimary:
       Boolean(state?.branch?.isPrimary) || !(state?.wizardDraft?.branches || []).length,
     cuisineTags: form.cuisineTags,
@@ -580,6 +584,8 @@ export default function AdminAddVendorBrunchs() {
   const draftHotFoodPrefilled = useRef(false)
   /** Store type display name for Delivery Settings seed banner (OG §02). */
   const [storeTypeName, setStoreTypeName] = useState('')
+  const [storeTypeSlug, setStoreTypeSlug] = useState('')
+  const [branchServiceSubTypeId, setBranchServiceSubTypeId] = useState('')
   const [vendorStoreTypeId, setVendorStoreTypeId] = useState('')
   /** Hot-food vendor radius from branch delivery-settings API (map preview on edit). */
   const [branchMapRadiusKm, setBranchMapRadiusKm] = useState('')
@@ -633,6 +639,7 @@ export default function AdminAddVendorBrunchs() {
         if (cancelled) return
 
         let offset = 0
+        let loadedServiceSubTypeId = ''
         if (!isNewBranch) {
           const list = results[0]?.data?.branches || []
           setAllBranches(list)
@@ -646,6 +653,7 @@ export default function AdminAddVendorBrunchs() {
           offset = 1
 
           const deliverySettingsRes = results[results.length - 1]
+          loadedServiceSubTypeId = String(deliverySettingsRes?.data?.serviceSubTypeId || '').trim()
           const hfVendor = deliverySettingsRes?.data?.hotFoodOnDemand?.vendor
           const radiusCell = hfVendor?.radiusKm
           const radiusValue =
@@ -681,6 +689,10 @@ export default function AdminAddVendorBrunchs() {
         setVendorStoreTypeId(storeTypeId)
         setStoreTypeName(
           String(storeType?.name || storeType?.title || storeType?.label || '').trim(),
+        )
+        setStoreTypeSlug(String(storeType?.slug || '').trim())
+        setBranchServiceSubTypeId(
+          String(detail?.serviceSubTypeId || loadedServiceSubTypeId || ''),
         )
         setSupportedOrderModes(
           Array.isArray(storeType?.supportedOrderModes)
@@ -834,6 +846,14 @@ export default function AdminAddVendorBrunchs() {
         setStoreTypeName(
           String(storeType?.name || storeType?.title || storeType?.label || '').trim(),
         )
+        setStoreTypeSlug(String(storeType?.slug || '').trim())
+        setBranchServiceSubTypeId((current) => {
+          const existing = String(current || '').trim()
+          if (existing) return current
+          const fromBranch = String(state?.branch?.serviceSubTypeId || '').trim()
+          if (fromBranch) return fromBranch
+          return String(draft?.form?.serviceSubTypeId || '')
+        })
         setSupportedOrderModes(
           Array.isArray(storeType?.supportedOrderModes)
             ? storeType.supportedOrderModes.map((code) => String(code))
@@ -933,6 +953,9 @@ export default function AdminAddVendorBrunchs() {
     }
     if (src.allowedVehiclesEdited) {
       allowedVehiclesEdited.current = true
+    }
+    if (src.serviceSubTypeId) {
+      setBranchServiceSubTypeId(String(src.serviceSubTypeId))
     }
   }, [useRealBranchApi, isNewBranch, state?.branch])
 
@@ -1391,6 +1414,15 @@ export default function AdminAddVendorBrunchs() {
           return
         }
       }
+      const servicesOn =
+        draftDeliveryModes.SERVICES?.enabled &&
+        draftDeliveryModes.SERVICES?.supportedByStoreType !== false &&
+        !draftDeliveryModes.SERVICES?.locked
+      const servicesPrimary = String(storeTypeSlug || '').trim().toLowerCase() === 'services'
+      if (servicesOn && !servicesPrimary && !String(branchServiceSubTypeId || '').trim()) {
+        setSaveError('Choose a Services sub-type before turning Services on.')
+        return
+      }
     }
 
     setSaveError(null)
@@ -1410,6 +1442,7 @@ export default function AdminAddVendorBrunchs() {
           branchOnline,
           allowPickup,
           allowDineIn,
+          serviceSubTypeId: branchServiceSubTypeId,
         })
         navigate(returnPath, {
           state: {
@@ -1461,6 +1494,7 @@ export default function AdminAddVendorBrunchs() {
           draftDriverRates,
           draftAllowedVehicles,
           allowedVehiclesEdited: allowedVehiclesEdited.current,
+          serviceSubTypeId: branchServiceSubTypeId,
         })
         if (deliveryBody) {
           await adminService.updateBranchDeliverySettings(vendorId, savedBranchId, deliveryBody)
@@ -1498,6 +1532,7 @@ export default function AdminAddVendorBrunchs() {
                 branchOnline,
                 allowPickup,
                 allowDineIn,
+                serviceSubTypeId: branchServiceSubTypeId,
               }),
             }
           : returnState
@@ -1530,6 +1565,8 @@ export default function AdminAddVendorBrunchs() {
   function handleBack() {
     navigate(returnPath, { state: returnState })
   }
+
+  const branchPhone = parseAdminPhone(form.phone)
 
   return (
     <div className="px-5 pb-10 pt-4 max-[700px]:px-3">
@@ -1637,14 +1674,18 @@ export default function AdminAddVendorBrunchs() {
               />
             </Field>
 
-            <Field label="Phone">
-              <input
-                className={inputClass}
-                value={form.phone}
-                onChange={(e) => updateField('phone', e.target.value)}
-                placeholder="+973 1770 0001"
+            <div className="block min-w-0">
+              <span className={labelClass}>Phone</span>
+              <AdminPhoneField
+                countryCode={branchPhone.countryCode}
+                phone={branchPhone.phone}
+                placeholder="1770 0001"
+                onChange={({ countryCode, phone }) => {
+                  const digits = String(phone || '').replace(/\D/g, '')
+                  updateField('phone', digits ? formatAdminPhoneDisplay(countryCode, digits) : '')
+                }}
               />
-            </Field>
+            </div>
 
             <div className="col-span-2 max-[700px]:col-span-1">
               <AdminBranchLocationPicker
@@ -1799,6 +1840,9 @@ export default function AdminAddVendorBrunchs() {
             vendorId={vendorId}
             locationId={useRealBranchApi && !isNewBranch ? branchId : null}
             storeTypeName={storeTypeName}
+            storeTypeSlug={storeTypeSlug}
+            serviceSubTypeId={branchServiceSubTypeId}
+            onServiceSubTypeIdChange={setBranchServiceSubTypeId}
             disabled={loading}
             supportedOrderModes={branchOrderModeCodes}
             previewReady={orderModesReady}
