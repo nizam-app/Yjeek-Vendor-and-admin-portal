@@ -641,6 +641,8 @@ export const endpoints = {
        * @param {string} customerId
        */
       support: (customerId) => `/admin/customers/${encodeURIComponent(customerId)}/support`,
+      supportTicket: (customerId, ticketId) =>
+        `/admin/customers/${encodeURIComponent(customerId)}/support/${encodeURIComponent(ticketId)}`,
       /**
        * Confirmed: POST /admin/customers/:customerId/suspend
        * Body: { reason, duration, notifyCustomer }

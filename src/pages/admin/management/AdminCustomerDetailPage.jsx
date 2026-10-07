@@ -360,7 +360,7 @@ export default function AdminCustomerDetailPage() {
           {supportLoading && !supportForTab ? (
             <p className="py-10 text-center text-[13px] text-[#7c8780]">Loading support tickets…</p>
           ) : (
-            <AdminCustomerSupport support={supportForTab} />
+            <AdminCustomerSupport support={supportForTab} customerId={customerId} />
           )}
         </div>
       ) : (

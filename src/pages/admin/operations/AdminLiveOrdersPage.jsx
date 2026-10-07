@@ -1254,6 +1254,11 @@ export default function AdminLiveOrdersPage() {
     setActiveChats((prev) => prev.filter((item) => item.conversationId !== conversationId))
   }
 
+  function handleChatStatusChanged(conversationId) {
+    closeChatPanel(conversationId)
+    refetchChats()
+  }
+
   const openOrderChat = (order, preferredRole) => {
     const role = preferredRole || order.contactType || 'Customer'
     const conversationId = resolveOrderConversationId(order, role)
@@ -1337,6 +1342,7 @@ export default function AdminLiveOrdersPage() {
           chats={activeChats}
           onClose={closeChatPanel}
           onMarkedRead={handleChatMarkedRead}
+          onStatusChanged={handleChatStatusChanged}
         />
       </>
     )
@@ -1551,6 +1557,7 @@ export default function AdminLiveOrdersPage() {
         chats={activeChats}
         onClose={closeChatPanel}
         onMarkedRead={handleChatMarkedRead}
+        onStatusChanged={handleChatStatusChanged}
       />
       {podApprovalOrderId ? (
         <AdminPodCashApprovalModal

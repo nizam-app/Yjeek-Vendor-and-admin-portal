@@ -14,7 +14,7 @@ function channelLabel(chat) {
  * Renders up to two AdminChatPanel instances with desktop side-by-side offsets.
  * On narrow viewports, shows a Customer/Driver switcher when both are open.
  */
-export function AdminActiveChatPanels({ chats = [], onClose, onMarkedRead }) {
+export function AdminActiveChatPanels({ chats = [], onClose, onMarkedRead, onStatusChanged }) {
   const [focusedId, setFocusedId] = useState(null)
   const [isNarrow, setIsNarrow] = useState(
     typeof window !== 'undefined' ? window.innerWidth < NARROW_BREAKPOINT : false,
@@ -85,6 +85,7 @@ export function AdminActiveChatPanels({ chats = [], onClose, onMarkedRead }) {
             dockOffset={stackOffset}
             onClose={() => onClose?.(id)}
             onMarkedRead={onMarkedRead}
+            onStatusChanged={onStatusChanged}
           />
         )
       })}

@@ -416,6 +416,11 @@ export function AdminIncidentBoard({
     setActiveChats((prev) => prev.filter((item) => item.conversationId !== conversationId))
   }
 
+  function handleChatStatusChanged(conversationId) {
+    closeChatPanel(conversationId)
+    refetchChats()
+  }
+
   function openOrderChat(order, preferredRole) {
     const role = preferredRole || order.contactType || 'Customer'
     const conversationId = resolveOrderConversationId(order, role)
@@ -481,6 +486,7 @@ export function AdminIncidentBoard({
         chats={activeChats}
         onClose={closeChatPanel}
         onMarkedRead={handleChatMarkedRead}
+        onStatusChanged={handleChatStatusChanged}
       />
     </>
   )

@@ -9,7 +9,7 @@ const STATUS_OPTIONS = ['OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED']
 /**
  * Admin floating chat panel — draggable, minimizable, status/resolve workflow.
  */
-export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) {
+export function AdminChatPanel({ chat, onClose, onMarkedRead, onStatusChanged, dockOffset = 0 }) {
   const conversationId = chat?.conversationId || chat?.id || null
   const useReal = isAdminRealApiFeature('dashboard') && Boolean(conversationId)
   const onMarkedReadRef = useRef(onMarkedRead)
@@ -117,8 +117,9 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
     conversation?.channelLabel ||
     chat?.channelLabel ||
     (chat?.channel === 'driver' ? 'Driver' : 'Customer')
-  const readOnly = Boolean(conversation?.readOnly)
   const currentStatus = conversation?.status || conversation?.lifecycle?.status || statusDraft
+  const terminalStatus = ['CLOSED', 'RESOLVED'].includes(String(currentStatus).toUpperCase())
+  const readOnly = Boolean(conversation?.readOnly) || terminalStatus
 
   function onDragStart(event) {
     if (event.button !== 0) return
@@ -182,14 +183,30 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
       const payload = {
         status: statusDraft,
         ...(resolutionNote.trim() ? { resolutionNote: resolutionNote.trim() } : {}),
-        ...(closeReason.trim() ? { closeReason: closeReason.trim() } : {}),
+        ...(closeReason.trim()
+          ? { closeReason: closeReason.trim() }
+          : statusDraft === 'CLOSED'
+            ? { closeReason: 'Closed by support' }
+            : {}),
       }
       const response = await adminChatService.updateStatus(conversationId, payload)
       setConversation((prev) => ({
         ...(prev || {}),
         status: response.data?.status || statusDraft,
         lifecycle: response.data,
+        readOnly: ['CLOSED', 'RESOLVED'].includes(String(response.data?.status || statusDraft).toUpperCase()),
       }))
+      try {
+        const refreshed = await adminChatService.getConversation(conversationId)
+        setConversation(refreshed.data)
+        setMessages(refreshed.data?.messages || [])
+        setStatusDraft(refreshed.data?.status || refreshed.data?.lifecycle?.status || statusDraft)
+      } catch {
+        // Status update succeeded even if refresh failed.
+      }
+      if (['CLOSED', 'RESOLVED'].includes(String(statusDraft).toUpperCase())) {
+        onStatusChanged?.(conversationId, statusDraft)
+      }
     } catch (err) {
       setStatusError(err?.message || 'Failed to update status.')
     } finally {
@@ -283,12 +300,18 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
           <p className="py-6 text-center text-[11px] text-[#78837c]">No messages</p>
         ) : null}
         {messages.map((item) => (
-          <div key={item.id} className={cn('flex', item.own ? 'justify-end' : 'justify-start')}>
+          <div
+            key={item.id}
+            className={cn(
+              'flex',
+              item.own ? 'justify-end' : item.system ? 'justify-center' : 'justify-start',
+            )}
+          >
             <div className={cn(
               'max-w-[78%] rounded-lg px-3 py-2.5 shadow-[0_1px_2px_rgba(20,35,25,.05)]',
               item.own
                 ? 'bg-[#e0f4e8]'
-                : item.senderRole === 'SYSTEM'
+                : item.system || item.senderRole === 'SYSTEM'
                   ? 'border border-[#e8ebe9] bg-[#f6f7f6]'
                   : 'border border-[#dfe4e0] bg-white',
             )}>
@@ -328,7 +351,11 @@ export function AdminChatPanel({ chat, onClose, onMarkedRead, dockOffset = 0 }) 
       <form onSubmit={sendMessage} className="flex w-full shrink-0 flex-col gap-1.5 border-t border-[#e1e6e2] bg-white p-3.5">
         {sendError ? <p className="text-[10px] text-[#d64044]">{sendError}</p> : null}
         {readOnly ? (
-          <p className="text-[10px] text-[#78837c]">Legacy conversation — read only.</p>
+          <p className="text-[10px] text-[#78837c]">
+            {terminalStatus
+              ? 'This chat is closed — messaging is disabled.'
+              : 'Legacy conversation — read only.'}
+          </p>
         ) : null}
         <div className="flex gap-2">
           <input
