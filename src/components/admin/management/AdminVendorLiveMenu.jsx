@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { GripVertical, Pencil, Plus, Trash2 } from 'lucide-react'
+import { GripVertical, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { ApiError } from '../../../api/errors'
+import AdminMediaImage from '../AdminMediaImage'
 import AdminModifierImageThumb, { moveListItem } from '../AdminModifierImageThumb'
+import { resolveAdminMediaUrl } from '../../../mappers/admin/mapAdminUpload'
 import { AdminItemClassSegment } from './AdminItemClassSegment'
 import AdminOptionGroupModal from './AdminOptionGroupModal'
+import AdminSuperDeleteModal from '../AdminSuperDeleteModal'
 import { adminStoresCatalogService } from '../../../services/admin/storesCatalogService'
-import { adminUploadService, validateAdminImageFile } from '../../../services/admin/uploadService'
+import {
+  ADMIN_IMAGE_UPLOAD_ACCEPT,
+  adminUploadService,
+  validateAdminImageFile,
+} from '../../../services/admin/uploadService'
 import { adminVendorService } from '../../../services/admin/vendorService'
 import { showError, showSuccess } from '../../../utils/toast'
 
@@ -133,6 +140,16 @@ function OrderMethodToggles({ value, disabled, onChange }) {
   )
 }
 
+function normalizeProductImageSlots(imageUrl, imageUrls) {
+  const urls = Array.isArray(imageUrls)
+    ? imageUrls.map((u) => String(u || '').trim()).filter(Boolean)
+    : imageUrl
+      ? [String(imageUrl).trim()]
+      : []
+  while (urls.length < 4) urls.push('')
+  return urls.slice(0, 4)
+}
+
 function emptyProductForm(categoryId = '') {
   return {
     name: '',
@@ -141,6 +158,7 @@ function emptyProductForm(categoryId = '') {
     price: '',
     catalogCategoryId: categoryId || '',
     imageUrl: '',
+    imageUrls: ['', '', '', ''],
     isActive: true,
     isAvailable: true,
     catalogLane: 'PRODUCT',
@@ -220,12 +238,51 @@ function ProductFormModal({
   error,
   onClose,
   onSave,
-  onUploadImage,
 }) {
   const [optionModal, setOptionModal] = useState(null)
   const [addonDragIndex, setAddonDragIndex] = useState(null)
+  const [uploadingSlot, setUploadingSlot] = useState(null)
+  const [uploadError, setUploadError] = useState('')
+  const fileRefs = useRef([])
+
+  useEffect(() => {
+    if (!open) return
+    setUploadError('')
+    setUploadingSlot(null)
+  }, [open])
 
   if (!open) return null
+
+  const imageSlots = normalizeProductImageSlots(form.imageUrl, form.imageUrls)
+  const imageBusy = uploadingSlot != null
+
+  const setImageAt = (slot, url) => {
+    setForm((prev) => {
+      const imageUrls = [...normalizeProductImageSlots(prev.imageUrl, prev.imageUrls)]
+      imageUrls[slot] = url || ''
+      const first = imageUrls.find((u) => String(u || '').trim()) || ''
+      return { ...prev, imageUrls, imageUrl: first }
+    })
+  }
+
+  const handleImagePick = async (slot, file) => {
+    if (!file || busy || imageBusy) return
+    setUploadError('')
+    setUploadingSlot(slot)
+    try {
+      validateAdminImageFile(file)
+      const uploaded = await adminUploadService.uploadImage(file, { feature: 'menu-import' })
+      const url = uploaded?.data?.url || uploaded?.url || ''
+      if (!url) throw new Error('Upload succeeded but no image URL was returned.')
+      setImageAt(slot, url)
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? err.message : err?.message || 'Failed to upload image.'
+      setUploadError(message)
+    } finally {
+      setUploadingSlot(null)
+    }
+  }
 
   const reorderAddOns = (from, to) => {
     setForm((prev) => ({
@@ -236,34 +293,112 @@ function ProductFormModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4">
-        <div className="flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[16px] bg-white shadow-xl">
+      <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4">
+        <div className="flex max-h-[92vh] w-full max-w-[720px] flex-col overflow-hidden rounded-[14px] bg-white shadow-[0_12px_40px_rgba(20,40,28,.18)]">
           <div className="flex items-center justify-between border-b border-[#edf0ee] px-5 py-4">
             <div>
               <h3 className="text-[15px] font-bold text-[#17231c]">
-                {mode === 'create' ? 'Add menu item' : 'Edit menu item'}
+                {mode === 'create' ? 'Add product' : 'Edit product'}
               </h3>
               <p className="mt-0.5 text-[12px] text-[#7c8780]">
-                Categories, price, class, options and add-ons — live catalog.
+                Images, category, price, class, options and add-ons — live menu catalog.
               </p>
             </div>
             <button
               type="button"
-              className="rounded-full p-2 text-[#637068] hover:bg-[#f3f5f3]"
+              className="inline-flex size-8 items-center justify-center rounded-full text-[#637068] hover:bg-[#f3f5f3] disabled:opacity-50"
               onClick={onClose}
-              disabled={busy}
+              disabled={busy || imageBusy}
               aria-label="Close"
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
             {error ? (
               <p className="text-[12px] font-medium text-[#d64044]" role="alert">
                 {error}
               </p>
             ) : null}
+
+            <div>
+              <p className="mb-2 text-[12.5px] font-bold text-[#17231c]">Images</p>
+              <div className="flex flex-wrap gap-2">
+                {imageSlots.map((url, slot) => {
+                  const isMain = slot === 0
+                  return (
+                    <div key={slot} className="relative">
+                      <input
+                        ref={(node) => {
+                          fileRefs.current[slot] = node
+                        }}
+                        type="file"
+                        accept={ADMIN_IMAGE_UPLOAD_ACCEPT}
+                        className="hidden"
+                        disabled={busy || imageBusy}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          e.target.value = ''
+                          void handleImagePick(slot, file)
+                        }}
+                      />
+                      {url ? (
+                        <div className="relative flex size-[86px] overflow-hidden rounded-[11px] bg-[#E3F2EB]">
+                          <AdminMediaImage
+                            src={resolveAdminMediaUrl(url) || url}
+                            alt=""
+                            className="absolute inset-0 size-full object-cover"
+                          />
+                          {isMain ? (
+                            <span className="absolute bottom-1.5 z-[1] inline-flex h-[21px] items-center rounded-[20px] bg-white px-2.5 text-[11px] font-medium text-[#127036]">
+                              Main
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            disabled={busy || imageBusy}
+                            onClick={() => setImageAt(slot, '')}
+                            className="absolute end-1 top-1 z-[1] flex size-5 items-center justify-center rounded-full bg-black/55 text-[11px] text-white"
+                            aria-label="Remove image"
+                          >
+                            ✕
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy || imageBusy}
+                            className="absolute inset-0 z-0"
+                            aria-label="Replace image"
+                            onClick={() => fileRefs.current[slot]?.click()}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={busy || imageBusy}
+                          onClick={() => fileRefs.current[slot]?.click()}
+                          className={`box-border flex size-[86px] flex-col items-center justify-center gap-0.5 rounded-[11px] border-[1.5px] border-dashed border-[#C7CFC7] bg-white disabled:opacity-60 ${
+                            isMain ? 'bg-[#E3F2EB]' : ''
+                          }`}
+                        >
+                          <span className="text-[20px] font-bold text-[#949C94]">＋</span>
+                          <span className="text-[10px] font-medium text-[#949C94]">
+                            {uploadingSlot === slot ? '…' : isMain ? 'Main' : 'Add'}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {uploadError ? (
+                <p className="mt-1 text-[12px] font-medium text-[#C0392B]">{uploadError}</p>
+              ) : (
+                <p className="mt-1 text-[11px] text-[#949C94]">
+                  Tap a slot to upload. The first image is shown as the main photo on the menu.
+                </p>
+              )}
+            </div>
 
             <div>
               <label className={labelClass}>Name (EN)</label>
@@ -400,40 +535,6 @@ function ProductFormModal({
                   disabled={busy}
                 />
               </div>
-            </div>
-
-            <div>
-              <label className={labelClass}>Image</label>
-              <div className="flex items-center gap-2">
-                <input
-                  className={inputClass}
-                  value={form.imageUrl}
-                  onChange={(e) => setForm((prev) => ({ ...prev, imageUrl: e.target.value }))}
-                  placeholder="Image URL"
-                  disabled={busy}
-                />
-                <label className={`${outlineBtn} cursor-pointer`}>
-                  Upload
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) onUploadImage(file)
-                      e.target.value = ''
-                    }}
-                  />
-                </label>
-              </div>
-              {form.imageUrl ? (
-                <img
-                  src={form.imageUrl}
-                  alt=""
-                  className="mt-2 h-16 w-16 rounded-[8px] object-cover"
-                />
-              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-4">
@@ -609,10 +710,15 @@ function ProductFormModal({
           </div>
 
           <div className="flex justify-end gap-2 border-t border-[#edf0ee] px-5 py-3">
-            <button type="button" className={outlineBtn} disabled={busy} onClick={onClose}>
+            <button type="button" className={outlineBtn} disabled={busy || imageBusy} onClick={onClose}>
               Cancel
             </button>
-            <button type="button" className={primaryBtn} disabled={busy} onClick={onSave}>
+            <button
+              type="button"
+              className={primaryBtn}
+              disabled={busy || imageBusy}
+              onClick={onSave}
+            >
               {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
@@ -692,6 +798,7 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
   const [classBusyKey, setClassBusyKey] = useState('')
   const [renamingId, setRenamingId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const scrollPinRef = useRef(null)
 
   useLayoutEffect(() => {
@@ -792,13 +899,15 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
     setBusy(true)
     try {
       const detail = await adminStoresCatalogService.getProduct(product.id)
+      const imageUrls = normalizeProductImageSlots(detail.imageUrl, detail.imageUrls)
       setForm({
         name: detail.name || '',
         nameAr: detail.nameAr || '',
         description: detail.description || '',
         price: detail.price != null ? String(detail.price) : '',
         catalogCategoryId: detail.catalogCategoryId || '',
-        imageUrl: detail.imageUrl || '',
+        imageUrl: imageUrls.find((u) => u) || detail.imageUrl || '',
+        imageUrls,
         isActive: detail.isActive !== false,
         isAvailable: detail.isAvailable !== false,
         availableFrom: detail.availableFrom || '',
@@ -818,22 +927,6 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
       const message =
         err instanceof ApiError ? err.message : err?.message || 'Failed to load item.'
       showError(message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const handleUploadImage = async (file) => {
-    setBusy(true)
-    setFormError('')
-    try {
-      validateAdminImageFile(file)
-      const uploaded = await adminUploadService.uploadImage(file)
-      setForm((prev) => ({ ...prev, imageUrl: uploaded.data.url }))
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : err?.message || 'Image upload failed.'
-      setFormError(message)
     } finally {
       setBusy(false)
     }
@@ -888,14 +981,19 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         })),
     }))
 
+    const imageUrls = normalizeProductImageSlots(form.imageUrl, form.imageUrls)
+      .map((u) => String(u || '').trim())
+      .filter(Boolean)
+      .slice(0, 4)
+
     const body = {
       name,
       nameAr: String(form.nameAr || '').trim() || null,
       description: String(form.description || '').trim() || null,
       price,
       catalogCategoryId: form.catalogCategoryId || null,
-      imageUrl: form.imageUrl || null,
-      imageUrls: form.imageUrl ? [form.imageUrl] : [],
+      imageUrl: imageUrls[0] || null,
+      imageUrls,
       isActive: Boolean(form.isActive),
       isAvailable: Boolean(form.isAvailable),
       ...orderMethodDefaults(form),
@@ -932,22 +1030,21 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
     }
   }
 
-  const handleDeactivate = async (product) => {
-    if (!window.confirm(`Deactivate “${product.name}”? It will be hidden from customers.`)) {
-      return
-    }
-    setBusy(true)
-    try {
-      await adminStoresCatalogService.deleteProduct(product.id)
-      showSuccess('Menu item deactivated.')
-      await load()
-    } catch (err) {
-      const message =
-        err instanceof ApiError ? err.message : err?.message || 'Failed to deactivate item.'
-      showError(message)
-    } finally {
-      setBusy(false)
-    }
+  const confirmDeleteItem = async () => {
+    const product = deleteTarget
+    if (!product?.id) return
+    const removedId = product.id
+    await adminStoresCatalogService.deleteProduct(removedId)
+    setCatalog((prev) => {
+      if (!prev?.products) return prev
+      return {
+        ...prev,
+        products: prev.products.filter((p) => p.id !== removedId),
+      }
+    })
+    setDeleteTarget(null)
+    showSuccess(`“${product.name}” was deleted from the menu.`)
+    await load({ silent: true })
   }
 
   const handleAddCategory = async () => {
@@ -1119,7 +1216,11 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         {item.imageUrl ? (
-          <img src={item.imageUrl} alt="" className="h-10 w-10 rounded-[8px] object-cover" />
+          <AdminMediaImage
+            src={resolveAdminMediaUrl(item.imageUrl) || item.imageUrl}
+            alt=""
+            className="h-10 w-10 rounded-[8px] object-cover"
+          />
         ) : (
           <div className="h-10 w-10 rounded-[8px] bg-[#f3f5f3]" />
         )}
@@ -1157,9 +1258,9 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         <button
           type="button"
           className="rounded-[8px] p-2 text-[#d64044] hover:bg-[#fdeeee]"
-          disabled={busy}
-          onClick={() => handleDeactivate(item)}
-          title="Deactivate"
+          disabled={busy || Boolean(deleteTarget)}
+          onClick={() => setDeleteTarget(item)}
+          title="Delete item"
         >
           <Trash2 size={14} />
         </button>
@@ -1438,7 +1539,19 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
         error={formError}
         onClose={() => !busy && setModalOpen(false)}
         onSave={handleSaveProduct}
-        onUploadImage={handleUploadImage}
+      />
+
+      <AdminSuperDeleteModal
+        open={Boolean(deleteTarget)}
+        title="Delete menu item?"
+        message={
+          deleteTarget
+            ? `“${deleteTarget.name}” will be permanently removed from this vendor’s menu. This cannot be undone.`
+            : ''
+        }
+        confirmLabel="Delete item"
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteItem}
       />
     </div>
   )

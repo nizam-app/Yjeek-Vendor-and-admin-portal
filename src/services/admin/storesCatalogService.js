@@ -89,7 +89,9 @@ export const adminStoresCatalogService = {
     const response = await apiClient.delete(endpoints.admin.storesCatalog.product(id), {
       ...requestOptions(options),
     })
-    return mapProduct(response?.data ?? response)
+    const data = response?.data ?? response
+    if (data?.deleted) return data
+    return mapProduct(data)
   },
 
   async getVendorCatalog(vendorId, options = {}) {
