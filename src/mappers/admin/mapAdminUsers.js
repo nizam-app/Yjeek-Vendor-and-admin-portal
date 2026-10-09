@@ -1,4 +1,5 @@
 import { ApiError } from '../../api/errors'
+import { mapPermissionFlagsToOverrides } from './permissionOverrideMap.js'
 
 const USER_COLUMNS = ['User', 'Role', 'Scope', 'Status', '2FA', 'Last active']
 
@@ -204,19 +205,52 @@ function formatScopeLevelLabel(scopeLevel) {
   const value = String(scopeLevel || '')
     .trim()
     .toUpperCase()
-  if (value === 'GLOBAL') return 'Global'
+  if (value === 'GLOBAL') return 'Global (all countries)'
   if (value === 'COUNTRY') return 'Country'
-  if (value === 'ZONE') return 'Zone'
+  if (value === 'ZONE') return 'Zone / City'
   return scopeLevel || '—'
+}
+
+const COUNTRY_CODE_TO_NAME = {
+  BH: 'Bahrain',
+  SA: 'Saudi Arabia',
+  AE: 'UAE',
+  KW: 'Kuwait',
+  QA: 'Qatar',
+  OM: 'Oman',
+}
+
+function formatCountryCodes(codes) {
+  if (!Array.isArray(codes) || !codes.length) return '—'
+  return codes
+    .map((code) => COUNTRY_CODE_TO_NAME[String(code).trim()] || String(code).trim())
+    .filter(Boolean)
+    .join(', ')
 }
 
 function mapCountriesDisplay(data = {}) {
   const level = String(data.scopeLevel || '')
     .trim()
     .toUpperCase()
-  if (level === 'GLOBAL') return data.scopeLabel || 'Global'
-  if (data.scopeLabel && String(data.scopeLabel).trim()) return String(data.scopeLabel).trim()
-  return joinList(data.countries)
+  if (level === 'GLOBAL') return 'All countries'
+  return formatCountryCodes(data.countries)
+}
+
+function attachPermissionCustomFlags(effectiveRows, roleRows) {
+  const roleByKey = new Map(
+    (Array.isArray(roleRows) ? roleRows : []).map((row) => [row.moduleKey, row]),
+  )
+  return (Array.isArray(effectiveRows) ? effectiveRows : []).map((row) => {
+    const roleRow = roleByKey.get(row.moduleKey) || {}
+    const flags = {}
+    let rowCustom = false
+    for (const action of PERMISSION_ACTIONS) {
+      const custom = Boolean(row[action]) !== Boolean(roleRow[action])
+      flags[`${action}Custom`] = custom
+      if (custom) rowCustom = true
+    }
+    return { ...row, ...flags, rowCustom }
+  })
 }
 
 function permissionsObjectToMatrixFlags(permissions = {}, moduleKey) {
@@ -345,7 +379,15 @@ export function mapAdminUserDetailResponse(data) {
       twoFa: listRow.twoFa,
       roleInheritedFrom:
         data.roleInheritedFrom || `Inherited from role — ${role.name || roleName}`,
-      permissions: mapPermissionsMatrix(data.permissionsMatrix, data.permissions),
+      hasCustomPermissionOverrides: Boolean(data.hasCustomPermissionOverrides),
+      permissionsRole: mapPermissionsMatrix(
+        data.permissionsMatrixRole,
+        data.rolePermissions,
+      ),
+      permissions: attachPermissionCustomFlags(
+        mapPermissionsMatrix(data.permissionsMatrix, data.permissions),
+        mapPermissionsMatrix(data.permissionsMatrixRole, data.rolePermissions),
+      ),
       activity: mapRecentActivity(data.recentActivity),
       raw: data,
     },
@@ -614,14 +656,4 @@ export function mapAdminUpdateUserRequest(form = {}) {
 /**
  * Checkbox flags → API permissionOverrides map (`MODULE: ["VIEW", …]`).
  */
-export function mapPermissionFlagsToOverrides(flags = {}) {
-  const overrides = {}
-  for (const [moduleKey, row] of Object.entries(flags || {})) {
-    if (!moduleKey || !row || typeof row !== 'object') continue
-    const actions = PERMISSION_ACTIONS.filter((action) => Boolean(row[action])).map((action) =>
-      action.toUpperCase(),
-    )
-    if (actions.length) overrides[moduleKey] = actions
-  }
-  return overrides
-}
+export { mapPermissionFlagsToOverrides }

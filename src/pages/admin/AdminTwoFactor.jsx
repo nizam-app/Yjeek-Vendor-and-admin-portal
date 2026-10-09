@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { firstAllowedAdminPath } from '../../config/adminNavManifest'
 import { adminAuthService } from '../../services/admin/authService'
 
 const securityFeatures = [
@@ -21,7 +22,7 @@ export default function AdminTwoFactor() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />
+  if (user?.role === 'admin') return <Navigate to={firstAllowedAdminPath(user)} replace />
   if (!pendingAdmin) return <Navigate to="/login" replace />
 
   function updateDigit(index, value) {
@@ -71,7 +72,7 @@ export default function AdminTwoFactor() {
 
     try {
       await verifyAdmin(code, { trustDevice: trusted })
-      navigate('/admin/dashboard', { replace: true })
+      navigate('/admin', { replace: true })
     } catch (err) {
       setError(adminAuthService.getVerifyErrorMessage(err))
     } finally {

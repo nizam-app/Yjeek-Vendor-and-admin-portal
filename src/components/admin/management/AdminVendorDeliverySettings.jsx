@@ -27,6 +27,7 @@ import AdminAllowedVehiclesPanel, {
   normalizeAllowedVehiclesForm,
   VEHICLE_NONE_UI_MESSAGE,
 } from './AdminAllowedVehiclesPanel'
+import AdminVendorBranchDriverRatesSummary from './AdminVendorBranchDriverRatesSummary'
 
 function applyServerPayload(data, setters) {
   const {
@@ -167,6 +168,7 @@ export default function AdminVendorDeliverySettings({
   const [applyToggle, setApplyToggle] = useState(false)
   const [modes, setModes] = useState(null)
   const [vendorAllowsScheduled, setVendorAllowsScheduled] = useState(false)
+  const [summaryRefreshToken, setSummaryRefreshToken] = useState(0)
 
   const scheduledEnabled = Boolean(modes?.SCHEDULED?.enabled)
   const showScheduledDriverRates = scheduledEnabled && vendorAllowsScheduled
@@ -288,6 +290,7 @@ export default function AdminVendorDeliverySettings({
       setDirtyAllowedVehicles(false)
       setVehiclesError(null)
       setSaveOk(true)
+      setSummaryRefreshToken((t) => t + 1)
     } catch (err) {
       setError(formatApiErrorMessage(err, 'Failed to save vendor delivery settings.'))
     } finally {
@@ -353,6 +356,7 @@ export default function AdminVendorDeliverySettings({
       )
       setPushModalOpen(false)
       setApplyToggle(false)
+      setSummaryRefreshToken((t) => t + 1)
     } catch (err) {
       setPushModalError(formatApiErrorMessage(err, 'Failed to push delivery settings.'))
     } finally {
@@ -364,10 +368,12 @@ export default function AdminVendorDeliverySettings({
     <div className="rounded-[14px] border border-[#eceeec] bg-white px-5 py-5 shadow-[0_1px_2px_rgba(20,40,28,.03)]">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-[15px] font-bold text-[#17231c]">Vendor delivery details</h3>
+          <h3 className="text-[15px] font-bold text-[#17231c]">
+            Vendor template (push to branches)
+          </h3>
           <p className="mt-1 text-[12px] leading-[16px] text-[#7c8780]">
             {storeName ? `${storeName} · ` : ''}
-            Template for push · live checkout reads the{' '}
+            Push source for delivery fields · live checkout reads the{' '}
             <span className="font-semibold text-[#17231c]">{checkoutSource}</span>
           </p>
         </div>
@@ -403,6 +409,11 @@ export default function AdminVendorDeliverySettings({
         </div>
       ) : null}
 
+      <AdminVendorBranchDriverRatesSummary
+        vendorId={vendorId}
+        refreshToken={summaryRefreshToken}
+      />
+
       {showSeedBanner && storeTypeName ? (
         <div className="mb-3 rounded-[8px] border border-[#b7e4c7] bg-[#e8f7ed] px-3 py-2 text-[12px] leading-[16px] text-[#147940]">
           ✓ Pre-filled from <strong>{storeTypeName}</strong> store-type delivery defaults (which
@@ -437,8 +448,11 @@ export default function AdminVendorDeliverySettings({
           <h4 className="text-[14px] font-bold text-[#17231c]">Driver rates</h4>
           <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
             {showScheduledDriverRates
-              ? 'What Yjeek pays for the delivery leg. On-demand adds distance; scheduled is flat per vehicle.'
-              : 'What Yjeek pays for the delivery leg. On-demand adds distance.'}
+              ? 'Template driver pay. On-demand adds distance; scheduled is flat per vehicle.'
+              : 'Template driver pay for on-demand (distance-based).'}
+            {' '}
+            Editing here does not change live Champ pay until you push to branches (multi-branch)
+            or save the only branch (single-branch sync).
           </p>
         </div>
         <AdminDriverRatesPanel

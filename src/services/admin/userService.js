@@ -176,6 +176,30 @@ export const adminUserService = {
     }
   },
 
+  /** POST /admin/users/:id/clear-permission-overrides — revert to role defaults */
+  async clearPermissionOverrides(userId, options = {}) {
+    const id = String(userId || '').trim()
+    if (!id) throw new Error('User id is required.')
+    if (!useRealUsersApi()) {
+      throw new Error('Real users API is required to clear permission overrides.')
+    }
+
+    const response = await apiClient.post(
+      endpoints.admin.users.clearPermissionOverrides(id),
+      {},
+      {
+        ...options,
+        scope: 'admin',
+        feature: 'users',
+      },
+    )
+
+    return {
+      data: mapAdminUserDetailResponse(response?.data),
+      meta: response?.meta ?? null,
+    }
+  },
+
   /**
    * Reset password — omit body password to auto-generate.
    * Confirmed: POST …/reset-password {} → { reset, temporaryPassword }

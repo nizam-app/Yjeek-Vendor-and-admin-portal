@@ -792,7 +792,11 @@ export default function AdminAddChampPage() {
       {createdResult?.temporaryPassword ? (
         <div className="mb-4 rounded-[12px] border border-[#b7e4c7] bg-[#f0faf4] px-4 py-3 text-[13px] text-[#147940]">
           <p className="font-bold">
-            Champ created{createdResult.displayCode ? ` (${createdResult.displayCode})` : ''}.
+            Champ created
+            {createdResult.champId || createdResult.displayCode
+              ? ` (${createdResult.champId || createdResult.displayCode})`
+              : ''}
+            .
           </p>
           <p className="mt-1">
             Temporary password:{' '}

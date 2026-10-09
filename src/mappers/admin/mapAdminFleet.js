@@ -11,6 +11,33 @@ export {
   resolveChampSelectedSlugs,
 } from './taxonomyHelpers'
 
+const CHAMP_PUBLIC_ID_RE = /^CH\d{6}$/i
+
+/** Public fleet champ id (CH000001). Not the legacy DRV- display code. */
+export function formatPublicChampId(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return null
+  if (CHAMP_PUBLIC_ID_RE.test(raw)) return raw.toUpperCase()
+  return raw
+}
+
+function pickPublicChampId(source = {}) {
+  const candidates = [
+    source.champId,
+    source.header?.champId,
+    source.champ?.header?.champId,
+  ]
+  for (const candidate of candidates) {
+    const formatted = formatPublicChampId(candidate)
+    if (formatted && CHAMP_PUBLIC_ID_RE.test(formatted)) return formatted
+  }
+  for (const candidate of candidates) {
+    const formatted = formatPublicChampId(candidate)
+    if (formatted) return formatted
+  }
+  return null
+}
+
 const FLEET_COLUMNS = [
   'Champ name',
   'Champ ID',
@@ -279,14 +306,11 @@ export function mapAdminFleetChampListItem(champ) {
     [source.firstName, source.lastName].filter(Boolean).join(' ').trim() ||
     '—'
 
+  const publicChampId = pickPublicChampId(source)
   const displayId =
-    source.displayCode ||
-    source.code ||
-    source.champCode ||
-    source.driverCode ||
-    source.externalId ||
-    source.champId ||
-    id
+    publicChampId ||
+    formatPublicChampId(source.champId) ||
+    '—'
 
   const supplierObj = source.supplier && typeof source.supplier === 'object' ? source.supplier : null
   const supplier =
@@ -306,6 +330,8 @@ export function mapAdminFleetChampListItem(champ) {
 
   return {
     id,
+    champId: publicChampId || formatPublicChampId(source.champId) || null,
+    displayCode: source.displayCode || null,
     displayId: String(displayId),
     name: String(name),
     initials: source.initials || initialsFromName(name),
@@ -1477,7 +1503,8 @@ export function mapAdminChampDetailResponse(data) {
     header.name ||
     [profile.firstName, profile.lastName].filter(Boolean).join(' ').trim() ||
     '—'
-  const displayCode = header.displayCode || header.champId || id
+  const publicChampId = pickPublicChampId({ champId: header.champId })
+  const displayCode = header.displayCode || null
   const vehicle = mapVehicleLabel({ vehicle: profile.vehicle, vehicleType: profile.vehicle?.type })
   const supplierObj = header.supplier && typeof header.supplier === 'object' ? header.supplier : null
   const supplierName = supplierObj?.name || '—'
@@ -1552,6 +1579,7 @@ export function mapAdminChampDetailResponse(data) {
 
   return {
     id,
+    champId: publicChampId || formatPublicChampId(header.champId),
     displayCode,
     name: String(name),
     initials: initialsFromName(name),
@@ -1603,7 +1631,7 @@ export function mapAdminChampDetailResponse(data) {
     tabs: ['Overview', 'Earnings', 'Documents', 'SLA'],
     profile: [
       ['Full name', name],
-      ['Champ ID', displayCode],
+      ['Champ ID', publicChampId || formatPublicChampId(header.champId) || '—'],
       ['Phone', phone],
       ['CPR', cpr],
       ['Vehicle type', vehicle],

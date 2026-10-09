@@ -1,5 +1,7 @@
 import { Navigate, Route } from 'react-router-dom'
 import AdminLayout from '../layout/AdminLayout'
+import { AdminIndexRedirect } from './AdminIndexRedirect'
+import { AdminPermissionOutlet } from './AdminPermissionOutlet'
 import AdminDashboardPage from '../pages/admin/dashboard/AdminDashboardPage'
 import AdminLiveOrdersPage from '../pages/admin/operations/AdminLiveOrdersPage'
 import AdminScheduledOrdersPage from '../pages/admin/operations/AdminScheduledOrdersPage'
@@ -66,7 +68,8 @@ import AdminAccountPage from '../pages/admin/AdminAccountPage'
 /** Nested under RequireRole(admin). Relative children under /admin. */
 export const adminRoutes = (
   <Route path="/admin" element={<AdminLayout />}>
-    <Route index element={<Navigate to="/admin/dashboard" replace />} />
+    <Route index element={<AdminIndexRedirect />} />
+    <Route element={<AdminPermissionOutlet />}>
     <Route path="account" element={<AdminAccountPage />} />
     <Route path="dashboard" element={<AdminDashboardPage />} />
     <Route path="live-orders" element={<AdminLiveOrdersPage />} />
@@ -153,5 +156,6 @@ export const adminRoutes = (
     <Route path="users" element={<AdminUsersPage />} />
     <Route path="reports" element={<AdminReportsPage />} />
     <Route path="settings" element={<AdminSettingsPage />} />
+    </Route>
   </Route>
 )

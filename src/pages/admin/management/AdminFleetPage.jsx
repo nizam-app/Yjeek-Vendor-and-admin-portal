@@ -6,6 +6,7 @@ import motoBikeIcon from '../../../assets/moto_bike.png'
 import eyeIcon from '../../../assets/👁.png'
 import { useApiResource } from '../../../hooks/useApiResource'
 import { useAuth } from '../../../context/AuthContext'
+import { useAdminCan } from '../../../hooks/useAdminCan'
 import { isSuperAdminUser } from '../../../mappers/admin/authMapper'
 import { apiConfig, isAdminRealApiFeature } from '../../../api/config'
 import { formatApiErrorMessage } from '../../../api/errors'
@@ -256,6 +257,8 @@ function ChampRowMenu({
 export default function AdminFleetPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { can } = useAdminCan()
+  const canCreateChamp = can('FLEET_MANAGEMENT', 'CREATE')
   const canDelete = isSuperAdminUser(user)
   // Prefer real fleet APIs when feature flagged OR when admin mocks are fully off
   // (avoids dead GET /admin/management?type=fleet which does not exist on backend).
@@ -444,14 +447,16 @@ export default function AdminFleetPage() {
             <Bell size={14} strokeWidth={2} className="text-[#c4841a]" />
             Notify
           </button>
-          <button
-            type="button"
-            onClick={() => navigate('/admin/fleet/new')}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
-          >
-            <Plus size={14} strokeWidth={2.2} />
-            {data?.action || 'Add champ'}
-          </button>
+          {canCreateChamp ? (
+            <button
+              type="button"
+              onClick={() => navigate('/admin/fleet/new')}
+              className="inline-flex h-[34px] items-center gap-1.5 rounded-full bg-[#1aa054] px-4 text-[12px] font-bold text-white shadow-[0_1px_2px_rgba(20,40,28,.15)] hover:bg-[#158a47]"
+            >
+              <Plus size={14} strokeWidth={2.2} />
+              {data?.action || 'Add champ'}
+            </button>
+          ) : null}
         </div>
       </div>
 

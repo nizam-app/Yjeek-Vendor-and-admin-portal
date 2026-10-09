@@ -1,113 +1,20 @@
-import {
-  Activity,
-  BarChart3,
-  Bike,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  CircleGauge,
-  Clock3,
-  LogOut,
-  Megaphone,
-  PanelTop,
-  Settings,
-  ShieldCheck,
-  ShoppingBag,
-  Store,
-  Users,
-  Workflow,
-} from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight, CircleGauge, LogOut } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { AdminShellProvider, useAdminShell } from '../context/AdminShellContext'
 import { cn } from '../components/admin/cn'
 import { AdminTopbarTools } from '../components/admin/AdminTopbarTools'
+import {
+  ADMIN_PAGE_TITLES,
+  filterAdminNavForUser,
+  firstAllowedAdminPath,
+} from '../config/adminNavManifest'
+import { adminNavIcon } from '../config/adminNavIcons'
 
 const SIDEBAR_COLLAPSED_KEY = 'admin-sidebar-collapsed'
 
-const dashboardChildren = [
-  ['Full Overview', '/admin/dashboard'],
-  ['Live orders', '/admin/live-orders'],
-  ['Scheduled', '/admin/scheduled'],
-  ['Pickup', '/admin/pickup'],
-  ['Dine-in', '/admin/dine-in'],
-  ['Services', '/admin/services'],
-]
-
-const navItems = [
-  ['Vendor Management', '/admin/vendors', ShoppingBag],
-  ['Store Management', '/admin/stores', Store],
-  ['Fleet Management', '/admin/fleet', Bike],
-  ['Customer Management', '/admin/customers', Users],
-  ['Marketing', '/admin/marketing', Megaphone],
-  ['SLA Models', '/admin/sla-models', Clock3],
-  ['Automation', '/admin/automation', Workflow],
-  ['UI Editor', '/admin/ui-editor?tab=banners', PanelTop],
-  ['Users', '/admin/users', ShieldCheck],
-  ['Reports', '/admin/reports', BarChart3],
-  ['Settings', '/admin/settings', Settings],
-]
-
-const pageTitles = {
-  '/admin/dashboard': 'Live Dashboard',
-  '/admin/live-orders': 'Live Dashboard',
-  '/admin/scheduled': 'Scheduled Orders',
-  '/admin/pickup': 'Live Dashboard',
-  '/admin/dine-in': 'Live Dashboard',
-  '/admin/services': 'Live Dashboard',
-  '/admin/vendors': 'Vendor Management',
-  '/admin/vendors/new': 'Vendor Management',
-  '/admin/stores': 'Store Management',
-  '/admin/stores/new': 'Store Management',
-  '/admin/stores/products': 'Store Management · Products',
-  '/admin/fleet': 'Fleet Management · Champs',
-  '/admin/fleet/new': 'Fleet Management · Champs',
-  '/admin/fleet/notify': 'Fleet Management · Champs',
-  '/admin/fleet/suppliers': 'Fleet Management · Suppliers',
-  '/admin/fleet/suppliers/new': 'Fleet Management · Suppliers',
-  '/admin/customers': 'Customer Management',
-  '/admin/marketing': 'Marketing · Push',
-  '/admin/marketing/notifications/customers': 'Marketing · Push',
-  '/admin/marketing/notifications/vendors': 'Vendor Management',
-  '/admin/marketing/promo-codes': 'Marketing · Promo codes',
-  '/admin/marketing/promo-codes/new': 'Marketing · Create promo code',
-  '/admin/marketing/promo-categories': 'Marketing · Promo categories',
-  '/admin/marketing/geofence': 'Marketing · Geofence offers',
-  '/admin/marketing/geofence/new': 'Marketing · New geofence offer',
-  '/admin/marketing/geofence/:campaignId/edit': 'Marketing · Edit geofence offer',
-  '/admin/marketing/cashback': 'Marketing · Cashback',
-  '/admin/marketing/referral': 'Marketing · Referral',
-  '/admin/marketing/vouchers': 'Marketing · Vouchers',
-  '/admin/marketing/campaigns': 'Marketing · Campaigns',
-  '/admin/marketing/banners': 'Marketing · Banners',
-  '/admin/marketing/spin-wheel': 'Marketing · Spin Wheel',
-  '/admin/marketing/vendor-promotions': 'Marketing · Vendor promotions',
-  '/admin/sla-models': 'SLA Models · Vendor SLA',
-  '/admin/sla-models/champ': 'SLA Models · Champ SLA',
-  '/admin/sla-models/dispatcher': 'SLA Models · Dispatcher SLA',
-  '/admin/sla-models/commercial': 'SLA Models · Delivery & fees',
-  '/admin/automation': 'Automation · Dispatch Rules',
-  '/admin/automation/dispatch-rules': 'Automation · Dispatch Rules',
-  '/admin/automation/champ-scoring': 'Automation · Champ Scoring',
-  '/admin/automation/stacking': 'Automation · Stacking',
-  '/admin/automation/radius-expansion': 'Automation · Radius Expansion',
-  '/admin/automation/vendor-status': 'Automation · Vendor Status',
-  '/admin/automation/pay-on-delivery': 'Automation · Pay on Delivery',
-  '/admin/automation/scheduled-tiers': 'Automation · Scheduled Tiers',
-  '/admin/automation/champ-status': 'Automation · Champ Status',
-  '/admin/automation/audit-log': 'Automation · Audit Log',
-
-  '/admin/ui-editor': 'UI Editor',
-  '/admin/users': 'Users & Roles · Users',
-  '/admin/users/new': 'Users & Roles · Create user',
-  '/admin/users/roles/new': 'Users & Roles · Create role',
-  '/admin/users/roles': 'Users & Roles · Roles',
-  '/admin/users/activity': 'Users & Roles · Activity log',
-  '/admin/reports': 'Reports · Orders',
-  '/admin/settings': 'Settings · General',
-  '/admin/account': 'Account',
-}
+const pageTitles = ADMIN_PAGE_TITLES
 
 function readCollapsedPreference() {
   try {
@@ -133,8 +40,14 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { attemptNavigation } = useAdminShell()
-  const dashboardActive = dashboardChildren.some(([, to]) => pathname === to || pathname.startsWith(`${to}/`))
+  const { dashboard, topLevel } = useMemo(() => filterAdminNavForUser(user), [user])
+  const dashboardChildren = dashboard?.children ?? []
+  const dashboardHome = dashboardChildren[0]?.path || firstAllowedAdminPath(user)
+  const dashboardActive = dashboardChildren.some(
+    (child) => pathname === child.path || pathname.startsWith(`${child.path}/`),
+  )
   const [dashboardOpen, setDashboardOpen] = useState(dashboardActive)
+  const DashboardIcon = adminNavIcon(dashboard?.iconId || 'Activity')
 
   useEffect(() => {
     if (dashboardActive) setDashboardOpen(true)
@@ -182,126 +95,124 @@ function AdminSidebar({ collapsed, onToggleCollapsed }) {
       </div>
 
       <nav className={cn('flex-1 overflow-y-auto pb-2', collapsed && 'w-full')}>
-        {collapsed ? (
-          <NavLink
-            to="/admin/dashboard"
-            title="Live Dashboard"
-            onClick={(event) =>
-              guardedNavClick(event, {
-                to: '/admin/dashboard',
-                pathname,
-                navigate,
-                attemptNavigation,
-                end: true,
-              })
-            }
-            className={() =>
-              cn(
-                'mx-auto mb-0.5 flex h-9 w-9 items-center justify-center rounded-[9px] border transition',
-                dashboardActive
-                  ? 'border-[#168b4a] bg-[#173a2c] text-[#f3faf5]'
-                  : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white',
-              )
-            }
-          >
-            <Activity
-              size={15}
-              strokeWidth={1.8}
-              className={dashboardActive ? 'text-[#2EC75E]' : 'text-white'}
-            />
-          </NavLink>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => setDashboardOpen((open) => !open)}
-              className={`flex h-[36px] w-full items-center gap-2.5 rounded-[9px] border px-2.5 text-[13px] font-medium transition ${
-                dashboardActive
-                  ? 'border-[#168b4a] bg-[#173a2c] text-[#f3faf5]'
-                  : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
-              }`}
+        {dashboard ? (
+          collapsed ? (
+            <NavLink
+              to={dashboardHome}
+              title={dashboard.label}
+              onClick={(event) =>
+                guardedNavClick(event, {
+                  to: dashboardHome,
+                  pathname,
+                  navigate,
+                  attemptNavigation,
+                  end: true,
+                })
+              }
+              className={() =>
+                cn(
+                  'mx-auto mb-0.5 flex h-9 w-9 items-center justify-center rounded-[9px] border transition',
+                  dashboardActive
+                    ? 'border-[#168b4a] bg-[#173a2c] text-[#f3faf5]'
+                    : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white',
+                )
+              }
             >
-              <Activity size={15} strokeWidth={1.8} className={`${dashboardActive ? 'text-[#2EC75E]' : 'text-white'}`} />
-              <span className="min-w-0 flex-1 text-left">Live Dashboard</span>
-              <ChevronDown
-                size={12}
+              <DashboardIcon
+                size={15}
                 strokeWidth={1.8}
-                className={`shrink-0 transition-transform ${dashboardOpen ? 'rotate-0' : '-rotate-90'}`}
+                className={dashboardActive ? 'text-[#2EC75E]' : 'text-white'}
               />
-            </button>
-            {dashboardOpen ? (
-              <div className="mb-0.5">
-                {dashboardChildren.map(([label, to]) => (
-                  <NavLink
-                    key={to}
-                    to={to}
-                    end={to !== '/admin/scheduled'}
-                    onClick={(event) =>
-                      guardedNavClick(event, {
-                        to,
-                        pathname,
-                        navigate,
-                        attemptNavigation,
-                        end: to !== '/admin/scheduled',
-                      })
-                    }
-                    className={({ isActive }) =>
-                      `flex h-[27px] mt-1 items-center gap-2 rounded-sm px-[34px] text-[12.5px] font-medium transition ${
-                        isActive || (to === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
-                          ? 'bg-[#28473a] font-medium text-white'
-                          : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
-                      }`
-                    }
-                  >
-                    <span className="h-[3px] w-[3px] rounded-full bg-current" />
-                    {label}
-                  </NavLink>
-                ))}
-              </div>
-            ) : null}
-          </>
-        )}
-        {navItems.map(([label, to, Icon, badge]) => (
-          <NavLink
-            key={to}
-            to={to}
-            title={collapsed ? label : undefined}
-            onClick={(event) =>
-              guardedNavClick(event, { to, pathname, navigate, attemptNavigation })
-            }
-            className={({ isActive }) =>
-              cn(
-                'flex items-center rounded-[9px] border text-[13px] font-medium transition',
-                collapsed
-                  ? 'mx-auto mb-0.5 h-9 w-9 justify-center px-0'
-                  : 'h-[38px] gap-2.5 px-2.5',
-                isActive
-                  ? 'border-[#168b4a] bg-[#173a2c] font-medium text-[#f3faf5]'
-                  : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white',
-              )
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <Icon
+            </NavLink>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setDashboardOpen((open) => !open)}
+                className={`flex h-[36px] w-full items-center gap-2.5 rounded-[9px] border px-2.5 text-[13px] font-medium transition ${
+                  dashboardActive
+                    ? 'border-[#168b4a] bg-[#173a2c] text-[#f3faf5]'
+                    : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white'
+                }`}
+              >
+                <DashboardIcon
                   size={15}
                   strokeWidth={1.8}
-                  className={isActive ? 'text-[#2EC75E]' : undefined}
+                  className={dashboardActive ? 'text-[#2EC75E]' : 'text-white'}
                 />
-                {!collapsed ? (
-                  <>
-                    <span className="min-w-0 flex-1">{label}</span>
-                    {badge ? (
-                      <span className="shrink-0 rounded-[10px] bg-[#CAA34D] px-1.5 py-px text-[9px] font-bold leading-none text-white">
-                        {badge}
-                      </span>
-                    ) : null}
-                  </>
-                ) : null}
-              </>
-            )}
-          </NavLink>
-        ))}
+                <span className="min-w-0 flex-1 text-left">{dashboard.label}</span>
+                <ChevronDown
+                  size={12}
+                  strokeWidth={1.8}
+                  className={`shrink-0 transition-transform ${dashboardOpen ? 'rotate-0' : '-rotate-90'}`}
+                />
+              </button>
+              {dashboardOpen ? (
+                <div className="mb-0.5">
+                  {dashboardChildren.map((child) => (
+                    <NavLink
+                      key={child.path}
+                      to={child.path}
+                      end={child.path !== '/admin/scheduled'}
+                      onClick={(event) =>
+                        guardedNavClick(event, {
+                          to: child.path,
+                          pathname,
+                          navigate,
+                          attemptNavigation,
+                          end: child.path !== '/admin/scheduled',
+                        })
+                      }
+                      className={({ isActive }) =>
+                        `flex h-[27px] mt-1 items-center gap-2 rounded-sm px-[34px] text-[12.5px] font-medium transition ${
+                          isActive ||
+                          (child.path === '/admin/scheduled' && pathname.startsWith('/admin/scheduled/'))
+                            ? 'bg-[#28473a] font-medium text-white'
+                            : 'text-[#c4d0c9] hover:bg-[#1a392d] hover:text-white'
+                        }`
+                      }
+                    >
+                      <span className="h-[3px] w-[3px] rounded-full bg-current" />
+                      {child.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          )
+        ) : null}
+        {topLevel.map((item) => {
+          const Icon = adminNavIcon(item.iconId)
+          const to = item.path
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              title={collapsed ? item.label : undefined}
+              onClick={(event) =>
+                guardedNavClick(event, { to, pathname, navigate, attemptNavigation })
+              }
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center rounded-[9px] border text-[13px] font-medium transition',
+                  collapsed
+                    ? 'mx-auto mb-0.5 h-9 w-9 justify-center px-0'
+                    : 'h-[38px] gap-2.5 px-2.5',
+                  isActive
+                    ? 'border-[#168b4a] bg-[#173a2c] font-medium text-[#f3faf5]'
+                    : 'border-transparent text-[#bfcac4] hover:bg-[#1a392d] hover:text-white',
+                )
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon size={15} strokeWidth={1.8} className={isActive ? 'text-[#2EC75E]' : undefined} />
+                  {!collapsed ? <span className="min-w-0 flex-1">{item.label}</span> : null}
+                </>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
 
       <div className={cn(collapsed && 'flex w-full flex-col items-center gap-1')}>

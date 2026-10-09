@@ -241,6 +241,9 @@ export default function AdminCreateRolePage() {
     form.templateId ||
     'Start from scratch'
 
+  const assignedUserCount =
+    Number(roleDetail?.raw?.users ?? roleDetail?.users ?? 0) || 0
+
   const submit = async (event) => {
     event.preventDefault()
     setSubmitError(null)
@@ -248,6 +251,13 @@ export default function AdminCreateRolePage() {
     if (!useRealUsers) {
       navigate('/admin/users/roles')
       return
+    }
+
+    if (isEdit && assignedUserCount > 0) {
+      const ok = window.confirm(
+        `This role is assigned to ${assignedUserCount} user(s). Saving permission changes updates the role for everyone on it (users with per-user overrides keep those until cleared). Assigned users must sign in again. Continue?`,
+      )
+      if (!ok) return
     }
 
     setSaving(true)
@@ -342,6 +352,17 @@ export default function AdminCreateRolePage() {
       {roleError && isEdit ? (
         <div className="mb-3 rounded-[10px] border border-[#f5c6c4] bg-[#fdebec] px-3 py-2 text-[12px] text-[#d64044]">
           {roleError.message || 'Failed to load role.'}
+        </div>
+      ) : null}
+      {isEdit && assignedUserCount > 0 ? (
+        <div className="mb-3 flex gap-2 rounded-[10px] border border-[#dce8f8] bg-[#f4f9ff] px-3 py-2.5 text-[12px] text-[#2b66a5]">
+          <Info size={16} className="mt-0.5 shrink-0" aria-hidden />
+          <p>
+            <span className="font-bold">{assignedUserCount}</span> user
+            {assignedUserCount === 1 ? '' : 's'} use this role. Permission updates apply to the
+            role for everyone assigned; users with per-user overrides keep those until cleared on
+            their profile.
+          </p>
         </div>
       ) : null}
       {submitError ? (

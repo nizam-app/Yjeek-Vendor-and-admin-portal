@@ -206,6 +206,9 @@ export const adminService = {
   updateAdminUser(userId, form, options = {}) {
     return adminUserService.updateUser(userId, form, options)
   },
+  clearAdminUserPermissionOverrides(userId, options = {}) {
+    return adminUserService.clearPermissionOverrides(userId, options)
+  },
   resetAdminUserPassword(userId, options = {}) {
     return adminUserService.resetUserPassword(userId, options)
   },
@@ -334,6 +337,9 @@ export const adminService = {
   },
   resetBranchDeliverySettingsField(vendorId, locationId, body, options = {}) {
     return adminVendorService.resetBranchDeliverySettingsField(vendorId, locationId, body, options)
+  },
+  getVendorBranchDriverRates(vendorId, options = {}) {
+    return adminVendorService.getVendorBranchDriverRates(vendorId, options)
   },
   getVendorDeliverySettings(vendorId, options = {}) {
     return adminVendorService.getVendorDeliverySettings(vendorId, options)

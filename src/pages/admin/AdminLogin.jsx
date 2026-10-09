@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Check, Eye, EyeOff, Lock } from 'lucide-react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { firstAllowedAdminPath } from '../../config/adminNavManifest'
 import { adminAuthService } from '../../services/admin/authService'
 
 const securityFeatures = [
@@ -29,7 +30,7 @@ export default function AdminLogin() {
   }, [])
 
   if (isAuthInitializing) return null
-  if (user?.role === 'admin') return <Navigate to="/admin/dashboard" replace />
+  if (user?.role === 'admin') return <Navigate to={firstAllowedAdminPath(user)} replace />
   if (user?.role === 'vendor') return <Navigate to="/dashboard" replace />
 
   async function handleSubmit(event) {
@@ -49,7 +50,7 @@ export default function AdminLogin() {
         navigate('/admin/verify', { replace: true })
         return
       }
-      navigate('/admin/dashboard', { replace: true })
+      navigate('/admin', { replace: true })
     } catch (err) {
       setError(adminAuthService.getLoginErrorMessage(err))
     } finally {

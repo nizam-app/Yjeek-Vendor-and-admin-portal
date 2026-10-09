@@ -306,6 +306,9 @@ export const endpoints = {
        * Confirmed: GET + PUT /admin/vendors/:vendorId/delivery-settings
        * @param {string} vendorId
        */
+      /** GET effective Champ driver rates per active branch */
+      branchDriverRates: (vendorId) =>
+        `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings/branch-driver-rates`,
       vendorDeliverySettings: (vendorId) =>
         `/admin/vendors/${encodeURIComponent(vendorId)}/delivery-settings`,
       /**
@@ -688,6 +691,8 @@ export const endpoints = {
        */
       resetPassword: (userId) =>
         `/admin/users/${encodeURIComponent(userId)}/reset-password`,
+      clearPermissionOverrides: (userId) =>
+        `/admin/users/${encodeURIComponent(userId)}/clear-permission-overrides`,
       /**
        * Confirmed: POST /admin/users/:id/resend-invite
        * @param {string} userId

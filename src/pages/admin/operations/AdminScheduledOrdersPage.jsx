@@ -26,9 +26,9 @@ import {
   writeScheduledBoardQuery,
 } from '../../../lib/adminScheduledBoardQuery'
 import { isAutomationRealApi } from '../../../services/admin/dispatchAutomationFeature'
+import { useAdminCan } from '../../../hooks/useAdminCan'
 
 const useAdminMocks = () => apiConfig.adminUseMockApi
-const hideScheduledAutoAssign = () => isAutomationRealApi()
 
 function normalizeScheduledView(value) {
   if (!value) return null
@@ -104,6 +104,9 @@ function mapScheduledOrderToBoardRow(order) {
 }
 
 function AdminOperationsBoard({ mode }) {
+  const { can } = useAdminCan()
+  const hideScheduledAutoAssign =
+    isAutomationRealApi() || !can('SCHEDULED_ORDERS', 'EDIT')
   const [searchParams, setSearchParams] = useSearchParams()
   const viewParamRaw = searchParams.get('view')
   const viewParam = normalizeScheduledView(viewParamRaw)
@@ -226,7 +229,7 @@ function AdminOperationsBoard({ mode }) {
                 onClear={clearBoardQuery}
                 orders={data.orders}
                 trailing={
-                  hideScheduledAutoAssign() ? null : (
+                  hideScheduledAutoAssign ? null : (
                     <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
                   )
                 }
@@ -234,7 +237,7 @@ function AdminOperationsBoard({ mode }) {
             ) : (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button className="h-[31px]">Zone: All ▾</Button>
-                {hideScheduledAutoAssign() ? null : (
+                {hideScheduledAutoAssign ? null : (
                   <Button primary className="h-[31px] shrink-0 px-4"><Zap size={12} /> Auto-assign</Button>
                 )}
               </div>
@@ -898,6 +901,9 @@ function ScheduledDispatchBoard({
   onViewChange,
   onIncidentClick,
 }) {
+  const { can } = useAdminCan()
+  const hideScheduledAutoAssign =
+    isAutomationRealApi() || !can('SCHEDULED_ORDERS', 'EDIT')
   const showMockChrome = useAdminMocks()
   const sourceOrders = Array.isArray(filteredOrders)
     ? filteredOrders
@@ -950,7 +956,7 @@ function ScheduledDispatchBoard({
             orders={data?.orders}
             align="left"
             trailing={
-              hideScheduledAutoAssign() ? null : (
+              hideScheduledAutoAssign ? null : (
                 <Button primary className="h-[31px] shrink-0 rounded-full px-4"><Zap size={11} /> Auto-assign</Button>
               )
             }
@@ -1044,7 +1050,7 @@ function ScheduledDispatchBoard({
         </DispatchSummary>
         <DispatchSummary title="Champ capacity">
           <SummaryRow label="Available tonight" value={champAvailable} success={champAvailable !== '0' && champAvailable !== '—'} />
-          {hideScheduledAutoAssign() ? null : (
+          {hideScheduledAutoAssign ? null : (
             <Button primary className="mt-2 h-8 w-full rounded-[8px]"><Zap size={11} /> Auto-assign all</Button>
           )}
         </DispatchSummary>

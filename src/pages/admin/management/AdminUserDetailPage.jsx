@@ -238,6 +238,8 @@ export default function AdminUserDetailPage() {
   const [tempPassword, setTempPassword] = useState(null)
   const [showTempPassword, setShowTempPassword] = useState(false)
   const [copiedPassword, setCopiedPassword] = useState(false)
+  /** When false, PATCH must not send permissionOverrides (avoids copying effective matrix into overrides). */
+  const [permissionsDirty, setPermissionsDirty] = useState(false)
 
   const { data, error, isLoading, refetch, setData } = useApiResource(
     () => adminService.getAdminUserDetail(userId),
@@ -278,6 +280,7 @@ export default function AdminUserDetailPage() {
     setTempPassword(null)
     setShowTempPassword(false)
     setCopiedPassword(false)
+    setPermissionsDirty(false)
   }, [userId])
 
   if (!data) return <ApiState isLoading={isLoading} error={error} onRetry={refetch} />
@@ -322,12 +325,14 @@ export default function AdminUserDetailPage() {
     setActionError('')
     setActionSuccess('')
     setEditForm(blankEditForm(detail))
+    setPermissionsDirty(false)
     setEditing(true)
   }
 
   const cancelEdit = () => {
     setEditing(false)
     setEditForm(null)
+    setPermissionsDirty(false)
     setActionError('')
   }
 
@@ -352,6 +357,7 @@ export default function AdminUserDetailPage() {
   }
 
   const onRoleChange = async (roleId) => {
+    setPermissionsDirty(false)
     patchForm({ roleId })
     if (!roleId || !useRealUsers) return
     try {
@@ -380,6 +386,7 @@ export default function AdminUserDetailPage() {
   }
 
   const togglePermission = (moduleKey, action) => {
+    setPermissionsDirty(true)
     setEditForm((current) => {
       const base = current || blankEditForm(detail)
       return {
@@ -400,7 +407,8 @@ export default function AdminUserDetailPage() {
     setActionError('')
     setActionSuccess('')
     try {
-      const result = await adminService.updateAdminUser(userId, {
+      const roleChanged = String(form.roleId || '') !== String(detail.roleId || '')
+      const updatePayload = {
         fullName: form.fullName,
         jobTitle: form.jobTitle,
         phone: form.phone,
@@ -409,11 +417,18 @@ export default function AdminUserDetailPage() {
         scopeLevel: form.scopeLevel,
         countries: form.scopeLevel === 'GLOBAL' ? [] : form.countries,
         zones: form.scopeLevel === 'ZONE' ? form.zones : [],
-        permissionOverrides: mapPermissionFlagsToOverrides(form.permissions),
-      })
+      }
+      if (permissionsDirty) {
+        updatePayload.permissionOverrides = mapPermissionFlagsToOverrides(form.permissions)
+      } else if (roleChanged) {
+        updatePayload.permissionOverrides = {}
+      }
+
+      const result = await adminService.updateAdminUser(userId, updatePayload)
       if (result?.data) setData(result.data)
       setEditing(false)
       setEditForm(null)
+      setPermissionsDirty(false)
       setActionSuccess('User updated.')
     } catch (err) {
       setActionError(formatApiErrorMessage(err, 'Failed to update user.'))
@@ -540,11 +555,33 @@ export default function AdminUserDetailPage() {
         : permissionRows)
     : permissions
 
+  const hasCustomOverrides = Boolean(detail.hasCustomPermissionOverrides)
   const roleSubtitle = editing
     ? selectedRole
-      ? `Editing permissions for ${selectedRole.name}`
-      : 'Toggle permissions for this user'
-    : detail.roleInheritedFrom || `Inherited from role — ${detail.roleFull}`
+      ? `Edits are saved as per-user overrides on top of ${selectedRole.name}`
+      : 'Toggle permissions — saved as per-user overrides'
+    : hasCustomOverrides
+      ? `Effective permissions — custom overrides on top of ${detail.roleFull}`
+      : detail.roleInheritedFrom || `Inherited from role — ${detail.roleFull}`
+
+  const handleClearPermissionOverrides = async () => {
+    const confirmed = window.confirm(
+      'Remove all custom permission overrides for this user? They will inherit permissions from their role only and must sign in again.',
+    )
+    if (!confirmed) return
+    setActionBusy('clear-overrides')
+    setActionError('')
+    setActionSuccess('')
+    try {
+      const result = await adminService.clearAdminUserPermissionOverrides(userId)
+      if (result?.data) setData(result.data)
+      setActionSuccess('Custom permission overrides cleared.')
+    } catch (err) {
+      setActionError(formatApiErrorMessage(err, 'Failed to clear overrides.'))
+    } finally {
+      setActionBusy('')
+    }
+  }
 
   return (
     <div className="px-5 py-4 pb-8 max-[700px]:px-3">
@@ -827,6 +864,28 @@ export default function AdminUserDetailPage() {
         </Card>
 
         <Card title="Permissions" subtitle={roleSubtitle}>
+          {!editing && hasCustomOverrides ? (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-[#f0e6c8] bg-[#fff9ed] px-3 py-2.5">
+              <p className="text-[12px] text-[#7a5c14]">
+                This user has custom permission overrides. Cells marked with an amber dot differ from
+                the role default.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={handleClearPermissionOverrides}
+                className="inline-flex h-[30px] shrink-0 items-center rounded-full border border-[#e8d4a8] bg-white px-3 text-[11.5px] font-bold text-[#7a5c14] hover:bg-[#fff5e0] disabled:opacity-60"
+              >
+                {actionBusy === 'clear-overrides' ? 'Clearing…' : 'Reset to role defaults'}
+              </button>
+            </div>
+          ) : null}
+          {editing ? (
+            <p className="mb-3 text-[11.5px] text-[#7c8780]">
+              Only changed modules are stored as overrides. Changing role clears overrides unless you
+              edit the matrix below.
+            </p>
+          ) : null}
           <div className="overflow-hidden rounded-[12px] border border-[#eceeec]">
             <div className="w-full max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch]">
               <table className="w-full min-w-[680px] border-collapse text-left">
@@ -876,12 +935,21 @@ export default function AdminUserDetailPage() {
                                 label={`${ACTION_LABELS[action] || action} ${entry.module}`}
                               />
                             ) : (
-                              <PermissionMark
-                                granted={Boolean(entry[action])}
-                                label={`${ACTION_LABELS[action] || action} ${entry.module}: ${
-                                  entry[action] ? 'allowed' : 'not allowed'
-                                }`}
-                              />
+                              <span className="relative inline-flex">
+                                <PermissionMark
+                                  granted={Boolean(entry[action])}
+                                  label={`${ACTION_LABELS[action] || action} ${entry.module}: ${
+                                    entry[action] ? 'allowed' : 'not allowed'
+                                  }${entry[`${action}Custom`] ? ' (custom override)' : ''}`}
+                                />
+                                {entry[`${action}Custom`] ? (
+                                  <span
+                                    className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-[#d79a1c] ring-2 ring-white"
+                                    title="Differs from role default"
+                                    aria-hidden
+                                  />
+                                ) : null}
+                              </span>
                             )}
                           </div>
                         </td>

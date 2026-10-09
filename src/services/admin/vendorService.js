@@ -982,6 +982,30 @@ export const adminVendorService = {
    * @param {string} vendorId
    * @param {{ signal?: AbortSignal }} [options]
    */
+  /**
+   * Effective on-demand driver rates per active branch (checkout SoT).
+   * Confirmed: GET /admin/vendors/:vendorId/delivery-settings/branch-driver-rates
+   *
+   * @param {string} vendorId
+   * @param {{ signal?: AbortSignal }} [options]
+   */
+  async getVendorBranchDriverRates(vendorId, options = {}) {
+    const vid = String(vendorId || '').trim()
+    if (!vid) throw new Error('Vendor id is required.')
+
+    if (!isAdminRealApiFeature('vendors')) {
+      throw new Error('Real vendors API is required to load branch driver rates.')
+    }
+
+    const response = await apiClient.get(endpoints.admin.vendors.branchDriverRates(vid), {
+      ...options,
+      scope: 'admin',
+      feature: 'vendors',
+    })
+
+    return { data: response?.data ?? null, meta: response?.meta ?? null }
+  },
+
   async getVendorDeliverySettings(vendorId, options = {}) {
     const vid = String(vendorId || '').trim()
     if (!vid) throw new Error('Vendor id is required.')

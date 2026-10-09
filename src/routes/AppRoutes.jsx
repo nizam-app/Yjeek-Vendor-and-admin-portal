@@ -4,6 +4,7 @@ import AdminLogin from '../pages/admin/AdminLogin'
 import AdminTwoFactor from '../pages/admin/AdminTwoFactor'
 import AdminAcceptInvite from '../pages/admin/AdminAcceptInvite'
 import { adminRoutes } from './AdminRoutes'
+import { firstAllowedAdminPath } from '../config/adminNavManifest'
 
 export function RequireRole({ role }) {
   const { user, isAuthInitializing } = useAuth()
@@ -14,7 +15,7 @@ export function RequireRole({ role }) {
     return <Navigate to="/login" replace />
   }
   if (user.role !== role) {
-    return <Navigate to="/admin/dashboard" replace />
+    return <Navigate to={firstAllowedAdminPath(user)} replace />
   }
   return <Outlet />
 }
@@ -24,7 +25,7 @@ function RoleHome() {
 
   if (isAuthInitializing) return null
   if (!user) return <Navigate to="/login" replace />
-  return <Navigate to="/admin/dashboard" replace />
+  return <Navigate to={firstAllowedAdminPath(user)} replace />
 }
 
 export default function AppRoutes() {

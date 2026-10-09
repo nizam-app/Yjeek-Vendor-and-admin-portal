@@ -1531,14 +1531,6 @@ export default function AdminAddVendorBrunchs() {
         })
         if (deliveryBody) {
           await adminService.updateBranchDeliverySettings(vendorId, savedBranchId, deliveryBody)
-          try {
-            const vendorDel = await adminService.getVendorDeliverySettings(vendorId)
-            if (!vendorDel?.data?.hasStoredTemplate) {
-              await adminService.updateVendorDeliverySettings(vendorId, deliveryBody)
-            }
-          } catch {
-            /* vendor template mirror is best-effort */
-          }
         }
       } else if (savedBranchId && useRealBranchApi && !showPreviewModes) {
         const deliveryOk = await deliverySettingsRef.current?.savePending?.()

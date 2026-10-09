@@ -188,7 +188,7 @@ export default function AdminChampDetailPage() {
         champName={data.name}
         champInitials={data.initials}
         champStatus={isSuspended ? 'Suspended' : data.status}
-        champCode={data.displayCode || data.id}
+        champCode={data.champId || data.displayCode || data.id}
       />
       <AdminSuspendChampModal
         open={suspendOpen}
@@ -264,7 +264,7 @@ export default function AdminChampDetailPage() {
               <Badge tone={tierTone(data.tier)}>{data.tier}</Badge>
             </div>
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12.5px] text-[#7c8780]">
-              <span>{data.displayCode || data.id}</span>
+              <span>{data.champId || data.displayCode || data.id}</span>
               <span>·</span>
               <VehicleLabel type={data.vehicle} />
               <span>·</span>
