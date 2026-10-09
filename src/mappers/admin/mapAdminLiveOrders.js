@@ -83,6 +83,14 @@ export function mapAdminLiveOrderItem(item) {
       item.podCashApproval && typeof item.podCashApproval === 'object'
         ? item.podCashApproval
         : null,
+    payOnDelivery:
+      item.payOnDelivery && typeof item.payOnDelivery === 'object'
+        ? item.payOnDelivery
+        : null,
+    riderCollection:
+      item.riderCollection && typeof item.riderCollection === 'object'
+        ? item.riderCollection
+        : null,
     manualDispatchEnabled: Boolean(item.manualDispatchEnabled),
   }
 }

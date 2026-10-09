@@ -19,6 +19,9 @@ const LOAD_KEY_FALLBACK_COLORS = {
   closed: '#737d77',
   pickup: '#35b86a',
   dropoff: '#e1a128',
+  low: '#facc15',
+  medium: '#fb923c',
+  high: '#ef4444',
 }
 
 /** Orders layer has no legend in the confirmed response — UI-only keys for pickup/dropoff. */
@@ -27,14 +30,14 @@ const DEFAULT_ORDERS_LEGEND = [
   { key: 'dropoff', label: 'Dropoff', color: '#e1a128' },
 ]
 
-export const ADMIN_DASHBOARD_MAP_API_LAYERS = ['champs', 'orders', 'vendors']
+export const ADMIN_DASHBOARD_MAP_API_LAYERS = ['champs', 'orders', 'vendors', 'heatmap']
 
 export const ADMIN_DASHBOARD_MAP_TABS = [
   { id: 'champs', label: 'Champs', api: true },
   { id: 'orders', label: 'Orders', api: true },
   { id: 'vendors', label: 'Vendors', api: true },
   { id: 'zones', label: 'Zones', api: false },
-  { id: 'heatmap', label: 'Heatmap', api: false },
+  { id: 'heatmap', label: 'Heatmap', api: true },
 ]
 
 function resolveColor(token, loadKey) {
@@ -158,6 +161,32 @@ export function mapVendorMapPoint(point, legendByKey = {}) {
  * Confirmed orders point: id, orderNumber, status, vendorName, pickup{lat,lng}, dropoff{lat,lng|null}.
  * Expands into one marker per valid coordinate (pickup and/or dropoff).
  */
+export function mapHeatmapPoint(point, legendByKey = {}) {
+  if (!point || typeof point !== 'object') return null
+
+  const lat = readCoord(point.lat)
+  const lng = readCoord(point.lng)
+  if (lat === null || lng === null) return null
+
+  const intensity = String(point.intensity || 'low').toLowerCase()
+  const color =
+    legendByKey[intensity]?.color || LOAD_KEY_FALLBACK_COLORS[intensity] || LOAD_KEY_FALLBACK_COLORS.low
+
+  return {
+    id: point.id ?? `${lat},${lng}`,
+    name: point.label || point.area || `Demand ×${point.orderCount ?? point.weight ?? 1}`,
+    area: point.area ?? null,
+    orderCount: point.orderCount ?? point.weight ?? null,
+    weight: point.weight ?? point.orderCount ?? null,
+    intensity,
+    loadKey: intensity,
+    kind: 'heatmap',
+    lat,
+    lng,
+    color,
+  }
+}
+
 export function mapOrderMapPoints(point) {
   if (!point || typeof point !== 'object') return []
 
@@ -257,6 +286,10 @@ function expandLayerPoints(layer, rawPoints, legendByKey) {
 
   if (layer === 'vendors') {
     return list.map((point) => mapVendorMapPoint(point, legendByKey)).filter(Boolean)
+  }
+
+  if (layer === 'heatmap') {
+    return list.map((point) => mapHeatmapPoint(point, legendByKey)).filter(Boolean)
   }
 
   // champs (default)

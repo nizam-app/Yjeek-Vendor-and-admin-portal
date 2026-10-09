@@ -232,6 +232,30 @@ export function AdminOpsOrderCard({
         </div>
       ) : null}
 
+      {order.riderCollection?.riderPaymentDisplay === 'PAID' ||
+      order.riderCollection?.onlinePaymentSettled ? (
+        <p className="mb-1.5 text-[9px] font-semibold leading-4 text-[#24834e]">
+          Paid online — no cash collection
+        </p>
+      ) : order.payOnDelivery?.collectableBhd != null ? (
+        <p
+          className={cn(
+            'mb-1.5 text-[9px] font-semibold leading-4',
+            order.payOnDelivery.collectionStatus === 'collected'
+              ? 'text-[#24834e]'
+              : 'text-[#92400e]',
+          )}
+        >
+          {order.payOnDelivery.collectionStatus === 'collected'
+            ? `Pay on Delivery · collected BHD ${Number(order.payOnDelivery.collectedBhd ?? order.payOnDelivery.collectableBhd).toFixed(3)}`
+            : `Pay on Delivery · collect BHD ${Number(order.payOnDelivery.collectableBhd).toFixed(3)}`}
+        </p>
+      ) : order.riderCollection?.cashCollectionRequired ? (
+        <p className="mb-1.5 text-[9px] font-semibold leading-4 text-[#92400e]">
+          Pay on Delivery · collect at door
+        </p>
+      ) : null}
+
       {/* Ops overrides — POD approval / Stage 2+ manual dispatch during expansion */}
       {(order.podCashApproval?.status === 'PENDING' || order.manualDispatchEnabled) && (
         <div className="mb-1.5 flex flex-wrap gap-1.5">

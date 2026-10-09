@@ -78,11 +78,56 @@ function formatClock(iso) {
 
 function formatPayment(payment) {
   if (!payment || typeof payment !== 'object') return '—'
+  const pod = payment.payOnDelivery
+  if (pod && typeof pod === 'object' && pod.label) {
+    const status = payment.status ? String(payment.status).toLowerCase() : ''
+    return status ? `${pod.label} · ${status}` : String(pod.label)
+  }
   const method = payment.method
     ? String(payment.method).replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
     : '—'
   const status = payment.status ? String(payment.status).toLowerCase() : ''
   return status ? `${method} · ${status}` : method
+}
+
+function formatPayOnDeliveryCollection(payment, currency = 'BHD') {
+  const pod = payment?.payOnDelivery
+  if (!pod || typeof pod !== 'object') return null
+  const collectable = formatAdminMoney(pod.collectableBhd, currency)
+  if (pod.collectionStatus === 'collected' || pod.collectionConfirmed) {
+    const collected = formatAdminMoney(pod.collectedBhd ?? pod.collectableBhd, currency)
+    const at = pod.collectedAt ? formatClock(pod.collectedAt) : null
+    return at ? `Collected ${collected} at ${at}` : `Collected ${collected}`
+  }
+  return `Collect ${collectable} · pending`
+}
+
+function formatRiderCollection(payment) {
+  const rider = payment?.riderCollection
+  if (!rider || typeof rider !== 'object') return null
+  if (rider.riderPaymentDisplay === 'PAID' || rider.onlinePaymentSettled) {
+    return 'Paid online — rider must not collect cash'
+  }
+  if (rider.cashCollectionRequired) {
+    return 'Collect cash at delivery'
+  }
+  return null
+}
+
+function payOnDeliverySummaryRows(payment, currency) {
+  const pod = payment?.payOnDelivery
+  const rider = payment?.riderCollection
+  const rows = []
+  if (pod && typeof pod === 'object') {
+    rows.push(['Pay on Delivery', formatAdminMoney(pod.collectableBhd, currency)])
+    const collection = formatPayOnDeliveryCollection(payment, currency)
+    if (collection) rows.push(['Cash collection', collection])
+  }
+  const riderLine = formatRiderCollection(payment)
+  if (riderLine && (!pod || rider?.onlinePaymentSettled)) {
+    rows.push(['Rider payment', riderLine])
+  }
+  return rows
 }
 
 function formatGatewayFee(payment) {
@@ -376,10 +421,13 @@ export function mapAdminOrderDetailResponse(data) {
   const distanceLabel = distanceKm == null || Number.isNaN(distanceKm) ? '—' : `${distanceKm} km`
 
   const gatewayFeeLabel = formatGatewayFee(payment)
+  const podSummaryRows = payOnDeliverySummaryRows(payment, currency)
+
   const liveSummaryRows = [
     ['Items', `${itemCount} item${itemCount === 1 ? '' : 's'}`],
     ['Order value', orderValue],
     ['Payment', formatPayment(payment)],
+    ...podSummaryRows,
     ...(gatewayFeeLabel ? [['Gateway fee', gatewayFeeLabel]] : []),
     ['Distance', distanceLabel],
     ['Pickup', formatPickup(locations.pickup)],
@@ -391,6 +439,7 @@ export function mapAdminOrderDetailResponse(data) {
     ['Order value', orderValue],
     ['Schedule', scheduleWindow ? String(scheduleWindow) : '—'],
     ['Payment', formatPayment(payment)],
+    ...podSummaryRows,
     ...(gatewayFeeLabel ? [['Gateway fee', gatewayFeeLabel]] : []),
     ['Distance', distanceLabel],
     ['Pickup', formatPickup(locations.pickup)],
@@ -434,6 +483,10 @@ export function mapAdminOrderDetailResponse(data) {
     incidentCount: Number(data.incidentCount) || 0,
     bucket: data.bucket ?? null,
     paymentLabel: formatPayment(payment),
+    payOnDelivery:
+      payment?.payOnDelivery && typeof payment.payOnDelivery === 'object'
+        ? payment.payOnDelivery
+        : null,
     orderValue,
     orderValueAmount: (() => {
       const raw = summary.orderValue ?? totals.totalAmount ?? payment?.amount

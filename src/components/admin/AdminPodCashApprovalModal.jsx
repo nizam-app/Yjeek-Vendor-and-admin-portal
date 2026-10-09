@@ -5,7 +5,7 @@ import { formatApiErrorMessage } from '../../api/errors'
 import { showError, showSuccess } from '../../utils/toast'
 
 /**
- * Dispatcher popup when automation parks a COD order for REQUIRE_APPROVAL.
+ * Dispatcher popup when automation parks a Pay on Delivery order for REQUIRE_APPROVAL.
  */
 export default function AdminPodCashApprovalModal({ orderId, open, onClose, onDone }) {
   const [loading, setLoading] = useState(false)
@@ -38,7 +38,7 @@ export default function AdminPodCashApprovalModal({ orderId, open, onClose, onDo
     setBusy(true)
     try {
       await adminOrderService.approvePodCash(orderId)
-      showSuccess('COD assignment approved.')
+      showSuccess('Pay on Delivery assignment approved.')
       onDone?.()
       onClose?.()
     } catch (err) {
@@ -69,9 +69,9 @@ export default function AdminPodCashApprovalModal({ orderId, open, onClose, onDo
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
-        <h3 className="text-[16px] font-bold text-[#111827]">POD cash approval required</h3>
+        <h3 className="text-[16px] font-bold text-[#111827]">Pay on Delivery approval required</h3>
         <p className="mt-1 text-[12px] text-[#6b7280]">
-          Automation paused for this COD order until you approve or reject.
+          Automation paused for this Pay on Delivery order until you approve or reject.
         </p>
 
         {loading ? (
@@ -84,7 +84,7 @@ export default function AdminPodCashApprovalModal({ orderId, open, onClose, onDo
               <span className="font-semibold">Order:</span> {order?.orderNumber}
             </p>
             <p>
-              <span className="font-semibold">Order cash:</span> BHD{' '}
+              <span className="font-semibold">Collectable:</span> BHD{' '}
               {Number(order?.orderCashBhd ?? 0).toFixed(3)}
             </p>
             <p>
