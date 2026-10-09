@@ -132,19 +132,19 @@ export const adminDashboardService = {
       const settled = await Promise.allSettled([
         this.getLiveOrders({
           bucket: 'critical',
-          sort: 'time_left',
+          sort: 'newest',
           limit: 2,
           ...requestOptions,
         }),
         this.getLiveOrders({
           bucket: 'at_risk',
-          sort: 'time_left',
+          sort: 'newest',
           limit: 2,
           ...requestOptions,
         }),
         this.getLiveOrders({
           bucket: 'on_track',
-          sort: 'time_left',
+          sort: 'newest',
           limit: 2,
           ...requestOptions,
         }),
@@ -203,7 +203,7 @@ export const adminDashboardService = {
   async getLiveOrders(options = {}) {
     const {
       bucket = 'all',
-      sort = 'time_left',
+      sort = 'newest',
       limit = 50,
       region,
       q,

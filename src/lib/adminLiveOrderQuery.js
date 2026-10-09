@@ -22,9 +22,9 @@ export const LIVE_ORDER_TYPES = [
 ]
 
 export const LIVE_ORDER_SORTS = [
-  { id: 'time_left', label: 'Time left' },
   { id: 'newest', label: 'Newest' },
   { id: 'oldest', label: 'Oldest' },
+  { id: 'time_left', label: 'Time left' },
   { id: 'vendor', label: 'Vendor' },
 ]
 
@@ -58,7 +58,7 @@ export const EMPTY_LIVE_ORDER_QUERY = {
   incidentSeverities: [],
   incidentCategories: [],
   incidentUnattended: false,
-  sort: 'time_left',
+  sort: 'newest',
 }
 
 const TYPE_IDS = new Set(LIVE_ORDER_TYPES.map((item) => item.id))
@@ -82,7 +82,7 @@ function setOrDelete(params, key, value) {
 }
 
 export function parseLiveOrderQuery(searchParams) {
-  const sort = String(searchParams?.get?.('sort') || 'time_left')
+  const sort = String(searchParams?.get?.('sort') || 'newest')
   const incidentUnattended = String(searchParams?.get?.('unattended') || '') === '1'
   return {
     q: String(searchParams?.get?.('q') || ''),
@@ -92,7 +92,7 @@ export function parseLiveOrderQuery(searchParams) {
     incidentSeverities: splitCsv(searchParams?.get?.('isev')).filter((id) => INCIDENT_SEVERITIES.some((s) => s.id === id)),
     incidentCategories: splitCsv(searchParams?.get?.('icat')),
     incidentUnattended,
-    sort: SORT_IDS.has(sort) ? sort : 'time_left',
+    sort: SORT_IDS.has(sort) ? sort : 'newest',
   }
 }
 
@@ -105,7 +105,7 @@ export function writeLiveOrderQuery(searchParams, query) {
   const champIds = Array.isArray(query?.champIds) ? query.champIds.filter(Boolean) : []
   const incidentSeverities = Array.isArray(query?.incidentSeverities) ? query.incidentSeverities.filter(Boolean) : []
   const incidentCategories = Array.isArray(query?.incidentCategories) ? query.incidentCategories.filter(Boolean) : []
-  const sort = SORT_IDS.has(query?.sort) ? query.sort : 'time_left'
+  const sort = SORT_IDS.has(query?.sort) ? query.sort : 'newest'
 
   setOrDelete(next, 'q', q)
   setOrDelete(next, 'vendor', vendorIds.join(','))
@@ -115,7 +115,7 @@ export function writeLiveOrderQuery(searchParams, query) {
   setOrDelete(next, 'icat', incidentCategories.join(','))
   if (query?.incidentUnattended) next.set('unattended', '1')
   else next.delete('unattended')
-  if (sort && sort !== 'time_left') next.set('sort', sort)
+  if (sort && sort !== 'newest') next.set('sort', sort)
   else next.delete('sort')
   return next
 }
@@ -216,7 +216,7 @@ function incidentPriorityRank(order) {
 
 export function sortLiveOrders(orders, sort) {
   const list = Array.isArray(orders) ? [...orders] : []
-  const key = SORT_IDS.has(sort) ? sort : 'time_left'
+  const key = SORT_IDS.has(sort) ? sort : 'newest'
 
   list.sort((a, b) => {
     if (key === 'vendor') {

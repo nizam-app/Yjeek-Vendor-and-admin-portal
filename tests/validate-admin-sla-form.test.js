@@ -7,6 +7,19 @@ import {
 } from '../src/mappers/admin/validateAdminSlaTier.js'
 
 describe('validateAdminSlaForm', () => {
+  it('allows descending tiers for higher-tier-ordering (≥) metrics', () => {
+    const issues = validateDurationTierForm(
+      {
+        target: { operator: '≥', h: '00', m: '30', s: '00' },
+        atRisk: { operator: '≥', h: '00', m: '20', s: '00' },
+        critical: { operator: '≥', h: '00', m: '15', s: '00' },
+      },
+      true,
+    )
+
+    assert.equal(issues.length, 0)
+  })
+
   it('flags critical below at-risk for lower-is-better tiers', () => {
     const issues = validateDurationTierForm(
       {

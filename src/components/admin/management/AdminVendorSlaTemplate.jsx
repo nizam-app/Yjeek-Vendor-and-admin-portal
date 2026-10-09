@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { SLA_DURATION_HOUR_MAX, formatSlaDurationHours } from '../../../constants/adminSlaDuration'
+import { deriveTierSecondsFromTarget } from '../../../mappers/admin/slaTierDirection'
 import { cn } from '../cn'
 
 export { SLA_DURATION_HOUR_MAX } from '../../../constants/adminSlaDuration'
@@ -790,9 +791,12 @@ function secToDurationParts(totalSec, operator = '≤') {
 function durationDefaultToTier(defaultValue) {
   if (defaultValue?.target) return structuredClone(defaultValue)
   const operator = defaultValue?.operator || '≤'
+  const higherTierOrdering = operator === '≥'
   const targetSec = durationPartsToSec(defaultValue)
-  const atRiskSec = Math.max(targetSec, Math.round(targetSec * 1.67))
-  const criticalSec = Math.max(atRiskSec, Math.round(targetSec * 2.5))
+  const { atRisk: atRiskSec, critical: criticalSec } = deriveTierSecondsFromTarget(
+    targetSec,
+    higherTierOrdering,
+  )
   return {
     target: secToDurationParts(targetSec, operator),
     atRisk: secToDurationParts(atRiskSec, operator),
@@ -1190,7 +1194,7 @@ const refMoney = (key, label, amount, currency = 'BHD', operator = '≥') => ({
   default: { operator, currency, amount },
 })
 
-const scheduledTierFields = [
+const scheduledTierFieldsBase = [
   tierField('acceptance', 'Acceptance time', '00', '05', '00', '00', '08', '00', '00', '12', '00'),
   tierField('champCollection', 'Champ collection time', '00', '20', '00', '00', '28', '00', '00', '40', '00'),
   withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') }),
@@ -1209,14 +1213,18 @@ const scheduledTierFields = [
     type: 'duration',
     default: duration('00', '30', '00'),
   }),
-  withUnits({
-    key: 'paymentWindow',
-    label: 'Customer payment window (after accept)',
-    type: 'duration',
-    default: duration('00', '05', '00'),
-    hint: 'Next Day / Standard / Economy only. Same Day is always N/A (uses hot-food after-accept window).',
-  }),
 ]
+
+const scheduledPaymentWindowField = withUnits({
+  key: 'paymentWindow',
+  label: 'Customer payment window (after accept)',
+  type: 'duration',
+  skipTierGrid: true,
+  default: duration('00', '05', '00'),
+  hint: 'Next Day / Standard / Economy only.',
+})
+
+const scheduledTierFields = [...scheduledTierFieldsBase, scheduledPaymentWindowField]
 
 export const VENDOR_SLA_SECTIONS = [
   {
@@ -1259,6 +1267,7 @@ export const VENDOR_SLA_SECTIONS = [
         key: 'paymentWindow',
         label: 'Customer payment window (waiting → payment)',
         type: 'duration',
+        skipTierGrid: true,
         default: duration('00', '05', '00'),
         hint: 'On-demand and Same Day standard after-accept deadline',
       }),
@@ -1272,7 +1281,8 @@ export const VENDOR_SLA_SECTIONS = [
     fields: [
       withUnits({ key: 'acceptance', label: 'Acceptance time', type: 'duration', default: duration('00', '02', '00') }),
       withUnits({ key: 'customerWait', label: 'Customer wait time', type: 'duration', default: duration('00', '15', '00') }),
-      withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '=') }),
+      withUnits({ key: 'tablePrep', label: 'Table preparation time', type: 'duration', default: duration('00', '08', '00') }),
+      withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') }),
       {
         key: 'appPrice',
         label: 'App price vs in-store',
@@ -1288,6 +1298,7 @@ export const VENDOR_SLA_SECTIONS = [
         key: 'paymentWindow',
         label: 'Customer payment window (after accept)',
         type: 'duration',
+        skipTierGrid: true,
         default: duration('00', '05', '00'),
         hint: 'Scheduled + dine-in 5-minute payment window feature',
       }),
@@ -1300,6 +1311,7 @@ export const VENDOR_SLA_SECTIONS = [
     fields: [
       withUnits({ key: 'acceptance', label: 'Acceptance time', type: 'duration', default: duration('00', '02', '00', '<') }),
       withUnits({ key: 'customerWait', label: 'Customer wait time', type: 'duration', default: duration('00', '10', '00', '>') }),
+      withUnits({ key: 'prepMax', label: 'Prep time (max)', type: 'duration', default: duration('00', '15', '00') }),
       withUnits({ key: 'dailyOnline', label: 'Daily online hours', type: 'duration', default: duration('08', '00', '00', '≥') }),
       {
         key: 'earlyPickup',
@@ -1315,6 +1327,7 @@ export const VENDOR_SLA_SECTIONS = [
         key: 'paymentWindow',
         label: 'Customer payment window (after accept)',
         type: 'duration',
+        skipTierGrid: true,
         default: duration('00', '02', '00'),
       }),
       { key: 'onTimePrep', label: 'On-time prep', type: 'percent', default: percent('90') },
@@ -1327,7 +1340,7 @@ export const VENDOR_SLA_SECTIONS = [
     allTiersLabel: 'All tiers',
     allTiersBanner: true,
     tiers: [
-      { id: 'same-day', label: 'Same day', fields: scheduledTierFields },
+      { id: 'same-day', label: 'Same day', fields: scheduledTierFieldsBase },
       { id: 'next-day', label: 'Next day', fields: scheduledTierFields },
       { id: 'standard', label: 'Standard', fields: scheduledTierFields },
       { id: 'economy', label: 'Economy', fields: scheduledTierFields },
@@ -1527,7 +1540,6 @@ export const DISPATCHER_SLA_SECTIONS = [
       withUnits({ key: 'firstResponse', label: 'Incident first response', type: 'duration', default: duration('00', '05', '00') }),
       withUnits({ key: 'resolutionTime', label: 'Incident resolution time', type: 'duration', default: duration('00', '30', '00') }),
       { key: 'resolutionRate', label: 'Incident resolution rate', type: 'percent', default: percent('95') },
-      withUnits({ key: 'responseToChat', label: 'Response to chat', type: 'duration', default: duration('00', '02', '00') }),
       withUnits({ key: 'liveChatFirst', label: 'Live-chat first response', type: 'duration', default: duration('00', '00', '45') }),
       withUnits({
         key: 'champContactNonDelivery',
@@ -1541,14 +1553,13 @@ export const DISPATCHER_SLA_SECTIONS = [
         type: 'duration',
         default: duration('00', '00', '45'),
       }),
-      {
+      withUnits({
         key: 'vendorNonResponsive',
         label: 'Vendor non-responsive protocol',
-        type: 'select',
-        withOperator: true,
-        options: ['3 calls · 5 min', '3 calls · 3 min', '5 calls · 5 min'],
-        default: { operator: '=', option: '3 calls · 5 min' },
-      },
+        type: 'duration',
+        default: duration('00', '05', '00'),
+        hint: 'Time window before vendor non-responsive escalation',
+      }),
       withUnits({
         key: 'champAssignmentIntervention',
         label: 'Champ assignment intervention',
@@ -1561,12 +1572,6 @@ export const DISPATCHER_SLA_SECTIONS = [
         label: 'Scheduled emergency reschedule',
         type: 'duration',
         default: duration('00', '10', '00'),
-      }),
-      withUnits({
-        key: 'serviceConflictResolution',
-        label: 'Service conflict resolution',
-        type: 'duration',
-        default: duration('00', '30', '00'),
       }),
       withUnits({
         key: 'cashOutEscalation',

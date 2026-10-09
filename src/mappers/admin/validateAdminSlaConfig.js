@@ -1,7 +1,6 @@
 import { mapSlaFormToConfig } from './mapAdminSlaModels'
+import { isHigherTierOrderingApiKey } from './slaTierDirection'
 import { slaFieldErrorId, validateDurationTierSeconds } from './validateAdminSlaTier'
-
-const HIGHER_IS_BETTER_KEYS = new Set(['earlyOnlineHoursSec', 'workingHoursDailySec'])
 
 const VENDOR_BLOCK_TO_SECTION = {
   hotFoodOnDemand: 'hot-food',
@@ -17,14 +16,18 @@ const API_METRIC_TO_FORM_KEY = {
   acceptanceTimeSec: 'acceptance',
   champCollectionTimeSec: 'champCollection',
   prepTimeLimitSec: 'prepMax',
+  prepTimeLimitSecPickup: 'prepMax',
   earlyOnlineHoursSec: 'dailyOnline',
   customerIssueResponseSec: 'vendorIssue',
   foodSafetyInvestigationSec: 'nonDelivery',
+  notifyCustomerDelaySec: 'notifyDelay',
+  billQualityReviewSec: 'billQuality',
+  markReadyWithinWindowSec: 'markReady',
   customerArrivalWaitSec: 'customerWait',
-  tablePreparationSec: 'customerWait',
+  tablePreparationSec: 'tablePrep',
   customerWaitSec: 'customerWait',
-  prepTimeLimitSecPickup: 'prepMax',
   handoverSec: 'maxCustomerWait',
+  leadTimeForCancellationsSec: 'advanceCancel',
   latePickupGraceSec: 'orderHold',
   serviceLevelAgreementSec: 'providerNoShowWait',
   qualityReportWindowSec: 'qualityReport',
@@ -59,6 +62,18 @@ const DISPATCHER_MODE_TO_FORM = {
   nextDay: 'nextDay',
   standard: 'standard',
   economy: 'economy',
+}
+
+const DISPATCHER_INCIDENT_TO_FORM = {
+  chatFirstResponseSec: 'liveChatFirst',
+  champResponseSec: 'champContactNonDelivery',
+  champContactTechFailureSec: 'champContactTech',
+  vendorNonResponsiveProtocolSec: 'vendorNonResponsive',
+  champAssignmentInterventionSec: 'champAssignmentIntervention',
+  scheduledEmergencyRescheduleSec: 'scheduledEmergency',
+  serviceConflictContactSec: 'serviceConflictContact',
+  serviceConflictResolveSec: 'serviceConflictResolve',
+  cashOutFinanceEscalationSec: 'cashOutEscalation',
 }
 
 const CHAMP_PERF_TO_FORM = {
@@ -115,6 +130,10 @@ export function mapConfigPathToFormRef(pathParts) {
       return { tab: 'vendor', sectionId, tierId, fieldKey }
     }
 
+    if (block === 'services' && path[2] === 'leadTimeForCancellationsSec') {
+      return { tab: 'vendor', sectionId: 'scheduled', tierId: 'all', fieldKey: 'advanceCancel' }
+    }
+
     const fieldKey = API_METRIC_TO_FORM_KEY[path[2]] || path[2]
     return { tab: 'vendor', sectionId, tierId: null, fieldKey }
   }
@@ -138,6 +157,50 @@ export function mapConfigPathToFormRef(pathParts) {
       if (!fieldKey) return null
       return { tab: 'dispatcher', sectionId: 'assignment', tierId: null, fieldKey }
     }
+    if (path[1] === 'incidentAckSecByPriority' || path[1] === 'incidentResolveSecByPriority') {
+      const priority = path[2]
+      if (priority === 'P1') return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: 'p1AllHands' }
+      if (priority === 'P2') return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: 'firstResponse' }
+      if (priority === 'P3') {
+        return {
+          tab: 'dispatcher',
+          sectionId: 'incidents',
+          tierId: null,
+          fieldKey: path[1] === 'incidentAckSecByPriority' ? 'acknowledgeBreach' : 'resolutionPlan',
+        }
+      }
+      if (priority === 'P4' && path[1] === 'incidentResolveSecByPriority') {
+        return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: 'cashOutEscalation' }
+      }
+    }
+    const incidentField = DISPATCHER_INCIDENT_TO_FORM[path[1]]
+    if (incidentField) {
+      return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: incidentField }
+    }
+    if (path[1] === 'coverageTargetPct') {
+      return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: 'resolutionRate' }
+    }
+    if (path[1] === 'opsLifecycle' && path.length >= 3) {
+      const OPS_FIELD_TO_FORM = {
+        champDsaEvidenceReviewSec: 'champDsaEvidence',
+        champDsaResponseWindowSec: 'champDsaResponse',
+        fraudReviewSec: 'fraudReview',
+        engFixSec: 'engFix',
+        systemOutageReplySec: 'outageReply',
+        systemOutageRootCauseSec: 'outageRootCause',
+      }
+      const fieldKey = OPS_FIELD_TO_FORM[path[2]]
+      if (fieldKey) {
+        return { tab: 'dispatcher', sectionId: 'ops', tierId: null, fieldKey }
+      }
+    }
+    if (path[1] === 'vendorNonResponsiveProtocolSec') {
+      return { tab: 'dispatcher', sectionId: 'incidents', tierId: null, fieldKey: 'vendorNonResponsive' }
+    }
+  }
+
+  if (path[0] === 'vendor' && path[1] === 'hotFoodOnDemand' && path[2] === 'handoverToChampSec') {
+    return { tab: 'vendor', sectionId: 'hot-food', tierId: null, fieldKey: 'maxChampWait' }
   }
 
   return null
@@ -187,7 +250,7 @@ function walkConfigNode(node, pathParts, out) {
     typeof node.critical === 'number'
   ) {
     const metricKey = pathParts[pathParts.length - 1] || 'metric'
-    const higherIsBetter = HIGHER_IS_BETTER_KEYS.has(metricKey)
+    const higherIsBetter = isHigherTierOrderingApiKey(metricKey)
     const issues = tierIssuesFromSeconds(node.target, node.atRisk, node.critical, higherIsBetter)
     for (const issue of issues) {
       pushTierErrors(pathParts, issue.tierPart, issue.message, out)

@@ -8,19 +8,12 @@ import {
   slaFieldErrorId,
   validateDurationTierForm,
 } from './validateAdminSlaTier'
+import { resolveHigherTierOrdering } from './slaTierDirection'
 import { validateAdminSlaBeforeSave as validateMergedConfigTiers } from './validateAdminSlaConfig'
 
 export { groupSlaValidationErrors, slaFieldErrorId, validateDurationTierForm } from './validateAdminSlaTier'
 
 const TIER_GRID_FIELD_TYPES = new Set(['duration', 'durationTier'])
-
-function isHigherIsBetter(formTier, field) {
-  const fromForm =
-    formTier?.target?.operator ?? formTier?.atRisk?.operator ?? formTier?.critical?.operator ?? formTier?.operator
-  const fromDefault =
-    field?.default?.target?.operator ?? field?.default?.operator ?? field?.default?.atRisk?.operator
-  return (fromForm || fromDefault) === '≥'
-}
 
 function fieldToGridField(field) {
   return {
@@ -48,7 +41,7 @@ function walkSection(tab, section, sectionValues, sectionId, tierId, out) {
   for (const field of tierGridFields) {
     const formTier = sectionValues?.[field.key]
     if (!formTier) continue
-    const higher = isHigherIsBetter(formTier, field)
+    const higher = resolveHigherTierOrdering(field.key, formTier, field)
     const issues = validateDurationTierForm(formTier, higher)
     for (const issue of issues) {
       out.push({
