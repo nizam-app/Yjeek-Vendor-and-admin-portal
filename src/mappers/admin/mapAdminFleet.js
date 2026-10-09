@@ -1365,14 +1365,13 @@ export function mapAdminSupplierDetailResponse(data) {
 
 /**
  * Build query for GET /admin/fleet/champs.
- * Confirmed Postman: search, statusTab, vehicle, tier, category, limit
+ * Confirmed Postman: search, statusTab, vehicle, tier, category, page, limit
  */
 export function mapAdminFleetChampsListParams(filters = {}) {
   const params = {
-    limit: Number(filters.limit) || 20,
+    page: Number(filters.page) || 1,
+    limit: Number(filters.limit) || 15,
   }
-
-  if (filters.page != null) params.page = Number(filters.page) || 1
 
   const search = String(filters.search || '').trim()
   if (search) params.search = search
@@ -1436,8 +1435,14 @@ export function mapAdminFleetChampsListResponse(data, summaryStats = null, store
     rows,
     pagination: {
       page: Number(payload.page) || 1,
-      limit: Number(payload.limit) || 20,
+      limit: Number(payload.limit) || 15,
       total: Number(payload.total) || rows.length,
+      totalPages: Math.max(
+        1,
+        Math.ceil(
+          (Number(payload.total) || rows.length) / (Number(payload.limit) || 15),
+        ),
+      ),
     },
     filterOptions: {
       vehicles: [

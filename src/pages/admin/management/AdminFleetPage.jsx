@@ -19,6 +19,15 @@ import AdminTerminateChampModal from '../../../components/admin/AdminTerminateCh
 import AdminSuperDeleteModal from '../../../components/admin/AdminSuperDeleteModal'
 import { cn } from '../../../components/admin/cn'
 
+const PAGE_SIZE = 15
+
+function pageNumbers(current, total) {
+  if (total <= 5) return Array.from({ length: total }, (_, i) => i + 1)
+  if (current <= 3) return [1, 2, 3, '…', total]
+  if (current >= total - 2) return [1, '…', total - 2, total - 1, total]
+  return [1, '…', current, '…', total]
+}
+
 const statTone = {
   ink: 'text-[#17231c]',
   green: 'text-[#1aa054]',
@@ -276,6 +285,7 @@ export default function AdminFleetPage() {
   const [actionBusy, setActionBusy] = useState('')
   const [actionError, setActionError] = useState('')
   const [actionSuccess, setActionSuccess] = useState('')
+  const [page, setPage] = useState(1)
 
   const { data, error, isLoading, refetch } = useApiResource(
     () => {
@@ -286,13 +296,14 @@ export default function AdminFleetPage() {
           vehicle: vehicleFilter,
           tier: tierFilter,
           category: categoryFilter,
-          limit: 20,
+          page,
+          limit: PAGE_SIZE,
           includeSummary: true,
         })
       }
       return adminService.getManagement('fleet')
     },
-    [useRealFleet, query, statusTab, vehicleFilter, tierFilter, categoryFilter],
+    [useRealFleet, query, statusTab, vehicleFilter, tierFilter, categoryFilter, page],
   )
 
   const stats = data?.stats || []
@@ -313,7 +324,7 @@ export default function AdminFleetPage() {
     categories: [{ value: '', label: 'Categories' }],
   }
 
-  const rows = useMemo(() => {
+  const filteredRows = useMemo(() => {
     if (!data?.rows) return []
     if (useRealFleet) return data.rows
 
@@ -334,6 +345,17 @@ export default function AdminFleetPage() {
       )
     })
   }, [data, useRealFleet, statusTab, query, vehicleFilter, tierFilter, categoryFilter])
+
+  const total = useRealFleet
+    ? Number(data?.pagination?.total) || 0
+    : filteredRows.length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE) || 1)
+  const shownFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const shownTo = Math.min(page * PAGE_SIZE, total)
+
+  const rows = useRealFleet
+    ? filteredRows
+    : filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const openChamp = (champId) => {
     navigate(`/admin/fleet/${encodeURIComponent(champId)}`)
@@ -515,7 +537,10 @@ export default function AdminFleetPage() {
             <button
               key={item}
               type="button"
-              onClick={() => setStatusTab(item)}
+              onClick={() => {
+                setStatusTab(item)
+                setPage(1)
+              }}
               className={cn(
                 'h-[28px] rounded-[8px] px-3.5 text-[12px]',
                 statusTab === item
@@ -534,7 +559,10 @@ export default function AdminFleetPage() {
           placeholder="Categories"
           options={filterOptions.categories}
           value={categoryFilter}
-          onChange={setCategoryFilter}
+          onChange={(value) => {
+            setCategoryFilter(value)
+            setPage(1)
+          }}
           className="h-[32px] text-[#6B736E]"
         />
         <AdminFilterSelect
@@ -542,7 +570,10 @@ export default function AdminFleetPage() {
           placeholder="Vehicle"
           options={filterOptions.vehicles}
           value={vehicleFilter}
-          onChange={setVehicleFilter}
+          onChange={(value) => {
+            setVehicleFilter(value)
+            setPage(1)
+          }}
           className="h-[32px] text-[#6B736E]"
         />
         <AdminFilterSelect
@@ -550,7 +581,10 @@ export default function AdminFleetPage() {
           placeholder="Tier"
           options={filterOptions.tiers}
           value={tierFilter}
-          onChange={setTierFilter}
+          onChange={(value) => {
+            setTierFilter(value)
+            setPage(1)
+          }}
           className="h-[32px] text-[#6B736E]"
         />
 
@@ -558,7 +592,10 @@ export default function AdminFleetPage() {
           <Search size={14} className="text-[#9aa49d]" />
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setPage(1)
+            }}
             className="min-w-0 flex-1 border-0 bg-transparent text-[12px] text-[#17231c] outline-none placeholder:text-[#9aa49d]"
             placeholder="Search champ"
           />
@@ -669,6 +706,52 @@ export default function AdminFleetPage() {
                 </tbody>
               </table>
             </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edf0ee] px-4 py-3">
+          <p className="text-[11.5px] text-[#8a948e]">
+            Showing {shownFrom}–{shownTo} of {total.toLocaleString()} champs
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e4e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#455249] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              ‹ Prev
+            </button>
+            {pageNumbers(page, totalPages).map((item, index) =>
+              item === '…' ? (
+                <span key={`ellipsis-${index}`} className="px-1 text-[12px] text-[#8a948e]">
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={isLoading}
+                  onClick={() => setPage(item)}
+                  className={cn(
+                    'inline-flex h-[30px] min-w-[30px] items-center justify-center rounded-[8px] text-[12px] font-semibold transition',
+                    page === item
+                      ? 'bg-[#1aa054] text-white'
+                      : 'border border-[#e4e8e4] bg-white text-[#455249] hover:bg-[#f8faf8]',
+                  )}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+            <button
+              type="button"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+              className="inline-flex h-[30px] items-center rounded-[8px] border border-[#e4e8e4] bg-white px-2.5 text-[12px] font-semibold text-[#455249] disabled:cursor-not-allowed disabled:opacity-40 hover:bg-[#f8faf8]"
+            >
+              Next ›
+            </button>
+          </div>
+        </div>
           </section>
     </div>
   )
