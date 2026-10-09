@@ -6,6 +6,11 @@ import {
   DISPATCHER_SLA_SECTIONS,
   buildSlaDefaults,
 } from '../../components/admin/management/AdminVendorSlaTemplate'
+import {
+  deriveTierSecondsFromTarget,
+  isHigherTierOrderingFormKey,
+  resolveHigherTierOrderingFromFormTier,
+} from './slaTierDirection'
 
 function pad2(value) {
   return String(Math.max(0, Number.parseInt(value, 10) || 0)).padStart(2, '0')
@@ -40,9 +45,6 @@ export function secFromDuration(value) {
   return clampSlaDurationSec(h * 3600 + m * 60 + s)
 }
 
-const DEFAULT_AT_RISK_RATIO = 1.67
-const DEFAULT_CRITICAL_RATIO = 2.5
-
 export function isApiDurationTier(value) {
   return (
     value &&
@@ -53,7 +55,7 @@ export function isApiDurationTier(value) {
   )
 }
 
-export function tierFromApi(value, operator = '≤') {
+export function tierFromApi(value, operator = '≤', higherTierOrdering = false) {
   if (isApiDurationTier(value)) {
     return {
       target: durationFromSec(value.target, operator),
@@ -62,19 +64,17 @@ export function tierFromApi(value, operator = '≤') {
     }
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
-    const target = Math.max(0, Math.round(value))
-    const atRisk = Math.max(target, Math.round(target * DEFAULT_AT_RISK_RATIO))
-    const critical = Math.max(atRisk, Math.round(target * DEFAULT_CRITICAL_RATIO))
+    const spread = deriveTierSecondsFromTarget(value, higherTierOrdering)
     return {
-      target: durationFromSec(target, operator),
-      atRisk: durationFromSec(atRisk, operator),
-      critical: durationFromSec(critical, operator),
+      target: durationFromSec(spread.target, operator),
+      atRisk: durationFromSec(spread.atRisk, operator),
+      critical: durationFromSec(spread.critical, operator),
     }
   }
   return null
 }
 
-export function tierToApi(formTier) {
+export function tierToApi(formTier, fieldKey) {
   if (!formTier || typeof formTier !== 'object') return undefined
   const target = secFromDuration(formTier.target)
   const atRisk = secFromDuration(formTier.atRisk)
@@ -83,6 +83,14 @@ export function tierToApi(formTier) {
   const resolvedTarget = target ?? atRisk ?? critical ?? 0
   const resolvedAtRisk = atRisk ?? resolvedTarget
   const resolvedCritical = critical ?? resolvedAtRisk
+  const higher = resolveHigherTierOrderingFromFormTier(formTier, fieldKey)
+  if (higher) {
+    return {
+      target: resolvedTarget,
+      atRisk: Math.min(resolvedTarget, resolvedAtRisk),
+      critical: Math.min(resolvedAtRisk, resolvedCritical),
+    }
+  }
   return {
     target: resolvedTarget,
     atRisk: Math.max(resolvedTarget, resolvedAtRisk),
@@ -201,12 +209,13 @@ function setDuration(target, key, seconds, fallback, operator) {
 
 function setDurationTier(target, key, apiValue, fallback, operator) {
   const op = fallback?.[key]?.target?.operator || fallback?.[key]?.operator || operator || '≤'
-  const mapped = tierFromApi(apiValue, op)
+  const higher = isHigherTierOrderingFormKey(key) || op === '≥'
+  const mapped = tierFromApi(apiValue, op, higher)
   if (mapped) target[key] = mapped
 }
 
 function writeTierApi(target, key, formValue) {
-  const tier = tierToApi(formValue)
+  const tier = tierToApi(formValue, key)
   if (tier) target[key] = tier
 }
 
@@ -215,8 +224,8 @@ function writeScalarDurationApi(target, key, formValue) {
   if (tier) target[key] = tier.target
 }
 
-function tierFromForm(formValue) {
-  return tierToApi(formValue)
+function tierFromForm(formValue, fieldKey) {
+  return tierToApi(formValue, fieldKey)
 }
 
 function scalarSecFromForm(formValue) {
@@ -261,6 +270,112 @@ const GPS_TO_API = {
   'End of shift': 'WITHIN_WINDOW',
 }
 
+const APP_PRICE_TO_UI = {
+  IN_STORE: 'In-store price',
+  BELOW_IN_STORE: 'Below in-store price',
+  ALLOW_VARIANCE: 'Allow variance',
+}
+const APP_PRICE_TO_API = {
+  'In-store price': 'IN_STORE',
+  'Below in-store price': 'BELOW_IN_STORE',
+  'Allow variance': 'ALLOW_VARIANCE',
+}
+
+const READY_AT_PICKUP_TO_UI = {
+  CONFIRMED_TIME: 'Confirmed time',
+  ESTIMATED_WINDOW: 'Estimated window',
+  FLEXIBLE: 'Flexible',
+}
+const READY_AT_PICKUP_TO_API = {
+  'Confirmed time': 'CONFIRMED_TIME',
+  'Estimated window': 'ESTIMATED_WINDOW',
+  Flexible: 'FLEXIBLE',
+}
+
+const PREP_ACK_TO_UI = {
+  AT_T_PREP: 'At T-prep',
+  ON_BOOKING_CONFIRMED: 'On booking confirmed',
+  AT_CUTOFF: 'At cutoff',
+}
+const PREP_ACK_TO_API = {
+  'At T-prep': 'AT_T_PREP',
+  'On booking confirmed': 'ON_BOOKING_CONFIRMED',
+  'At cutoff': 'AT_CUTOFF',
+}
+
+const NO_SHOW_HANDLING_TO_UI = {
+  FULL_REFUND_SPPA: 'Full refund + SPPA',
+  PARTIAL_REFUND: 'Partial refund',
+  RESCHEDULE_ONLY: 'Reschedule only',
+}
+const NO_SHOW_HANDLING_TO_API = {
+  'Full refund + SPPA': 'FULL_REFUND_SPPA',
+  'Partial refund': 'PARTIAL_REFUND',
+  'Reschedule only': 'RESCHEDULE_ONLY',
+}
+
+const REVIEW_CYCLE_TO_UI = {
+  WEEKLY_MONTHLY: 'Weekly / Monthly',
+  WEEKLY: 'Weekly',
+  MONTHLY: 'Monthly',
+  QUARTERLY: 'Quarterly',
+}
+const REVIEW_CYCLE_TO_API = Object.fromEntries(
+  Object.entries(REVIEW_CYCLE_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
+const SILVER_INTERVENTION_TO_UI = {
+  SUPPORT_CALL: 'Support call',
+  WRITTEN_WARNING: 'Written warning',
+  PERFORMANCE_PLAN: 'Performance plan',
+}
+const SILVER_INTERVENTION_TO_API = Object.fromEntries(
+  Object.entries(SILVER_INTERVENTION_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
+const BRONZE_PLAN_TO_UI = {
+  PLAN_30_DAY: '30-day plan',
+  PLAN_14_DAY: '14-day plan',
+  PLAN_60_DAY: '60-day plan',
+}
+const BRONZE_PLAN_TO_API = Object.fromEntries(Object.entries(BRONZE_PLAN_TO_UI).map(([api, ui]) => [ui, api]))
+
+const CSS_NOTIFICATION_TO_UI = {
+  IF_OVER_THRESHOLD: 'If over threshold',
+  ALWAYS: 'Always',
+  MANUAL_ONLY: 'Manual only',
+}
+const CSS_NOTIFICATION_TO_API = Object.fromEntries(
+  Object.entries(CSS_NOTIFICATION_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
+const PERIODIC_REVIEW_TO_UI = {
+  MONTHLY: 'Monthly',
+  WEEKLY: 'Weekly',
+  QUARTERLY: 'Quarterly',
+}
+const PERIODIC_REVIEW_TO_API = Object.fromEntries(
+  Object.entries(PERIODIC_REVIEW_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
+const VENDOR_CALL_INTERVAL_TO_UI = {
+  INTERVAL_2_MIN: '2-min intervals',
+  INTERVAL_3_MIN: '3-min intervals',
+  INTERVAL_5_MIN: '5-min intervals',
+}
+const VENDOR_CALL_INTERVAL_TO_API = Object.fromEntries(
+  Object.entries(VENDOR_CALL_INTERVAL_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
+const P1_UPDATE_CYCLE_TO_UI = {
+  EVERY_15_MIN: 'Every 15 min',
+  EVERY_10_MIN: 'Every 10 min',
+  EVERY_30_MIN: 'Every 30 min',
+}
+const P1_UPDATE_CYCLE_TO_API = Object.fromEntries(
+  Object.entries(P1_UPDATE_CYCLE_TO_UI).map(([api, ui]) => [ui, api]),
+)
+
 /** Legacy scheduled prep used a clock widget; normalize to duration parts for the API mapper. */
 function normalizeScheduledPrepMax(value) {
   if (!value || typeof value !== 'object') return value
@@ -285,6 +400,7 @@ function mapScheduledTierFromApi(tier, fallback) {
   setDurationTier(next, 'acceptance', source.acceptanceTimeSec, fallback)
   setDurationTier(next, 'champCollection', source.champCollectionTimeSec, fallback)
   setDurationTier(next, 'dailyOnline', source.earlyOnlineHoursSec, fallback, '≥')
+  setDurationTier(next, 'markReady', source.markReadyWithinWindowSec, fallback)
   if (source.cutoffTime) {
     next.cutoff = clockFromApi(source.cutoffTime, fallback?.cutoff?.operator || '=')
   }
@@ -307,13 +423,15 @@ function mapScheduledTierFromApi(tier, fallback) {
 function mapScheduledTierToApi(tier, uiKey) {
   const source = asRecord(tier)
   const payload = {}
-  const acceptance = tierToApi(source.acceptance)
-  const collection = tierToApi(source.champCollection)
-  const online = tierToApi(source.dailyOnline)
+  const acceptance = tierToApi(source.acceptance, 'acceptance')
+  const collection = tierToApi(source.champCollection, 'champCollection')
+  const online = tierToApi(source.dailyOnline, 'dailyOnline')
+  const markReady = tierToApi(source.markReady, 'markReady')
   const cutoff = clockToApi(source.cutoff)
   if (acceptance) payload.acceptanceTimeSec = acceptance
   if (collection) payload.champCollectionTimeSec = collection
   if (online) payload.earlyOnlineHoursSec = online
+  if (markReady) payload.markReadyWithinWindowSec = markReady
   if (cutoff) payload.cutoffTime = cutoff
   const prepSec = secFromDuration(normalizeScheduledPrepMax(source.prepMax))
   if (prepSec != null) {
@@ -362,20 +480,35 @@ function mapVendorFromConfig(config, defaults) {
   if (hot.customerPaymentWindowSec != null) {
     hotFood.paymentWindow = durationFromSec(hot.customerPaymentWindowSec, '≤')
   }
-  if (config.handoverToChampMin != null) {
-    setDurationTier(hotFood, 'maxChampWait', Number(config.handoverToChampMin) * 60, defaults['hot-food'])
-  }
+  setDurationTier(
+    hotFood,
+    'maxChampWait',
+    hot.handoverToChampSec ??
+      (config.handoverToChampMin != null ? Number(config.handoverToChampMin) * 60 : null),
+    defaults['hot-food'],
+  )
+  setNumber(hotFood, 'geoFence', hot.vendorGeoFenceRadiusM, defaults['hot-food'], '=')
+  setDurationTier(hotFood, 'notifyDelay', hot.notifyCustomerDelaySec, defaults['hot-food'])
 
   const dineIn = { ...asRecord(defaults['dine-in']) }
   setDurationTier(dineIn, 'acceptance', dine.acceptanceTimeSec, defaults['dine-in'])
+  setDurationTier(dineIn, 'customerWait', dine.customerArrivalWaitSec, defaults['dine-in'])
   setDurationTier(
     dineIn,
-    'customerWait',
+    'tablePrep',
     dine.tablePreparationSec ?? dine.customerArrivalWaitSec,
     defaults['dine-in'],
   )
+  setDurationTier(dineIn, 'dailyOnline', dine.earlyOnlineHoursSec, defaults['dine-in'], '≥')
+  if (dine.appPriceMode && APP_PRICE_TO_UI[dine.appPriceMode]) {
+    dineIn.appPrice = {
+      operator: defaults['dine-in']?.appPrice?.operator || '≤',
+      option: APP_PRICE_TO_UI[dine.appPriceMode],
+    }
+  }
   setPercent(dineIn, 'reservationHonored', dine.orderAccuracyPct, defaults['dine-in'])
   setDurationTier(dineIn, 'billDispute', dine.issueResponseSec, defaults['dine-in'])
+  setDurationTier(dineIn, 'billQuality', dine.billQualityReviewSec, defaults['dine-in'])
   setDurationTier(dineIn, 'reservationNotice', dine.noShowGraceSec, defaults['dine-in'], '≥')
   if (dine.customerPaymentWindowSec != null) {
     dineIn.paymentWindow = durationFromSec(dine.customerPaymentWindowSec, '≤')
@@ -384,9 +517,18 @@ function mapVendorFromConfig(config, defaults) {
   const pickupValues = { ...asRecord(defaults.pickup) }
   setDurationTier(pickupValues, 'acceptance', pickup.acceptanceTimeSec, defaults.pickup, '<')
   setDurationTier(pickupValues, 'customerWait', pickup.customerWaitSec, defaults.pickup)
+  setDurationTier(pickupValues, 'prepMax', pickup.prepTimeLimitSec, defaults.pickup)
+  setDurationTier(pickupValues, 'dailyOnline', pickup.earlyOnlineHoursSec, defaults.pickup, '≥')
+  if (pickup.readyAtPickupMode && READY_AT_PICKUP_TO_UI[pickup.readyAtPickupMode]) {
+    pickupValues.earlyPickup = {
+      operator: defaults.pickup?.earlyPickup?.operator || '=',
+      option: READY_AT_PICKUP_TO_UI[pickup.readyAtPickupMode],
+    }
+  }
   setDurationTier(pickupValues, 'maxCustomerWait', pickup.handoverSec, defaults.pickup)
   setDurationTier(pickupValues, 'orderHold', pickup.latePickupGraceSec, defaults.pickup, '≥')
   setPercent(pickupValues, 'onTimePrep', pickup.orderAccuracyPct, defaults.pickup)
+  setDurationTier(pickupValues, 'notifyDelay', pickup.notifyCustomerDelaySec, defaults.pickup)
   if (pickup.customerPaymentWindowSec != null) {
     pickupValues.paymentWindow = durationFromSec(pickup.customerPaymentWindowSec, '≤')
   }
@@ -396,18 +538,46 @@ function mapVendorFromConfig(config, defaults) {
     scheduledValues[uiKey] = mapScheduledTierFromApi(scheduled[apiKey], defaults.scheduled?.[uiKey])
   })
   const scheduledAll = { ...asRecord(defaults.scheduled?.all) }
-  setPercent(scheduledAll, 'reliability', asRecord(scheduled.general).attendanceDuringDayPct, defaults.scheduled?.all)
+  const scheduledGeneral = asRecord(scheduled.general)
+  setPercent(scheduledAll, 'reliability', scheduledGeneral.attendanceDuringDayPct, defaults.scheduled?.all)
+  setDurationTier(
+    scheduledAll,
+    'advanceCancel',
+    services.leadTimeForCancellationsSec,
+    defaults.scheduled?.all,
+    '≥',
+  )
+  if (scheduledGeneral.prepAlertAckMode && PREP_ACK_TO_UI[scheduledGeneral.prepAlertAckMode]) {
+    scheduledAll.prepAck = {
+      operator: defaults.scheduled?.all?.prepAck?.operator || '=',
+      option: PREP_ACK_TO_UI[scheduledGeneral.prepAlertAckMode],
+    }
+  }
   scheduledValues.all = scheduledAll
 
   const servicesValues = { ...asRecord(defaults.services) }
   setDurationTier(servicesValues, 'acceptance', services.acceptanceTimeSec, defaults.services)
   setPercent(servicesValues, 'attendance', services.serviceAttendancePct, defaults.services)
   setRating(servicesValues, 'quality', services.serviceRating, defaults.services)
+  setPercent(servicesValues, 'lastMinuteCancel', services.lastMinuteCancellationPct, defaults.services, '≤')
+  if (services.noShowHandlingMode && NO_SHOW_HANDLING_TO_UI[services.noShowHandlingMode]) {
+    servicesValues.noShowHandling = {
+      operator: defaults.services?.noShowHandling?.operator || '=',
+      option: NO_SHOW_HANDLING_TO_UI[services.noShowHandlingMode],
+    }
+  }
   setDurationTier(
     servicesValues,
     'providerNoShowWait',
     services.serviceLevelAgreementSec,
     defaults.services,
+  )
+  setNumber(
+    servicesValues,
+    'contactAttempts',
+    services.providerNoShowContactAttempts,
+    defaults.services,
+    '=',
   )
   setDurationTier(servicesValues, 'qualityReport', services.qualityReportWindowSec, defaults.services)
   setDurationTier(servicesValues, 'damageReport', services.inventoryDamageReportWindowSec, defaults.services)
@@ -447,10 +617,11 @@ function mapChampFromConfig(config, defaults) {
     const span = Math.max(0, clockToSeconds(performance.peakHoursEnd) - clockToSeconds(performance.peakHoursStart))
     perf.peakHours = {
       duration: durationFromSec(span, defaults.performance?.peakHours?.duration?.operator || '≤'),
-      percent: percentFromPct(
-        performance.onTimeDeliveryPct,
-        defaults.performance?.peakHours?.percent?.operator || '≥',
-      ) || defaults.performance?.peakHours?.percent,
+      percent:
+        percentFromPct(
+          performance.peakHoursOnTimeTargetPct,
+          defaults.performance?.peakHours?.percent?.operator || '≥',
+        ) || defaults.performance?.peakHours?.percent,
     }
   }
   setRating(perf, 'customerRating', performance.customerRating, defaults.performance)
@@ -520,16 +691,90 @@ function mapDispatcherFromConfig(config, defaults) {
   setDurationTier(incidents, 'p1AllHands', ack.P1, defaults.incidents)
   setDurationTier(incidents, 'resolutionTime', resolve.P2 ?? resolve.P1, defaults.incidents)
   setPercent(incidents, 'resolutionRate', dispatcher.coverageTargetPct, defaults.incidents)
-  setDurationTier(incidents, 'responseToChat', dispatcher.chatFirstResponseSec, defaults.incidents)
   setDurationTier(incidents, 'liveChatFirst', dispatcher.chatFirstResponseSec, defaults.incidents)
   setDurationTier(incidents, 'champContactNonDelivery', dispatcher.champResponseSec, defaults.incidents)
   setDurationTier(incidents, 'acknowledgeBreach', ack.P3, defaults.incidents)
   setDurationTier(incidents, 'resolutionPlan', resolve.P3, defaults.incidents)
+  setDurationTier(incidents, 'champContactTech', dispatcher.champContactTechFailureSec, defaults.incidents)
+  setDurationTier(incidents, 'vendorNonResponsive', dispatcher.vendorNonResponsiveProtocolSec, defaults.incidents)
+  setDurationTier(
+    incidents,
+    'champAssignmentIntervention',
+    dispatcher.champAssignmentInterventionSec,
+    defaults.incidents,
+  )
+  setDurationTier(
+    incidents,
+    'scheduledEmergency',
+    dispatcher.scheduledEmergencyRescheduleSec,
+    defaults.incidents,
+  )
+  setDurationTier(incidents, 'cashOutEscalation', dispatcher.cashOutFinanceEscalationSec, defaults.incidents)
+  setDurationTier(incidents, 'serviceConflictContact', dispatcher.serviceConflictContactSec, defaults.incidents)
+  setDurationTier(incidents, 'serviceConflictResolve', dispatcher.serviceConflictResolveSec, defaults.incidents)
+  if (dispatcher.vendorCallIntervalMode && VENDOR_CALL_INTERVAL_TO_UI[dispatcher.vendorCallIntervalMode]) {
+    incidents.vendorCallIntervals = {
+      operator: defaults.incidents?.vendorCallIntervals?.operator || '=',
+      option: VENDOR_CALL_INTERVAL_TO_UI[dispatcher.vendorCallIntervalMode],
+    }
+  }
+  if (dispatcher.p1UpdateCycleMode && P1_UPDATE_CYCLE_TO_UI[dispatcher.p1UpdateCycleMode]) {
+    incidents.p1UpdateCycle = {
+      operator: defaults.incidents?.p1UpdateCycle?.operator || '=',
+      option: P1_UPDATE_CYCLE_TO_UI[dispatcher.p1UpdateCycleMode],
+    }
+  }
+
+  const ops = { ...asRecord(defaults.ops) }
+  const opsApi = asRecord(dispatcher.opsLifecycle)
+  if (opsApi.performanceReviewCycle && REVIEW_CYCLE_TO_UI[opsApi.performanceReviewCycle]) {
+    ops.reviewCycle = {
+      operator: defaults.ops?.reviewCycle?.operator || '=',
+      option: REVIEW_CYCLE_TO_UI[opsApi.performanceReviewCycle],
+    }
+  }
+  if (opsApi.silverTierIntervention && SILVER_INTERVENTION_TO_UI[opsApi.silverTierIntervention]) {
+    ops.silverIntervention = {
+      operator: defaults.ops?.silverIntervention?.operator || '=',
+      option: SILVER_INTERVENTION_TO_UI[opsApi.silverTierIntervention],
+    }
+  }
+  if (opsApi.bronzeTierPlan && BRONZE_PLAN_TO_UI[opsApi.bronzeTierPlan]) {
+    ops.bronzePlan = {
+      operator: defaults.ops?.bronzePlan?.operator || '=',
+      option: BRONZE_PLAN_TO_UI[opsApi.bronzeTierPlan],
+    }
+  }
+  setDurationTier(ops, 'champDsaEvidence', opsApi.champDsaEvidenceReviewSec, defaults.ops)
+  setDurationTier(ops, 'champDsaResponse', opsApi.champDsaResponseWindowSec, defaults.ops)
+  setDurationTier(ops, 'fraudReview', opsApi.fraudReviewSec, defaults.ops)
+  if (opsApi.cssNotificationMode && CSS_NOTIFICATION_TO_UI[opsApi.cssNotificationMode]) {
+    ops.cssNotification = {
+      operator: defaults.ops?.cssNotification?.operator || '=',
+      option: CSS_NOTIFICATION_TO_UI[opsApi.cssNotificationMode],
+    }
+  }
+  if (opsApi.providerSppaReview && PERIODIC_REVIEW_TO_UI[opsApi.providerSppaReview]) {
+    ops.providerSppa = {
+      operator: defaults.ops?.providerSppa?.operator || '=',
+      option: PERIODIC_REVIEW_TO_UI[opsApi.providerSppaReview],
+    }
+  }
+  if (opsApi.cashbackAudit && PERIODIC_REVIEW_TO_UI[opsApi.cashbackAudit]) {
+    ops.cashbackAudit = {
+      operator: defaults.ops?.cashbackAudit?.operator || '=',
+      option: PERIODIC_REVIEW_TO_UI[opsApi.cashbackAudit],
+    }
+  }
+  setDurationTier(ops, 'engFix', opsApi.engFixSec, defaults.ops)
+  setDurationTier(ops, 'outageReply', opsApi.systemOutageReplySec, defaults.ops)
+  setDurationTier(ops, 'outageRootCause', opsApi.systemOutageRootCauseSec, defaults.ops)
 
   return {
     ...defaults,
     assignment,
     incidents,
+    ops,
   }
 }
 
@@ -537,7 +782,9 @@ function weightsFromForm(hotFood) {
   const accuracy = Math.round(pctFromPercent(hotFood?.vpiAccuracy) ?? 20)
   const packing = Math.round(pctFromPercent(hotFood?.vpiPacking) ?? 5)
   const prepTime = Math.round(pctFromPercent(hotFood?.vpiPrep) ?? 25)
-  const reliability = Math.max(0, 100 - accuracy - packing - prepTime)
+  const reliabilityRaw = pctFromPercent(hotFood?.vpiReliability)
+  const reliability =
+    reliabilityRaw != null ? Math.round(reliabilityRaw) : Math.max(0, 100 - accuracy - packing - prepTime)
   return { accuracy, packing, prepTime, reliability }
 }
 
@@ -571,19 +818,20 @@ function mapVendorToConfig(vendorValues) {
   const scheduled = asRecord(vendorValues.scheduled)
   const services = asRecord(vendorValues.services)
   const weights = weightsFromForm(hotFood)
-  const acceptanceTier = tierToApi(hotFood.acceptance)
+  const acceptanceTier = tierToApi(hotFood.acceptance, 'acceptance')
   const acceptanceSec = acceptanceTier?.target ?? null
-  const prepTier = tierToApi(hotFood.prepMax)
+  const prepTier = tierToApi(hotFood.prepMax, 'prepMax')
   const prepSec = prepTier?.target ?? null
-  const waitTier = tierToApi(hotFood.maxChampWait)
-  const waitSec = waitTier?.target ?? null
+  const waitTier = tierToApi(hotFood.maxChampWait, 'maxChampWait')
+  const scheduledAll = asRecord(scheduled.all)
 
   const scheduledPayload = {}
   Object.entries(SCHEDULED_TIER_MAP).forEach(([uiKey, apiKey]) => {
     scheduledPayload[apiKey] = mapScheduledTierToApi(scheduled[uiKey], uiKey)
   })
   scheduledPayload.general = {
-    attendanceDuringDayPct: pctFromPercent(asRecord(scheduled.all).reliability) ?? undefined,
+    attendanceDuringDayPct: pctFromPercent(scheduledAll.reliability) ?? undefined,
+    prepAlertAckMode: PREP_ACK_TO_API[scheduledAll.prepAck?.option] ?? undefined,
   }
 
   return {
@@ -592,17 +840,18 @@ function mapVendorToConfig(vendorValues) {
       acceptanceSec != null ? Math.round(acceptanceSec / 60) : undefined,
     prepTimeHotFoodMin: prepSec != null ? Math.round(prepSec / 60) : undefined,
     readyOnTimeTargetPct: pctFromPercent(hotFood.onTimeReady) ?? undefined,
-    handoverToChampMin: waitSec != null ? Math.round(waitSec / 60) : undefined,
+    handoverToChampMin: waitTier?.target != null ? Math.round(waitTier.target / 60) : undefined,
     vpiWeights: weights,
     vendor: {
       hotFoodOnDemand: {
         acceptanceTimeSec: acceptanceTier ?? undefined,
-        champCollectionTimeSec: tierToApi(hotFood.champCollection) ?? undefined,
-        earlyOnlineHoursSec: tierToApi(hotFood.dailyOnline) ?? undefined,
+        champCollectionTimeSec: tierToApi(hotFood.champCollection, 'champCollection') ?? undefined,
+        earlyOnlineHoursSec: tierToApi(hotFood.dailyOnline, 'dailyOnline') ?? undefined,
         fullDeliveryWindowStart: clockTimeFromDuration(hotFood.fullWindow?.from) ?? undefined,
         fullDeliveryWindowEnd: clockTimeFromDuration(hotFood.fullWindow?.to) ?? undefined,
         prepTimeLimitSec: prepTier ?? undefined,
-        customerIssueResponseSec: tierFromForm(hotFood.vendorIssue) ?? undefined,
+        handoverToChampSec: waitTier ?? undefined,
+        customerIssueResponseSec: tierFromForm(hotFood.vendorIssue, 'vendorIssue') ?? undefined,
         customerPaymentWindowSec: secFromDuration(hotFood.paymentWindow) ?? undefined,
         orderAccuracyPct: pctFromPercent(hotFood.orderAccuracy) ?? undefined,
         orderRatingPct: pctFromPercent(hotFood.onTimeReady) ?? undefined,
@@ -612,33 +861,47 @@ function mapVendorToConfig(vendorValues) {
           prepTimeWeight: weights.prepTime,
           metricTypeWeight: weights.reliability,
         },
-        foodSafetyInvestigationSec: tierFromForm(hotFood.nonDelivery) ?? undefined,
+        foodSafetyInvestigationSec: tierFromForm(hotFood.nonDelivery, 'nonDelivery') ?? undefined,
+        vendorGeoFenceRadiusM: num(hotFood.geoFence?.amount) ?? undefined,
+        notifyCustomerDelaySec: tierFromForm(hotFood.notifyDelay, 'notifyDelay') ?? undefined,
       },
       dineIn: {
-        acceptanceTimeSec: tierToApi(dineIn.acceptance) ?? undefined,
-        customerArrivalWaitSec: tierToApi(dineIn.customerWait) ?? undefined,
-        tablePreparationSec: tierToApi(dineIn.customerWait) ?? undefined,
+        acceptanceTimeSec: tierToApi(dineIn.acceptance, 'acceptance') ?? undefined,
+        customerArrivalWaitSec: tierToApi(dineIn.customerWait, 'customerWait') ?? undefined,
+        tablePreparationSec: tierToApi(dineIn.tablePrep, 'tablePrep') ?? undefined,
+        earlyOnlineHoursSec: tierToApi(dineIn.dailyOnline, 'dailyOnline') ?? undefined,
+        appPriceMode: APP_PRICE_TO_API[dineIn.appPrice?.option] ?? undefined,
         customerPaymentWindowSec: secFromDuration(dineIn.paymentWindow) ?? undefined,
         orderAccuracyPct: pctFromPercent(dineIn.reservationHonored) ?? undefined,
-        issueResponseSec: tierFromForm(dineIn.billDispute) ?? undefined,
-        noShowGraceSec: tierFromForm(dineIn.reservationNotice) ?? undefined,
+        issueResponseSec: tierFromForm(dineIn.billDispute, 'billDispute') ?? undefined,
+        billQualityReviewSec: tierFromForm(dineIn.billQuality, 'billQuality') ?? undefined,
+        noShowGraceSec: tierFromForm(dineIn.reservationNotice, 'reservationNotice') ?? undefined,
       },
       pickup: {
-        acceptanceTimeSec: tierToApi(pickup.acceptance) ?? undefined,
-        customerWaitSec: tierToApi(pickup.customerWait) ?? undefined,
-        handoverSec: tierToApi(pickup.maxCustomerWait) ?? undefined,
+        acceptanceTimeSec: tierToApi(pickup.acceptance, 'acceptance') ?? undefined,
+        prepTimeLimitSec: tierToApi(pickup.prepMax, 'prepMax') ?? undefined,
+        customerWaitSec: tierToApi(pickup.customerWait, 'customerWait') ?? undefined,
+        earlyOnlineHoursSec: tierToApi(pickup.dailyOnline, 'dailyOnline') ?? undefined,
+        readyAtPickupMode: READY_AT_PICKUP_TO_API[pickup.earlyPickup?.option] ?? undefined,
+        handoverSec: tierToApi(pickup.maxCustomerWait, 'maxCustomerWait') ?? undefined,
         customerPaymentWindowSec: secFromDuration(pickup.paymentWindow) ?? undefined,
-        latePickupGraceSec: tierFromForm(pickup.orderHold) ?? undefined,
+        latePickupGraceSec: tierFromForm(pickup.orderHold, 'orderHold') ?? undefined,
         orderAccuracyPct: pctFromPercent(pickup.onTimePrep) ?? undefined,
+        notifyCustomerDelaySec: tierFromForm(pickup.notifyDelay, 'notifyDelay') ?? undefined,
       },
       scheduledDelivery: scheduledPayload,
       services: {
-        acceptanceTimeSec: tierToApi(services.acceptance) ?? undefined,
+        acceptanceTimeSec: tierToApi(services.acceptance, 'acceptance') ?? undefined,
         serviceAttendancePct: pctFromPercent(services.attendance) ?? undefined,
         serviceRating: num(services.quality?.amount) ?? undefined,
-        serviceLevelAgreementSec: tierFromForm(services.providerNoShowWait) ?? undefined,
-        qualityReportWindowSec: tierFromForm(services.qualityReport) ?? undefined,
-        inventoryDamageReportWindowSec: tierFromForm(services.damageReport) ?? undefined,
+        leadTimeForCancellationsSec:
+          tierFromForm(scheduledAll.advanceCancel, 'advanceCancel') ?? undefined,
+        lastMinuteCancellationPct: pctFromPercent(services.lastMinuteCancel) ?? undefined,
+        noShowHandlingMode: NO_SHOW_HANDLING_TO_API[services.noShowHandling?.option] ?? undefined,
+        providerNoShowContactAttempts: num(services.contactAttempts?.amount) ?? undefined,
+        serviceLevelAgreementSec: tierFromForm(services.providerNoShowWait, 'providerNoShowWait') ?? undefined,
+        qualityReportWindowSec: tierFromForm(services.qualityReport, 'qualityReport') ?? undefined,
+        inventoryDamageReportWindowSec: tierFromForm(services.damageReport, 'damageReport') ?? undefined,
       },
     },
   }
@@ -650,70 +913,93 @@ function mapChampToConfig(champValues, baseConfig) {
   const basePerf = asRecord(asRecord(baseConfig.champ).performance)
   const peakDuration = scalarSecFromForm(performance.peakHours?.duration)
   const peakStart = basePerf.peakHoursStart || '16:00:00'
-  const pickupArrival = scalarSecFromForm(performance.pickupArrival)
+  const pickupArrival = tierFromForm(performance.pickupArrival, 'pickupArrival')
 
   return {
     champ: {
       acceptanceTimeByMode: {
-        hotFood: tierToApi(acceptance.hotFood) ?? undefined,
-        sameDay: tierToApi(acceptance.sameDay) ?? undefined,
-        nextDay: tierToApi(acceptance.nextDay) ?? undefined,
-        standard: tierToApi(acceptance.standard) ?? undefined,
-        economy: tierToApi(acceptance.economy) ?? undefined,
-        food: tierToApi(acceptance.acceptFood) ?? undefined,
-        groceryPharmacy: tierToApi(acceptance.acceptGrocery) ?? undefined,
-        flowers: tierToApi(acceptance.acceptFlowers) ?? undefined,
-        electronics: tierToApi(acceptance.acceptElectronics) ?? undefined,
+        hotFood: tierToApi(acceptance.hotFood, 'hotFood') ?? undefined,
+        sameDay: tierToApi(acceptance.sameDay, 'sameDay') ?? undefined,
+        nextDay: tierToApi(acceptance.nextDay, 'nextDay') ?? undefined,
+        standard: tierToApi(acceptance.standard, 'standard') ?? undefined,
+        economy: tierToApi(acceptance.economy, 'economy') ?? undefined,
+        food: tierToApi(acceptance.acceptFood, 'acceptFood') ?? undefined,
+        groceryPharmacy: tierToApi(acceptance.acceptGrocery, 'acceptGrocery') ?? undefined,
+        flowers: tierToApi(acceptance.acceptFlowers, 'acceptFlowers') ?? undefined,
+        electronics: tierToApi(acceptance.acceptElectronics, 'acceptElectronics') ?? undefined,
       },
       performance: {
-        doubleConfirmationSec: tierFromForm(performance.doubleConfirm) ?? undefined,
+        doubleConfirmationSec: tierFromForm(performance.doubleConfirm, 'doubleConfirm') ?? undefined,
         onTimeDeliveryPct: pctFromPercent(performance.onTimeDelivery) ?? undefined,
-        workingHoursDailySec: tierFromForm(performance.workingHours) ?? undefined,
+        workingHoursDailySec: tierFromForm(performance.workingHours, 'workingHours') ?? undefined,
         peakHoursStart: peakStart,
         peakHoursEnd:
           peakDuration != null ? addSecondsToClock(peakStart, peakDuration) : undefined,
+        peakHoursOnTimeTargetPct: pctFromPercent(performance.peakHours?.percent) ?? undefined,
         customerRating: num(performance.customerRating?.amount) ?? undefined,
         arrivalPickupWindowCompliancePct: pctFromPercent(performance.arrivalCompliance) ?? undefined,
         orderCompletionRatePct: pctFromPercent(performance.orderCompletion) ?? undefined,
         conductCompliancePct: pctFromPercent(performance.conductCompliance) ?? undefined,
         pickupArrivalCitySec: pickupArrival ?? undefined,
         pickupArrivalSuburbSec: pickupArrival ?? undefined,
-        vendorWaitFoodSec: tierFromForm(performance.vendorWaitFood) ?? undefined,
-        vendorWaitGroceryPharmacySec: tierFromForm(performance.vendorWaitGrocery) ?? undefined,
-        vendorWaitFlowersSec: tierFromForm(performance.vendorWaitFlowers) ?? undefined,
-        vendorWaitElectronicsSec: tierFromForm(performance.vendorWaitElectronics) ?? undefined,
-        customerUnreachableWaitSec: tierFromForm(performance.unreachableWait) ?? undefined,
+        vendorWaitFoodSec: tierFromForm(performance.vendorWaitFood, 'vendorWaitFood') ?? undefined,
+        vendorWaitGroceryPharmacySec:
+          tierFromForm(performance.vendorWaitGrocery, 'vendorWaitGrocery') ?? undefined,
+        vendorWaitFlowersSec: tierFromForm(performance.vendorWaitFlowers, 'vendorWaitFlowers') ?? undefined,
+        vendorWaitElectronicsSec:
+          tierFromForm(performance.vendorWaitElectronics, 'vendorWaitElectronics') ?? undefined,
+        customerUnreachableWaitSec: tierFromForm(performance.unreachableWait, 'unreachableWait') ?? undefined,
         customerAlternativeUnreachableAttempts: num(performance.contactAttempts?.amount) ?? undefined,
         wrongOrderReportMode: WRONG_ORDER_TO_API[performance.wrongOrderReport?.option] || undefined,
-        emergencyMessageOnDemandSec: tierFromForm(performance.emergencyOnDemand) ?? undefined,
-        emergencyMessageScheduledSec: tierFromForm(performance.emergencyScheduled) ?? undefined,
+        emergencyMessageOnDemandSec: tierFromForm(performance.emergencyOnDemand, 'emergencyOnDemand') ?? undefined,
+        emergencyMessageScheduledSec:
+          tierFromForm(performance.emergencyScheduled, 'emergencyScheduled') ?? undefined,
         appGpsFailureReportMode: GPS_TO_API[performance.appGpsFailure?.option] || undefined,
-        appGpsFixWindowSec: tierFromForm(performance.appGpsFixWindow) ?? undefined,
-        temperatureEquipmentReturnSec: tierFromForm(performance.tempWorkaround) ?? undefined,
-        champAssignmentPlatformSec: tierFromForm(performance.champAssignment) ?? undefined,
+        appGpsFixWindowSec: tierFromForm(performance.appGpsFixWindow, 'appGpsFixWindow') ?? undefined,
+        temperatureEquipmentReturnSec: tierFromForm(performance.tempWorkaround, 'tempWorkaround') ?? undefined,
+        champAssignmentPlatformSec: tierFromForm(performance.champAssignment, 'champAssignment') ?? undefined,
       },
       tiers: sanitizeChampTiers(champValues.tier),
     },
   }
 }
 
+function mapOpsLifecycleToApi(opsValues) {
+  const ops = asRecord(opsValues)
+  return {
+    performanceReviewCycle: REVIEW_CYCLE_TO_API[ops.reviewCycle?.option] ?? undefined,
+    silverTierIntervention: SILVER_INTERVENTION_TO_API[ops.silverIntervention?.option] ?? undefined,
+    bronzeTierPlan: BRONZE_PLAN_TO_API[ops.bronzePlan?.option] ?? undefined,
+    champDsaEvidenceReviewSec: tierFromForm(ops.champDsaEvidence, 'champDsaEvidence') ?? undefined,
+    champDsaResponseWindowSec: tierFromForm(ops.champDsaResponse, 'champDsaResponse') ?? undefined,
+    fraudReviewSec: tierFromForm(ops.fraudReview, 'fraudReview') ?? undefined,
+    cssNotificationMode: CSS_NOTIFICATION_TO_API[ops.cssNotification?.option] ?? undefined,
+    providerSppaReview: PERIODIC_REVIEW_TO_API[ops.providerSppa?.option] ?? undefined,
+    cashbackAudit: PERIODIC_REVIEW_TO_API[ops.cashbackAudit?.option] ?? undefined,
+    engFixSec: tierFromForm(ops.engFix, 'engFix') ?? undefined,
+    systemOutageReplySec: tierFromForm(ops.outageReply, 'outageReply') ?? undefined,
+    systemOutageRootCauseSec: tierFromForm(ops.outageRootCause, 'outageRootCause') ?? undefined,
+  }
+}
+
 function mapDispatcherToConfig(dispatcherValues) {
   const assignment = asRecord(dispatcherValues.assignment)
   const incidents = asRecord(dispatcherValues.incidents)
-  const firstResponse = tierFromForm(incidents.firstResponse)
-  const p1 = tierFromForm(incidents.p1AllHands)
-  const resolution = tierFromForm(incidents.resolutionTime)
-  const ackP3 = tierFromForm(incidents.acknowledgeBreach)
-  const resolveP3 = tierFromForm(incidents.resolutionPlan)
-  const chat = tierFromForm(incidents.liveChatFirst) ?? tierFromForm(incidents.responseToChat)
+  const ops = asRecord(dispatcherValues.ops)
+  const firstResponse = tierFromForm(incidents.firstResponse, 'firstResponse')
+  const p1 = tierFromForm(incidents.p1AllHands, 'p1AllHands')
+  const resolution = tierFromForm(incidents.resolutionTime, 'resolutionTime')
+  const ackP3 = tierFromForm(incidents.acknowledgeBreach, 'acknowledgeBreach')
+  const resolveP3 = tierFromForm(incidents.resolutionPlan, 'resolutionPlan')
+  const chat = tierFromForm(incidents.liveChatFirst, 'liveChatFirst')
 
   return {
     dispatcher: {
       assignmentTimeByMode: {
-        sameDay: tierToApi(assignment.sameDay) ?? undefined,
-        nextDay: tierToApi(assignment.nextDay) ?? undefined,
-        standard: tierToApi(assignment.standard) ?? undefined,
-        economy: tierToApi(assignment.economy) ?? undefined,
+        sameDay: tierToApi(assignment.sameDay, 'sameDay') ?? undefined,
+        nextDay: tierToApi(assignment.nextDay, 'nextDay') ?? undefined,
+        standard: tierToApi(assignment.standard, 'standard') ?? undefined,
+        economy: tierToApi(assignment.economy, 'economy') ?? undefined,
       },
       incidentAckSecByPriority: {
         P1: p1 ?? firstResponse ?? undefined,
@@ -727,7 +1013,22 @@ function mapDispatcherToConfig(dispatcherValues) {
       },
       coverageTargetPct: pctFromPercent(incidents.resolutionRate) ?? undefined,
       chatFirstResponseSec: chat ?? undefined,
-      champResponseSec: tierFromForm(incidents.champContactNonDelivery) ?? undefined,
+      champResponseSec: tierFromForm(incidents.champContactNonDelivery, 'champContactNonDelivery') ?? undefined,
+      champContactTechFailureSec: tierFromForm(incidents.champContactTech, 'champContactTech') ?? undefined,
+      vendorNonResponsiveProtocolSec:
+        tierFromForm(incidents.vendorNonResponsive, 'vendorNonResponsive') ?? undefined,
+      champAssignmentInterventionSec:
+        tierFromForm(incidents.champAssignmentIntervention, 'champAssignmentIntervention') ?? undefined,
+      scheduledEmergencyRescheduleSec:
+        tierFromForm(incidents.scheduledEmergency, 'scheduledEmergency') ?? undefined,
+      serviceConflictContactSec:
+        tierFromForm(incidents.serviceConflictContact, 'serviceConflictContact') ?? undefined,
+      serviceConflictResolveSec:
+        tierFromForm(incidents.serviceConflictResolve, 'serviceConflictResolve') ?? undefined,
+      cashOutFinanceEscalationSec: tierFromForm(incidents.cashOutEscalation, 'cashOutEscalation') ?? undefined,
+      vendorCallIntervalMode: VENDOR_CALL_INTERVAL_TO_API[incidents.vendorCallIntervals?.option] ?? undefined,
+      p1UpdateCycleMode: P1_UPDATE_CYCLE_TO_API[incidents.p1UpdateCycle?.option] ?? undefined,
+      opsLifecycle: mapOpsLifecycleToApi(ops),
     },
   }
 }

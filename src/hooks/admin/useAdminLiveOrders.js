@@ -10,7 +10,7 @@ import { adminDashboardService } from '../../services/admin/dashboardService'
  */
 export function useAdminLiveOrders(options = {}) {
   const bucket = options.bucket || 'all'
-  const sort = options.sort || 'time_left'
+  const sort = options.sort || 'newest'
   const limit = options.limit ?? 5
   const region = options.region
 

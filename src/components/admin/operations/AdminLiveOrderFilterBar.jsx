@@ -34,7 +34,7 @@ export function AdminLiveOrderFilterBar({
   const vendors = [...vendorsFromOrders(orders), ...extraVendors]
   const chips = liveOrderFilterChips(query, { vendors, champs })
   const active = liveOrderQueryIsActive(query)
-  const sort = query?.sort || 'time_left'
+  const sort = query?.sort || 'newest'
   const sortOptions = [
     ...LIVE_ORDER_SORTS,
     ...(showIncidentFilters ? LIVE_INCIDENT_PRIORITY_SORTS : []),
@@ -119,7 +119,7 @@ export function AdminLiveOrderFilterBar({
           value={sort}
           options={sortOptions}
           align="right"
-          onChange={(nextSort) => onChange?.({ ...query, sort: nextSort || 'time_left' })}
+          onChange={(nextSort) => onChange?.({ ...query, sort: nextSort || 'newest' })}
         />
       </div>
 

@@ -865,7 +865,7 @@ function AdminLiveOrdersFullView({
   const bucket = adminLiveOrdersBucketForColumnId(column.id)
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket,
-    sort: 'time_left',
+    sort: 'newest',
     limit: ADMIN_BOARD_FULL_LIMIT,
   })
 
@@ -1042,7 +1042,7 @@ export default function AdminLiveOrdersPage() {
   }
   const { data, error, isLoading, refetch } = useAdminLiveOrders({
     bucket: 'all',
-    sort: 'time_left',
+    sort: 'newest',
     // Load the full bucket pool so each column can scroll independently.
     limit: ADMIN_BOARD_FULL_LIMIT,
   })
