@@ -9,6 +9,10 @@ import {
   normalizeScheduledFees,
   scheduledFreeDeliveryMissingMessage,
 } from './scheduledFeesForm'
+import AdminDriverRatesPanel, {
+  buildDriverRatesPayload,
+  normalizeDriverRates,
+} from './AdminDriverRatesPanel'
 import { AdminVendorCommission } from './AdminVendorCommission'
 import { ApiErrorBanner } from '../ApiState'
 import { cn } from '../cn'
@@ -57,6 +61,7 @@ export default function AdminSlaCommercialDefaultsTab() {
   const [allowedVehicles, setAllowedVehicles] = useState({ bike: true, car: true })
   const [hotFood, setHotFood] = useState(null)
   const [scheduledFees, setScheduledFees] = useState(null)
+  const [driverRates, setDriverRates] = useState(null)
   const [commission, setCommission] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -76,6 +81,7 @@ export default function AdminSlaCommercialDefaultsTab() {
       setAllowedVehicles(form.allowedVehicles)
       setHotFood(form.hotFood)
       setScheduledFees(form.scheduledFees)
+      setDriverRates(form.driverRates)
       setCommission(form.commission)
     } catch (err) {
       setLoadError(err)
@@ -120,12 +126,14 @@ export default function AdminSlaCommercialDefaultsTab() {
       },
       hotFoodOnDemand: buildHotFoodDefaultsPayload(hotFood),
       scheduled: buildScheduledFeesPayload(scheduledFees),
+      driverRates: buildDriverRatesPayload(driverRates),
     }
     const result = await saveAll(body)
     const form = mapPlatformCommercialDefaultsToForm(result?.data)
     setAllowedVehicles(form.allowedVehicles)
     setHotFood(form.hotFood)
     setScheduledFees(form.scheduledFees)
+    setDriverRates(form.driverRates)
     setSaveMessage('Platform delivery fee defaults saved. Store types inherit until overridden.')
   }
 
@@ -215,6 +223,20 @@ export default function AdminSlaCommercialDefaultsTab() {
           value={scheduledFees}
           onChange={setScheduledFees}
           disabled={saving}
+        />
+      </Card>
+
+      <Card
+        title="Driver rates"
+        subtitle="What Yjeek pays champs — on-demand distance + scheduled flat by vehicle. Store types inherit until overridden."
+      >
+        <AdminDriverRatesPanel
+          value={driverRates}
+          onChange={setDriverRates}
+          disabled={saving}
+          includeOnDemand
+          includeScheduled
+          allowedVehicles={allowedVehicles}
         />
       </Card>
 

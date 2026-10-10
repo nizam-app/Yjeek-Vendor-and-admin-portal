@@ -122,8 +122,45 @@ export function mapChampMapPoint(point, legendByKey = {}) {
     kind: 'champ',
     lat,
     lng,
+    lastLocationAt: point.lastLocationAt ?? null,
     color: legendColor || resolveColor(point.color, loadKey),
   }
+}
+
+/** Separate markers that share identical coords so ops can see each champ. */
+export function spreadCoincidentMapPoints(points, radiusDeg = 0.00045) {
+  const list = Array.isArray(points) ? points : []
+  const groups = new Map()
+
+  for (const point of list) {
+    const lat = Number(point.lat)
+    const lng = Number(point.lng)
+    if (Number.isNaN(lat) || Number.isNaN(lng)) continue
+    const key = `${lat.toFixed(5)},${lng.toFixed(5)}`
+    const bucket = groups.get(key) || []
+    bucket.push(point)
+    groups.set(key, bucket)
+  }
+
+  const spread = []
+  for (const bucket of groups.values()) {
+    if (bucket.length <= 1) {
+      spread.push(bucket[0])
+      continue
+    }
+    bucket.forEach((point, index) => {
+      const angle = (2 * Math.PI * index) / bucket.length
+      const lat = Number(point.lat)
+      const lng = Number(point.lng)
+      spread.push({
+        ...point,
+        lat: lat + Math.cos(angle) * radiusDeg,
+        lng: lng + Math.sin(angle) * radiusDeg,
+        coordStackSize: bucket.length,
+      })
+    })
+  }
+  return spread
 }
 
 /**
@@ -321,7 +358,10 @@ export function mapAdminDashboardMapResponse(data) {
   }
 
   const legendByKey = Object.fromEntries(legend.map((item) => [item.key, item]))
-  const points = expandLayerPoints(layer, data.points, legendByKey)
+  let points = expandLayerPoints(layer, data.points, legendByKey)
+  if (layer === 'champs') {
+    points = spreadCoincidentMapPoints(points)
+  }
 
   return {
     layer,

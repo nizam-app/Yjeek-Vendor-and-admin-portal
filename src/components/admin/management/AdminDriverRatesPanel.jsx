@@ -116,6 +116,7 @@ const DRIVER_SCHEDULED_FIELDS = [
  *   resettingPath?: string | null,
  *   includeOnDemand?: boolean,
  *   includeScheduled?: boolean,
+ *   allowedVehicles?: { bike?: boolean, car?: boolean } | null,
  * }} props
  */
 export default function AdminDriverRatesPanel({
@@ -127,7 +128,10 @@ export default function AdminDriverRatesPanel({
   resettingPath = null,
   includeOnDemand = true,
   includeScheduled = false,
+  allowedVehicles = null,
 }) {
+  const allowBike = allowedVehicles == null ? true : allowedVehicles.bike !== false
+  const allowCar = allowedVehicles == null ? true : allowedVehicles.car !== false
   const form = value || EMPTY_DRIVER_RATES
   const onDemand = form.onDemand || EMPTY_DRIVER_RATES.onDemand
 
@@ -285,7 +289,7 @@ export default function AdminDriverRatesPanel({
         </div>
       ) : null}
 
-      {includeScheduled
+      {includeScheduled && allowBike
         ? renderScheduledGrid(
             'scheduledBike',
             'Scheduled — Bike',
@@ -293,13 +297,21 @@ export default function AdminDriverRatesPanel({
           )
         : null}
 
-      {includeScheduled
+      {includeScheduled && allowCar
         ? renderScheduledGrid(
             'scheduledCar',
             'Scheduled — Car',
-            'Scheduled driver pay is vehicle-specific. Bike and car are never priced together. Values are placeholders until rates are set — empty is not zero.',
+            allowBike
+              ? 'Scheduled driver pay is vehicle-specific. Bike and car are never priced together. Values are placeholders until rates are set — empty is not zero.'
+              : 'Car-only branch — set scheduled car driver pay here. Empty is not zero.',
           )
         : null}
+
+      {includeScheduled && !allowBike && !allowCar ? (
+        <p className="text-[12px] leading-[16px] text-[#7c8780]">
+          No delivery vehicles are allowed on this branch — scheduled driver pay is not applicable.
+        </p>
+      ) : null}
     </div>
   )
 }

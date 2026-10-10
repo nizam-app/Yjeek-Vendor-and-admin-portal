@@ -24,6 +24,16 @@ function matchesFocus(point, focusTarget) {
   return String(point.id) === id || String(point.orderId || '') === id
 }
 
+function formatGpsAge(iso) {
+  if (!iso) return null
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return null
+  const sec = Math.floor(ms / 1000)
+  if (sec < 60) return `GPS ${sec}s ago`
+  const min = Math.floor(sec / 60)
+  return `GPS ${min}m ago`
+}
+
 function buildPointTitle(point) {
   return [
     point.orderNumber || point.name,
@@ -32,6 +42,8 @@ function buildPointTitle(point) {
     point.kind === 'pickup' ? 'Pickup' : point.kind === 'dropoff' ? 'Dropoff' : null,
     point.status,
     point.load != null ? `load ${point.load}` : null,
+    formatGpsAge(point.lastLocationAt),
+    point.coordStackSize > 1 ? `${point.coordStackSize} at pin` : null,
   ]
     .filter(Boolean)
     .join(' · ')

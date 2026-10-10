@@ -68,6 +68,15 @@ function hasBothItemClasses(itemClasses) {
   )
 }
 
+/** Default new product class when store type or vendor has narrowed to one class. */
+function defaultProductItemClassFromCatalog(catalog) {
+  const ic = catalog?.vendor?.itemClasses
+  if (!ic) return 'NORMAL'
+  if (ic.allowsSpecialItems !== false && ic.allowsNormalItems === false) return 'SPECIAL'
+  if (ic.allowsNormalItems !== false && ic.allowsSpecialItems === false) return 'NORMAL'
+  return 'NORMAL'
+}
+
 function formatPrice(value) {
   const n = Number(value)
   if (!Number.isFinite(n)) return '—'
@@ -150,7 +159,7 @@ function normalizeProductImageSlots(imageUrl, imageUrls) {
   return urls.slice(0, 4)
 }
 
-function emptyProductForm(categoryId = '') {
+function emptyProductForm(categoryId = '', itemClass = 'NORMAL') {
   return {
     name: '',
     nameAr: '',
@@ -165,7 +174,7 @@ function emptyProductForm(categoryId = '') {
     ...orderMethodDefaults(),
     availableFrom: '',
     availableTo: '',
-    itemClass: 'NORMAL',
+    itemClass: itemClass === 'SPECIAL' ? 'SPECIAL' : 'NORMAL',
     optionGroups: [],
     addOns: [{ name: '', nameAr: '', price: '+0.000', imageUrl: null }],
   }
@@ -883,10 +892,17 @@ export function AdminVendorLiveMenu({ vendorId, storeName }) {
   const openCreate = (categoryId = '') => {
     setModalMode('create')
     setEditingId(null)
-    setForm(emptyProductForm(categoryId))
+    const defaultClass = defaultProductItemClassFromCatalog(catalog)
+    setForm(emptyProductForm(categoryId, defaultClass))
     setFormItemClassMeta({
-      editable: vendorBoth,
-      lockedBy: vendorBoth ? null : vendorClassEditable ? 'VENDOR' : 'STORE_TYPE',
+      editable: vendorBoth && vendorClassEditable,
+      lockedBy: vendorBoth
+        ? vendorClassEditable
+          ? null
+          : 'STORE_TYPE'
+        : vendorClassEditable
+          ? 'VENDOR'
+          : 'STORE_TYPE',
     })
     setFormError('')
     setModalOpen(true)

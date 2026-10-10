@@ -15,6 +15,11 @@ import AdminStoreTypeHotFoodDefaults, {
   extractHotFoodFieldMeta,
   normalizeHotFoodDefaults,
 } from './AdminStoreTypeHotFoodDefaults'
+import AdminScheduledFeesPanel, {
+  EMPTY_SCHEDULED_FEES,
+  extractScheduledFieldMeta,
+  normalizeScheduledFees,
+} from './AdminScheduledFeesPanel'
 import AdminDriverRatesPanel, {
   EMPTY_DRIVER_RATES,
   buildDriverRatesPayload,
@@ -35,6 +40,8 @@ function applyServerPayload(data, setters) {
     setHasStoredTemplate,
     setHotFoodForm,
     setHotFoodFieldMeta,
+    setScheduledForm,
+    setScheduledFieldMeta,
     setDriverRatesForm,
     setDriverRatesFieldMeta,
     setAllowedVehiclesForm,
@@ -52,6 +59,13 @@ function applyServerPayload(data, setters) {
   } else {
     setHotFoodForm(EMPTY_HOT_FOOD_DEFAULTS)
     setHotFoodFieldMeta(null)
+  }
+  if (data?.scheduled) {
+    setScheduledForm(normalizeScheduledFees(data.scheduled))
+    setScheduledFieldMeta(extractScheduledFieldMeta(data.scheduled))
+  } else {
+    setScheduledForm(EMPTY_SCHEDULED_FEES)
+    setScheduledFieldMeta(null)
   }
   if (data?.driverRates) {
     setDriverRatesForm(normalizeDriverRates(data.driverRates))
@@ -152,6 +166,8 @@ export default function AdminVendorDeliverySettings({
   const [checkoutSource, setCheckoutSource] = useState('branch')
   const [hotFoodForm, setHotFoodForm] = useState(EMPTY_HOT_FOOD_DEFAULTS)
   const [hotFoodFieldMeta, setHotFoodFieldMeta] = useState(null)
+  const [scheduledForm, setScheduledForm] = useState(EMPTY_SCHEDULED_FEES)
+  const [scheduledFieldMeta, setScheduledFieldMeta] = useState(null)
   const [driverRatesForm, setDriverRatesForm] = useState(EMPTY_DRIVER_RATES)
   const [driverRatesFieldMeta, setDriverRatesFieldMeta] = useState(null)
   const [allowedVehiclesForm, setAllowedVehiclesForm] = useState(() =>
@@ -170,8 +186,9 @@ export default function AdminVendorDeliverySettings({
   const [vendorAllowsScheduled, setVendorAllowsScheduled] = useState(false)
   const [summaryRefreshToken, setSummaryRefreshToken] = useState(0)
 
+  const storeTypeSupportsScheduled = Boolean(modes?.SCHEDULED?.supportedByStoreType)
   const scheduledEnabled = Boolean(modes?.SCHEDULED?.enabled)
-  const showScheduledDriverRates = scheduledEnabled && vendorAllowsScheduled
+  const showScheduledDriverRates = scheduledEnabled && storeTypeSupportsScheduled
 
   const dirtyFields = dirtyHotFood || dirtyDriverRates || dirtyAllowedVehicles
 
@@ -181,6 +198,8 @@ export default function AdminVendorDeliverySettings({
       setHasStoredTemplate,
       setHotFoodForm,
       setHotFoodFieldMeta,
+      setScheduledForm,
+      setScheduledFieldMeta,
       setDriverRatesForm,
       setDriverRatesFieldMeta,
       setAllowedVehiclesForm,
@@ -431,6 +450,26 @@ export default function AdminVendorDeliverySettings({
         resettingPath={resettingPath}
       />
 
+      {storeTypeSupportsScheduled ? (
+        <div className="mt-5 border-t border-[#f0f2f0] pt-4">
+          <div className="mb-3">
+            <h4 className="text-[14px] font-bold text-[#17231c]">Scheduled order fees (read-only)</h4>
+            <p className="mt-0.5 text-[12px] leading-[16px] text-[#7c8780]">
+              Customer and vendor scheduled delivery fees come from the{' '}
+              <strong className="font-semibold text-[#17231c]">store type</strong> (shown here for
+              reference). Edit tiers on each <strong className="font-semibold text-[#17231c]">branch</strong>
+              — push below does not overwrite scheduled fees.
+            </p>
+          </div>
+          <AdminScheduledFeesPanel
+            value={scheduledForm}
+            onChange={() => {}}
+            disabled
+            fieldMeta={scheduledFieldMeta}
+          />
+        </div>
+      ) : null}
+
       <div className="mt-5 border-t border-[#f0f2f0] pt-4">
         <AdminAllowedVehiclesPanel
           value={allowedVehiclesForm}
@@ -463,6 +502,7 @@ export default function AdminVendorDeliverySettings({
           onResetField={hasStoredTemplate ? handleResetField : undefined}
           resettingPath={resettingPath}
           includeScheduled={showScheduledDriverRates}
+          allowedVehicles={allowedVehiclesForm}
         />
       </div>
 

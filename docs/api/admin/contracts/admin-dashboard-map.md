@@ -37,11 +37,12 @@ Confirmed from Postman screenshots. Real credentials, tokens, and record IDs are
       {
         "id": "<redacted>",
         "name": "<redacted>",
-        "status": "OFFLINE",
-        "load": 3,
-        "loadKey": "busy",
+        "status": "ONLINE",
+        "load": 0,
+        "loadKey": "idle",
         "lat": 26.22,
-        "lng": 50.58
+        "lng": 50.58,
+        "lastLocationAt": "2026-10-10T12:00:00.000Z"
       }
     ]
   }

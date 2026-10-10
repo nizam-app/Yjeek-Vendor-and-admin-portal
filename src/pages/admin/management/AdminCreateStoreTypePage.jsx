@@ -41,6 +41,11 @@ import {
   normalizeScheduledFees,
   scheduledFreeDeliveryMissingMessage,
 } from '../../../components/admin/management/scheduledFeesForm'
+import AdminDriverRatesPanel, {
+  EMPTY_DRIVER_RATES,
+  buildDriverRatesPayload,
+  normalizeDriverRates,
+} from '../../../components/admin/management/AdminDriverRatesPanel'
 import { useAdminFormNavigationGuard } from '../../../hooks/useAdminFormNavigationGuard'
 import { normalizeItemClasses } from '../../../mappers/admin/mapAdminStoreTypes'
 import { commissionServiceLabelsForStoreTypeModes } from '../../../mappers/admin/mapAdminVendorCommission'
@@ -141,6 +146,7 @@ function serializeStoreTypeState(state) {
     lowStockThreshold: String(state.lowStockThreshold ?? 5),
     hotFood: state.hotFood || EMPTY_HOT_FOOD_DEFAULTS,
     scheduledFees: state.scheduledFees || EMPTY_SCHEDULED_FEES,
+    driverRates: state.driverRates || EMPTY_DRIVER_RATES,
   })
 }
 
@@ -164,6 +170,7 @@ function mockInitialValues(storeTypeId, isEdit) {
       lowStockThreshold: 5,
       hotFood: normalizeHotFoodDefaults(null),
       scheduledFees: normalizeScheduledFees(null),
+      driverRates: normalizeDriverRates(null),
     }
   }
 
@@ -196,6 +203,7 @@ function mockInitialValues(storeTypeId, isEdit) {
     lowStockThreshold: 5,
     hotFood: normalizeHotFoodDefaults(null),
     scheduledFees: normalizeScheduledFees(null),
+    driverRates: normalizeDriverRates(null),
   }
 }
 
@@ -233,6 +241,7 @@ function initialFromDetail(detail, deliveryDefaults = null, commissionDefaults =
     lowStockThreshold: detail.lowStockThreshold ?? 5,
     hotFood: normalizeHotFoodDefaults(deliveryDefaults?.hotFoodOnDemand),
     scheduledFees: normalizeScheduledFees(deliveryDefaults?.scheduled),
+    driverRates: normalizeDriverRates(deliveryDefaults?.driverRates),
     commercialInheritance: deliveryDefaults?.inheritance ?? null,
     commission: commissionDefaults?.commission ?? null,
     commissionSectionInheritance: commissionDefaults?.sectionInheritance ?? 'empty',
@@ -617,6 +626,7 @@ function StoreTypeForm({
   onCommissionDefaultsRefetch = null,
   liveHotFoodOnDemand = null,
   liveScheduledFees = null,
+  liveDriverRates = null,
 }) {
   const [displayName, setDisplayName] = useState(initial.displayName)
   const [displayNameAr, setDisplayNameAr] = useState(initial.displayNameAr || '')
@@ -694,6 +704,9 @@ function StoreTypeForm({
   const [scheduledFees, setScheduledFees] = useState(() =>
     normalizeScheduledFees(initial.scheduledFees || null),
   )
+  const [driverRates, setDriverRates] = useState(() =>
+    normalizeDriverRates(initial.driverRates || null),
+  )
   const [resettingCommercialSection, setResettingCommercialSection] = useState(null)
 
   const commercialInheritance = liveCommercialInheritance ?? initial.commercialInheritance
@@ -710,6 +723,12 @@ function StoreTypeForm({
     }
   }, [liveScheduledFees])
 
+  useEffect(() => {
+    if (liveDriverRates) {
+      setDriverRates(normalizeDriverRates(liveDriverRates))
+    }
+  }, [liveDriverRates])
+
   const applyDeliveryDefaultsApi = (data) => {
     if (!data || typeof data !== 'object') return
     if (data.hotFoodOnDemand) {
@@ -717,6 +736,9 @@ function StoreTypeForm({
     }
     if (data.scheduled) {
       setScheduledFees(normalizeScheduledFees(data.scheduled))
+    }
+    if (data.driverRates) {
+      setDriverRates(normalizeDriverRates(data.driverRates))
     }
     if (data.allowedVehicles) {
       setAllowedVehicles(normalizeAllowedVehicles(data.allowedVehicles))
@@ -763,6 +785,7 @@ function StoreTypeForm({
         lowStockThreshold,
         hotFood,
         scheduledFees,
+        driverRates,
       }),
     [
       displayName,
@@ -782,6 +805,7 @@ function StoreTypeForm({
       lowStockThreshold,
       hotFood,
       scheduledFees,
+      driverRates,
     ],
   )
   const isDirty = currentSnapshot !== baselineSnapshot
@@ -848,6 +872,9 @@ function StoreTypeForm({
     }
     if (modes.Scheduled) {
       body.scheduled = buildScheduledFeesPayload(scheduledFees)
+    }
+    if (showAllowedVehicles) {
+      body.driverRates = buildDriverRatesPayload(driverRates)
     }
     if (!Object.keys(body).length) return
     await adminService.updateAdminStoreTypeDeliveryDefaults(id, body)
@@ -1575,7 +1602,8 @@ function StoreTypeForm({
         </Card>
 
         {commercialInheritance?.hotFoodOnDemand === 'inherited' ||
-        commercialInheritance?.scheduled === 'inherited' ? (
+        commercialInheritance?.scheduled === 'inherited' ||
+        commercialInheritance?.driverRates === 'inherited' ? (
           <div className="rounded-[12px] border border-[#d4e8dc] bg-[#f0faf4] px-4 py-3 text-[12.5px] text-[#2d5a40]">
             Some delivery fee fields are inherited from{' '}
             <strong>SLA platform defaults</strong>. Saving this store type after edits will override
@@ -1659,6 +1687,34 @@ function StoreTypeForm({
               items needing refrigeration. When both are allowed, the system forces Car if the order
               exceeds the bike capacity threshold.
             </div>
+          </Card>
+        ) : null}
+
+        {showAllowedVehicles ? (
+          <Card
+            title="Driver rates"
+            subtitle="What Yjeek pays champs — copied onto a branch with hot food and/or scheduled delivery. Empty cells stay empty. Vendors and branches may override."
+          >
+            <AdminDriverRatesPanel
+              value={driverRates}
+              onChange={setDriverRates}
+              disabled={saving || Boolean(resettingCommercialSection)}
+              includeOnDemand={Boolean(modes['Hot food — on demand'])}
+              includeScheduled={Boolean(modes.Scheduled)}
+              allowedVehicles={allowedVehicles}
+            />
+            {isEditMode && canSaveRemote && commercialInheritance?.driverRates === 'overridden' ? (
+              <button
+                type="button"
+                disabled={saving || resettingCommercialSection === 'driverRates'}
+                onClick={() => void handleResetCommercialSection('driverRates')}
+                className="mt-3 inline-flex h-[34px] items-center rounded-full border border-[#e4e8e4] bg-white px-4 text-[12px] font-bold text-[#455249] hover:bg-[#f8faf8] disabled:opacity-60"
+              >
+                {resettingCommercialSection === 'driverRates'
+                  ? 'Resetting…'
+                  : 'Reset driver rates to SLA platform defaults'}
+              </button>
+            ) : null}
           </Card>
         ) : null}
 
@@ -1987,6 +2043,7 @@ export default function AdminCreateStoreTypePage() {
       allowedVehicles: mapped.allowedVehicles,
       hotFood: mapped.hotFood,
       scheduledFees: mapped.scheduledFees,
+      driverRates: mapped.driverRates,
     }
   }, [platformCommercial, storeTypeId])
 
@@ -2039,6 +2096,7 @@ export default function AdminCreateStoreTypePage() {
         liveCommercialInheritance={deliveryDefaults?.inheritance ?? null}
         liveHotFoodOnDemand={deliveryDefaults?.hotFoodOnDemand ?? null}
         liveScheduledFees={deliveryDefaults?.scheduled ?? null}
+        liveDriverRates={deliveryDefaults?.driverRates ?? null}
         liveCommission={commissionMapped.commission}
         liveCommissionSectionInheritance={commissionMapped.sectionInheritance}
         onDeliveryDefaultsRefetch={refetchDeliveryDefaults}

@@ -29,7 +29,11 @@ import {
   hotFoodSeedMissingMessage,
   normalizeHotFoodDefaults,
 } from '../../../components/admin/management/AdminStoreTypeHotFoodDefaults'
-import { normalizeAllowedVehiclesForm } from '../../../components/admin/management/AdminAllowedVehiclesPanel'
+import {
+  extractAllowedVehiclesFieldMeta,
+  normalizeAllowedVehiclesForm,
+} from '../../../components/admin/management/AdminAllowedVehiclesPanel'
+import { fetchStoreTypeAllowedVehiclesPrefill } from '../../../utils/branchAllowedVehiclesPrefill'
 import {
   EMPTY_DRIVER_RATES,
   normalizeDriverRates,
@@ -46,6 +50,10 @@ import {
   fetchBranchScheduledPrefill,
   scheduledFormHasDisplayValues,
 } from '../../../utils/branchScheduledPrefill'
+import {
+  fetchBranchDriverRatesPrefill,
+  driverRatesFormHasDisplayValues,
+} from '../../../utils/branchDriverRatesPrefill'
 import { mapWizardBranchDeliverySettings } from '../../../utils/mapWizardBranchDeliverySettings'
 
 const cn = (...parts) => parts.filter(Boolean).join(' ')
@@ -580,10 +588,12 @@ export default function AdminAddVendorBrunchs() {
   const [draftScheduled, setDraftScheduled] = useState(null)
   const [draftDriverRates, setDraftDriverRates] = useState(null)
   const [draftAllowedVehicles, setDraftAllowedVehicles] = useState(null)
+  const [draftAllowedVehiclesFieldMeta, setDraftAllowedVehiclesFieldMeta] = useState(null)
   const [createdBranchId, setCreatedBranchId] = useState(null)
   const draftModesEdited = useRef(false)
   const deliveryDraftPrefilled = useRef(false)
   const allowedVehiclesEdited = useRef(false)
+  const allowedVehiclesPrefilled = useRef(false)
   const deliverySettingsRef = useRef(null)
   const draftHotFoodPrefilled = useRef(false)
   /** Store type display name for Delivery Settings seed banner (OG §02). */
@@ -785,6 +795,72 @@ export default function AdminAddVendorBrunchs() {
     void loadDraftScheduledPrefill()
   }, [orderModesReady, loadDraftScheduledPrefill])
 
+  const loadDraftDriverRatesPrefill = useCallback(async () => {
+    if (!isNewBranch) return
+    if (driverRatesFormHasDisplayValues(draftDriverRates)) return
+
+    const wizardStoreTypeId = state?.wizardDraft?.form?.storeTypeId
+      ? String(state.wizardDraft.form.storeTypeId)
+      : ''
+    const storeTypeId = useRealBranchApi ? vendorStoreTypeId : wizardStoreTypeId
+    if (!storeTypeId && !vendorId) return
+
+    const next = await fetchBranchDriverRatesPrefill({
+      vendorId: useRealBranchApi ? vendorId : undefined,
+      vendorStoreTypeId: storeTypeId,
+      adminService,
+      adminSlaModelsService,
+    })
+    if (!next) return
+    setDraftDriverRates((prev) => (driverRatesFormHasDisplayValues(prev) ? prev : next))
+  }, [
+    isNewBranch,
+    draftDriverRates,
+    useRealBranchApi,
+    vendorStoreTypeId,
+    vendorId,
+    state?.wizardDraft?.form?.storeTypeId,
+  ])
+
+  useEffect(() => {
+    if (!orderModesReady) return
+    void loadDraftDriverRatesPrefill()
+  }, [orderModesReady, loadDraftDriverRatesPrefill])
+
+  const loadDraftAllowedVehiclesPrefill = useCallback(async () => {
+    if (allowedVehiclesEdited.current || allowedVehiclesPrefilled.current) return
+
+    const wizardStoreTypeId = state?.wizardDraft?.form?.storeTypeId
+      ? String(state.wizardDraft.form.storeTypeId)
+      : ''
+    const storeTypeId = useRealBranchApi ? vendorStoreTypeId : wizardStoreTypeId
+    if (!storeTypeId) return
+
+    const prefill = await fetchStoreTypeAllowedVehiclesPrefill(adminService, storeTypeId)
+    allowedVehiclesPrefilled.current = true
+    if (!prefill || allowedVehiclesEdited.current) return
+
+    setDraftAllowedVehiclesFieldMeta((prev) => prev ?? prefill.fieldMeta)
+    setDraftAllowedVehicles((prev) => {
+      if (prev != null || allowedVehiclesEdited.current) return prev
+      return prefill.form
+    })
+  }, [
+    useRealBranchApi,
+    vendorStoreTypeId,
+    state?.wizardDraft?.form?.storeTypeId,
+  ])
+
+  useEffect(() => {
+    if (!orderModesReady) return
+    void loadDraftAllowedVehiclesPrefill()
+  }, [orderModesReady, loadDraftAllowedVehiclesPrefill])
+
+  useEffect(() => {
+    if (allowedVehiclesEdited.current) return
+    allowedVehiclesPrefilled.current = false
+  }, [vendorStoreTypeId, state?.wizardDraft?.form?.storeTypeId])
+
   const loadDeliveryDraftPrefill = useCallback(async () => {
     if (!useRealBranchApi || !isNewBranch || !vendorId) return
     if (deliveryDraftPrefilled.current) return
@@ -797,19 +873,30 @@ export default function AdminAddVendorBrunchs() {
         setDraftAllowedVehicles((prev) =>
           prev || normalizeAllowedVehiclesForm(data.allowedVehicles),
         )
+        setDraftAllowedVehiclesFieldMeta((prev) =>
+          prev || extractAllowedVehiclesFieldMeta(data.allowedVehicles),
+        )
       } else {
-        setDraftAllowedVehicles((prev) => prev || normalizeAllowedVehiclesForm(null))
+        await loadDraftAllowedVehiclesPrefill()
       }
-      if (data?.driverRates) {
-        setDraftDriverRates((prev) => prev || normalizeDriverRates(data.driverRates))
+      if (data?.driverRates && driverRatesFormHasDisplayValues(normalizeDriverRates(data.driverRates))) {
+        setDraftDriverRates((prev) =>
+          prev || normalizeDriverRates(data.driverRates),
+        )
       } else {
-        setDraftDriverRates((prev) => prev || EMPTY_DRIVER_RATES)
+        await loadDraftDriverRatesPrefill()
       }
     } catch {
-      setDraftAllowedVehicles((prev) => prev || normalizeAllowedVehiclesForm(null))
-      setDraftDriverRates((prev) => prev || EMPTY_DRIVER_RATES)
+      await loadDraftAllowedVehiclesPrefill()
+      await loadDraftDriverRatesPrefill()
     }
-  }, [useRealBranchApi, isNewBranch, vendorId])
+  }, [
+    useRealBranchApi,
+    isNewBranch,
+    vendorId,
+    loadDraftAllowedVehiclesPrefill,
+    loadDraftDriverRatesPrefill,
+  ])
 
   useEffect(() => {
     if (!orderModesReady) return
@@ -1881,6 +1968,19 @@ export default function AdminAddVendorBrunchs() {
               ) {
                 void loadDraftHotFoodPrefill()
               }
+              if (
+                next.SCHEDULED?.enabled &&
+                next.SCHEDULED?.supportedByStoreType !== false
+              ) {
+                void loadDraftScheduledPrefill()
+              }
+              if (
+                (next.HOT_FOOD_ON_DEMAND?.enabled &&
+                  next.HOT_FOOD_ON_DEMAND?.supportedByStoreType !== false) ||
+                (next.SCHEDULED?.enabled && next.SCHEDULED?.supportedByStoreType !== false)
+              ) {
+                void loadDraftDriverRatesPrefill()
+              }
             }}
             draftHotFood={draftHotFood}
             onDraftHotFoodChange={(next) => {
@@ -1895,6 +1995,7 @@ export default function AdminAddVendorBrunchs() {
             draftDriverRates={draftDriverRates}
             onDraftDriverRatesChange={setDraftDriverRates}
             draftAllowedVehicles={draftAllowedVehicles}
+            draftAllowedVehiclesFieldMeta={draftAllowedVehiclesFieldMeta}
             onDraftAllowedVehiclesChange={(next) => {
               allowedVehiclesEdited.current = true
               setDraftAllowedVehicles(next)

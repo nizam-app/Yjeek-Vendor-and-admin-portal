@@ -101,6 +101,69 @@ export function normalizeDriverRates(raw) {
   return base
 }
 
+/** True when the form has at least one priced cell (for wizard prefill detection). */
+export function driverRatesFormHasDisplayValues(form) {
+  if (!form || typeof form !== 'object') return false
+  const od = form.onDemand || {}
+  for (const key of DRIVER_ON_DEMAND_KEYS) {
+    const raw = od[key]
+    if (raw != null && String(raw).trim() !== '') return true
+  }
+  for (const gridKey of DRIVER_SCHEDULED_GRID_KEYS) {
+    const tiers = form[gridKey]?.tiers
+    if (!tiers || typeof tiers !== 'object') continue
+    for (const tier of SCHEDULED_SPEED_TIERS) {
+      const cell = tiers[tier]
+      if (!cell) continue
+      for (const key of DRIVER_SCHEDULED_TIER_KEYS) {
+        const raw = cell[key]
+        if (raw != null && String(raw).trim() !== '') return true
+      }
+    }
+  }
+  return false
+}
+
+export function mergeDriverRatesPrefillSources(...raws) {
+  const base = emptyDriverRatesForm()
+  for (const raw of raws) {
+    if (!raw) continue
+    const form = normalizeDriverRates(raw)
+    for (const key of DRIVER_ON_DEMAND_KEYS) {
+      const cur = base.onDemand[key]
+      const next = form.onDemand[key]
+      if ((cur === '' || cur == null) && next !== '' && next != null) {
+        base.onDemand[key] = next
+      }
+    }
+    for (const gridKey of DRIVER_SCHEDULED_GRID_KEYS) {
+      for (const tier of SCHEDULED_SPEED_TIERS) {
+        const out = base[gridKey].tiers[tier]
+        const src = form[gridKey].tiers[tier]
+        for (const key of DRIVER_SCHEDULED_TIER_KEYS) {
+          const cur = out[key]
+          const next = src[key]
+          if ((cur === '' || cur == null) && next !== '' && next != null) {
+            out[key] = next
+          }
+        }
+      }
+    }
+  }
+  return base
+}
+
+export function pickDriverRatesPrefill(...candidates) {
+  const merged = mergeDriverRatesPrefillSources(...candidates)
+  if (driverRatesFormHasDisplayValues(merged)) return merged
+  for (const raw of candidates) {
+    if (!raw) continue
+    const form = normalizeDriverRates(raw)
+    if (driverRatesFormHasDisplayValues(form)) return form
+  }
+  return null
+}
+
 function extractOnDemandMeta(raw) {
   if (!raw || typeof raw !== 'object') return null
   const hasInherited = DRIVER_ON_DEMAND_KEYS.some((key) => {

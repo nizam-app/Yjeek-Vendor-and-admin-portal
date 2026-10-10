@@ -38,7 +38,7 @@ export function mapWizardBranchDeliverySettings(branch) {
   if (branch.draftDriverRates) {
     body.driverRates = buildDriverRatesPayload(branch.draftDriverRates)
   }
-  if (branch.allowedVehiclesEdited && branch.draftAllowedVehicles) {
+  if (branch.draftAllowedVehicles) {
     body.allowedVehicles = buildAllowedVehiclesPayload(branch.draftAllowedVehicles)
   }
   if (modeEnabled(modes, 'SERVICES') && branch.serviceSubTypeId) {

@@ -301,6 +301,7 @@ function applyServerPayload(
  *   onDraftDriverRatesChange?: (form: object) => void,
  *   draftAllowedVehicles?: object | null,
  *   onDraftAllowedVehiclesChange?: (form: object) => void,
+ *   draftAllowedVehiclesFieldMeta?: object | null,
  * }} props
  */
 function AdminBranchDeliverySettings(
@@ -324,6 +325,7 @@ function AdminBranchDeliverySettings(
   onDraftDriverRatesChange,
   draftAllowedVehicles = null,
   onDraftAllowedVehiclesChange,
+  draftAllowedVehiclesFieldMeta = null,
 },
   ref,
 ) {
@@ -1065,11 +1067,19 @@ function AdminBranchDeliverySettings(
             <div className="space-y-3 border-t border-[#eceeec] pt-4">
               <AdminAllowedVehiclesPanel
                 value={
-                  draftAllowedVehicles ||
-                  normalizeAllowedVehiclesForm(null)
+                  draftAllowedVehicles ??
+                  normalizeAllowedVehiclesForm(
+                    draftAllowedVehiclesFieldMeta
+                      ? {
+                          bike: { value: draftAllowedVehiclesFieldMeta.bike?.defaultValue },
+                          car: { value: draftAllowedVehiclesFieldMeta.car?.defaultValue },
+                        }
+                      : null,
+                  )
                 }
                 onChange={(next) => onDraftAllowedVehiclesChange?.(next)}
                 disabled={disabled}
+                fieldMeta={draftAllowedVehiclesFieldMeta}
               />
               {shouldShowOnDemandDriverRates(previewModes) ||
               shouldShowScheduledDriverRates(previewModes, supportedOrderModes) ? (
@@ -1083,7 +1093,11 @@ function AdminBranchDeliverySettings(
                     )}
                   </p>
                 </div>
-                <div className="px-3.5 py-3.5">
+                <div className="space-y-3 px-3.5 py-3.5">
+                  <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                    Pre-filled from store type / SLA defaults (or vendor template). Edit for this
+                    branch before saving — overrides are kept on the branch.
+                  </p>
                   <AdminDriverRatesPanel
                     value={draftDriverRates || EMPTY_DRIVER_RATES}
                     onChange={(next) => onDraftDriverRatesChange?.(next)}
@@ -1093,6 +1107,7 @@ function AdminBranchDeliverySettings(
                       previewModes,
                       supportedOrderModes,
                     )}
+                    allowedVehicles={draftAllowedVehicles}
                   />
                 </div>
               </div>
@@ -1302,6 +1317,12 @@ function AdminBranchDeliverySettings(
                 ✓ {driverRatesSeedBannerLabel}
               </div>
             ) : null}
+            {showScheduledDriverRates ? (
+              <p className="text-[12px] leading-[16px] text-[#7c8780]">
+                Customer and vendor scheduled fees are in the <strong className="font-semibold text-[#17231c]">Scheduled</strong>{' '}
+                section above. Driver rates here are what Yjeek pays the champ (flat, by vehicle).
+              </p>
+            ) : null}
             <AdminDriverRatesPanel
               value={driverRatesForm}
               onChange={onDriverRatesChange}
@@ -1311,6 +1332,7 @@ function AdminBranchDeliverySettings(
               resettingPath={resettingPath}
               includeOnDemand={showOnDemandDriverRates}
               includeScheduled={showScheduledDriverRates}
+              allowedVehicles={allowedVehiclesForm}
             />
           </div>
         </div>

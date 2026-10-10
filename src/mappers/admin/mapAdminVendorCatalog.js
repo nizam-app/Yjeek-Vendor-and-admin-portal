@@ -110,10 +110,15 @@ export function mapAdminVendorCatalog(raw) {
     ? src.products.map(mapAdminCatalogProduct).filter(Boolean)
     : []
 
-  const vendorItemClasses = normalizeItemClasses(vendor.itemClasses ?? vendor)
   const storeTypeItemClasses = storeType
     ? normalizeItemClasses(storeType.itemClasses ?? storeType)
     : { allowsNormalItems: true, allowsSpecialItems: true }
+  const vendorItemClassesRaw = normalizeItemClasses(vendor.itemClasses ?? vendor)
+  const storeTypeBoth =
+    storeTypeItemClasses.allowsNormalItems !== false &&
+    storeTypeItemClasses.allowsSpecialItems !== false
+  const vendorItemClasses =
+    !storeTypeBoth && storeType ? storeTypeItemClasses : vendorItemClassesRaw
 
   return {
     vendor: {

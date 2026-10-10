@@ -1,6 +1,7 @@
 import { mapAdminVendorCommissionResponse } from './mapAdminVendorCommission'
 import { normalizeHotFoodDefaults } from '../../components/admin/management/AdminStoreTypeHotFoodDefaults'
 import { normalizeScheduledFees } from '../../components/admin/management/scheduledFeesForm'
+import { normalizeDriverRates } from '../../components/admin/management/driverRatesForm'
 
 const DEFAULT_ALLOWED_VEHICLES = { bike: true, car: true }
 
@@ -10,6 +11,7 @@ export function mapPlatformCommercialDefaultsToForm(data) {
       allowedVehicles: { ...DEFAULT_ALLOWED_VEHICLES },
       hotFood: normalizeHotFoodDefaults(null),
       scheduledFees: normalizeScheduledFees(null),
+      driverRates: normalizeDriverRates(null),
       commission: null,
     }
   }
@@ -35,6 +37,7 @@ export function mapPlatformCommercialDefaultsToForm(data) {
     },
     hotFood: normalizeHotFoodDefaults(data.hotFoodOnDemand),
     scheduledFees: normalizeScheduledFees(data.scheduled),
+    driverRates: normalizeDriverRates(data.driverRates),
     commission,
     raw: data,
   }
