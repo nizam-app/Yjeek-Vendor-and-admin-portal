@@ -266,6 +266,8 @@ function AdminTopbar({ collapsed }) {
     notifications: 'Settings · Notifications',
     security: 'Settings · Security',
     integrations: 'Settings · Integrations',
+    services: 'Settings · Services',
+    customerFees: 'Settings · Customer fees',
   }
 
   const title =

@@ -735,12 +735,16 @@ export default function AdminSettingsPage() {
     }))
   }, [pageData])
 
+  /** UI owns the tab list; merge API tabs so new sections are not hidden on older backends. */
   const visibleTabs = useMemo(() => {
     const apiTabs = pageData?.tabs
-    if (!Array.isArray(apiTabs) || apiTabs.length === 0) return TABS
-    const allowed = new Set(apiTabs)
-    const filtered = TABS.filter((tab) => allowed.has(tab.id))
-    return filtered.length > 0 ? filtered : TABS
+    const allowed = new Set(TABS.map((tab) => tab.id))
+    if (Array.isArray(apiTabs)) {
+      for (const id of apiTabs) {
+        if (id) allowed.add(String(id).trim().toLowerCase())
+      }
+    }
+    return TABS.filter((tab) => allowed.has(tab.id))
   }, [pageData])
 
   const canSave = true
