@@ -43,6 +43,12 @@ test('dispatcher persona permission checks', () => {
   assert.equal(hasAdminPermission(dispatcherManama, 'SETTINGS', 'VIEW'), false)
 })
 
+test('champ form loads store types via fleet catalog (no STORE_MANAGEMENT)', () => {
+  const svc = readSrc('src', 'services', 'admin', 'storeTypeService.js')
+  assert.match(svc, /listStoreTypesForChampForm/)
+  assert.match(svc, /endpoints\.admin\.fleet\.champStoreTypes/)
+})
+
 test('adminNavManifest wires vendors and fleet routes to module keys', () => {
   const src = readSrc('src', 'config', 'adminNavManifest.js')
   assert.match(src, /prefix: '\/admin\/vendors'[\s\S]*?module: 'VENDOR_MANAGEMENT'/)

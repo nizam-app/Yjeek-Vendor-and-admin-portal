@@ -103,11 +103,26 @@ export const adminStoreTypeService = {
    * @param {{ signal?: AbortSignal, params?: Record<string, unknown> }} [options]
    */
   async listStoreTypesForChampForm(options = {}) {
-    const result = await this.listStoreTypes({
+    const useFleetCatalog =
+      isAdminRealApiFeature('fleet') || !apiConfig.adminUseMockApi
+
+    const requestOpts = {
       ...options,
-      params: { visibleOnly: true, ...(options.params || {}) },
-    })
-    const storeTypes = (result?.data?.storeTypes || [])
+      scope: 'admin',
+      feature: 'fleet',
+      forceReal: !apiConfig.adminUseMockApi,
+    }
+
+    const result = useFleetCatalog
+      ? await apiClient.get(endpoints.admin.fleet.champStoreTypes, requestOpts)
+      : await apiClient.get(endpoints.admin.storeTypes.list, {
+          ...requestOpts,
+          feature: useRealStoreTypesApi() ? 'store-types' : 'fleet',
+          params: { limit: 100, visibleOnly: true, ...(options.params || {}) },
+        })
+
+    const payload = useFleetCatalog ? result?.data : mapAdminStoreTypesResponse(result?.data)
+    const storeTypes = (payload?.storeTypes || [])
       .filter((item) => item && item.id && item.name && item.slug && item.visible !== false)
       .map((item) => ({
         id: String(item.id),

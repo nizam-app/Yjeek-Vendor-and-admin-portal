@@ -140,6 +140,7 @@ export default function AdminDashboardPage() {
         <AdminLiveMap
           layer={layer}
           onLayerChange={setLayer}
+          region={region}
           legend={mapData?.legend || []}
           points={mapData?.points || []}
           scopeNote={mapData?.scopeNote}

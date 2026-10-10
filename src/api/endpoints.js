@@ -748,6 +748,8 @@ export const endpoints = {
       summary: '/admin/fleet/summary',
       /** GET /admin/fleet/champ-nationalities — list; POST { label } — add custom */
       champNationalities: '/admin/fleet/champ-nationalities',
+      /** GET /admin/fleet/champ-store-types — published store types for champ category chips */
+      champStoreTypes: '/admin/fleet/champ-store-types',
       /**
        * Confirmed: GET /admin/fleet/champs?search=&statusTab=&vehicle=&tier=&category=&limit=
        * Confirmed: POST /admin/fleet/champs — create champ
@@ -1056,6 +1058,8 @@ export const endpoints = {
       integrations: '/admin/settings/integrations',
       /** Services v1 S05 — GET + PATCH /admin/settings/services */
       services: '/admin/settings/services',
+      /** Customer checkout / receipt fees — GET + PATCH /admin/settings/customerFees */
+      customerFees: '/admin/settings/customerFees',
       /** Confirmed: GET /admin/settings/meta */
       meta: '/admin/settings/meta',
       /** Confirmed: POST /admin/settings/reset */

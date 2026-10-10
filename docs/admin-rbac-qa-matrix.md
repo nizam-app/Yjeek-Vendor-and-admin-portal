@@ -43,7 +43,7 @@ Run against **real API** (`VITE_ADMIN_USE_MOCK_API=false`, `VITE_ADMIN_REAL_API_
 | # | Step | Expected | ✓ |
 |---|------|----------|---|
 | 10 | Fleet list | Scoped champs (zone rules per backend) | |
-| 11 | **Add champ** visible | Has `FLEET_MANAGEMENT.CREATE` | |
+| 11 | **Add champ** visible | Has `FLEET_MANAGEMENT.CREATE`; category chips load via `GET /admin/fleet/champ-store-types` (no `STORE_MANAGEMENT`) | |
 
 ### Scheduled
 
