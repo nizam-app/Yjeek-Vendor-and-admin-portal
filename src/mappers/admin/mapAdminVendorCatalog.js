@@ -1,6 +1,6 @@
 /** Map Admin Store Management vendor catalog (Menu Settings → Menu). */
 
-import { normalizeItemClasses } from './mapAdminStoreTypes'
+import { normalizeItemClasses } from './mapAdminStoreTypes.js'
 
 function money(value) {
   if (value == null || value === '') return null
