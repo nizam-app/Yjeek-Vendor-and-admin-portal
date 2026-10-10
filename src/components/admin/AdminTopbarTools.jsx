@@ -315,6 +315,7 @@ export function AdminTopbarTools() {
                   role="option"
                   aria-selected={region === option.value}
                   onClick={() => {
+                    if (option.value !== region) clearMapFocus()
                     setRegion(option.value)
                     setRegionOpen(false)
                   }}

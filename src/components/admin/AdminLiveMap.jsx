@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { LocateFixed } from 'lucide-react'
 import { cn } from './cn'
 import { ADMIN_DASHBOARD_MAP_TABS } from '../../mappers/admin/mapAdminDashboardMap'
+import { adminRegionMapView } from '../../lib/adminRegions'
 import { hasGoogleMapsApiKey, isPlottableLatLng, loadGoogleMapsApi } from '../../lib/googleMaps'
-
-const DEFAULT_CENTER = { lat: 26.2285, lng: 50.586 }
 const USER_LOCATION_ZOOM = 14
 
 function matchesFocus(point, focusTarget) {
@@ -75,6 +74,7 @@ export function AdminLiveMap({
   focusTarget = null,
   onFocusClear,
   onPointClick,
+  region = 'BH',
 }) {
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
@@ -83,6 +83,7 @@ export function AdminLiveMap({
   const infoWindowRef = useRef(null)
   const infoWindowCloseListenerRef = useRef(null)
   const focusKeyRef = useRef(null)
+  const viewScopeRef = useRef(`${region}:${layer}`)
   const keepInfoWindowOpenRef = useRef(false)
   const onFocusClearRef = useRef(onFocusClear)
   const [mapStatus, setMapStatus] = useState('loading')
@@ -91,6 +92,8 @@ export function AdminLiveMap({
   const [locateError, setLocateError] = useState(null)
 
   onFocusClearRef.current = onFocusClear
+
+  const regionView = useMemo(() => adminRegionMapView(region), [region])
 
   const plottable = useMemo(
     () =>
@@ -126,9 +129,10 @@ export function AdminLiveMap({
       .then((maps) => {
         if (cancelled || !mapRef.current) return
         if (!mapInstanceRef.current) {
+          const initialView = adminRegionMapView(region)
           mapInstanceRef.current = new maps.Map(mapRef.current, {
-            center: DEFAULT_CENTER,
-            zoom: 11,
+            center: { lat: initialView.lat, lng: initialView.lng },
+            zoom: initialView.zoom,
             mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: false,
@@ -151,6 +155,15 @@ export function AdminLiveMap({
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (mapStatus !== 'ready' || !mapInstanceRef.current) return
+    const map = mapInstanceRef.current
+    map.panTo({ lat: regionView.lat, lng: regionView.lng })
+    if (map.getZoom() < regionView.zoom) {
+      map.setZoom(regionView.zoom)
+    }
+  }, [mapStatus, regionView.lat, regionView.lng, regionView.zoom])
 
   function ensureInfoWindow(maps) {
     if (!infoWindowRef.current) {
@@ -191,6 +204,9 @@ export function AdminLiveMap({
     const clickListeners = []
     const nextFocusKey = focusTargetKey(focusTarget)
     const focusChanged = nextFocusKey !== focusKeyRef.current
+    const viewScopeKey = `${region}:${layer}`
+    const viewScopeChanged = viewScopeKey !== viewScopeRef.current
+    viewScopeRef.current = viewScopeKey
 
     markersRef.current.forEach((marker) => marker.setMap(null))
     markersRef.current = []
@@ -201,8 +217,8 @@ export function AdminLiveMap({
         focusKeyRef.current = nextFocusKey
       }
       if (!userMarkerRef.current && !focusTarget) {
-        map.setCenter(DEFAULT_CENTER)
-        map.setZoom(11)
+        map.setCenter({ lat: regionView.lat, lng: regionView.lng })
+        map.setZoom(regionView.zoom)
       }
       return undefined
     }
@@ -280,8 +296,8 @@ export function AdminLiveMap({
     const hadFocus = Boolean(focusKeyRef.current)
     focusKeyRef.current = null
 
-    // Keep camera after dismissing a focused pin; only auto-fit for normal layer views.
-    if (hadFocus) {
+    // Keep camera after dismissing a focused pin; refit when region/layer scope changes.
+    if (hadFocus && !viewScopeChanged) {
       return () => {
         clickListeners.forEach((listener) => maps.event.removeListener(listener))
       }
@@ -297,7 +313,7 @@ export function AdminLiveMap({
       maps.event.removeListener(listener)
       clickListeners.forEach((item) => maps.event.removeListener(item))
     }
-  }, [mapStatus, pointsKey, plottable, focusTarget, onPointClick])
+  }, [mapStatus, pointsKey, plottable, focusTarget, onPointClick, region, layer, regionView])
 
   useEffect(() => {
     return () => {

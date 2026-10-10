@@ -18,6 +18,12 @@ const TABS = [
   { id: 'security', label: 'Security', title: 'Security', topbar: 'Settings · Security' },
   { id: 'integrations', label: 'Integrations', title: 'Integrations', topbar: 'Settings · Integrations' },
   { id: 'services', label: 'Services', title: 'Services booking', topbar: 'Settings · Services' },
+  {
+    id: 'customerFees',
+    label: 'Customer fees',
+    title: 'Customer fees & receipts',
+    topbar: 'Settings · Customer fees',
+  },
 ]
 
 const COUNTRIES = ['Bahrain', 'Saudi Arabia', 'UAE', 'Kuwait', 'Qatar', 'Oman']
@@ -83,6 +89,30 @@ const DEFAULT_STATE = {
     cancelFeePercent: '50',
     rescheduleWindowHours: '2',
     rescheduleFeePercent: '0',
+  },
+  customerFees: {
+    vat: {
+      enabled: true,
+      pricingMode: 'included',
+      ratePct: '10',
+      visibleToVendor: false,
+      visibleToCustomer: false,
+      visibleOnReceipt: false,
+    },
+    serviceFee: {
+      enabled: false,
+      ratePct: '0.03',
+      scheduledFlatBhd: '0.3',
+      visibleToVendor: true,
+      visibleToCustomer: true,
+      visibleOnReceipt: true,
+    },
+    deliveryFee: {
+      enabled: true,
+      visibleToVendor: true,
+      visibleToCustomer: true,
+      visibleOnReceipt: true,
+    },
   },
 }
 
@@ -495,6 +525,97 @@ function IntegrationsTab({ services, onToggleStatus }) {
   )
 }
 
+function FeeVisibilityCard({ title, description, form, setField, extraFields = null }) {
+  return (
+    <SectionCard title={title}>
+      {description ? <p className="mb-3 text-[12px] text-[#8a948e]">{description}</p> : null}
+      <div className="space-y-2.5">
+        <SettingRow
+          title="Charge enabled"
+          subtitle="When off, this fee is not calculated at checkout"
+          checked={form.enabled}
+          onChange={(value) => setField('enabled', value)}
+        />
+        <SettingRow
+          title="Visible to vendor"
+          subtitle="Vendor order details and panel breakdown"
+          checked={form.visibleToVendor}
+          onChange={(value) => setField('visibleToVendor', value)}
+        />
+        <SettingRow
+          title="Visible to customer"
+          subtitle="Customer app cart and checkout"
+          checked={form.visibleToCustomer}
+          onChange={(value) => setField('visibleToCustomer', value)}
+        />
+        <SettingRow
+          title="Visible on receipt"
+          subtitle="Printed and digital receipts (all apps)"
+          checked={form.visibleOnReceipt}
+          onChange={(value) => setField('visibleOnReceipt', value)}
+        />
+        {extraFields}
+      </div>
+    </SectionCard>
+  )
+}
+
+function CustomerFeesTab({ form, setFeeField }) {
+  return (
+    <div className="space-y-4">
+      <FeeVisibilityCard
+        title="VAT"
+        description="Menu prices are VAT-inclusive by default. Use on top only if you add VAT at checkout later."
+        form={form.vat}
+        setField={(key, value) => setFeeField('vat', key, value)}
+        extraFields={
+          <div className="grid gap-3 pt-1 sm:grid-cols-2">
+            <SelectField
+              label="Pricing mode"
+              value={form.vat.pricingMode === 'on_top' ? 'On top of prices' : 'Included in prices'}
+              onChange={(value) =>
+                setFeeField('vat', 'pricingMode', value === 'On top of prices' ? 'on_top' : 'included')
+              }
+              options={['Included in prices', 'On top of prices']}
+            />
+            <TextField
+              label="VAT rate (%)"
+              value={form.vat.ratePct}
+              onChange={(value) => setFeeField('vat', 'ratePct', value)}
+            />
+          </div>
+        }
+      />
+      <FeeVisibilityCard
+        title="Service fee"
+        description="Platform service fee (formula can be updated when buyer provides rates)."
+        form={form.serviceFee}
+        setField={(key, value) => setFeeField('serviceFee', key, value)}
+        extraFields={
+          <div className="grid gap-3 pt-1 sm:grid-cols-2">
+            <TextField
+              label="On-demand rate (decimal)"
+              value={form.serviceFee.ratePct}
+              onChange={(value) => setFeeField('serviceFee', 'ratePct', value)}
+            />
+            <TextField
+              label="Scheduled flat (BHD)"
+              value={form.serviceFee.scheduledFlatBhd}
+              onChange={(value) => setFeeField('serviceFee', 'scheduledFlatBhd', value)}
+            />
+          </div>
+        }
+      />
+      <FeeVisibilityCard
+        title="Delivery fee"
+        description="Amounts still come from branch delivery settings; this controls charge and visibility."
+        form={form.deliveryFee}
+        setField={(key, value) => setFeeField('deliveryFee', key, value)}
+      />
+    </div>
+  )
+}
+
 function ServicesTab({ form, setField }) {
   return (
     <div className="space-y-3.5">
@@ -604,6 +725,13 @@ export default function AdminSettingsPage() {
       security: pageData.security ? { ...prev.security, ...pageData.security } : prev.security,
       integrations: Array.isArray(pageData.integrations) ? pageData.integrations : prev.integrations,
       services: pageData.services ? { ...prev.services, ...pageData.services } : prev.services,
+      customerFees: pageData.customerFees
+        ? {
+            vat: { ...prev.customerFees.vat, ...pageData.customerFees.vat },
+            serviceFee: { ...prev.customerFees.serviceFee, ...pageData.customerFees.serviceFee },
+            deliveryFee: { ...prev.customerFees.deliveryFee, ...pageData.customerFees.deliveryFee },
+          }
+        : prev.customerFees,
     }))
   }, [pageData])
 
@@ -623,6 +751,19 @@ export default function AdminSettingsPage() {
       [section]: {
         ...prev[section],
         [key]: value,
+      },
+    }))
+  }
+
+  const setCustomerFeeField = (feeKey, field, value) => {
+    setState((prev) => ({
+      ...prev,
+      customerFees: {
+        ...prev.customerFees,
+        [feeKey]: {
+          ...prev.customerFees[feeKey],
+          [field]: value,
+        },
       },
     }))
   }
@@ -654,6 +795,15 @@ export default function AdminSettingsPage() {
       const result = await saveSettings({ tabId: sectionKey, form })
       if (sectionKey === 'integrations' && Array.isArray(result?.data)) {
         setState((prev) => ({ ...prev, integrations: result.data }))
+      } else if (sectionKey === 'customerFees' && result?.data && typeof result.data === 'object') {
+        setState((prev) => ({
+          ...prev,
+          customerFees: {
+            vat: { ...prev.customerFees.vat, ...(result.data.vat || {}) },
+            serviceFee: { ...prev.customerFees.serviceFee, ...(result.data.serviceFee || {}) },
+            deliveryFee: { ...prev.customerFees.deliveryFee, ...(result.data.deliveryFee || {}) },
+          },
+        }))
       } else if (result?.data && typeof result.data === 'object' && !Array.isArray(result.data)) {
         setState((prev) => ({
           ...prev,
@@ -712,24 +862,30 @@ export default function AdminSettingsPage() {
         />
       )
     }
-    return (
-      <IntegrationsTab
-        services={state.integrations}
-        onToggleStatus={(id) => {
-          setState((prev) => ({
-            ...prev,
-            integrations: prev.integrations.map((item) =>
-              item.id === id
-                ? {
-                    ...item,
-                    status: item.status === 'Connected' ? 'Not connected' : 'Connected',
-                  }
-                : item,
-            ),
-          }))
-        }}
-      />
-    )
+    if (activeTab.id === 'customerFees') {
+      return <CustomerFeesTab form={state.customerFees} setFeeField={setCustomerFeeField} />
+    }
+    if (activeTab.id === 'integrations') {
+      return (
+        <IntegrationsTab
+          services={state.integrations}
+          onToggleStatus={(id) => {
+            setState((prev) => ({
+              ...prev,
+              integrations: prev.integrations.map((item) =>
+                item.id === id
+                  ? {
+                      ...item,
+                      status: item.status === 'Connected' ? 'Not connected' : 'Connected',
+                    }
+                  : item,
+              ),
+            }))
+          }}
+        />
+      )
+    }
+    return null
   }, [activeTab.id, state])
 
   return (

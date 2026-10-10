@@ -411,6 +411,43 @@ export function mapAdminSettingsServices(data) {
   return Object.keys(mapped).length ? mapped : null
 }
 
+function mapFeeBlock(nested, extraKeys = []) {
+  if (!nested || typeof nested !== 'object') return null
+  const mapped = {}
+  if ('enabled' in nested) mapped.enabled = asBool(nested.enabled)
+  if ('visibleToVendor' in nested) mapped.visibleToVendor = asBool(nested.visibleToVendor)
+  if ('visibleToCustomer' in nested) mapped.visibleToCustomer = asBool(nested.visibleToCustomer)
+  if ('visibleOnReceipt' in nested) mapped.visibleOnReceipt = asBool(nested.visibleOnReceipt)
+  for (const key of extraKeys) {
+    if (key in nested) {
+      const n = asNumber(nested[key])
+      mapped[key] = n != null ? String(n) : asString(nested[key])
+    }
+  }
+  return Object.keys(mapped).length ? mapped : null
+}
+
+/**
+ * Map GET /admin/settings/customerFees into Customer fees tab form.
+ */
+export function mapAdminSettingsCustomerFees(data) {
+  const src = asObject(data)
+  if (!src) return null
+  const nested = asObject(src.customerFees) || src
+  const vat = mapFeeBlock(nested.vat, ['ratePct'])
+  const serviceFee = mapFeeBlock(nested.serviceFee, ['ratePct', 'scheduledFlatBhd'])
+  const deliveryFee = mapFeeBlock(nested.deliveryFee)
+  if (nested.vat?.pricingMode) {
+    if (!vat) return null
+    vat.pricingMode = asString(nested.vat.pricingMode, 'included')
+  }
+  const out = {}
+  if (vat) out.vat = vat
+  if (serviceFee) out.serviceFee = serviceFee
+  if (deliveryFee) out.deliveryFee = deliveryFee
+  return Object.keys(out).length ? out : null
+}
+
 /**
  * Map GET /admin/settings root payload.
  */
@@ -446,6 +483,7 @@ export function mapAdminSettingsAll(data) {
     security: mapAdminSettingsSecurity(src.security),
     integrations: mapAdminSettingsIntegrations(src.integrations),
     services: mapAdminSettingsServices(src.services),
+    customerFees: mapAdminSettingsCustomerFees(src.customerFees),
   }
 }
 
@@ -522,6 +560,7 @@ export function mapAdminSettingsPageState(
   defaults = {},
   integrationsData = null,
   servicesData = null,
+  customerFeesData = null,
 ) {
   const all = mapAdminSettingsAll(allData)
   const general = {
@@ -563,7 +602,26 @@ export function mapAdminSettingsPageState(
       ...(all?.services || {}),
       ...(mapAdminSettingsServices(servicesData) || {}),
     },
+    customerFees: mergeCustomerFeesForm(
+      defaults.customerFees,
+      all?.customerFees,
+      mapAdminSettingsCustomerFees(customerFeesData),
+    ),
     tabs: all?.tabs?.length ? all.tabs : null,
+  }
+}
+
+function mergeCustomerFeesForm(defaults, fromAll, fromSection) {
+  const base = asObject(defaults) || {}
+  const mergeBlock = (key) => ({
+    ...(asObject(base[key]) || {}),
+    ...(asObject(fromAll?.[key]) || {}),
+    ...(asObject(fromSection?.[key]) || {}),
+  })
+  return {
+    vat: mergeBlock('vat'),
+    serviceFee: mergeBlock('serviceFee'),
+    deliveryFee: mergeBlock('deliveryFee'),
   }
 }
 
@@ -658,5 +716,39 @@ export function mapAdminPatchServicesRequest(form) {
   if (rescheduleHours != null) body.rescheduleWindowHours = Math.trunc(rescheduleHours)
   const rescheduleFee = asNumber(src.rescheduleFeePercent)
   if (rescheduleFee != null) body.rescheduleFeePercent = Math.trunc(rescheduleFee)
+  return body
+}
+
+function patchFeeBlock(src, extra = []) {
+  if (!src || typeof src !== 'object') return undefined
+  const out = {}
+  if ('enabled' in src) out.enabled = asBool(src.enabled)
+  if ('visibleToVendor' in src) out.visibleToVendor = asBool(src.visibleToVendor)
+  if ('visibleToCustomer' in src) out.visibleToCustomer = asBool(src.visibleToCustomer)
+  if ('visibleOnReceipt' in src) out.visibleOnReceipt = asBool(src.visibleOnReceipt)
+  for (const key of extra) {
+    const n = asNumber(src[key])
+    if (n != null) out[key] = n
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+/** PATCH /admin/settings/customerFees body */
+export function mapAdminPatchCustomerFeesRequest(form) {
+  const src = asObject(form) || {}
+  const vatSrc = asObject(src.vat)
+  const serviceSrc = asObject(src.serviceFee)
+  const deliverySrc = asObject(src.deliveryFee)
+  const body = {}
+  const vat = patchFeeBlock(vatSrc, ['ratePct'])
+  if (vat && vatSrc?.pricingMode) {
+    const mode = asString(vatSrc.pricingMode)
+    if (mode === 'included' || mode === 'on_top') vat.pricingMode = mode
+  }
+  const serviceFee = patchFeeBlock(serviceSrc, ['ratePct', 'scheduledFlatBhd'])
+  const deliveryFee = patchFeeBlock(deliverySrc)
+  if (vat) body.vat = vat
+  if (serviceFee) body.serviceFee = serviceFee
+  if (deliveryFee) body.deliveryFee = deliveryFee
   return body
 }

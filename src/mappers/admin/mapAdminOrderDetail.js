@@ -450,6 +450,12 @@ export function mapAdminOrderDetailResponse(data) {
     ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
     ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
     ['Tip Amount', formatAdminMoney(totals.tipAmount ?? 0, currency)],
+    ...(Number(totals.serviceFee) > 0
+      ? [['Service fee', formatAdminMoney(totals.serviceFee, currency)]]
+      : []),
+    ...(Number(totals.vatAmount) > 0
+      ? [['VAT', formatAdminMoney(totals.vatAmount, currency)]]
+      : []),
     ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
     ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
   ]
@@ -458,7 +464,12 @@ export function mapAdminOrderDetailResponse(data) {
     ['Subtotal', formatAdminMoney(totals.subtotal, currency)],
     ['Delivery fee', formatAdminMoney(totals.deliveryFee, currency)],
     ['Tip Amount', formatAdminMoney(totals.tipAmount ?? 0, currency)],
-    ['VAT', formatAdminMoney(totals.vatAmount, currency)],
+    ...(Number(totals.vatAmount) > 0
+      ? [['VAT', formatAdminMoney(totals.vatAmount, currency)]]
+      : []),
+    ...(Number(totals.serviceFee) > 0
+      ? [['Service fee', formatAdminMoney(totals.serviceFee, currency)]]
+      : []),
     ['Discount', `– ${formatAdminMoney(totals.discountAmount, currency)}`],
     ['Total', formatAdminMoney(totals.totalAmount ?? summary.orderValue, currency)],
   ]

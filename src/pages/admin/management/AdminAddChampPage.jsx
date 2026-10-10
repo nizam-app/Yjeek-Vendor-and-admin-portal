@@ -451,12 +451,12 @@ export default function AdminAddChampPage() {
         const types = typesRes?.data?.storeTypes || []
         setStoreTypeOptions(types)
         if (!types.length) {
-          setStoreTypesError('No store types returned from Store Management.')
+          setStoreTypesError('No published store types are available for champ categories.')
         }
       } catch (err) {
         if (cancelled) return
         setStoreTypeOptions([])
-        setStoreTypesError(formatApiErrorMessage(err, 'Failed to load store types from Store Management.'))
+        setStoreTypesError(formatApiErrorMessage(err, 'Failed to load store type options for this champ.'))
       } finally {
         if (!cancelled) setStoreTypesLoading(false)
       }

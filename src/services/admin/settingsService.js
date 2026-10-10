@@ -8,7 +8,9 @@ import {
   mapAdminPatchNotificationsRequest,
   mapAdminPatchSecurityRequest,
   mapAdminPatchServicesRequest,
+  mapAdminPatchCustomerFeesRequest,
   mapAdminSettingsAll,
+  mapAdminSettingsCustomerFees,
   mapAdminSettingsGeneral,
   mapAdminSettingsIntegrations,
   mapAdminSettingsLocalization,
@@ -42,6 +44,7 @@ function settingsRequestOptions(options = {}) {
  *   GET/PATCH /admin/settings/security
  *   GET/PATCH /admin/settings/integrations
  *   GET/PATCH /admin/settings/services
+ *   GET/PATCH /admin/settings/customerFees
  *
  * Feature flag: `settings` (also on when VITE_ADMIN_USE_MOCK_API=false)
  */
@@ -86,6 +89,7 @@ export const adminSettingsService = {
       securityResponse,
       integrationsResponse,
       servicesResponse,
+      customerFeesResponse,
     ] = await Promise.all([
       apiClient.get(endpoints.admin.settings.root, requestOpts),
       apiClient.get(endpoints.admin.settings.general, requestOpts),
@@ -94,6 +98,7 @@ export const adminSettingsService = {
       apiClient.get(endpoints.admin.settings.security, requestOpts),
       apiClient.get(endpoints.admin.settings.integrations, requestOpts),
       apiClient.get(endpoints.admin.settings.services, requestOpts),
+      apiClient.get(endpoints.admin.settings.customerFees, requestOpts),
     ])
 
     return {
@@ -106,6 +111,7 @@ export const adminSettingsService = {
         options.defaults,
         integrationsResponse?.data,
         servicesResponse?.data,
+        customerFeesResponse?.data,
       ),
       meta: allResponse?.meta ?? null,
     }
@@ -235,6 +241,42 @@ export const adminSettingsService = {
     }
   },
 
+  async getCustomerFees(options = {}) {
+    if (!useRealSettingsApi()) return { data: null, meta: null }
+
+    const response = await apiClient.get(
+      endpoints.admin.settings.customerFees,
+      settingsRequestOptions(options),
+    )
+    return {
+      data: mapAdminSettingsCustomerFees(response?.data),
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
+  async patchCustomerFees(form, options = {}) {
+    if (!useRealSettingsApi()) {
+      throw new Error('Settings API is not enabled.')
+    }
+
+    const body = mapAdminPatchCustomerFeesRequest(form)
+    const response = await apiClient.patch(
+      endpoints.admin.settings.customerFees,
+      body,
+      settingsRequestOptions(options),
+    )
+
+    const mapped =
+      mapAdminSettingsCustomerFees(response?.data) ||
+      mapAdminSettingsCustomerFees({ customerFees: body })
+    return {
+      data: mapped,
+      meta: response?.meta ?? null,
+      raw: response?.data ?? null,
+    }
+  },
+
   async patchServices(form, options = {}) {
     if (!useRealSettingsApi()) {
       throw new Error('Settings API is not enabled.')
@@ -256,7 +298,7 @@ export const adminSettingsService = {
 
   /**
    * Save the active settings tab.
-   * @param {'general'|'localization'|'notifications'|'security'|'integrations'|'services'} tabId
+   * @param {'general'|'localization'|'notifications'|'security'|'integrations'|'services'|'customerFees'} tabId
    * @param {object} form
    */
   async saveTab(tabId, form, options = {}) {
@@ -267,6 +309,7 @@ export const adminSettingsService = {
     if (tab === 'security') return this.patchSecurity(form, options)
     if (tab === 'integrations') return this.patchIntegrations(form, options)
     if (tab === 'services') return this.patchServices(form, options)
+    if (tab === 'customerFees') return this.patchCustomerFees(form, options)
     throw new Error('This settings tab cannot be saved yet.')
   },
 }
