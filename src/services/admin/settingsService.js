@@ -309,7 +309,7 @@ export const adminSettingsService = {
     if (tab === 'security') return this.patchSecurity(form, options)
     if (tab === 'integrations') return this.patchIntegrations(form, options)
     if (tab === 'services') return this.patchServices(form, options)
-    if (tab === 'customerFees') return this.patchCustomerFees(form, options)
+    if (tab === 'customerfees') return this.patchCustomerFees(form, options)
     throw new Error('This settings tab cannot be saved yet.')
   },
 }
